@@ -180,6 +180,7 @@ static void fm1_main(void)
         uint32_t m = fm1_ms;
         fm1_wdt_feed();
         usb_retry(fm1_ms);
+        sng_poll();                                     /* fm1-arranger: a song asked for by the pedal (PC) */
         if ((uint32_t)(m - healthy_since) >= 30000u && bootguard.pending) {
             bootguard_clear(&bootguard);     /* 30 s of this boot, even if TIMER4 survived reset */
         }

@@ -160,6 +160,10 @@ static void te_header(const char *title, uint16_t tc, uint32_t *cache)
                                (playing ? beat * 131u + TSEL->seq_idx * 7919u : 0u) + (uint32_t)song.g[G_CLOCK] * 77u +
                                arrangement_enabled * 5u + (ui.bpm_t != 0) * 104729u + song.solo * 37u, title);
     sig = sig * 31u + tc;
+#if FELUCCA_ARRANGER
+    sig = studio_hash(sig + live_bar * 17u + (uint32_t)(live_sec + 1) * 23u, sng_ui_name);   /* (fm1-arranger) */
+    sig = studio_hash(sig, sng_ui_next);
+#endif
     if (!ui.force && sig == *cache)
         return;
     *cache = sig;
@@ -181,6 +185,39 @@ static void te_header(const char *title, uint16_t tc, uint32_t *cache)
         cv_text(176, 4, &FONT_S, "rec", TE_RED);
         if (song.g[G_CLOCK] != 0)                       /* the click is on */
             cv_text(168, 22, &FONT_S, "click", TE_G3);
+#if FELUCCA_ARRANGER
+    } else if (sng_ui_name[0] && live_sec >= 0) {      /* fm1-arranger: the section playing (or cued), white, in the
+                                                        * title's place; under it the bar it is in */
+        char nm[13], full[13], next[13];
+        uint32_t n = 0;
+        fm1_irq_off();                                 /* (the ISR writes them: taken whole) */
+        str_cpy(full, sng_ui_name, sizeof full);
+        str_cpy(next, sng_ui_next, sizeof next);
+        fm1_irq_on();
+        while (n < 12u && full[n]) {                   /* (the name cut to the room right of the beat lights) */
+            nm[n] = full[n];
+            nm[n + 1] = 0;
+            if (text_w(&FONT_S, nm) > 92)
+                break;
+            n++;
+        }
+        nm[n] = 0;
+        cv_text(236 - text_w(&FONT_S, nm), 5, &FONT_S, nm, playing ? C_WHITE : TE_G3);
+        if (playing && next[0]) {                      /* the one asked for, coming on the bar */
+            char nx[14];
+            nx[0] = '>';
+            str_cpy(nx + 1, next, sizeof nx - 1u);
+            while (text_w(&FONT_S, nx) > 92)
+                nx[str_len(nx) - 1u] = 0;
+            cv_text(236 - text_w(&FONT_S, nx), 22, &FONT_S, nx, C_AMB);
+        } else if (playing) {
+            str_cpy(b, "bar ", 5);
+            fmt_int(b + 4, (int32_t)(live_bar == 0xFFFFFFFFu ? 1u : live_bar + 1u));
+            cv_text(236 - text_w(&FONT_S, b), 22, &FONT_S, b, TE_G3);
+        } else {
+            cv_text(236 - text_w(&FONT_S, "cued"), 22, &FONT_S, "cued", TE_G3);
+        }
+#endif
     } else {
         cv_text(240 - text_w(&FONT_S, title) - 4, 5, &FONT_S, title, tc);
         if (song.solo)

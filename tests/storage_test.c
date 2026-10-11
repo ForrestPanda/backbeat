@@ -95,7 +95,8 @@ int main(void)
                 uint32_t a = st_sector(o, c);
                 int data = a >= 0x97000u && a + 4096u <= 0xA0000u, ups = a >= 0xDC000u && a + 4096u <= 0xE0000u;
                 int glob = a >= 0xFC000u && a + 4096u <= 0xFF000u, fm6 = a >= 0xE5000u && a + 4096u <= 0xE7000u;
-                inside &= (data || ups || glob || fm6) && !(a & 0xFFFu);
+                int arr = a >= 0xA0000u && a + 4096u <= 0xB2000u;   /* fm1-arranger: 8 songs A/B, the pedal settings (USR1's place) */
+                inside &= (data || ups || glob || fm6 || arr) && !(a & 0xFFFu);
                 for (o2 = 0; o2 < OBJ_COUNT; o2++)
                     for (c2 = 0; c2 < 2u; c2++)
                         if ((o2 != o || c2 != c) && st_sector(o2, c2) == a)

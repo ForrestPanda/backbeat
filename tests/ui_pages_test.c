@@ -150,6 +150,16 @@ int main(int argc, char **argv)
     sloop_splash(); ppm("page-splash");
     ui.menu = 2; ui.force = 1; frame(); ppm("page-about"); ui.menu = 0;
     go_home(); ui.force = 1; frame(); ppm("page-tracks");
+    {   /* fm1-arranger: a song's section playing (its name and bar in the top bar), the pedal asking for the next */
+        str_cpy(sng_ui_name, "CHORUS", sizeof sng_ui_name);
+        live_sec = 1; live_bar = 2; song.playing = 1;
+        ui.force = 1; frame(); ppm("page-tracks-song");
+        pedal_say(PU_NEXT, "SOLO"); str_cpy(sng_ui_next, "SOLO", sizeof sng_ui_next);
+        frame(); ppm("page-tracks-next");
+        check(ui.msg_t > 40u && !strcmp(ui.msg, "NEXT: SOLO"), "arranger: the pedal's request said in the top bar (NEXT: SOLO)");
+        ui.msg_t = 0; sng_ui_next[0] = 0; song.playing = 0; ui.force = 1; frame(); ppm("page-tracks-cued");
+        live_sec = -1; sng_ui_name[0] = 0; ui.force = 1; frame();
+    }
     open_family(FAM_ENV); ui.force = 1; ui.hot_col = 1; ui.hot_t = 30; frame(); ppm("page-env");
     open_family(FAM_EDIT); ui.force = 1; frame(); ppm("page-edit");
     open_family(FAM_FX); ui.force = 1; frame(); ppm("page-fx");

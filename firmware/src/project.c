@@ -779,6 +779,7 @@ static void persist_boot(void)                    /* before settings_init / pane
     }
     dsu_boot();                                    /* SLOOP 2.5: the SYN kits (after the settings) */
     up_boot();                                     /* user presets */
+    arrset_boot();                                 /* fm1-arranger: the pedal channel (sng.c) */
     fm6_bank_boot();                               /* the FM6 patch bank (fm6_bank.c) */
 #endif
 }

@@ -48,6 +48,23 @@ $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/song_audio_test" tests/song_audio
 run "song: four simultaneous tracks, scene transition and stop" "$OUT/song_audio_test" "$OUT/song-demo.wav"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/song_ui_test" tests/song_ui_test.c -lm
 run "song screen: commands, load (OCT+ twice), display bounds" "$OUT/song_ui_test" "$OUT/song-screen.ppm"
+$CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/pedal_test" tests/pedal_test.c -lm
+run "pedal: sections, next / previous, stop, tap tempo over TRS MIDI" "$OUT/pedal_test"
+$CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/song_test" tests/song_test.c -lm
+run "songs: packed form, PC loads one, its sections on the bar, the outro, back to A..D" "$OUT/song_test"
+run "songs: the example packed by tools/fm1_song.py passes the firmware's check" sh -c \
+    "python3 tools/fm1_song.py songs/example.json --out $OUT/example-song.bin >/dev/null && $OUT/song_test $OUT/example-song.bin"
+run "songs: every song in songs/ packs (tools/fm1_song.py)" sh -c \
+    'for f in songs/*.json; do python3 tools/fm1_song.py "$f" >/dev/null || exit 1; done'
+run "songs: the example played by the pedal and rendered (tools/fm1_render.py, tests/song_render.c)" sh -c \
+    "python3 tools/fm1_render.py songs/example.json --out $OUT/example-song.wav --tail 0.5 >/dev/null && [ -s $OUT/example-song.wav ]"
+run "kit: tools/mkkit.py from the CC0 recordings into a USR3+4 image, the example rendered with it" sh -c \
+    "python3 tools/mkkit.py STUDIO assets/samples-cc0/KIT --image $OUT/studio-kit.img >/dev/null && python3 tools/fm1_render.py songs/example.json --usrkit $OUT/studio-kit.img --out $OUT/example-studio.wav --tail 0.5 | grep -q 'USR3+4'"
+if python3 -c "import guitarpro" 2>/dev/null; then
+    run "songs: tools/gp2song.py on a Guitar Pro file written with PyGuitarPro (sections, pattern, fill, flam, accents)" python3 tests/gp2song_test.py
+else
+    echo "== skip gp2song (no PyGuitarPro: pip install pyguitarpro)"
+fi
 
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/studio_drums_test" tests/studio_drums_test.c -lm
 run "drum lanes, kit audio, metronome, record arm, free take" "$OUT/studio_drums_test" "$OUT/drum-styles.wav"

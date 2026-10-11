@@ -286,6 +286,12 @@ empty). Numbers are 5 × 7 bit (u35, LSB first); data is pack7.
 | 35 BK_GET | id, offset u35, count (2 × 7 bit, 1..256) | id, rc (0 ok, 1 arguments, 5 the snapshot is gone: LIST again), offset u35, count, pack7 data |
 | 36 BK_PUT | op 0 begin: id 0..9 (8: v9, 9: v10), length u35, CRC-32 u35 · op 1 data: id, offset u35, pack7 (≤ 256 bytes, in order) · op 2 commit: id · op 3 abort: id | op, id, rc: 0 ok, 1 arguments, 2 not a valid object (CRC, magic, sizes, ranges), 3 stop the song first (projects and preset banks; since 2.5 the settings too when their song order differs), 4 flash, 5 no begin for this object (or more than 15 s ago) |
 
+**fm1-arranger (objects 16..24):** `BK_GET` and `BK_PUT` also reach the songs (object 16 + slot, slots 0..7,
+the packed form of `firmware/src/sng.c`; a PUT of length 0 erases the slot) and the pedal settings (object 24,
+16 bytes: "ARS1", the pedal channel 0..17, 11 zero bytes). They are not in `BK_LIST`, so a backup made by the
+SLOOP editor stays one it can restore; USR1 (object 32) is listed with length 0, since its flash holds the songs. The songs take the flash of the USR1 sample slot: `SMP_BEGIN`,
+`SMP_ERASE` and `SMP_WRITE` on slot 0 answer rc 4. `tools/fm1_song.py` writes and sends songs.
+
 A restore stages one object in RAM (the project load buffer), checks it at the commit as a load checks it
 (projects: magic, size and sum, older formats converted; banks: magic, record size, slot count; settings:
 magic, palette, a permutation of the buttons and knobs, a valid song order) and writes it through the usual

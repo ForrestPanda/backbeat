@@ -67,3 +67,4 @@ static void song_restore(void)                 /* (audio ISR: seq_stop) */
     sync_reload = 1;
     ui.force = 1;
 }
+#include "sng.c"                                   /* fm1-arranger: songs (their sections into the drum track) */

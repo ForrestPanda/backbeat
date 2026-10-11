@@ -1768,12 +1768,62 @@ static void srec_stop(void)
         srec_finish();
     srec = 0;
 }
+/* fm1-arranger (pedal.c): a section asked for by the pedal makes the rest of the bar a fill (FILL ONLY steps
+ * play, NO FILL steps rest) until the section starts; asked for with a whole fill bar first, the request
+ * waits one bar; an ending plays the outro for its bars, then stops on the bar */
+static volatile uint8_t pedal_fill;                /* this bar is the pedal's fill */
+static volatile uint8_t pedal_wait;                /* live_req waits for the next bar (a whole fill bar first) */
+static volatile uint8_t pedal_end_req;             /* bars of the outro asked for (taken when its section starts) */
+static volatile uint8_t pedal_end_bars;            /* stop when the section playing has played this many (0: none) */
+/* fm1-arranger (sng.c, arranger_scene.c): a song loaded from flash: its sections replace A..D for live_req */
+#define SNG_SLOTS 8u                               /* songs in flash */
+#define SNG_SMP_SLOT 0u                            /* the user sample slot (USR1) whose flash the songs take */
+#define SNG_SECTIONS 8u                            /* sections a song holds at most */
+static int8_t sng_cur = -1;                        /* the song's slot, -1 = SLOOP's sections A..D */
+static volatile uint8_t sng_req;                   /* PC: slot + 1 to load, 0xFF to unload (sng_poll, main loop) */
+static void sng_apply(uint32_t k);                 /* section k of the song into the drum track (at the bar) */
+static uint32_t sng_ready(void);                   /* bit k: section k exists */
+static uint32_t sng_bars(uint32_t k);              /* the bars section k takes */
+static uint32_t sng_outro(void);                   /* the section flagged as the outro, 0xFF = none */
+static void sng_name(uint32_t k, char *out);       /* section k's name (12 + 1 chars) */
+/* what the screen shows (ui_draw.c draw_head: the section playing and its bar; the pedal's events as messages) */
+static char sng_ui_name[13];                       /* the section playing: the song's name for it, or A..D */
+static char sng_ui_song[13];                       /* the song loaded, or empty */
+static char sng_ui_next[13];                       /* the section the pedal asked for, until it starts (empty: none) */
+static void sng_unload(void)                       /* SLOOP's sections A..D again (a project loaded over the song) */
+{
+    sng_cur = -1;
+    sng_ui_song[0] = 0;
+    sng_ui_next[0] = 0;
+}
+static volatile uint8_t pedal_ui;                  /* an event to say: PU_* (the UI thread clears it) */
+static char pedal_ui_name[13];                     /* its name (the section asked for, the song) */
+enum { PU_NONE, PU_NEXT, PU_SONG, PU_ENDING, PU_FILL, PU_NOSONG, PU_STOP };
+static void pedal_say(uint32_t ev, const char *name)
+{
+    uint32_t i;
+    for (i = 0; i < 12u && name[i]; i++)
+        pedal_ui_name[i] = name[i];
+    pedal_ui_name[i] = 0;
+    pedal_ui = (uint8_t)ev;
+}
+static void seq_stop(void);
 static void seq_reset_tracks(uint32_t pos);
 static void live_block(void)                       /* once a block while playing a loop (not the song) */
 {
     if ((clk_beat & 3u) || (clk_beat >> 2) == live_bar)
         return;
     live_bar = clk_beat >> 2;                       /* a new bar */
+    if (pedal_end_bars && live_req < 0 && live_bar >= pedal_end_bars) {   /* the ending: the outro has played */
+        pedal_end_bars = 0;
+        pedal_fill = 0;
+        seq_stop();
+        song.rec = 0;                               /* (as STOP: the take and the wait end with the song) */
+        rec_wait = 0;
+        return;
+    }
+    if (live_req >= 0 && sng_cur >= 0 && !((sng_ready() >> live_req) & 1u))
+        live_req = -1;                              /* (a section the song loaded meanwhile does not have: dropped) */
     if (srec == 2u && srec_n) {
         arr_entry_t *e = &srec_e[srec_n - 1u];
         if (e->bars < 64u) {
@@ -1788,27 +1838,41 @@ static void live_block(void)                       /* once a block while playing
         chain_i = (uint8_t)((chain_i + 1u) % (chain_n < CHAIN_MAX ? chain_n : CHAIN_MAX));
         live_req = (int8_t)(chain_sec[chain_i] & 3u);
     }
-    if (live_req >= 0) {
+    if (live_req >= 0 && pedal_wait) {              /* the pedal: a whole fill bar first, the section after it */
+        pedal_wait = 0;
+        pedal_fill = 1;
+    } else if (live_req >= 0) {
         uint32_t s = (uint32_t)live_req;
         live_req = -1;
         {                                           /* (the UI asked for a section it checked: no hash here) */
-            arrangement_apply(s);
+            if (sng_cur >= 0) {
+                sng_apply(s);                       /* (fm1-arranger: the song's section, named by it) */
+            } else {
+                arrangement_apply(s);
+                sng_ui_name[0] = (char)('A' + (s & 3u));   /* (SLOOP's sections: their letter) */
+                sng_ui_name[1] = 0;
+            }
             song.rec = 0;                           /* (a take does not run on into another section) */
             live_sec = (int8_t)s;
             seq_reset_tracks(clk_pos);              /* on the bar: every track from its step 0 */
             live_bar = 0;
             if (chain_n)
                 chain_bars = (uint8_t)section_bars(chain_sec[chain_i % CHAIN_MAX]);
-            if (srec == 2u)
-                srec_add(s);
+            if (srec == 2u && sng_cur < 0)
+                srec_add(s);                        /* (a song's sections are not SLOOP's A..D: not recorded) */
+            pedal_fill = 0;                         /* the pedal's fill ends with the section it announced */
+            pedal_end_bars = pedal_end_req;         /* (the outro: its bars, then stop) */
+            pedal_end_req = 0;
+            sng_ui_next[0] = 0;                     /* (the screen: it is here) */
         }
     }
-    if (srec == 1u && live_sec >= 0) {
+    if (srec == 1u && live_sec >= 0 && sng_cur < 0) {
         srec = 2;
         srec_n = 0;
         srec_add((uint32_t)live_sec);
     }
 }
+#include "pedal.c"                                 /* fm1-arranger: a pedalboard's CC / PC -> sections, transport */
 #endif
 
 /* every track from its step 0, together, at pos units into beat 0 (a song section: the arranger's
@@ -1883,6 +1947,13 @@ static void seq_stop(void)
     fill_held = 0;                                  /* STOP ends a fill, held or armed */
     fill_arm = 0;
     fill_bar_on = 0;
+#if FELUCCA_ARRANGER
+    pedal_fill = 0;                                 /* (fm1-arranger: the pedal's fill, wait and ending too) */
+    pedal_wait = 0;
+    pedal_end_req = 0;
+    pedal_end_bars = 0;
+    sng_ui_next[0] = 0;
+#endif
     song.playing = 0;
     for (i = 0; i < NTRK; i++) {
         seq_release(&trk[i]);
@@ -2395,6 +2466,9 @@ static uint32_t mclk_adv(uint32_t n)               /* units to advance this bloc
 static void events_block(uint32_t n)
 {
     uint32_t i, pr, adv;
+#if FELUCCA_ARRANGER
+    pedal_elapse(n);
+#endif
     if (mo_any && !song.g[G_MIDI]) {            /* MIDI = KEYS again: end what the sequencer had sent */
         seq_out_all_off();
         mo_any = 0;
@@ -2472,7 +2546,11 @@ static void events_block(uint32_t n)
         fill_bar_on = fill_arm;
         fill_arm = 0;
     }
+#if FELUCCA_ARRANGER
+    fill_now = (uint8_t)(fill_held || fill_bar_on || pedal_fill);   /* (pedal_fill: fm1-arranger) */
+#else
     fill_now = (uint8_t)(fill_held || fill_bar_on);
+#endif
     {   /* GLO > SYSTEM > IN changed to or from CH n, or a channel of GLO > MIDI / DRUMS (2.6): what the other routing
          * started is released (its note-offs would go elsewhere now: stuck notes), the pedals and wheels too */
         static uint8_t route_was;
@@ -2549,6 +2627,15 @@ static void events_block(uint32_t n)
             mclk_event((pkt >> 8) & 0xFFu, ((pkt >> 4) & 15u) ? 2u : 1u);
             continue;
         }
+#if FELUCCA_ARRANGER
+        if ((st == 0xC0u || (st == 0xB0u && d1 >= PEDAL_CC_SECTION && d1 <= PEDAL_CC_SECTION_FILLBAR)) &&
+            pedal_listens(ch)) {                      /* the pedalboard's channel: its CCs (20..27) and PC (a song)
+                                                       * go to pedal.c before any track or CC map sees them; the
+                                                       * other CCs (sustain, learned ones) pass as usual */
+            pedal_msg(st, ch, d1, d2);
+            continue;
+        }
+#endif
         if (song.g[G_ROUTE] >= 2) {                   /* 2.6: IN = CH n: that channel only, on the selected
                                                        * track (notes and CCs); every other channel ignored */
             if (ch != (uint32_t)song.g[G_ROUTE] - 2u)
