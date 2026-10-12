@@ -16,11 +16,12 @@ The JSON (see docs/design.md):
        {"name": "VERSE", "steps": 16, "div": "1/16", "outro": false,
         "lanes": {"KICK": "x...x...x...x...", "SNARE": "....x.......x...", "HAT": "x.x.x.x.x.x.x.x."},
         "ratchets": {"SNARE": "............2..."},
-        "fill": "............FFFF"}]}
+        "fills": {"HITOM": "............FF..", "HAT": "............NNNN"}}]}
 
 A lane string has one character a step: '.' rest, 'g' ghost, 'o' soft, 'x' normal, 'X' hard. A ratchet
-string: '.' or 1, or 2..4 repeats inside the step. The fill string: '.' plays always, 'F' only during a
-fill (the pedal's transition, CC 21, or the device's GLO + key 9 / 10), 'N' never during one. Lanes:
+string: '.' or 1, or 2..4 repeats inside the step. "fills" marks a lane's hits one by one: '.' plays
+always, 'F' only during a fill (the pedal's transition, CC 21, or the device's GLO + key 9 / 10), 'N' never
+during one. The older "fill" string does the same for a whole step, every lane at once. Lanes:
 KICK, KICK2, SNARE, CLAP, HAT, OPENHAT, PEDAL, RIM, SNARE2, LOWTOM, HITOM, CRASH, RIDE, SHAKER, CONGA,
 COWBELL (spaces and case do not matter). div: 1/4 1/8 1/16 1/32 8T 16T 1/2 1BAR 2BAR. kit: the index in the
 device's KIT list (0 ACOUSTIC .. as the web editor shows them). Up to 8 sections; the packed song must stay
@@ -63,7 +64,7 @@ def pack_section(sec, index):
         sys.exit(f"{name}: steps must be 1..{NSTEP}")
     if div not in DIVS:
         sys.exit(f"{name}: div must be one of {' '.join(DIVS)}")
-    flags = 1 if sec.get("outro") else 0
+    flags = (1 if sec.get("outro") else 0)
     on = [[0, 0] for _ in range(steps)]
     lvl = [[0] * 4 for _ in range(steps)]
     rat = [[0] * 4 for _ in range(steps)]
@@ -87,6 +88,21 @@ def pack_section(sec, index):
             if ch not in "234":
                 sys.exit(f"{name}: ratchets {lane}: '{ch}' is not . 1 2 3 4")
             rat[i][k >> 2] |= (int(ch) - 1) << (2 * (k & 3))
+    marks = sec.get("fills", {})                     # a lane's own marks: F only during a fill, N not during one
+    fonly = [0] * steps
+    fno = [0] * steps
+    for lane, v in marks.items():
+        k = lane_index(lane)
+        v = str(v)
+        if len(v) > steps:
+            sys.exit(f"{name}: fills {lane} has {len(v)} characters for {steps} steps")
+        for i, ch in enumerate(v):
+            if ch == ".":
+                continue
+            if ch not in "FN":
+                sys.exit(f"{name}: fills {lane}: '{ch}' is not . F N")
+            (fonly if ch == "F" else fno)[i] |= 1 << k
+    has_marks = any(fonly) or any(fno)
     fill = bytearray((steps + 3) // 4)
     cond = str(sec.get("fill", ""))
     if len(cond) > steps:
@@ -96,10 +112,13 @@ def pack_section(sec, index):
             sys.exit(f"{name}: fill: '{ch}' is not . F N")
         fill[i // 4] |= CONDS[ch] << (2 * (i % 4))
     out = bytearray(name.encode("ascii", "replace").ljust(12, b"\0"))
-    out += bytes([steps, DIVS.index(div), flags, 0])
+    out += bytes([steps, DIVS.index(div), flags | (2 if has_marks else 0), 0])
     out += fill
     for i in range(steps):
         out += bytes(on[i]) + bytes(lvl[i]) + bytes(rat[i])
+    if has_marks:
+        for i in range(steps):
+            out += struct.pack("<HH", fonly[i], fno[i])
     return bytes(out)
 
 
@@ -134,8 +153,8 @@ def describe(blob):
         steps, div, flags = blob[pos + 12], blob[pos + 13], blob[pos + 14]
         nf = (steps + 3) // 4
         hits = sum(bin(blob[pos + 16 + nf + i * 10] | blob[pos + 16 + nf + i * 10 + 1] << 8).count("1") for i in range(steps))
-        print(f"  {k}: {sname:12s} {steps:2d} steps {DIVS[div]:5s} {hits:3d} hits{'  OUTRO' if flags & 1 else ''}")
-        pos += 16 + nf + steps * 10
+        print(f"  {k}: {sname:12s} {steps:2d} steps {DIVS[div]:5s} {hits:3d} hits{'  OUTRO' if flags & 1 else ''}{'  lane marks' if flags & 2 else ''}")
+        pos += 16 + nf + steps * 10 + (steps * 4 if flags & 2 else 0)
 
 
 def pack7(b):

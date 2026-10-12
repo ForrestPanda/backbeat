@@ -69,3 +69,10 @@ by those owners.
 ## Radio
 
 Felucca never enables the Bluetooth / Wi-Fi radio of the hardware.
+
+## fm1-arranger
+
+`web/kit/`: the MuldjordKit by Lars Muldjord and the DrumGizmo team (drumgizmo.org; the SFZ port by kinwie),
+CC BY 4.0, one sound a lane as `tools/mkkit.py` makes them; the three hi-hat lanes from AVL Drumkits "Black Pearl"
+by Glen MacArthur, CC BY-SA 3.0; CLAP, CONGA and COWBELL from the CC0 studio recordings (see `web/kit/ATTRIBUTION.txt` and `docs/kits.md`). Preloaded on the editor's Drum kit page and
+played by its Songs tab.

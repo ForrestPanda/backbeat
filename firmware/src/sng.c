@@ -13,8 +13,9 @@
  *
  * The packed song (little endian):
  *   header (32)   "SNG1", name[12], bpm u16, kit, swing, drum level, drum reverb, nsec, rsv[9]
- *   per section   name[12], len (1..64), div (N_SDIV index), flags (bit 0: the outro), rsv;
- *                 fill[(len + 3) / 4] (2 bits a step: FC_*); len x dstep_t (10 bytes: lanes u16, lvl[4], rat[4])
+ *   per section   name[12], len (1..64), div (N_SDIV index), flags (bit 0: the outro; bit 1: lane marks follow), rsv;
+ *                 fill[(len + 3) / 4] (2 bits a step: FC_*); len x dstep_t (10 bytes: lanes u16, lvl[4], rat[4]);
+ *                 with bit 1: len x (u16 "only during a fill" lanes, u16 "not during a fill" lanes)
  * tools/fm1_song.py writes one from a JSON file and sends it (EDITOR_PROTOCOL.md: BK_PUT object 16 + slot).
  * The pedal settings (the channel) are a small object of their own (OBJ_ARRSET, backup object 24).
  * Included from arranger_scene.c (the firmware through project.c, the host tests directly). */
@@ -24,6 +25,7 @@
 #define SNG_SEC_HDR 16u
 #define SNG_MAX 3800u                            /* a packed song (<= proj_tmp, the staging RAM; <= a sector's payload) */
 #define SNG_F_OUTRO 1u
+#define SNG_F_MARKS 2u                           /* the section's steps carry lane marks (seq.c drum_fonly / drum_fno) */
 
 typedef struct {
     const uint8_t *xip;                          /* the packed song: flash (XIP), or a RAM blob on the host */
@@ -64,6 +66,8 @@ static int sng_check(const uint8_t *b, uint32_t n, sng_t *out)
             return 5;
         out->off[k] = (uint16_t)pos;
         pos += SNG_SEC_HDR + (len + 3u) / 4u + len * sizeof(dstep_t);
+        if (b[out->off[k] + 14] & SNG_F_MARKS)
+            pos += len * 4u;
         if (pos > n)
             return 6;
     }
@@ -134,6 +138,15 @@ static void sng_apply(uint32_t k)
     locks_clear(t);                              /* (no lock, no nudge, no condition: then the section's) */
     memcpy(t->dstep, s + SNG_SEC_HDR + nf, len * sizeof(dstep_t));
     memcpy(t->fill, s + SNG_SEC_HDR, nf);
+    drum_fill_masks_clear();
+    if (s[14] & SNG_F_MARKS) {                    /* the lane marks, little endian: only-during, not-during a fill */
+        const uint8_t *m = s + SNG_SEC_HDR + nf + len * sizeof(dstep_t);
+        uint32_t i;
+        for (i = 0; i < len; i++) {
+            drum_fonly[i] = (uint16_t)(m[4u * i] | m[4u * i + 1u] << 8);
+            drum_fno[i] = (uint16_t)(m[4u * i + 2u] | m[4u * i + 3u] << 8);
+        }
+    }
     t->p[P_SLEN] = (int16_t)len;
     t->p[P_SDIV] = (int16_t)(s[13] % NDIV_STEP);
     sng_name(k, sng_ui_name);

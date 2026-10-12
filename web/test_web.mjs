@@ -34,7 +34,7 @@ const E = vm.runInNewContext(proto + `
    CHOP, chopNovelty, chopHits, chopSnap, chopGrid, chopEqual, chopList, chopPick, chopFit, chopZones, wavFile, zipStore, crc32,
    UP, bank, capturePatch, auditionPatch, startWatch, libraryFile, readLibraryFile, paramKeys, patternFromSteps, stepsFromPattern, upName,
    mixer, GM_DRUM, drumName, parseNotes, fmtValue, F, DRUM_LANES, LV_NAMES, emptyDrum, lockable, MICRO, FC, fillGet, fillSet, pack7, unpack7,
-   backupCapture, backupRestore, backupObjects, b64enc, b64dec, FM6, KIT, kitPad, kitZones, kitLen, kitBytes, kitFit, kitSplit, kitLaneOf, kitPlace, zipRead, ROLL, SMF, ARR, mockSettings, fm6CartWrite, fm6CartPreset, fm6CartSlots, fm6CartPresets, DSYN, DSYN_MOCK_NAMES, DSYN_MOCK_KITS, SetGate, bkProjFormat, bkDevFormat, bkFwAtLeast })`,
+   backupCapture, backupRestore, backupObjects, b64enc, b64dec, FM6, KIT, kitPad, kitZones, kitLen, kitBytes, kitFit, kitSplit, kitLaneOf, kitPlace, zipRead, ROLL, SMF, ARR, mockSettings, fm6CartWrite, fm6CartPreset, fm6CartSlots, fm6CartPresets, DSYN, DSYN_MOCK_NAMES, DSYN_MOCK_KITS, SetGate, bkProjFormat, bkDevFormat, bkFwAtLeast, SNG, PLAY, SED })`,
 { setTimeout, clearTimeout, setInterval, clearInterval, console, TextEncoder, TextDecoder, Blob, Response, DecompressionStream });
 
 async function editorMock() {
@@ -569,6 +569,163 @@ async function editorV9() {
   try { await old.rq(E.req.fm6List(), { timeout: 200, retries: 0 }); } catch (e) { none = true; }
   ok(oi.proto === 8 && none, "v9: a v8 device says 8 and does not answer FM6_LIST (the editor hides the FM6 panel)");
   old.done();
+}
+
+/* ------------------------------------- fm1-arranger: songs (the Songs tab) --- */
+async function editorSongs() {
+  const C = E.CMD;
+  /* the packer: byte for byte what tools/fm1_song.py writes */
+  const spec = JSON.parse(readFileSync(join(HERE, "../songs/example.json"), "utf8"));
+  const tmp = mkdtempSync(join(tmpdir(), "sng-"));
+  execFileSync("python3", [join(HERE, "../tools/fm1_song.py"), join(HERE, "../songs/example.json"), "--out", join(tmp, "e.bin")], { stdio: "ignore" });
+  const py = new Uint8Array(readFileSync(join(tmp, "e.bin")));
+  const js = E.SNG.pack(spec);
+  ok(js.length === py.length && js.every((v, i) => v === py[i]), `songs: SNG.pack == tools/fm1_song.py (${js.length} bytes)`);
+  const h = E.SNG.check(js);
+  ok(h && h.name === "EXAMPLE" && h.bpm === 112 && h.nsec === 5 && h.sections[4].outro && h.sections[1].steps === 32 && h.bytes === js.length, "songs: SNG.check reads the header and the sections");
+  const back = E.SNG.unpack(js);
+  ok(JSON.stringify(E.SNG.pack(back)) === JSON.stringify(js) && back.sections[0].lanes.KICK === spec.sections[0].lanes.KICK && back.sections[1].ratchets.SNARE === spec.sections[1].ratchets.SNARE
+    && back.sections[1].fill === spec.sections[1].fill, "songs: unpack -> pack gives the same bytes (lanes, ratchets, fill conditions)");
+  let bad = 0;
+  for (const x of [{ ...spec, bpm: 300 }, { ...spec, sections: [] }, { ...spec, sections: [{ ...spec.sections[0], steps: 65 }] },
+                   { ...spec, sections: [{ ...spec.sections[0], lanes: { KICK: "x...q" } }] }, { ...spec, sections: [{ ...spec.sections[0], div: "1/3" }] }]) {
+    try { E.SNG.pack(x); } catch (e) { bad++; }
+  }
+  ok(bad === 5 && !E.SNG.check(js.subarray(0, js.length - 1)) && !E.SNG.check(Uint8Array.from([1, 2, 3])), "songs: bad JSON refused; a truncated or alien blob is not a song");
+  /* the device: send, list, read back, erase; the pedal channel */
+  const { rq, done } = attachMock({});
+  let rows = await E.SNG.summaries(rq);
+  ok(rows.length === 8 && rows.every((r) => r === null), "songs: a new device has 8 empty slots");
+  ok((await E.SNG.put(rq, 2, js)) === 0, "songs: PUT into slot 2 (begin, data, commit) ok");
+  rows = await E.SNG.summaries(rq);
+  ok(rows[2] && rows[2].name === "EXAMPLE" && rows[2].sections.map((x) => x.name).join() === "INTRO,VERSE,CHORUS,SOLO,OUTRO" && rows[2].bytes === js.length && !rows[0] && !rows[3],
+    "songs: the summary of slot 2 (name, sections) from the header and the section headers");
+  const got = await E.SNG.get(rq, 2);
+  ok(got && got.length === js.length && got.every((v, i) => v === js[i]), "songs: GET gives the bytes back");
+  ok((await E.SNG.put(rq, 2, Uint8Array.from([9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9]))) === 2, "songs: a blob that is not a song: rc 2, the slot keeps its song");
+  ok((await E.SNG.get(rq, 2)).length === js.length, "songs: ..kept");
+  ok((await E.SNG.put(rq, 2, new Uint8Array(0))) === 0 && (await E.SNG.summaries(rq))[2] === null, "songs: an empty PUT erases the slot");
+  ok((await E.SNG.getPedal(rq)) === 16 && (await E.SNG.setPedal(rq, 17)) === 0 && (await E.SNG.getPedal(rq)) === 17, "songs: the pedal channel read (16) and set (any)");
+  const L = E.parse[C.BK_LIST](await rq(E.req.bkList(), { timeout: 5000, retries: 0 }));
+  ok(!L.items.some((it) => it.id >= 16 && it.id <= 24), "songs: not in BK_LIST (a SLOOP backup stays restorable)");
+  done();
+}
+
+/* ------------------------------------- fm1-arranger: the player's rules (PLAY) --- */
+function editorPlay() {
+  const P = E.PLAY;
+  const spec = { name: "T", bpm: 120, sections: [
+    { name: "A", steps: 16, div: "1/16", lanes: { KICK: "x...x...x...x...", HAT: "x.x.x.x.x.x.x.x." }, fill: "............FFFF" },
+    { name: "B", steps: 32, div: "1/16", lanes: { SNARE: "....x.......x.......x.......x...", CRASH: "x..............................." } },
+    { name: "OUT", steps: 16, div: "1/16", outro: true, lanes: { KICK: "x..............." } }] };
+  spec.sections[0].lanes.HITOM = "............x.x.";   /* FILL ONLY steps 13..16 carry the toms */
+  const st = P.create(spec);
+  ok(P.tick(st) === null && !st.playing, "play: stopped: no steps");
+  P.request(st, 0);
+  let ev = P.tick(st);
+  ok(st.playing && st.sec === 0 && ev.sec === 0 && ev.step === 0 && ev.hits.map((h) => h.lane).sort().join() === "0,4" && Math.abs(ev.secs - 0.125) < 1e-9,
+    "play: a section from stopped starts at once: step 0 kick + hat, a 1/16 at 120 BPM = 125 ms");
+  for (let i = 1; i < 12; i++) ev = P.tick(st);          /* steps 1..11 */
+  ok(!ev.fill && st.bar === 0, "play: no fill before a request");
+  P.request(st, 1);                                        /* asked for in the bar: the rest of it is the fill */
+  const fillHits = [];
+  for (let i = 12; i < 16; i++) { ev = P.tick(st); fillHits.push(ev.hits.some((h) => h.lane === 10)); }
+  ok(ev.fill && fillHits.join() === "true,false,true,false" && ev.newBar, "play: the fill: FILL ONLY toms play on 13 and 15, the bar ends");
+  ev = P.tick(st);
+  ok(st.sec === 1 && ev.sec === 1 && ev.step === 0 && !ev.fill && ev.hits.some((h) => h.lane === 11) && st.req < 0, "play: B on the bar with its crash, the fill over");
+  for (let i = 1; i < 16; i++) ev = P.tick(st);
+  ok(ev.newBar && st.bar === 1 && st.sec === 1, "play: B's second bar (32 steps = 2 bars)");
+  P.request(st, 0, true);                                  /* CC 27: a whole fill bar first */
+  for (let i = 0; i < 16; i++) ev = P.tick(st);            /* the rest of bar 2 */
+  ok(st.sec === 1 && st.fill && !st.wait && st.req === 0, "play: CC 27: after the bar the request waits, the next bar is a fill");
+  for (let i = 0; i < 16; i++) ev = P.tick(st);            /* the fill bar */
+  ok(st.sec === 0 && st.step === 0 && !st.fill, "play: ..and the section on the bar after");
+  P.fillNext(st);
+  for (let i = 0; i < 16; i++) ev = P.tick(st);
+  ok(st.fillBar, "play: fill the next bar (CC 21): armed, on at the bar");
+  for (let i = 0; i < 16; i++) ev = P.tick(st);
+  ok(!st.fillBar && st.sec === 0, "play: ..over after it");
+  P.ending(st, null);                                      /* the flagged outro */
+  ok(st.req === 2 && st.endReq === 1 && st.fill, "play: the ending takes the outro, the fill until it");
+  for (let i = 0; i < 16; i++) ev = P.tick(st);
+  ok(st.sec === 2 && st.endBars === 1 && st.playing, "play: the outro plays its bar");
+  for (let i = 0; i < 16; i++) ev = P.tick(st);
+  ok(!st.playing && st.stopped && P.tick(st) === null, "play: ..then the stop on the bar");
+  {   /* the player's default kit: web/kit/LANE_note.wav as the page fetches them (PLAY_NOTE in editor.html) */
+    const notes = JSON.parse((/const PLAY_NOTE = (\{[^}]*\})/.exec(html) || [])[1].replace(/(\w+):/g, '"$1":'));
+    const have = E.SNG.LANES.filter((l) => existsSync(join(HERE, "kit", `${l}_${notes[l]}.wav`)));
+    ok(have.length === 16 && existsSync(join(HERE, "kit", "ATTRIBUTION.txt")), `play: the kit served next to the editor: ${have.length} lanes (Muldjord), with its attribution`);
+    ok(/kitPreload\(\)/.test(html) && /kitPreloaded:/.test(html), "kits: the Drum kit page preloads the served kit onto empty pads");
+    ok(readFileSync(join(HERE, "gp2song.py"), "utf8") === readFileSync(join(HERE, "../tools/gp2song.py"), "utf8"), "gpi: web/gp2song.py is tools/gp2song.py (the page fetches it next to the editor)");
+  }
+  const st2 = P.create({ name: "N", bpm: 100, sections: [spec.sections[0]] });
+  P.request(st2, 0); P.tick(st2); P.ending(st2, null);
+  ok(st2.endBars === 1 && st2.fill && st2.req < 0, "play: an ending with no outro: the fill, stop on the next bar");
+  for (let i = 0; i < 16; i++) P.tick(st2);
+  ok(!st2.playing, "play: ..stopped");
+}
+
+/* ------------------------------------- fm1-arranger: the section editor's operations (SED) --- */
+function editorSed() {
+  const S = E.SED;
+  let sec = S.blank("VERSE", 32);
+  ok(sec.steps === 32 && sec.div === "1/16" && Object.keys(sec.lanes).length === 0 && !sec.fill, "sed: a blank section");
+  sec = S.setHit(sec, "KICK", 0, "x"); sec = S.setHit(sec, "KICK", 8, "X"); sec = S.setHit(sec, "SNARE", 4, "x", 2); sec = S.setHit(sec, "HAT", 2, "g");
+  ok(sec.lanes.KICK === "x.......X......................." && sec.lanes.SNARE[4] === "x" && sec.ratchets.SNARE[4] === "2" && sec.lanes.HAT[2] === "g", "sed: hits with levels and a ratchet");
+  ok(S.cell(sec, "SNARE", 4).rat === 2 && S.cell(sec, "KICK", 8).hit === "X" && S.cell(sec, "KICK", 1).hit === "", "sed: cells read back");
+  sec = S.setHit(sec, "SNARE", 4, "");
+  ok(!("SNARE" in sec.lanes) && !sec.ratchets, "sed: a cleared lane and its ratchet go away");
+  sec = S.setCond(sec, 28, "F"); sec = S.setCond(sec, 29, "N");
+  ok(sec.fill.length === 32 && sec.fill[28] === "F" && sec.fill[29] === "N", "sed: fill conditions");
+  const parts = S.split(sec, 1);
+  ok(parts && parts[0].steps === 16 && parts[1].steps === 16 && parts[0].lanes.KICK === "x.......X......." && !("KICK" in parts[1].lanes) && parts[1].fill[12] === "F" && parts[1].name === "VERSE 2", "sed: split at bar 1");
+  ok(S.split(sec, 2) === null && S.split(sec, 0) === null, "sed: no split outside the pattern");
+  const back = S.merge(parts[0], parts[1]);
+  ok(back.steps === 32 && back.lanes.KICK === sec.lanes.KICK && back.fill === sec.fill, "sed: merge gives the section back");
+  ok(S.merge(parts[0], S.setDiv(parts[1], "1/8")) === null && S.merge(S.blank("A", 40), S.blank("B", 40)) === null, "sed: no merge across divisions or over 64 steps");
+  ok(S.setSteps(sec, 16).lanes.KICK === "x.......X......." && S.setSteps(sec, 48).lanes.KICK.length === 48, "sed: steps cut and pad the strings");
+  const bars = [{ lanes: { KICK: "x...x...x...x...", HAT: "x.x.x.x.x.x.x.x." } }, { lanes: { KICK: "x...x...x.x.x...", SNARE: "....x.......x..." }, ratchets: { SNARE: "............2..." } }];
+  const fb = S.fromBars(bars, "CHORUS");
+  ok(fb.steps === 32 && fb.lanes.KICK === "x...x...x...x...x...x...x.x.x..." && fb.lanes.SNARE.slice(16) === "....x.......x..." && fb.ratchets.SNARE[28] === "2", "sed: a pattern from two bars of the file");
+  const fill = { lanes: { HITOM: "............x.x.", LOWTOM: ".............x.x", KICK: "x...x...x...x..." } };
+  const wf = S.withFill(fb, fill);
+  ok(!wf.sec.fill && wf.sec.lanes.HITOM.slice(28) === "x.x." && wf.sec.fills.HITOM.slice(28) === "F.F." && wf.sec.lanes.LOWTOM.slice(29) === "x.x" && wf.sec.fills.LOWTOM.slice(29) === "F.F"
+    && wf.sec.fills.KICK.slice(16) === "..........N....." && wf.sec.fills.SNARE.slice(16) === "....N.......N..." && wf.dropped.length === 0,
+    "sed: the fill bar, lane by lane: the toms only in a fill, the pattern's lone kick not in one, nothing dropped");
+  {   /* the marks: set with a hit, changed on a hit, kept through split / merge / copy, packed as flag 2 and unpacked */
+    let m = S.setHit(S.blank("M", 16), "HITOM", 12, "x", 1, "F");
+    m = S.setHit(m, "HAT", 12, "o", 1, "N");
+    m = S.setHit(m, "KICK", 0, "x");
+    ok(S.cell(m, "HITOM", 12).mark === "F" && S.cell(m, "HAT", 12).mark === "N" && S.cell(m, "KICK", 0).mark === "" && m.fills.HITOM === "............F...", "sed: a hit set with its mark");
+    m = S.setMark(m, "KICK", 0, "N");
+    ok(m.fills.KICK === "N..............." && S.setMark(m, "KICK", 0, "").fills.KICK === undefined && S.setMark(m, "SNARE", 3, "F").fills.SNARE === undefined, "sed: a mark changed on a hit, none on a rest");
+    const two = S.merge(m, m), sp = S.split(two, 1);
+    ok(two.fills.HITOM === "............F...............F..." && sp[1].fills.HAT === "............N...", "sed: marks through merge and split");
+    ok(S.pasteCols(S.blank("P", 16), 4, S.copyCols(m, 12, 12)).fills.HITOM === "....F...........", "sed: marks through copy and paste");
+    const packed = E.SNG.pack({ name: "M", bpm: 100, sections: [m] }), h = E.SNG.check(packed);
+    ok(h && h.sections[0].marks && packed.length === 32 + 16 + 4 + 160 + 64 && E.SNG.unpack(packed).sections[0].fills.HITOM === "............F..." && E.SNG.unpack(packed).sections[0].fills.HAT === "............N...",
+      "sed: packed with flag 2 and four bytes a step, unpacked to the same marks");
+    const st = E.PLAY.create({ name: "M", bpm: 120, sections: [m] });
+    E.PLAY.request(st, 0);
+    const steps = []; for (let i = 0; i < 16; i++) steps.push(E.PLAY.tick(st));
+    ok(steps[12].hits.map((x) => x.lane).sort().join() === "4" && steps[0].hits.length === 1, "play: outside a fill the tom (F) is out, the hat (N) and the kick (N) in");
+    E.PLAY.request(st, 0); const f = []; for (let i = 0; i < 16; i++) f.push(E.PLAY.tick(st));
+    ok(f[12].hits.map((x) => x.lane).sort().join() === "10", "play: in a fill the tom in, the hat out");
+  }
+  ok(S.outro(fb, true).outro === true && !("outro" in S.outro(fb, false)) && S.rename(fb, "end part long name").name === "END PART LON", "sed: outro and names");
+  ok(S.hits(fb) === 19 && E.SNG.pack({ name: "T", bpm: 100, sections: [wf.sec, parts[0]] }).length > 32, "sed: hit count; the result packs");
+  {   /* columns: copy steps 1..4 of the first bar, paste at 17 (the second bar), clear 1..4 */
+    const clip = S.copyCols(fb, 0, 3);
+    ok(clip.n === 4 && clip.lanes.KICK === "x..." && clip.lanes.HAT === "x.x." && !("SNARE" in clip.lanes) === false && clip.lanes.SNARE === "....", "sed: copy of four steps");
+    const p2 = S.pasteCols(fb, 16, clip);
+    ok(p2.lanes.HAT.slice(16, 20) === "x.x." && p2.lanes.HAT.slice(20) === fb.lanes.HAT.slice(20) && p2.lanes.KICK.slice(16, 20) === "x..." && p2.lanes.KICK.slice(0, 16) === fb.lanes.KICK.slice(0, 16), "sed: paste writes the four steps and nothing else");
+    const p3 = S.pasteCols(fb, 30, clip);
+    ok(p3.lanes.KICK.length === 32 && p3.lanes.KICK.slice(30) === "x." && S.pasteCols(fb, 32, clip) === fb, "sed: a paste past the end is cut; one at the end does nothing");
+    const cl = S.clearCols(fb, 0, 3);
+    ok(cl.lanes.KICK.slice(0, 4) === "...." && cl.lanes.KICK.slice(4) === fb.lanes.KICK.slice(4) && !("HAT" in cl.lanes) === false, "sed: clear empties the steps");
+    const cf = S.copyCols(S.setCond(fb, 2, "F"), 0, 3);
+    ok(cf.fill === "..F." && S.pasteCols(fb, 8, cf).fill[10] === "F", "sed: the fill conditions travel with the steps");
+  }
 }
 
 /* ------------------------------------- editor v6: backup / restore --- */
@@ -1179,7 +1336,7 @@ function editorTabs() {
   const tabs = [...html.matchAll(/<button role="tab" data-tab="(\w+)"/g)].map((x) => x[1]);
   const panels = [...html.matchAll(/<section class="panel" id="p-(\w+)" data-tab="(\w+)"/g)].map((x) => [x[1], x[2]]);
   const TABS = JSON.parse((/const TABS = (\[[^\]]*\]);/.exec(html) || [])[1] || "[]");
-  ok(tabs.length === 10 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b),
+  ok(tabs.length === 11 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b),
     `editor: ${tabs.length} tabs, one panel each (${tabs.join(" ")})`);
   ok(/localStorage\.setItem\(TAB_KEY/.test(html) && /try \{ localStorage/.test(html) && /history\.replaceState\([^)]*"#" \+ name\)/.test(html)
     && /addEventListener\("hashchange"/.test(html), "editor: last tab in localStorage (try/catch) and in the URL hash");
@@ -1206,6 +1363,11 @@ function editorTabs() {
     ok(/TE_COL\[4\] = \{RGB\(40, 124, 255\), RGB\(30, 204, 112\), RGB\(255, 198, 24\), RGB\(255, 98, 26\)\}/.test(te),
       "editor: ... the same four as the firmware's TE_COL");
     ok(/SLOOP-FONT\*\/url\(data:font\/ttf;base64,[A-Za-z0-9+\/=]{20000,}\)/.test(html), "editor: the device's Terminus font inlined (tools/gen_webfont.py)");
+    /* the section editor's pen and fill mark: the chosen one painted (as the cells it draws), the choice set as aria-pressed */
+    ok(/#sed-pen button\[aria-pressed="true"\] \{ background: var\(--trk\)/.test(css) && /#sed-pen button\[aria-pressed="true"\]\[data-pen="X"\] \{ background: var\(--fg\)/.test(css)
+      && /#sed-mark button\[aria-pressed="true"\]\[data-mark="F"\] \{ border-color: var\(--t3\)/.test(css) && /#sed-mark button\[aria-pressed="true"\]\[data-mark="N"\] \{ border-color: var\(--red\)/.test(css)
+      && /b\.dataset\.pen === SONGED\.pen \? "true" : "false"/.test(script) && /b\.dataset\.mark === SONGED\.mark \? "true" : "false"/.test(script),
+      "editor: the section editor's chosen pen and fill mark are highlighted");
   }
 }
 
@@ -1481,6 +1643,9 @@ await editorV7();
 await editorV8();
 await editorV9();
 await editorBackup();
+  await editorSongs();
+  editorPlay();
+  editorSed();
 await editor25();
 await editorDsyn();
 await editorCart();

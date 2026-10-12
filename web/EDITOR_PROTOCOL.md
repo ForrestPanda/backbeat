@@ -290,7 +290,8 @@ empty). Numbers are 5 × 7 bit (u35, LSB first); data is pack7.
 the packed form of `firmware/src/sng.c`; a PUT of length 0 erases the slot) and the pedal settings (object 24,
 16 bytes: "ARS1", the pedal channel 0..17, 11 zero bytes). They are not in `BK_LIST`, so a backup made by the
 SLOOP editor stays one it can restore; USR1 (object 32) is listed with length 0, since its flash holds the songs. The songs take the flash of the USR1 sample slot: `SMP_BEGIN`,
-`SMP_ERASE` and `SMP_WRITE` on slot 0 answer rc 4. `tools/fm1_song.py` writes and sends songs.
+`SMP_ERASE` and `SMP_WRITE` on slot 0 answer rc 4. `tools/fm1_song.py` writes and sends songs, and so does the editor's Songs tab (`SNG` in editor.html:
+the same packed form, byte for byte; the simulated device holds the song objects too).
 
 A restore stages one object in RAM (the project load buffer), checks it at the commit as a load checks it
 (projects: magic, size and sum, older formats converted; banks: magic, record size, slot count; settings:

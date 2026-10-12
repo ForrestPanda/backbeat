@@ -812,6 +812,25 @@ static uint32_t step_plays(const track_t *t, uint32_t idx)   /* its condition ho
     uint32_t c = step_fill(t, idx);
     return c == FC_FILL ? fill_now : c == FC_NOFILL ? !fill_now : 1u;
 }
+#if FELUCCA_ARRANGER
+/* fm1-arranger: a song's section marks the drum track's hits one by one (a lane at a step): "only during a fill"
+   or "not during a fill" (sng.c: section flag 2, two 16-bit masks a step), on top of SLOOP's condition of the
+   whole step. The masks are the song's: cleared with the pattern (steps_clear, a project) */
+static uint16_t drum_fonly[NSTEP], drum_fno[NSTEP];
+static uint32_t drum_fill_mask(uint32_t idx)       /* the lanes that do not play at this step, now */
+{
+    idx %= NSTEP;
+    return fill_now ? drum_fno[idx] : drum_fonly[idx];
+}
+static void drum_fill_masks_clear(void)
+{
+    memset(drum_fonly, 0, sizeof drum_fonly);
+    memset(drum_fno, 0, sizeof drum_fno);
+}
+#else
+static uint32_t drum_fill_mask(uint32_t idx) { (void)idx; return 0; }
+static void drum_fill_masks_clear(void) {}
+#endif
 
 static void steps_clear(track_t *t)           /* an empty pattern (synth: REST steps, drums: no lane); no lock, no nudge, no condition */
 {
@@ -822,6 +841,8 @@ static void steps_clear(track_t *t)           /* an empty pattern (synth: REST s
             t->step[k].time = ST_REST;
     locks_clear(t);
     memset(t->fill, 0, sizeof t->fill);
+    if (is_drum(t))
+        drum_fill_masks_clear();                   /* (fm1-arranger: the song's marks go with the pattern) */
 }
 
 /* tempo x 10 of a loop of T blocks holding n bars of 4/4 */
@@ -2035,9 +2056,9 @@ static void seq_step(track_t *t, const step_t *s, uint32_t slen, uint32_t skip)
 }
 
 /* play one drum step: each lane a hit (skip: lanes already played by live recording, or rolling) */
-static void drum_step(track_t *t, const dstep_t *s, uint32_t skip)
+static void drum_step(track_t *t, const dstep_t *s, uint32_t skip, uint32_t idx)
 {
-    uint32_t l, m = dstep_mask(s) & ~skip & ~roll_lanes(t) & ~(uint32_t)drum_mute;
+    uint32_t l, m = dstep_mask(s) & ~skip & ~roll_lanes(t) & ~(uint32_t)drum_mute & ~drum_fill_mask(idx);
     seq_out_track_off(t);                           /* the last step's hits end here */
     for (l = 0; m; l++, m >>= 1)
         if (m & 1u) {
@@ -2054,7 +2075,7 @@ static void seq_ratchets(track_t *t, uint32_t into, uint32_t slen)
         return;                                     /* (its condition failed: no hit at all) */
     if (is_drum(t)) {
         const dstep_t *s = &t->dstep[t->seq_idx % NSTEP];
-        uint32_t m = dstep_mask(s) & ~roll_lanes(t) & ~(uint32_t)drum_mute;
+        uint32_t m = dstep_mask(s) & ~roll_lanes(t) & ~(uint32_t)drum_mute & ~drum_fill_mask(t->seq_idx);
         for (i = 0; m; i++, m >>= 1) {
             uint32_t hits = 1u + dstep_rat(s, i), h, done;
             if (!(m & 1u) || hits == 1u)
@@ -2167,7 +2188,7 @@ static void seq_tick(track_t *t, uint32_t adv)
             uint32_t skip = t->rskip_abs == nabs ? t->rskip_lanes : 0u;
             lock_step(t, idx);                       /* its parameter locks, before the block renders */
             t->rskip_lanes = 0;
-            drum_step(t, &t->dstep[idx], skip);
+            drum_step(t, &t->dstep[idx], skip, idx);
         } else {
             const step_t *s = &t->step[idx];
             uint32_t skip = 0, i, k;

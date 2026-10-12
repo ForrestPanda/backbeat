@@ -40,6 +40,19 @@ python3 tools/fm1_song.py songs/example.json --put 0    # into song slot 0 (the 
 python3 tools/fm1_song.py --pedal-channel 16            # the pedal's MIDI channel, kept through power-off
 ```
 
+Or, with the FM-1 connected by USB, open SLOOP's web editor (`web/editor.html`): its **Songs** tab lists
+the eight slots, takes a song JSON by drop or file picker, saves one back as JSON, erases a slot, and sets
+the pedal's MIDI channel. Its **From Guitar Pro** card runs `tools/gp2song.py` itself in the browser (Python
+through Pyodide, loaded from the internet the first time) and its **Play** card plays a song with the kit's
+pads as the pedal would: the section buttons are the footswitches, with fills, the ending and stop. Its
+**Section editor** card edits a song by hand: names, order, length, the outro, split and merge, the hits on a
+grid with levels and ratchets, the fill conditions, and, for a song read from Guitar Pro, the file's bars to
+pick as a section's pattern or its fill; then Play, Send or Save JSON. The
+Drum kit page opens with the Muldjord Kit on its pads (served from `web/kit/`, CC BY 4.0, see `docs/kits.md`), and
+the player plays those pads, or WAVs you pick. The page must be served, not opened as a file: from the project
+root `python3 -m http.server 8000`, then `http://localhost:8000/web/editor.html?mock=1` for the simulated
+FM-1 (serving `web/` itself works too: the importer is linked there).
+
 Or take the drum track of a Guitar Pro file (.gp3 / .gp4 / .gp5; `pip install pyguitarpro`): the score's
 section markers become the sections, each with the pattern its bars repeat and the bar that deviates as
 the fill; edit the JSON afterwards:
@@ -64,10 +77,15 @@ python3 tools/mkkit.py ROCK path/to/wavs --image build/host/rock.img     # hear 
 python3 tools/mkkit.py ROCK path/to/wavs --load                           # into the FM-1 (USR3 and USR4)
 ```
 
+An SFZ kit with velocity layers works too (`--sfz kit.sfz`: the hardest layer of each drum, FLAC decoded
+with sox; `--layers` adds a soft layer for ghost and soft hits, `--hires HAT,PEDAL,RIM` keeps the bright short
+sounds at 44.1 kHz); `docs/kits.md` has the kits tried, the chosen one (the Muldjord Kit, CC BY 4.0) and the recipes.
 Songs then use that kit by its index (`"kit": 41` in the JSON, the kit after the built-in and SYN kits).
 The songs live in the flash of the USR1 slot, which the arranger gives up (USR2 stays free). With no song loaded the
-pedal plays SLOOP's own sections A..D (the four project slots). A fill is SLOOP's: the steps of the pattern marked FILL ONLY play only then, NO FILL steps rest (a step
-held + OCT+, or the web editor). Built for the Hotone Ampero II Stage (each footswitch sends up to three CC / PC messages), but any
+pedal plays SLOOP's own sections A..D (the four project slots). **Fills** are marks on the hits of a section's
+pattern: a hit marked "only in a fill" plays only during the transition (or CC 21, or the device's GLO fill keys),
+one marked "not in a fill" rests then, mark by mark in the editor's grid or lane by lane in the JSON (`"fills"`);
+SLOOP's own whole-step conditions still work on top. Built for the Hotone Ampero II Stage (each footswitch sends up to three CC / PC messages), but any
 pedalboard with a MIDI out does.
 
 ## Build and test
@@ -86,9 +104,11 @@ The TRS MIDI input is SLOOP's (`FELUCCA_UART=1`, in use since SLOOP 2.3). Instal
 | --- | --- |
 | `docs/design.md` | the model, the pedal command map, milestones, flash budget, review notes, open questions |
 | `docs/ampero-setup.md` | what to put into the Ampero II Stage's footswitches, the cable, what to check with the FM-1 |
+| `docs/kits.md` | the drum kits: Red Zeppelin (AVL Drumkits, CC BY-SA) and the CC0 studio kit, how they are built |
 | `firmware/src/pedal.c` | the pedal: CC / PC from the MIDI in queue to section, song and transport requests |
 | `firmware/src/sng.c` | songs: the packed form, read in place from flash, a section into the drum track on the bar, the pedal settings |
 | `tools/fm1_song.py`, `songs/` | songs from JSON: check, pack, send, read back; the example and four from Guitar Pro tabs (Black, Jeremy, Another Brick in the Wall, Comfortably Numb) |
+| `web/editor.html` | SLOOP's web editor with a Songs tab: the slots, the pedal channel, Guitar Pro import (Pyodide), a player; `web/test_web.mjs` tests it against the simulated FM-1 |
 | `tools/fm1_render.py`, `tests/song_render.c` | a song played by the pedal, rendered to a WAV on the host |
 | `tools/gp2song.py`, `tests/gp2song_test.py` | the drum track of a Guitar Pro file into a song (markers, patterns, fills, levels, ratchets) |
 | `tools/mkkit.py` | a sampled kit from a folder of WAVs onto USR3+4: lanes by name, trim, cut, level; an image for the renderer, or the upload |

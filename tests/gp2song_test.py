@@ -152,11 +152,11 @@ def main():
     assert v["lanes"]["KICK"][:27] == "x.......x.......x.......x.x", v["lanes"]["KICK"]
     assert v["lanes"]["HAT"].startswith("o.o.o.o.o.o.o.o.o.o.o.o."), v["lanes"]["HAT"]      # soft hats
     assert v["lanes"]["SNARE"][:16] == "....x.......x...", v["lanes"]["SNARE"]
-    # the fill's toms on 16ths 13 and 15 (steps the pattern leaves silent) are FILL ONLY; those on 12 and 14 land on
-    # the pattern's hat and snare and are dropped (a step holds one condition): "additive" fills
-    assert "fill" in v and v["fill"][28:32] == ".F.F" and set(v["fill"][16:28]) <= {"."}, v.get("fill")
-    assert v["lanes"]["HITOM"][28:30] == ".x" and v["lanes"]["LOWTOM"][30:32] == ".x", (v["lanes"].get("HITOM"), v["lanes"].get("LOWTOM"))
-    assert v["lanes"]["HAT"][28:32] == "o.o.", v["lanes"]["HAT"]                            # the pattern's hats stay
+    # the fill's toms (16ths 12..15) are marked F lane by lane; the pattern's hats and snare on 12 and 14, which the
+    # fill leaves out, are marked N; nothing is dropped
+    assert "fill" not in v and v["fills"]["HITOM"][28:32] == "FF.." and v["fills"]["LOWTOM"][28:32] == "..FF", v.get("fills")
+    assert v["lanes"]["HITOM"][28:30] == "xx" and v["lanes"]["LOWTOM"][30:32] == "xx", (v["lanes"].get("HITOM"), v["lanes"].get("LOWTOM"))
+    assert v["lanes"]["HAT"][28:32] == "o.o." and v["fills"]["HAT"][28:32] == "N.N." and v["fills"]["SNARE"][28] == "N", (v["lanes"]["HAT"], v["fills"].get("HAT"), v["fills"].get("SNARE"))
     assert c["steps"] == 16 and c["lanes"]["CRASH"][0] == "X" and c["lanes"]["KICK"][0] == "X", c["lanes"]
     assert c["lanes"]["SNARE"][12] == "x" and c.get("ratchets", {}).get("SNARE", "")[12] == "2", c.get("ratchets")
     assert c["lanes"]["SHAKER"] == "g...g...g...g...", c["lanes"].get("SHAKER")              # the second track, ghost
@@ -165,7 +165,7 @@ def main():
     assert "VERSE 2" not in names
     blob = fm1_song.pack(spec)
     assert blob[:4] == b"SNG1" and len(blob) < 3800
-    print(f"gp2song: verse (2-bar pattern, fill), chorus (accent, flam, tambourine), outro, duplicate skipped, {len(blob)} bytes packed PASS")
+    print(f"gp2song: verse (2-bar pattern, fill as lane marks), chorus (accent, flam, tambourine), outro, duplicate skipped, {len(blob)} bytes packed PASS")
 
 
 if __name__ == "__main__":

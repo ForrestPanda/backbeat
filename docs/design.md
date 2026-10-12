@@ -108,6 +108,29 @@ next bar). No named sections, one song, no fill tied to a section change.
      Still wanted: a real rock kit's recordings (CC0), two velocity layers are out of reach (a zone per
      lane).
    - Stripping code only if a second built-in kit or a bigger feature needs the room.
+5a. **The editor's Songs tab (done 2026-10-11).** SLOOP's web editor gained a Songs tab: the eight
+   slots with name, tempo and section names (read from the headers through BK_GET, after a BK_LIST),
+   a song JSON sent by drop or file picker (packed in the browser, byte for byte as the Python tool),
+   saved back as JSON (unpacked from the device), erased, and the pedal channel. The simulated FM-1 in
+   the editor holds songs too, so `web/test_web.mjs` round-trips one. (later the same day) **From Guitar Pro** in the tab: `tools/gp2song.py`
+   unchanged, run in the browser by Pyodide (Python in WebAssembly, about 10 MB from a CDN on first
+   use; PyGuitarPro from PyPI through micropip; the importer's `convert()` is what both the CLI and
+   the page call, so the result is identical), with the sections and auto options, the importer's
+   log, Send to a slot, Save JSON, Play. **Play**: the song through Web Audio with the Drum kit page's
+   pads (as they would go to the device) or the processed WAVs of `tools/mkkit.py --wavs`; the
+   section buttons and keys 1..8 are the pedal, with the fill window, CC 27 (shift), the next-bar
+   fill, the ending and stop, as a state machine (`PLAY`) tested in `web/test_web.mjs`. A preview:
+   no ADPCM, no limiter, no reverb; `tools/fm1_render.py` stays the reference.
+5b. **The section editor (done 2026-10-11).** A card on the Songs tab over the working song (from the
+   Guitar Pro import, a JSON file, a slot's Edit, or a new song): the song's name, tempo, kit and
+   swing; the sections as chips; for the selected one its name, steps, division, the outro flag, up
+   and down, duplicate, new, delete, split at a bar, merge with the next; a grid of 16 lanes by the
+   steps with a pen (normal, hard, soft, ghost, erase) and a ratchet, bar and beat lines, and a top row
+   for the fill conditions; for a song from Guitar Pro the file's bars as a strip (the importer returns
+   every bar as strings at 1/16 and each section's range), 1 to 4 bars picked as the pattern, one as
+   the fill by the importer's rule; Play, Send to a slot, Save JSON. The operations are a pure module
+   (`SED`: norm, setHit, setCond, setSteps, split, merge, fromBars, withFill...) tested in
+   `web/test_web.mjs`; the page only draws and calls them.
 5. **Authoring from Guitar Pro (decided and done 2026-10-11, first version).** The user writes songs in
    Guitar Pro 3 / 4. `tools/gp2song.py` (PyGuitarPro) takes the drum track of a .gp3 / .gp4: the measures between the
    score's section markers (Intro, Verse, Chorus...) become the sections, GM drum notes become the 16
@@ -117,14 +140,18 @@ next bar). No named sections, one song, no fill tied to a section change.
    the bar needs it), sections up to 64 steps (the drum pattern repeats inside longer sections if it
    is the same). Later, other tracks of the file (the bass line) when bass comes back. The JSON stays
    the intermediate form, editable by hand.
-   What the first version does: every percussion track merged; the pattern = the 1, 2 or 4 bars
+   What the first version does: every percussion track merged; the pattern = the 1, 2, 3 or 4 bars
    (the most common bar at each position) that most of the section repeats, 1/32 only when an eighth
    of the hits sit between 16ths; the fill = the section's last bar when it deviates, else the most
    common deviating bar at phrase ends when the match is strong; sections with the same pattern as an
    earlier one skipped; at most 8, the outro kept. A limit worth knowing: a step's fill condition
    covers all its lanes, so a fill hit that lands on a step where the pattern also hits is dropped
    (listed by the tool): fills come out "additive". Tested on Pearl Jam and Pink Floyd tabs of the
-   user's, and by `tests/gp2song_test.py` on a file written with PyGuitarPro.
+   user's, and by `tests/gp2song_test.py` on a file written with PyGuitarPro. A file without markers
+   (Shine On You Crazy Diamond, 348 bars): the sections are found from the drums alone, as the runs of
+   bars that repeat a pattern of 1 to 4 bars with fills allowed; silence is dropped, short runs join
+   their neighbour, equal neighbours merge; they are named PART n for the user to rename (`--auto`
+   does the same for a file with markers).
 6. **The screen (done 2026-10-11, first version).** On the TRACKS screen (the one on stage) the title's
    place shows the section playing (the song's name for it, or A..D) and under it the bar it is in,
    grey and "cued" while stopped; the parameter pages' top bar shows the same in the octave's place.
@@ -161,6 +188,21 @@ Numbers to **verify** against the linker map once milestone 4 starts. The image 
 area (milestones 1 to 3 cost about 2.6 KB together), and static RAM is at 92808 of 98304 bytes: songs are
 therefore read from flash in place, and anything else added before milestone 4 must stay small.
 
+## Fills, mark by mark (2026-10-11, evening)
+
+The user expected to mark each box of the grid as a fill, and that is the better model: SLOOP's fill condition
+covers a whole step, every lane at once, which forced the "additive" fills and the dropped hits. The arranger
+now marks a section's hits one by one: a lane at a step is "only in a fill" or "not in a fill". In the
+firmware two 16-bit masks a step for the drum track (`seq.c drum_fonly / drum_fno`, 256 bytes), taken out of
+the lanes a step plays (`drum_step`, the ratchets too), set by a song's section (format flag 2: four bytes a
+step after the drum steps), cleared with the pattern and by a project load; SLOOP's whole-step condition
+still applies on top. In the JSON `"fills": {"HITOM": "............F..."}` per lane (`"fill"` per step stays
+for SLOOP's). The importer marks the fill bar's own hits F and the pattern's hits it leaves out N, lane by
+lane: nothing dropped any more. The editor's pen has a fill mark (always, only in a fill, not in a fill);
+with it set, clicking a hit that is there changes its mark; cells show an amber or red ring. The player and
+the packers (Python, JavaScript) follow. Found on the way: the review's project-load fixes (the song unloaded
+by a project, USR1 not scanned at boot) had never landed because their anchor text differed; applied now.
+
 ## Review notes (2026-10-11)
 
 An independent review of the firmware diff (interrupt safety, flash, bounds, logic) found no memory
@@ -179,6 +221,12 @@ hazard; what it found and what was done:
   drops the take as a project load does.
 - Known and accepted: a flash write started while the pedal starts the transport in the same instant
   drops the audio for about 50 ms (SLOOP has the same window with a MIDI START).
+
+## Future work (the user's wishes, 2026-10-11)
+
+- (done 2026-10-11) **A section editor in the web editor**: see 5b.
+- A kit of real rock recordings (CC0), once the user picks one.
+- The pedal channel on the device's menu, if a place for it turns up.
 
 ## Open questions
 

@@ -28,7 +28,7 @@ OUT=build/host
 mkdir -p "$OUT"
 CC="${CC:-cc} -O1 -Wall -Wno-unused-function"
 fail=0
-run() { echo "== $1"; shift; "$@" || fail=1; }
+run() { echo "== $1"; name=$1; shift; "$@" || { echo "FAILED: $name"; fail=1; failed="$failed, $name"; }; }
 
 [ -f build/felucca.fwsc ] || { echo "run ./build.sh first"; exit 1; }
 # the generated headers the FM6 engine needs (tools/build.py generate() makes them too; no Pillow needed)
@@ -60,6 +60,12 @@ run "songs: the example played by the pedal and rendered (tools/fm1_render.py, t
     "python3 tools/fm1_render.py songs/example.json --out $OUT/example-song.wav --tail 0.5 >/dev/null && [ -s $OUT/example-song.wav ]"
 run "kit: tools/mkkit.py from the CC0 recordings into a USR3+4 image, the example rendered with it" sh -c \
     "python3 tools/mkkit.py STUDIO assets/samples-cc0/KIT --image $OUT/studio-kit.img >/dev/null && python3 tools/fm1_render.py songs/example.json --usrkit $OUT/studio-kit.img --out $OUT/example-studio.wav --tail 0.5 | grep -q 'USR3+4'"
+if [ -f ../../kits/avl-drumkits/Red_Zeppelin_5pc.sfz ] && command -v sox >/dev/null 2>&1; then
+    run "kit: tools/mkkit.py --sfz on AVL Drumkits' Red Zeppelin (16 lanes from the hardest layers)" sh -c \
+        "python3 tools/mkkit.py REDZEP --sfz ../../kits/avl-drumkits/Red_Zeppelin_5pc.sfz --image $OUT/redzep.img | grep -q '16 lanes'"
+else
+    echo "== skip the Red Zeppelin kit (no ../../kits/avl-drumkits, or no sox)"
+fi
 if python3 -c "import guitarpro" 2>/dev/null; then
     run "songs: tools/gp2song.py on a Guitar Pro file written with PyGuitarPro (sections, pattern, fill, flam, accents)" python3 tests/gp2song_test.py
 else
@@ -170,4 +176,4 @@ else
     echo "== skip web tests (no node)"
 fi
 
-[ $fail -eq 0 ] && echo "ALL HOST TESTS PASSED" || { echo "HOST TESTS FAILED"; exit 1; }
+[ $fail -eq 0 ] && echo "ALL HOST TESTS PASSED" || { echo "HOST TESTS FAILED:${failed#,}"; exit 1; }

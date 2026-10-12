@@ -244,10 +244,13 @@ static void drum_on(uint32_t note, uint32_t vel)
         if (note == 76u || note == 77u)
             return;                                 /* (the click's wood block: not a lane) */
         note = LANE_NOTE[lane_of_note(note)];
-        if (kit == DRUM_PAIR) {                     /* USR3+4: the lane's sound in USR3, else in USR4 */
-            zid = drum_usr_zone(2, note);
+        if (kit == DRUM_PAIR) {                     /* USR3+4: two layers (fm1-arranger): USR3 the hard hits, USR4 the
+                                                     * soft ones (ghost / soft: vel <= 72, lvl_vel); a lane in one slot
+                                                     * only plays that one, so SLOOP's split big kit works as before */
+            uint32_t soft = vel <= 72u;
+            zid = drum_usr_zone(soft ? 3u : 2u, note);
             if (zid < 0)
-                zid = drum_usr_zone(3, note);
+                zid = drum_usr_zone(soft ? 2u : 3u, note);
         } else {
             zid = drum_usr_zone(kit - DRUM_USR, note);
         }

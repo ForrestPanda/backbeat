@@ -11,10 +11,9 @@ Needs PyGuitarPro (pip install pyguitarpro): .gp3, .gp4 and .gp5.
 The score's section markers (Intro, Verse 1, Chorus...) bound the sections; the measures of a section give
 its drum pattern: the run of 1, 2 or 4 bars that most of the section repeats (at 1/16; at 1/32, and then
 at most 2 bars, when many hits sit between 16ths). The bar that deviates from the pattern at the end of
-the section, or most often at the end of a phrase, is the fill: its hits on steps the pattern leaves
-silent become FILL ONLY steps, the pattern's hits on steps the fill leaves silent become NO FILL steps
-(a step holds one condition for all its lanes, so fill hits that land on a pattern hit are dropped, and
-listed). Every percussion track of the file goes into the pattern (drums and percussion). Sections whose
+the section, or most often at the end of a phrase, is the fill: its own hits are marked "only during
+a fill", the pattern's hits it leaves out "not during a fill", lane by lane ("fills" in the JSON), so nothing
+is dropped. Every percussion track of the file goes into the pattern (drums and percussion). Sections whose
 pattern repeats an earlier one (Chorus 2, Chorus 3) are skipped; at most 8 are kept, the outro always
 (--sections picks and orders them by their marker titles). A section called OUTRO, ENDING, END or CODA is
 the outro. GM drum notes go to the 16 lanes (kick 35 36, snare 38 40, side stick 37, clap 39, hats 42 44
@@ -102,10 +101,10 @@ def offgrid_share(bars):
 
 
 def best_period(bars, max_p):
-    """(p, pattern, score): the run of 1, 2 or 4 bars (the most common bar at each position) most of the
+    """(p, pattern, score): the run of 1, 2, 3 or 4 bars (the most common bar at each position) most of the
     section repeats: the shortest that matches, else the shortest whose score is within NEAR of the best"""
     found = []
-    for p in (1, 2, 4):
+    for p in (1, 2, 3, 4):
         if p > max_p or p > len(bars):
             continue
         pattern = []
@@ -139,7 +138,6 @@ def make_section(name, bar_measures, outro, max_bars=4):
     steps = steps_per_bar * p
     lanes = {l: ["."] * steps for l in LANES}
     rats = {l: ["."] * steps for l in LANES}
-    cond = ["."] * steps
     for b, (n, hits) in enumerate(pattern):
         for s, h in hits:
             for lane, (lvl, rat) in h:
@@ -147,24 +145,23 @@ def make_section(name, bar_measures, outro, max_bars=4):
                 if rat > 1:
                     rats[lane][b * steps_per_bar + s] = str(rat)
     dropped = []
+    marks = {l: ["."] * steps for l in LANES}      # a lane's hit at a step: F only during a fill, N not during one
     if fill:
         last = (p - 1) * steps_per_bar
         body_last = dict(pattern[p - 1][1])
         fill_hits = dict(fill[1])
         for s in range(steps_per_bar):
-            in_body, in_fill = s in body_last, s in fill_hits
-            if in_fill and not in_body:
-                cond[last + s] = "F"
-                for lane, (lvl, rat) in fill_hits[s]:
+            b, f = dict(body_last.get(s, ())), dict(fill_hits.get(s, ()))
+            for lane in set(b) | set(f):
+                if lane in f and lane not in b:    # the fill's own hit: only during a fill
+                    lvl, rat = f[lane]
                     lanes[lane][last + s] = LEVEL_CHAR[lvl]
                     if rat > 1:
                         rats[lane][last + s] = str(rat)
-            elif in_body and not in_fill:
-                cond[last + s] = "N"
-            elif in_body and in_fill and dict(fill_hits[s]) != dict(body_last[s]):
-                extra = [l for l, _ in fill_hits[s] if l not in dict(body_last[s])]
-                if extra:
-                    dropped.append((s, extra))
+                    marks[lane][last + s] = "F"
+                elif lane in b and lane not in f:  # the pattern's hit the fill leaves out: not during a fill
+                    marks[lane][last + s] = "N"
+                # both: the pattern's hit stays, whatever its level in the fill
     sec = {"name": name[:12], "steps": steps, "div": div}
     if outro:
         sec["outro"] = True
@@ -172,19 +169,83 @@ def make_section(name, bar_measures, outro, max_bars=4):
     r = {l: "".join(v) for l, v in rats.items() if set(v) != {"."}}
     if r:
         sec["ratchets"] = r
-    if fill:
-        sec["fill"] = "".join(cond)
+    m = {l: "".join(v) for l, v in marks.items() if set(v) != {"."}}
+    if m:
+        sec["fills"] = m
     return sec, p, score, fill is not None, dropped
 
 
 def body_key(sec):
     """the pattern without its fill: a later section with the same body is the same section"""
     cond = sec.get("fill", "")
-    strip = lambda v: "".join("." if i < len(cond) and cond[i] == "F" else ch for i, ch in enumerate(v))
+    marks = sec.get("fills", {})
+    def strip(l, v):
+        m = marks.get(l, "")
+        return "".join("." if (i < len(cond) and cond[i] == "F") or (i < len(m) and m[i] == "F") else ch for i, ch in enumerate(v))
     return json.dumps({"steps": sec["steps"], "div": sec["div"],
-                       "lanes": {l: strip(v) for l, v in sec["lanes"].items() if set(strip(v)) != {"."}},
-                       "ratchets": {l: strip(v) for l, v in sec.get("ratchets", {}).items() if set(strip(v)) != {"."}}},
+                       "lanes": {l: strip(l, v) for l, v in sec["lanes"].items() if set(strip(l, v)) != {"."}},
+                       "ratchets": {l: strip(l, v) for l, v in sec.get("ratchets", {}).items() if set(strip(l, v)) != {"."}}},
                       sort_keys=True)
+
+
+def auto_sections(song, tracks, min_bars=4):
+    """sections found from the drums alone (a file without markers): a run of bars that repeats a pattern of
+    1..4 bars (fills allowed) is a section; runs of silence are dropped, short runs join their neighbour"""
+    tps = QUARTER // 4
+    all_bars = [[t.measures[k] for t in tracks] for k in range(len(song.measureHeaders))]
+    keys = [bar_hits(ms, tps)[1] for ms in all_bars]
+    n = len(keys)
+    segs = []                                      # [start, end) of the explained runs
+    i = 0
+    while i < n:
+        best = None
+        for p in (1, 2, 3, 4):
+            if i + p > n:
+                break
+            pat = keys[i:i + p]
+            j, miss = i + p, 0
+            while j < n:
+                if keys[j] == pat[(j - i) % p]:
+                    miss = 0
+                elif miss == 0 and j + 1 < n and keys[j + 1] == pat[(j + 1 - i) % p]:
+                    miss = 1                       # one bar off the pattern, back on it after: a fill
+                else:
+                    break
+                j += 1
+            run = j - i
+            if run >= 2 * p and (best is None or run > best[1] + (best[0] - p)):   # longer wins; a tie, the shorter period
+                best = (p, run)
+        if best is None:
+            segs.append([i, i + 1, 0])             # a bar on its own (joined to a neighbour below)
+            i += 1
+        else:
+            segs.append([i, i + best[1], best[0]])
+            i += best[1]
+    # lone bars and short runs join the run before them (or after, at the start)
+    out = []
+    for sg in segs:
+        if out and (sg[1] - sg[0] < min_bars):
+            out[-1][1] = sg[1]
+        elif not out and sg[1] - sg[0] < min_bars:
+            out.append(sg)
+        else:
+            if out and out[-1][1] - out[-1][0] < min_bars:
+                out[-1][1] = sg[1]
+                out[-1][2] = sg[2]
+            else:
+                out.append(sg)
+    # silence dropped; neighbours with the same pattern merged
+    def silent(a, b):
+        return all(not keys[k] for k in range(a, b))
+    res = []
+    for a, b, p in out:
+        if silent(a, b):
+            continue
+        if res and p and res[-1][2] == p and keys[res[-1][0]:res[-1][0] + p] == keys[a:a + p]:
+            res[-1][1] = b
+        else:
+            res.append([a, b, p])
+    return [(f"PART {k + 1}", all_bars[a:b], a + 1, b) for k, (a, b, p) in enumerate(res)]
 
 
 def sections_of(song, tracks):
@@ -204,6 +265,100 @@ def sections_of(song, tracks):
     return out
 
 
+def bar_strings(measures, tps=QUARTER // 4):
+    """one bar as the JSON's strings at 1/16: {"lanes": {lane: "x..."}, "ratchets": {lane: "..2."}}"""
+    n, hits = bar_hits(measures, tps)
+    lanes, rats = {}, {}
+    for s, h in hits:
+        for lane, (lvl, rat) in h:
+            lanes.setdefault(lane, ["."] * n)[s] = LEVEL_CHAR[lvl]
+            if rat > 1:
+                rats.setdefault(lane, ["."] * n)[s] = str(rat)
+    out = {"lanes": {l: "".join(v) for l, v in lanes.items()}}
+    if rats:
+        out["ratchets"] = {l: "".join(v) for l, v in rats.items()}
+    return out
+
+
+def convert(source, sections=None, track=None, kit=0, keep_duplicates=False, auto=False, log=print, title=None, detail=False):
+    """a Guitar Pro file (a path, or a file-like object) -> the song JSON (a dict); what main() prints goes to log.
+    sections: marker titles to keep, in order; track: one track's number; auto: sections from the drums alone.
+    detail: the dict also carries "bars" (every bar of the file as strings at 1/16) and "ranges" (each section's
+    bars, 1-based, as found), for an editor that lets the user pick a pattern's bars by hand."""
+    song = gp.parse(source)
+    tracks = [t for t in song.tracks if t.number == track] if track else [t for t in song.tracks if t.isPercussionTrack]
+    if not tracks:
+        raise ValueError("no percussion track in this file (--track n to pick one)")
+    name = (song.title or (title or "SONG")).upper()[:12]
+    log(f"{song.title or title or 'song'}: {song.tempo} BPM, {len(song.measureHeaders)} measures, percussion: " +
+        ", ".join(f"track {t.number} {t.name.strip()!r}" for t in tracks))
+    wanted = [s.strip().upper() for s in sections.split(",")] if sections else None
+    if auto or not any(h.marker for h in song.measureHeaders):
+        secs = auto_sections(song, tracks)
+        log(f"  no markers{' used' if auto and any(h.marker for h in song.measureHeaders) else ''}: {len(secs)} sections found from the drums (bars that repeat a pattern); rename them in the JSON")
+    else:
+        secs = sections_of(song, tracks)
+    if wanted:
+        by_name = {n: x for x in secs for n in [x[0]]}
+        missing = [w for w in wanted if w not in by_name]
+        if missing:
+            raise ValueError(f"no section {', '.join(missing)}; the file has: {', '.join(n for n, _, _, _ in secs)}")
+        secs = [by_name[w] for w in wanted]
+    out, seen, skipped = [], {}, []
+    for sname, bars, first, last in secs:
+        outro = any(sname.startswith(w) for w in OUTRO_NAMES)
+        sec, p, score, has_fill, dropped = make_section(sname, bars, outro)
+        key = body_key(sec)
+        if key in seen and not keep_duplicates and not wanted and not outro:   # (the outro stays: the ending needs it)
+            kept = out[seen[key]]
+            if ("fill" in sec or "fills" in sec) and "fill" not in kept and "fills" not in kept:   # the same body, and this one has the fill: take it
+                for k in ("lanes", "ratchets", "fill", "fills"):
+                    if k in sec:
+                        kept[k] = sec[k]
+                skipped.append(f"{sname} (bars {first}-{last}: as {kept['name']}, whose fill it gives)")
+            else:
+                skipped.append(f"{sname} (bars {first}-{last}: as {kept['name']})")
+            continue
+        seen[key] = len(out)
+        hits = sum(c != "." for v in sec["lanes"].values() for c in v)
+        log(f"  {sname:12s} bars {first:3d}-{last:3d}: pattern {p} bar{'s' if p > 1 else ''} ({score:.0%} of {len(bars)}), "
+            f"{sec['steps']} steps {sec['div']}, {hits} hits{', a fill' if has_fill else ''}{', OUTRO' if outro else ''}")
+        for step, lanes in dropped:
+            log(f"    fill hit dropped at step {step + 1} ({', '.join(lanes)}): the pattern hits there too")
+        out.append(sec)
+    for sk in skipped:
+        log(f"  skipped {sk}")
+    if len(out) > 8:                               # unnamed parts go first, then from the end; the outro stays
+        order = sorted(range(len(out)), key=lambda i: (bool(out[i].get("outro")), not out[i]["name"].startswith("PART "), -i))
+        drop = set(order[:len(out) - 8])
+        log("  more than 8 sections: dropped " + ", ".join(out[i]["name"] for i in sorted(drop)) + " (--sections picks)")
+        out = [s for i, s in enumerate(out) if i not in drop]
+    # the packed song must fit its flash sector: the longest patterns give way (4 bars -> 2 -> 1)
+    def packed_size(secs_):
+        return 32 + sum(16 + (x["steps"] + 3) // 4 + x["steps"] * (14 if x.get("fills") else 10) for x in secs_)
+    by_name = {n: (bars, outro) for n, bars, _, _ in secs for outro in [any(n.startswith(w) for w in OUTRO_NAMES)]}
+    limits = {x["name"]: 4 for x in out}
+    while packed_size(out) > SNG_MAX:
+        big = max(out, key=lambda x: (x["steps"], limits[x["name"]]))
+        if limits[big["name"]] <= 1:
+            log(f"  the song does not fit ({packed_size(out)} B of {SNG_MAX}): drop sections (--sections)")
+            break
+        limits[big["name"]] //= 2
+        bname = big["name"]
+        bars, outro = by_name[bname]
+        sec, p, score, has_fill, dropped = make_section(bname, bars, outro, limits[bname])
+        out[out.index(big)] = sec
+        log(f"  {bname}: pattern cut to {p} bar{'s' if p > 1 else ''} ({score:.0%}) so the song fits its flash sector")
+    if not any(s.get("outro") for s in out):
+        log("  no section named OUTRO / ENDING / END: the ending stops on the next bar (set \"outro\": true in the JSON)")
+    spec = {"name": name, "bpm": int(song.tempo), "kit": kit, "swing": 50, "drum_level": 100, "drum_reverb": 20,
+            "sections": out}
+    if detail:
+        spec["bars"] = [bar_strings([t.measures[k] for t in tracks]) for k in range(len(song.measureHeaders))]
+        spec["ranges"] = [{"name": n, "first": first, "last": last} for n, _, first, last in secs]
+    return spec
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("gp", help="the .gp3 / .gp4 / .gp5 file")
@@ -212,71 +367,14 @@ def main():
     ap.add_argument("--track", type=int, help="one track's number (default: every percussion track)")
     ap.add_argument("--kit", type=int, default=0, help="the kit index (default 0, ACOUSTIC)")
     ap.add_argument("--keep-duplicates", action="store_true", help="keep sections whose pattern repeats an earlier one")
+    ap.add_argument("--auto", action="store_true", help="find the sections from the drums alone, ignoring the markers")
     a = ap.parse_args()
-    song = gp.parse(a.gp)
-    tracks = [t for t in song.tracks if t.number == a.track] if a.track else [t for t in song.tracks if t.isPercussionTrack]
-    if not tracks:
-        sys.exit("no percussion track in this file (--track n to pick one)")
-    title = (song.title or a.gp.rsplit("/", 1)[-1].rsplit(".", 1)[0]).upper()[:12]
-    print(f"{song.title or a.gp}: {song.tempo} BPM, {len(song.measureHeaders)} measures, percussion: " +
-          ", ".join(f"track {t.number} {t.name.strip()!r}" for t in tracks))
-    wanted = [s.strip().upper() for s in a.sections.split(",")] if a.sections else None
-    secs = sections_of(song, tracks)
-    if wanted:
-        by_name = {n: x for x in secs for n in [x[0]]}
-        missing = [w for w in wanted if w not in by_name]
-        if missing:
-            sys.exit(f"no section {', '.join(missing)}; the file has: {', '.join(n for n, _, _, _ in secs)}")
-        secs = [by_name[w] for w in wanted]
-    out, seen, skipped = [], {}, []
-    for name, bars, first, last in secs:
-        outro = any(name.startswith(w) for w in OUTRO_NAMES)
-        sec, p, score, has_fill, dropped = make_section(name, bars, outro)
-        key = body_key(sec)
-        if key in seen and not a.keep_duplicates and not wanted and not outro:   # (the outro stays: the ending needs it)
-            kept = out[seen[key]]
-            if "fill" in sec and "fill" not in kept:   # the same body, and this one has the fill: take it
-                for k in ("lanes", "ratchets", "fill"):
-                    if k in sec:
-                        kept[k] = sec[k]
-                skipped.append(f"{name} (bars {first}-{last}: as {kept['name']}, whose fill it gives)")
-            else:
-                skipped.append(f"{name} (bars {first}-{last}: as {kept['name']})")
-            continue
-        seen[key] = len(out)
-        hits = sum(c != "." for v in sec["lanes"].values() for c in v)
-        print(f"  {name:12s} bars {first:3d}-{last:3d}: pattern {p} bar{'s' if p > 1 else ''} ({score:.0%} of {len(bars)}), "
-              f"{sec['steps']} steps {sec['div']}, {hits} hits{', a fill' if has_fill else ''}{', OUTRO' if outro else ''}")
-        for step, lanes in dropped:
-            print(f"    fill hit dropped at step {step + 1} ({', '.join(lanes)}): the pattern hits there too")
-        out.append(sec)
-    for sk in skipped:
-        print(f"  skipped {sk}")
-    if len(out) > 8:                               # unnamed parts go first, then from the end; the outro stays
-        order = sorted(range(len(out)), key=lambda i: (bool(out[i].get("outro")), not out[i]["name"].startswith("PART "), -i))
-        drop = set(order[:len(out) - 8])
-        print("  more than 8 sections: dropped " + ", ".join(out[i]["name"] for i in sorted(drop)) + " (--sections picks)")
-        out = [s for i, s in enumerate(out) if i not in drop]
-    # the packed song must fit its flash sector: the longest patterns give way (4 bars -> 2 -> 1)
-    def packed_size(secs):
-        return 32 + sum(16 + (x["steps"] + 3) // 4 + x["steps"] * 10 for x in secs)
-    by_name = {n: (bars, outro) for n, bars, _, _ in [(n, b, f, l) for n, b, f, l in secs]}
-    limits = {x["name"]: 4 for x in out}
-    while packed_size(out) > SNG_MAX:
-        big = max(out, key=lambda x: (x["steps"], limits[x["name"]]))
-        if limits[big["name"]] <= 1:
-            print(f"  the song does not fit ({packed_size(out)} B of {SNG_MAX}): drop sections (--sections)")
-            break
-        limits[big["name"]] //= 2
-        name = big["name"]
-        bars, outro = by_name[name]
-        sec, p, score, has_fill, dropped = make_section(name, bars, outro, limits[name])
-        out[out.index(big)] = sec
-        print(f"  {name}: pattern cut to {p} bar{'s' if p > 1 else ''} ({score:.0%}) so the song fits its flash sector")
-    if not any(s.get("outro") for s in out):
-        print("  no section named OUTRO / ENDING / END: the ending stops on the next bar (set \"outro\": true in the JSON)")
-    spec = {"name": title, "bpm": int(song.tempo), "kit": a.kit, "swing": 50, "drum_level": 100, "drum_reverb": 20,
-            "sections": out}
+    try:
+        spec = convert(a.gp, sections=a.sections, track=a.track, kit=a.kit, keep_duplicates=a.keep_duplicates, auto=a.auto,
+                       title=a.gp.rsplit("/", 1)[-1].rsplit(".", 1)[0])
+    except ValueError as e:
+        sys.exit(str(e))
+    out = spec["sections"]
     if a.out:
         with open(a.out, "w") as f:
             json.dump(spec, f, indent=1)

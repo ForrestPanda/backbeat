@@ -62,6 +62,17 @@ static uint32_t song_sec(uint8_t *b, uint32_t pos, const char *name, uint32_t le
     return pos + SNG_SEC_HDR + nf + len * sizeof(dstep_t);
 }
 
+/* lane marks appended to a section (flag 2): per step the "only during a fill" and "not during a fill" lanes */
+static uint32_t song_marks(uint8_t *b, uint32_t secpos, uint32_t end, const uint16_t *fonly, const uint16_t *fno)
+{
+    uint32_t len = b[secpos + 12], i;
+    b[secpos + 14] |= 2;
+    for (i = 0; i < len; i++) {
+        b[end + 4 * i] = (uint8_t)fonly[i]; b[end + 4 * i + 1] = (uint8_t)(fonly[i] >> 8);
+        b[end + 4 * i + 2] = (uint8_t)fno[i]; b[end + 4 * i + 3] = (uint8_t)(fno[i] >> 8);
+    }
+    return end + 4 * len;
+}
 static void capture(uint32_t slot) { proj_capture(&proj_slot[slot]); }
 static void cc(uint32_t ch, uint32_t num, uint32_t val) { um_byte(0xB0u | (ch - 1u)); um_byte(num); um_byte(val); }
 static void pc(uint32_t ch, uint32_t n) { um_byte(0xC0u | (ch - 1u)); um_byte(n); }
@@ -124,6 +135,15 @@ int main(int argc, char **argv)
                    "x.x.x.x.x.x.x.x.x.x.x.x.x.x.x.x.", "............................FFFF");
     pos = song_sec(blob[0], pos, "OUTRO", 16, 2, SNG_F_OUTRO, "x...............", "........X.......", 0, 0);
     blob_n[0] = pos;
+    {   /* slot 3: one section with lane marks: step 12's tom (lane 10) only during a fill, step 12's hat (lane 4)
+         * not during one; step 0 plain */
+        uint16_t fonly[16] = {0}, fno[16] = {0};
+        uint32_t p3 = song_hdr(blob[3], "MARKS", 120, 0, 1), secpos = p3;
+        fonly[12] = 1u << 10; fno[12] = 1u << 4;
+        p3 = song_sec(blob[3], p3, "ONE", 16, 2, 0, "x...............", "....x.......x...", "x.x.x.x.x.x.x...", 0);
+        dstep_set((dstep_t *)(blob[3] + secpos + SNG_SEC_HDR + 4 + 12 * sizeof(dstep_t)), 10, LV_NORM, 0);   /* the tom */
+        blob_n[3] = song_marks(blob[3], secpos, p3, fonly, fno);
+    }
     pos = song_hdr(blob[1], "SLOW", 100, 2, 1);
     pos = song_sec(blob[1], pos, "ONLY", 16, 2, 0, "x.x.x.x.x.x.x.x.", 0, 0, 0);
     blob_n[1] = pos;
@@ -250,6 +270,21 @@ int main(int argc, char **argv)
     cc(16, 23, 0); advance(CTL * 2u);
     assert(!song.playing);
     printf("song: bad / empty slot ignored, PC 127 back to A..D PASS\n");
+
+    /* ---- (lane marks) a section whose hits are marked one by one: the masks reach the sequencer, the lanes
+     * follow them in and out of a fill; a plain section clears them */
+    pc(16, 3); advance(CTL); sng_poll();
+    assert(sng_cur == 3 && drum_fonly[12] == (1u << 10) && drum_fno[12] == (1u << 4) && !drum_fonly[0] && !drum_fno[0]);
+    fill_now = 0;
+    assert(drum_fill_mask(12) == (1u << 10) && drum_fill_mask(0) == 0);    /* normal play: the tom stays out */
+    fill_now = 1;
+    assert(drum_fill_mask(12) == (1u << 4));                                /* a fill: the hat stays out, the tom in */
+    fill_now = 0;
+    assert(sng_check(blob[3], blob_n[3], &tmp) == 0 && tmp.off[0] == SNG_HDR);
+    assert(sng_check(blob[3], blob_n[3] - 1u, &tmp) == 6);                  /* the marks counted in the size */
+    pc(16, 0); advance(CTL); sng_poll();                                    /* a song without marks: cleared */
+    assert(sng_cur == 0 && !drum_fonly[12] && !drum_fno[12]);
+    printf("song: lane marks: only-during and not-during a fill, per lane and step; cleared by a plain section PASS\n");
 
     /* ---- the pedal settings object */
     {

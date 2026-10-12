@@ -144,6 +144,9 @@ def main(pkg, version, out):
         raise SystemExit('editor.html and index_pkg.html must link download="sloop-editor.html" once; update make_site.py')
     (ed / "index.html").write_text(ed_html.replace('download="sloop-editor.html"', dl), encoding="utf-8")
     (ed / "sloop-editor.html").write_text(offline_editor(ed_html), encoding="utf-8")
+    (ed / "gp2song.py").write_text((HERE.parent / "tools" / "gp2song.py").read_text(encoding="utf-8"), encoding="utf-8")   # (fm1-arranger:
+                                                                                                                            # the editor's From Guitar Pro)
+    shutil.copytree(HERE / "kit", ed / "kit", dirs_exist_ok=True)                                                           # (its player's kit)
     (inst / "index.html").write_text(html.replace('download="sloop-editor.html"', dl), encoding="utf-8")
     for f in ("fukiai.ttf", "FUKIAI-LICENSE.txt"):
         if (HERE / f).exists():

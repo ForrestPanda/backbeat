@@ -4,6 +4,7 @@
 
     tools/fm1_render.py songs/example.json
     tools/fm1_render.py songs/example.json --play "INTRO:2 VERSE:8 CHORUS:8 SOLO:8 CHORUS:8 OUTRO"
+    tools/fm1_render.py songs/black.json --play "INTRO:2, VERSE 1:4, PRE - CHORUS:4, CHORUS:4"   # commas: names with spaces
     tools/fm1_render.py songs/example.json --kit 7 --out take.wav --listen
 
 The play list names the sections (or their numbers) with the bars each plays; the next one is asked for
@@ -57,8 +58,11 @@ def main():
     names = [str(s.get("name", f"PART {i + 1}"))[:12].upper() for i, s in enumerate(spec["sections"])]
     if a.play:
         entries = []
-        for tok in a.play.replace(",", " ").split():
-            name, _, bars = tok.partition(":")
+        toks = [x.strip() for x in a.play.split(",")] if "," in a.play else a.play.split()   # (commas: names with spaces)
+        for tok in toks:
+            if not tok:
+                continue
+            name, _, bars = tok.rpartition(":") if ":" in tok else (tok, "", "")
             key = name.upper()
             if key.isdigit():
                 idx = int(key)

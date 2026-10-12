@@ -585,6 +585,10 @@ static void project_apply(const project_t *p)
     panic_req = (1u << NTRK) - 1u;
     drum_mute = 0;                                      /* (the live mutes: a performance's, not the project's) */
     fm1_irq_off();                                      /* the audio ISR must not see half a project */
+#if FELUCCA_ARRANGER
+    sng_unload();                                       /* (fm1-arranger: a project over a song: A..D again) */
+    drum_fill_masks_clear();
+#endif
     proj_apply(p, 1);
     song.sel = (uint8_t)(p->sel < NTRK ? p->sel : 0u);
     fm1_irq_on();
@@ -724,7 +728,8 @@ static void persist_boot(void)                    /* before settings_init / pane
     {
         uint32_t k;
         for (k = 0; k < SMP_USER_SLOTS; k++)
-            smp_user_scan(k);
+            if (k != SNG_SMP_SLOT)                 /* (fm1-arranger: USR1's flash holds the songs: never a slot) */
+                smp_user_scan(k);
     }
     {
         int n = st_load(OBJ_SETTINGS, &p, sizeof p);

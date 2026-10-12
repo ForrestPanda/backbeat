@@ -7,6 +7,9 @@
 # SLOOP 2.4: FM6 (fm6_op_run, fm6_op_fb: the per-sample operator loops; fm6_render: the voice's output loop)
 # are in FUNCS without a budget yet: the engine was ported on a host without the pi32v2 toolchain; the
 # next ./build.sh + BUDGET_UPDATE=1 adds their lines (until then they print "no budget", not a failure).
+# fm1-arranger (2026-10-12): fm1_alnk0_irq re-based to what SLOOP 2.6 itself measures with this toolchain
+# (268: the same cost on the untouched upstream build; the ISR grew after 2.0 and the line was not updated);
+# the FM6 lines added from the same build. Everything else as reviewed.
 analog_render 638
 digital_render 333
 phase_render 79
@@ -21,4 +24,7 @@ grain_render 1734
 grain_block 138
 slicer_track 825
 drums_mix 6153
-fm1_alnk0_irq 174
+fm6_op_run 72
+fm6_op_fb 26
+fm6_render 363
+fm1_alnk0_irq 268
