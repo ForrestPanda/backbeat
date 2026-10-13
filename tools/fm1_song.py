@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""fm1-arranger: songs for the FM-1 from a JSON file (firmware/src/sng.c).
+"""fm1-drummer: songs for the FM-1 from a JSON file (firmware/src/sng.c).
 
     tools/fm1_song.py song.json                     check it, print its sections and size
     tools/fm1_song.py song.json --out song.bin      the packed song (as the device stores it)
@@ -8,12 +8,13 @@
     tools/fm1_song.py --get 0 --out song.bin        read slot 0 back (packed)
     tools/fm1_song.py --erase 0                     erase slot 0
     tools/fm1_song.py --pedal-channel 16            the pedal channel: 0 off, 1..16, 17 any (kept through power-off)
+    tools/fm1_song.py --count-in 1                  bars of clicks before a section started from stopped: 0, 1, 2
 
 The JSON (see docs/design.md):
 
     {"name": "MY SONG", "bpm": 120, "kit": 0, "swing": 50, "drum_level": 100, "drum_reverb": 20,
      "sections": [
-       {"name": "VERSE", "steps": 16, "div": "1/16", "outro": false,
+       {"name": "VERSE", "steps": 16, "div": "1/16", "time": "4/4", "outro": false,
         "lanes": {"KICK": "x...x...x...x...", "SNARE": "....x.......x...", "HAT": "x.x.x.x.x.x.x.x."},
         "ratchets": {"SNARE": "............2..."},
         "fills": {"HITOM": "............FF..", "HAT": "............NNNN"}}]}
@@ -23,9 +24,11 @@ string: '.' or 1, or 2..4 repeats inside the step. "fills" marks a lane's hits o
 always, 'F' only during a fill (the pedal's transition, CC 21, or the device's GLO + key 9 / 10), 'N' never
 during one. The older "fill" string does the same for a whole step, every lane at once. Lanes:
 KICK, KICK2, SNARE, CLAP, HAT, OPENHAT, PEDAL, RIM, SNARE2, LOWTOM, HITOM, CRASH, RIDE, SHAKER, CONGA,
-COWBELL (spaces and case do not matter). div: 1/4 1/8 1/16 1/32 8T 16T 1/2 1BAR 2BAR. kit: the index in the
-device's KIT list (0 ACOUSTIC .. as the web editor shows them). Up to 8 sections; the packed song must stay
-under 3800 bytes (about 8 sections of 48 steps, or 5 of 64).
+COWBELL (spaces and case do not matter). div: 1/4 1/8 1/16 1/32 8T 16T 1/2 1BAR 2BAR. time: the section's meter,
+n/d with n 1..16 and d 2, 4, 8 or 16 (none: 4/4); the pedal's bars, the click and the count-in follow it. kit: the
+index in the device's KIT list (0 ACOUSTIC .. as the web editor shows them). Up to 8 sections; the packed song
+("SNG2": a section header of 18 bytes, the fill conditions, then a step: 2 bytes of lanes and a byte a hit) must
+stay under 3800 bytes: 64 steps of three hits take about 340 bytes, so 8 full sections fit.
 
 Sending needs mido (pip install mido python-rtmidi); the transfer is the editor protocol's backup PUT
 (EDITOR_PROTOCOL.md: object 16 + slot; the pedal settings: object 24)."""
@@ -39,7 +42,8 @@ import zlib
 HDR = [0x7D, 0x46, 0x4C]
 BK_LIST, BK_GET, BK_PUT = 34, 35, 36
 OBJ_SONG0, OBJ_ARRSET = 16, 24
-SNG_MAGIC = b"SNG1"
+SNG_MAGIC = b"SNG2"
+HDR, SEC_HDR = 32, 18
 SNG_MAX = 3800
 NSTEP = 64
 LANES = ["KICK", "KICK2", "SNARE", "CLAP", "HAT", "OPENHAT", "PEDAL", "RIM",
@@ -47,6 +51,7 @@ LANES = ["KICK", "KICK2", "SNARE", "CLAP", "HAT", "OPENHAT", "PEDAL", "RIM",
 DIVS = ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1BAR", "2BAR"]
 LEVELS = {"x": 0, "g": 1, "o": 2, "X": 3}            # LV_NORM, LV_GHOST, LV_SOFT, LV_HARD
 CONDS = {".": 0, "F": 1, "N": 2}                     # FC_NORM, FC_FILL, FC_NOFILL
+DENS = [4, 8, 2, 16]                                 # the meter byte's denominator code
 
 
 def lane_index(name):
@@ -54,6 +59,24 @@ def lane_index(name):
     if key not in LANES:
         sys.exit(f"unknown lane {name!r}; lanes: {' '.join(LANES)}")
     return LANES.index(key)
+
+
+def meter_byte(t, name):
+    """a section's "time" ("7/8"; none: 4/4) as the section header's meter byte: 0 = 4/4, else the numerator
+    (1..16) in bits 0..4 and the denominator's code (DENS) in bits 5..6"""
+    if t is None or t == "":
+        return 0
+    try:
+        num, den = (int(x) for x in str(t).split("/"))
+    except ValueError:
+        sys.exit(f"{name}: time {t!r} is not n/d")
+    if not 1 <= num <= 16 or den not in DENS:
+        sys.exit(f"{name}: time {t}: n 1..16, d 2, 4, 8 or 16")
+    return 0 if (num, den) == (4, 4) else num | DENS.index(den) << 5
+
+
+def meter_str(v):
+    return None if not v & 31 else f"{v & 31}/{DENS[(v >> 5) & 3]}"
 
 
 def pack_section(sec, index):
@@ -64,10 +87,8 @@ def pack_section(sec, index):
         sys.exit(f"{name}: steps must be 1..{NSTEP}")
     if div not in DIVS:
         sys.exit(f"{name}: div must be one of {' '.join(DIVS)}")
-    flags = (1 if sec.get("outro") else 0)
-    on = [[0, 0] for _ in range(steps)]
-    lvl = [[0] * 4 for _ in range(steps)]
-    rat = [[0] * 4 for _ in range(steps)]
+    meter = meter_byte(sec.get("time"), name)
+    hit = [[None] * 16 for _ in range(steps)]        # each lane's hit byte: level, ratchet << 2, mark << 4
     for lane, s in sec.get("lanes", {}).items():
         k = lane_index(lane)
         s = str(s)
@@ -78,8 +99,7 @@ def pack_section(sec, index):
                 continue
             if ch not in LEVELS:
                 sys.exit(f"{name}: lane {lane}: '{ch}' is not one of . g o x X")
-            on[i][k >> 3] |= 1 << (k & 7)
-            lvl[i][k >> 2] |= LEVELS[ch] << (2 * (k & 3))
+            hit[i][k] = LEVELS[ch]
     for lane, s in sec.get("ratchets", {}).items():
         k = lane_index(lane)
         for i, ch in enumerate(str(s)):
@@ -87,11 +107,9 @@ def pack_section(sec, index):
                 continue
             if ch not in "234":
                 sys.exit(f"{name}: ratchets {lane}: '{ch}' is not . 1 2 3 4")
-            rat[i][k >> 2] |= (int(ch) - 1) << (2 * (k & 3))
-    marks = sec.get("fills", {})                     # a lane's own marks: F only during a fill, N not during one
-    fonly = [0] * steps
-    fno = [0] * steps
-    for lane, v in marks.items():
+            if i < steps and hit[i][k] is not None:
+                hit[i][k] |= (int(ch) - 1) << 2
+    for lane, v in sec.get("fills", {}).items():    # a lane's own marks: F only during a fill, N not during one
         k = lane_index(lane)
         v = str(v)
         if len(v) > steps:
@@ -101,8 +119,8 @@ def pack_section(sec, index):
                 continue
             if ch not in "FN":
                 sys.exit(f"{name}: fills {lane}: '{ch}' is not . F N")
-            (fonly if ch == "F" else fno)[i] |= 1 << k
-    has_marks = any(fonly) or any(fno)
+            if hit[i][k] is not None:
+                hit[i][k] |= (1 if ch == "F" else 2) << 4
     fill = bytearray((steps + 3) // 4)
     cond = str(sec.get("fill", ""))
     if len(cond) > steps:
@@ -111,15 +129,14 @@ def pack_section(sec, index):
         if ch not in CONDS:
             sys.exit(f"{name}: fill: '{ch}' is not . F N")
         fill[i // 4] |= CONDS[ch] << (2 * (i % 4))
-    out = bytearray(name.encode("ascii", "replace").ljust(12, b"\0"))
-    out += bytes([steps, DIVS.index(div), flags | (2 if has_marks else 0), 0])
-    out += fill
+    body = bytearray(fill)
     for i in range(steps):
-        out += bytes(on[i]) + bytes(lvl[i]) + bytes(rat[i])
-    if has_marks:
-        for i in range(steps):
-            out += struct.pack("<HH", fonly[i], fno[i])
-    return bytes(out)
+        on = sum(1 << k for k in range(16) if hit[i][k] is not None)
+        body += struct.pack("<H", on) + bytes(h for h in hit[i] if h is not None)
+    size = SEC_HDR + len(body)
+    out = bytearray(name.encode("ascii", "replace").ljust(12, b"\0"))
+    out += bytes([steps, DIVS.index(div), 1 if sec.get("outro") else 0, meter]) + struct.pack("<H", size)
+    return bytes(out + body)
 
 
 def pack(spec):
@@ -143,18 +160,32 @@ def pack(spec):
     return blob
 
 
+def sections(blob):
+    """the packed song's sections: (name, steps, div, flags, meter, offset of the steps, size), as sng.c walks them"""
+    nsec = blob[22]
+    pos = HDR
+    out = []
+    for _ in range(nsec):
+        steps, div, flags, meter = blob[pos + 12:pos + 16]
+        size = blob[pos + 16] | blob[pos + 17] << 8
+        out.append((blob[pos:pos + 12].rstrip(b"\0").decode("ascii", "replace"), steps, div, flags, meter,
+                    pos + SEC_HDR + (steps + 3) // 4, size))
+        pos += size
+    return out
+
+
 def describe(blob):
     name = blob[4:16].rstrip(b"\0").decode("ascii", "replace")
     bpm, kit, swing, lvl, rev, nsec = struct.unpack("<HBBBBB", blob[16:23])
     print(f"{name}: {bpm} BPM, kit {kit}, swing {swing}, drums {lvl} / reverb {rev}, {nsec} sections, {len(blob)} bytes")
-    pos = 32
-    for k in range(nsec):
-        sname = blob[pos:pos + 12].rstrip(b"\0").decode("ascii", "replace")
-        steps, div, flags = blob[pos + 12], blob[pos + 13], blob[pos + 14]
-        nf = (steps + 3) // 4
-        hits = sum(bin(blob[pos + 16 + nf + i * 10] | blob[pos + 16 + nf + i * 10 + 1] << 8).count("1") for i in range(steps))
-        print(f"  {k}: {sname:12s} {steps:2d} steps {DIVS[div]:5s} {hits:3d} hits{'  OUTRO' if flags & 1 else ''}{'  lane marks' if flags & 2 else ''}")
-        pos += 16 + nf + steps * 10 + (steps * 4 if flags & 2 else 0)
+    for k, (sname, steps, div, flags, meter, q, size) in enumerate(sections(blob)):
+        hits = 0
+        for _ in range(steps):
+            n = bin(blob[q] | blob[q + 1] << 8).count("1")
+            hits += n
+            q += 2 + n
+        print(f"  {k}: {sname:12s} {steps:2d} steps {DIVS[div]:5s} {meter_str(meter) or '4/4':5s} {hits:3d} hits {size:4d} bytes"
+              f"{'  OUTRO' if flags & 1 else ''}")
 
 
 def pack7(b):
@@ -253,6 +284,7 @@ def main():
     ap.add_argument("--get", type=int, metavar="SLOT", help="read song slot 0..7 back")
     ap.add_argument("--erase", type=int, metavar="SLOT", help="erase song slot 0..7")
     ap.add_argument("--pedal-channel", type=int, metavar="CH", help="0 off, 1..16, 17 any")
+    ap.add_argument("--count-in", type=int, metavar="BARS", help="bars of clicks before a start from stopped: 0, 1, 2")
     a = ap.parse_args()
     blob = None
     if a.json:
@@ -276,12 +308,24 @@ def main():
     if a.erase is not None:
         rc = Link().put(OBJ_SONG0 + a.erase, b"")
         print("erased" if rc == 0 else f"refused: rc {rc}")
-    if a.pedal_channel is not None:
-        if not 0 <= a.pedal_channel <= 17:
+    if a.pedal_channel is not None or a.count_in is not None:
+        if a.pedal_channel is not None and not 0 <= a.pedal_channel <= 17:
             sys.exit("the pedal channel is 0..17")
-        rc = Link().put(OBJ_ARRSET, b"ARS1" + bytes([a.pedal_channel]) + bytes(11))
-        print("pedal channel set" if rc == 0 else f"refused: rc {rc}")
-    if not any(x is not None for x in (a.json, a.get, a.erase, a.pedal_channel)):
+        if a.count_in is not None and not 0 <= a.count_in <= 2:
+            sys.exit("the count-in is 0, 1 or 2 bars")
+        link = Link()
+        try:
+            cur = link.get(OBJ_ARRSET)                       # the settings as they are (the other one kept)
+        except SystemExit:
+            cur = b""
+        ch, count = (cur[4], cur[5]) if cur[:4] == b"ARS1" and len(cur) >= 6 else (16, 0)
+        if a.pedal_channel is not None:
+            ch = a.pedal_channel
+        if a.count_in is not None:
+            count = a.count_in
+        rc = link.put(OBJ_ARRSET, b"ARS1" + bytes([ch, count]) + bytes(10))
+        print(f"pedal channel {ch}, count-in {count} bar(s): set" if rc == 0 else f"refused: rc {rc}")
+    if not any(x is not None for x in (a.json, a.get, a.erase, a.pedal_channel, a.count_in)):
         ap.print_help()
 
 

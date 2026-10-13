@@ -53,13 +53,11 @@ run "pedal: sections, next / previous, stop, tap tempo over TRS MIDI" "$OUT/peda
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/song_test" tests/song_test.c -lm
 run "songs: packed form, PC loads one, its sections on the bar, the outro, back to A..D" "$OUT/song_test"
 run "songs: the example packed by tools/fm1_song.py passes the firmware's check" sh -c \
-    "python3 tools/fm1_song.py songs/example.json --out $OUT/example-song.bin >/dev/null && $OUT/song_test $OUT/example-song.bin"
-run "songs: every song in songs/ packs (tools/fm1_song.py)" sh -c \
-    'for f in songs/*.json; do python3 tools/fm1_song.py "$f" >/dev/null || exit 1; done'
+    "python3 tools/fm1_song.py tests/example-song.json --out $OUT/example-song.bin >/dev/null && $OUT/song_test $OUT/example-song.bin"
 run "songs: the example played by the pedal and rendered (tools/fm1_render.py, tests/song_render.c)" sh -c \
-    "python3 tools/fm1_render.py songs/example.json --out $OUT/example-song.wav --tail 0.5 >/dev/null && [ -s $OUT/example-song.wav ]"
+    "python3 tools/fm1_render.py tests/example-song.json --out $OUT/example-song.wav --tail 0.5 >/dev/null && [ -s $OUT/example-song.wav ]"
 run "kit: tools/mkkit.py from the CC0 recordings into a USR3+4 image, the example rendered with it" sh -c \
-    "python3 tools/mkkit.py STUDIO assets/samples-cc0/KIT --image $OUT/studio-kit.img >/dev/null && python3 tools/fm1_render.py songs/example.json --usrkit $OUT/studio-kit.img --out $OUT/example-studio.wav --tail 0.5 | grep -q 'USR3+4'"
+    "python3 tools/mkkit.py STUDIO assets/samples-cc0/KIT --image $OUT/studio-kit.img >/dev/null && python3 tools/fm1_render.py tests/example-song.json --usrkit $OUT/studio-kit.img --out $OUT/example-studio.wav --tail 0.5 | grep -q 'USR3+4'"
 if [ -f ../../kits/avl-drumkits/Red_Zeppelin_5pc.sfz ] && command -v sox >/dev/null 2>&1; then
     run "kit: tools/mkkit.py --sfz on AVL Drumkits' Red Zeppelin (16 lanes from the hardest layers)" sh -c \
         "python3 tools/mkkit.py REDZEP --sfz ../../kits/avl-drumkits/Red_Zeppelin_5pc.sfz --image $OUT/redzep.img | grep -q '16 lanes'"

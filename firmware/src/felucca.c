@@ -48,13 +48,14 @@
 #if FELUCCA_UART
 #include "midi_uart.c"
 #endif
-#define FELUCCA_ARRANGER 1
+#define FELUCCA_DRUMMER 1
 #include "arranger.c"
 #include "seq.c"
 #include "audio.c"
 #include "panel.c"
 #include "ui.c"
 #include "ui_song.c"
+#include "ui_drummer.c"       /* fm1-drummer: the song screen, on the SONG page */
 #include "ui_studio.c"
 #include "icons.c"           /* parameter icons (FELUCCA_ICONS), used by ui_draw.c */
 #include "ui_draw.c"

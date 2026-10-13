@@ -46,8 +46,8 @@ static void draw_head(void)
     uint32_t sig = (uint32_t)song.playing * 3u + rec * 5u + (uint32_t)(song.octave + 8) * 11u + song.sel * 13131u +
                    (ui.msg_t ? str_hash(7u, ui.msg) : 0u) + (uint32_t)song.g[G_BPM] * 101u + (ui.bpm_t != 0) * 31u +
                    (uint32_t)batt_shown() * 7777u + (usb.config && !usb.suspended) * 99991u + mlu.on * 7919u
-#if FELUCCA_ARRANGER
-                   + str_hash(11u, sng_ui_name) * 3u + live_bar * 17u + (uint32_t)(live_sec + 1) * 23u   /* (fm1-arranger) */
+#if FELUCCA_DRUMMER
+                   + str_hash(11u, sng_ui_name) * 3u + live_bar * 17u + (uint32_t)(live_sec + 1) * 23u   /* (fm1-drummer) */
 #endif
                    ;
     if (!ui.force && sig == ui.head_sig)
@@ -76,8 +76,8 @@ static void draw_head(void)
     x = cv_text(x, 1, &FONT_S, b, ui.bpm_t ? C_WHITE : C_HI);   /* white while SELECT turns it */
     if (mlu.on) {                                     /* MIDI LEARN on (2.6, GLO + F#3): in the octave's place */
         cv_text(x + 12, 1, &FONT_S, "LEARN", C_AMB);
-#if FELUCCA_ARRANGER
-    } else if (sng_ui_name[0] && live_sec >= 0) {     /* fm1-arranger: the section playing and its bar, in the
+#if FELUCCA_DRUMMER
+    } else if (sng_ui_name[0] && live_sec >= 0) {     /* fm1-drummer: the section playing and its bar, in the
                                                        * octave's place: "CHORUS 3" (the name cut to what fits) */
         char nm[13], full[13];
         uint32_t n = 0, bars = song.playing ? (live_bar == 0xFFFFFFFFu ? 1u : live_bar + 1u) : 0u;
@@ -1003,8 +1003,8 @@ static void ui_draw(void)
 {
     ui.frame++;
     pads_tick();
-#if FELUCCA_ARRANGER
-    if (pedal_ui) {                                     /* fm1-arranger: the pedal's events, said in the top bar */
+#if FELUCCA_DRUMMER
+    if (pedal_ui) {                                     /* fm1-drummer: the pedal's events, said in the top bar */
         uint32_t ev;
         char nm[13];
         fm1_irq_off();                                  /* (the ISR writes them: taken whole) */
@@ -1019,6 +1019,7 @@ static void ui_draw(void)
         case PU_FILL:   ui_message("FILL NEXT BAR"); break;
         case PU_NOSONG: ui_say(nm[0] ? "NO SONG " : "SECTIONS A-D", nm); break;
         case PU_STOP:   ui_message("STOP"); break;
+        case PU_COUNT:  ui_say("COUNT-IN: ", nm); break;
         default: break;
         }
         ui.msg_t = 90;                                  /* (longer than a knob's message: read from the floor) */
@@ -1071,9 +1072,12 @@ static void ui_draw(void)
         lcd_fill(0, 0, 240, 240, C_BLACK);
         ui.force = 1;
     }
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     if (!ui.menu && on_song_page()) {
-        song_screen_draw();
+        if (drummer_on())
+            drummer_draw();                             /* (fm1-drummer: a song's, ui_drummer.c) */
+        else
+            song_screen_draw();
         ui_timers();
         ui.force = 0;
         return;

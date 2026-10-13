@@ -399,9 +399,9 @@ _Static_assert(sizeof proj_tmp >= sizeof(project_t) && sizeof proj_tmp >= sizeof
                sizeof proj_tmp >= sizeof(persist_t), "backup staging");
 static persist_t ed_bk_set;                             /* LIST's snapshot of the settings */
 static uint8_t ed_bk_ml[MIDI_PART];                     /* .. and of the MIDI part (2.6, object 10: project.c) */
-static arrset_t ed_bk_ars;                              /* fm1-arranger: GET's copy of the pedal settings */
+static arrset_t ed_bk_ars;                              /* fm1-drummer: GET's copy of the pedal settings */
 _Static_assert(SNG_MAX <= sizeof proj_tmp && SNG_MAX <= ST_PAYLOAD_MAX, "a song is staged in the project buffer, in a sector");
-#define ED_BK_SONG0 16u                                 /* fm1-arranger: objects 16..23 the songs, 24 the pedal settings */
+#define ED_BK_SONG0 16u                                 /* fm1-drummer: objects 16..23 the songs, 24 the pedal settings */
 #define ED_BK_ARRSET 24u
 static uint8_t ed_bk_valid, ed_bk_put, ed_bk_id;
 static uint32_t ed_bk_len, ed_bk_crc, ed_bk_pos, ed_bk_ms;
@@ -450,7 +450,7 @@ static const uint8_t *ed_bk_obj(uint32_t id, uint32_t *len)   /* 0 = no such obj
             *len = sizeof ed_bk_ml;
         return ed_bk_ml;
     }
-    if (id >= ED_BK_SONG0 && id < ED_BK_SONG0 + SNG_SLOTS) {   /* fm1-arranger: a song, in flash (XIP) */
+    if (id >= ED_BK_SONG0 && id < ED_BK_SONG0 + SNG_SLOTS) {   /* fm1-drummer: a song, in flash (XIP) */
         uint32_t n = 0;
         const uint8_t *q = sng_fetch(id - ED_BK_SONG0, &n);
         sng_t tmp;
@@ -458,12 +458,12 @@ static const uint8_t *ed_bk_obj(uint32_t id, uint32_t *len)   /* 0 = no such obj
             *len = n;
         return q ? q : ED_BK_RAW;
     }
-    if (id == ED_BK_ARRSET) {                             /* fm1-arranger: the pedal settings */
+    if (id == ED_BK_ARRSET) {                             /* fm1-drummer: the pedal settings */
         arrset_fill(&ed_bk_ars);
         *len = sizeof ed_bk_ars;
         return (const uint8_t *)&ed_bk_ars;
     }
-    if (id == 32u + SNG_SMP_SLOT) {                       /* fm1-arranger: USR1's flash holds the songs: listed empty */
+    if (id == 32u + SNG_SMP_SLOT) {                       /* fm1-drummer: USR1's flash holds the songs: listed empty */
         *len = 0;
         return smp_user_xip(SNG_SMP_SLOT);
     }
@@ -534,7 +534,7 @@ static uint32_t ed_bk_commit(void)
         persist_saved = p;
         return 0;
     }
-    if (id >= ED_BK_SONG0 && id < ED_BK_SONG0 + SNG_SLOTS) {   /* fm1-arranger: a song (n 0: erased) */
+    if (id >= ED_BK_SONG0 && id < ED_BK_SONG0 + SNG_SLOTS) {   /* fm1-drummer: a song (n 0: erased) */
         uint32_t k = id - ED_BK_SONG0;
         sng_t tmp;
         if (ed_flash_busy())
@@ -547,7 +547,7 @@ static uint32_t ed_bk_commit(void)
             sng_req = (uint8_t)(n ? k + 1u : 0xFFu);        /* the song playing: reloaded (or gone) */
         return 0;
     }
-    if (id == ED_BK_ARRSET) {                             /* fm1-arranger: the pedal settings */
+    if (id == ED_BK_ARRSET) {                             /* fm1-drummer: the pedal settings */
         if (ed_flash_busy())
             return 3;
         if (n != sizeof(arrset_t) || !arrset_valid((const arrset_t *)raw))
@@ -619,7 +619,7 @@ static int ed_backup(uint32_t cmd, const uint8_t *a, uint32_t na)   /* 1: a back
         if (!flash_ok) {
             rc = 4;
         } else if (op == 0u && na == 12u && (id <= 10u || (id >= ED_BK_SONG0 && id <= ED_BK_ARRSET))) {   /* begin: id,
-                                                       * length (5), CRC-32 (5); 16..24: fm1-arranger */
+                                                       * length (5), CRC-32 (5); 16..24: fm1-drummer */
             len = ed_bk_r32(a + 2);
             if (id >= 2u || len) {                        /* (the working project and the settings are never empty) */
                 if (len <= sizeof proj_tmp) {
@@ -778,7 +778,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
     case ED_PROJECT:                                       /* 0 = load, 1 = save, 2 = query; slot 0..3 */
         if (na < 2u || a[0] > 2u)
             return;
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
         if (a[0] < 2u && (song.playing || transport_req)) {
             ed_b(a[0]); ed_b(a[1] & 3u); ed_b(project_used(a[1] & 3u));
             ed_b(1);                                  /* optional status: transport busy */
@@ -808,7 +808,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         uint32_t rc;
         if (na < 1u || a[0] >= SMP_USER_SLOTS || !flash_ok)
             return;
-        if (a[0] == SNG_SMP_SLOT) {                        /* fm1-arranger: USR1's flash holds the songs */
+        if (a[0] == SNG_SMP_SLOT) {                        /* fm1-drummer: USR1's flash holds the songs */
             ed_b(a[0]);
             ed_b(4);
             break;
@@ -823,7 +823,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         uint32_t off, len, rc = 0, took;
         if (na < 5u || a[0] >= SMP_USER_SLOTS || !flash_ok)
             return;
-        if (a[0] == SNG_SMP_SLOT) {                        /* fm1-arranger: USR1's flash holds the songs */
+        if (a[0] == SNG_SMP_SLOT) {                        /* fm1-drummer: USR1's flash holds the songs */
             ed_b(a[0]);
             ed_b(a[1]);
             ed_b(a[2]);

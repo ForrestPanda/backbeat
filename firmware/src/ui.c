@@ -337,7 +337,7 @@ static void page_fix(void)
 
 static void go_home(void)
 {
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     ui.home = 0;
     ui.page = (uint8_t)page_first(FAM_TRK);
 #else

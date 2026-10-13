@@ -110,6 +110,10 @@ static void studio_open(uint32_t scope)
     uint32_t i;
     if (scope == SC_SONG && rec_wait)
         rec_wait = 0;                                   /* (an arm does not follow into the song page) */
+    if (scope == SC_SONG) {                             /* fm1-drummer: the song screen first (ui_drummer.c) */
+        sng_view = 1;
+        sng_pick = (uint8_t)(sng_cur >= 0 ? sng_cur : 0);
+    }
     for (i = 0; i < NPAGES; i++) if (PAGES[i].scope == scope) {
         ui.page = (uint8_t)i; ui.home = 0; song.seq_mode = 0; ui.force = 1;
         ui.msg_t = 0; ui.entry_open = 0; return;
@@ -160,8 +164,8 @@ static void te_header(const char *title, uint16_t tc, uint32_t *cache)
                                (playing ? beat * 131u + TSEL->seq_idx * 7919u : 0u) + (uint32_t)song.g[G_CLOCK] * 77u +
                                arrangement_enabled * 5u + (ui.bpm_t != 0) * 104729u + song.solo * 37u, title);
     sig = sig * 31u + tc;
-#if FELUCCA_ARRANGER
-    sig = studio_hash(sig + live_bar * 17u + (uint32_t)(live_sec + 1) * 23u, sng_ui_name);   /* (fm1-arranger) */
+#if FELUCCA_DRUMMER
+    sig = studio_hash(sig + live_bar * 17u + (uint32_t)(live_sec + 1) * 23u, sng_ui_name);   /* (fm1-drummer) */
     sig = studio_hash(sig, sng_ui_next);
 #endif
     if (!ui.force && sig == *cache)
@@ -185,8 +189,8 @@ static void te_header(const char *title, uint16_t tc, uint32_t *cache)
         cv_text(176, 4, &FONT_S, "rec", TE_RED);
         if (song.g[G_CLOCK] != 0)                       /* the click is on */
             cv_text(168, 22, &FONT_S, "click", TE_G3);
-#if FELUCCA_ARRANGER
-    } else if (sng_ui_name[0] && live_sec >= 0) {      /* fm1-arranger: the section playing (or cued), white, in the
+#if FELUCCA_DRUMMER
+    } else if (sng_ui_name[0] && live_sec >= 0) {      /* fm1-drummer: the section playing (or cued), white, in the
                                                         * title's place; under it the bar it is in */
         char nm[13], full[13], next[13];
         uint32_t n = 0;

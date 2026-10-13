@@ -504,7 +504,7 @@ static void proj_apply(const project_t *p, int all)
 }
 
 #ifndef PROJ_HOST
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
 #include "arranger_scene.c"
 #endif
 static uint8_t sec_dirty, song_dirty;           /* live sections / the song: in RAM, not yet in flash */
@@ -531,7 +531,7 @@ static void proj_fetch(uint32_t slot)
 static void project_save(uint32_t slot)
 {
     project_t *p = &proj_slot[slot & 3u];
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     if (song.playing || transport_req) { ui_message("STOP BEFORE SAVE"); return; }
 #endif
     proj_capture(p);
@@ -551,7 +551,7 @@ static void project_save(uint32_t slot)
 static void project_erase(uint32_t slot)
 {
     slot &= 3u;
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     if (song.playing || transport_req) { ui_message("STOP BEFORE ERASE"); return; }
 #endif
     if (!proj_ok(&proj_slot[slot])) {
@@ -569,7 +569,7 @@ static void project_erase(uint32_t slot)
     sec_dirty &= (uint8_t)~(1u << slot);
     if (live_sec == (int8_t)slot)
         live_sec = -1;
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     if (arr_drop_scene(&arrangement, slot))
         song_dirty = 1;                                     /* (saved with the settings, when quiet) */
 #endif
@@ -585,8 +585,8 @@ static void project_apply(const project_t *p)
     panic_req = (1u << NTRK) - 1u;
     drum_mute = 0;                                      /* (the live mutes: a performance's, not the project's) */
     fm1_irq_off();                                      /* the audio ISR must not see half a project */
-#if FELUCCA_ARRANGER
-    sng_unload();                                       /* (fm1-arranger: a project over a song: A..D again) */
+#if FELUCCA_DRUMMER
+    sng_unload();                                       /* (fm1-drummer: a project over a song: A..D again) */
     drum_fill_masks_clear();
 #endif
     proj_apply(p, 1);
@@ -604,7 +604,7 @@ static void project_apply(const project_t *p)
 static void project_load(uint32_t slot)
 {
     project_t *p = &proj_slot[slot & 3u];
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     if (song.playing || transport_req) { ui_message("STOP BEFORE LOAD"); return; }
 #endif
 #if FELUCCA_FLASH
@@ -689,7 +689,7 @@ static void autosave_resume(void)              /* power-on: the project as it wa
 typedef struct {
     uint32_t magic, palette, lowcut, zoom;
     panel_t panel;
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     arr_config_t arrangement;
 #endif
     uint32_t lights;                               /* SLOOP 2.3: the backlight (panel.c lights_word); appended,
@@ -697,11 +697,11 @@ typedef struct {
 } persist_t;
 #define PERSIST_SIZE_V22 __builtin_offsetof(persist_t, lights)   /* the settings as 2.2 wrote them (no lights) */
 _Static_assert(sizeof(persist_t) == PERSIST_SIZE_V22 + 4u, "lights: the last word, no padding before it");
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
 _Static_assert(__builtin_offsetof(persist_t, arrangement) == 48u && sizeof(arr_config_t) == 36u,
                "the web editor's Song page edits bytes 48..83 of the settings (web/editor.html ARR)");
 #endif
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
 #define PERSIST_MAGIC 0x50455233u                  /* "PER3": includes the song order */
 #else
 #define PERSIST_MAGIC 0x50455232u
@@ -713,7 +713,7 @@ static void dsu_boot(void);
 
 static void persist_boot(void)                    /* before settings_init / panel_init */
 {
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     arr_defaults(&arrangement);
 #endif
 #if FELUCCA_FLASH
@@ -728,7 +728,7 @@ static void persist_boot(void)                    /* before settings_init / pane
     {
         uint32_t k;
         for (k = 0; k < SMP_USER_SLOTS; k++)
-            if (k != SNG_SMP_SLOT)                 /* (fm1-arranger: USR1's flash holds the songs: never a slot) */
+            if (k != SNG_SMP_SLOT)                 /* (fm1-drummer: USR1's flash holds the songs: never a slot) */
                 smp_user_scan(k);
     }
     {
@@ -736,7 +736,7 @@ static void persist_boot(void)                    /* before settings_init / pane
         if (n == (int)PERSIST_SIZE_V22 && p.magic == PERSIST_MAGIC)
             p.lights = 0;                          /* from 2.2: backlight off */
         if (((n == (int)sizeof p || n == (int)PERSIST_SIZE_V22) && p.magic == PERSIST_MAGIC)
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
             || (n == (int)(16u + sizeof(panel_t)) && p.magic == 0x50455232u)
 #endif
             ) {
@@ -750,7 +750,7 @@ static void persist_boot(void)                    /* before settings_init / pane
                 lights_from_word(p.lights);
             else
                 p.lights = 0;
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
             if (p.magic == PERSIST_MAGIC && arr_valid(&p.arrangement, 15u))
                 arrangement = p.arrangement;
             else
@@ -784,7 +784,7 @@ static void persist_boot(void)                    /* before settings_init / pane
     }
     dsu_boot();                                    /* SLOOP 2.5: the SYN kits (after the settings) */
     up_boot();                                     /* user presets */
-    arrset_boot();                                 /* fm1-arranger: the pedal channel (sng.c) */
+    arrset_boot();                                 /* fm1-drummer: the pedal channel (sng.c) */
     fm6_bank_boot();                               /* the FM6 patch bank (fm6_bank.c) */
 #endif
 }
@@ -894,7 +894,7 @@ static void persist_fill(persist_t *p)              /* the settings as they are 
     p->zoom = settings.zoom;
     p->panel = panel;
     p->lights = lights_word();
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     p->arrangement = arrangement;
 #endif
 }
@@ -949,7 +949,7 @@ static uint32_t settings_restore(const void *raw, uint32_t n)
     memcpy(&p, raw, n);
     if (p.magic != PERSIST_MAGIC || p.palette >= NPALETTES || p.lowcut > 1u || p.zoom > 1u || !panel_valid(&p.panel))
         return 2;
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     if (!arr_valid(&p.arrangement, 15u))
         return 2;
     if ((song.playing || transport_req) && memcmp(&p.arrangement, &arrangement, sizeof arrangement))
@@ -962,7 +962,7 @@ static uint32_t settings_restore(const void *raw, uint32_t n)
     settings.lowcut = p.lowcut;
     settings.zoom = p.zoom;
     panel = p.panel;
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     arrangement = p.arrangement;
 #endif
     lights_from_word(p.lights);
@@ -1000,7 +1000,7 @@ static uint32_t project_restore(uint32_t slot, const void *raw, uint32_t n)
     return 0;
 }
 #endif
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
 static void arrangement_save(void)
 {
     if (song.playing || transport_req) { ui_message("STOP BEFORE SAVE"); return; }

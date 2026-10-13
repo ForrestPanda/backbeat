@@ -18,7 +18,7 @@
  *           section taps: a chain, "chain A B" on the sub line)
  *   DRUMS   the grid: sound / step / hit / level knobs, GRID <-> KIT
  * then 20000 frames of random use: every draw stays on the screen. */
-#define FELUCCA_ARRANGER 1
+#define FELUCCA_DRUMMER 1
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
@@ -76,7 +76,18 @@ static void up_name(uint32_t k, char *b) { str_cpy(b, k ? "MY PAD" : "MY LEAD", 
 static void up_slot_label(char *b, uint32_t k) { fmt_int(b, (int32_t)k + 1); }
 static void up_ui(uint32_t op, uint32_t k) { (void)op; (void)k; }
 static void settings_save(void) {}
+/* fm1-drummer: a song for the song screen (sng.c is not in this test): INTRO, VERSE (2 bars of 7/8), CHORUS;
+ * slots 1 and 3 hold songs */
+static void sng_name(uint32_t k, char *out) { static const char *const N[3] = {"INTRO", "VERSE", "CHORUS"}; str_cpy(out, k < 3u ? N[k] : "", 13); }
+static uint32_t sng_ready(void) { return sng_cur >= 0 ? 7u : 0u; }
+static uint32_t sng_bars(uint32_t k) { return k == 1u ? 2u : 1u; }
+static uint32_t sng_meter(uint32_t k) { return k == 1u ? 7u | 1u << 5 : 0u; }
+static uint32_t sng_outro(void) { return 0xFFu; }
+static int sng_pending(void) { return 0; }
+static void sng_apply(uint32_t k) { sng_name(k, sng_ui_name); }
+static void sng_slot_name(uint32_t slot, char *out) { str_cpy(out, slot == 0u ? "TIME" : slot == 2u ? "BLACK" : "", 13); }
 #include "../firmware/src/ui_song.c"
+#include "../firmware/src/ui_drummer.c"
 #include "../firmware/src/ui_studio.c"
 #include "../firmware/src/icons.c"
 #include "../firmware/src/ui_draw.c"
@@ -150,13 +161,13 @@ int main(int argc, char **argv)
     sloop_splash(); ppm("page-splash");
     ui.menu = 2; ui.force = 1; frame(); ppm("page-about"); ui.menu = 0;
     go_home(); ui.force = 1; frame(); ppm("page-tracks");
-    {   /* fm1-arranger: a song's section playing (its name and bar in the top bar), the pedal asking for the next */
+    {   /* fm1-drummer: a song's section playing (its name and bar in the top bar), the pedal asking for the next */
         str_cpy(sng_ui_name, "CHORUS", sizeof sng_ui_name);
         live_sec = 1; live_bar = 2; song.playing = 1;
         ui.force = 1; frame(); ppm("page-tracks-song");
         pedal_say(PU_NEXT, "SOLO"); str_cpy(sng_ui_next, "SOLO", sizeof sng_ui_next);
         frame(); ppm("page-tracks-next");
-        check(ui.msg_t > 40u && !strcmp(ui.msg, "NEXT: SOLO"), "arranger: the pedal's request said in the top bar (NEXT: SOLO)");
+        check(ui.msg_t > 40u && !strcmp(ui.msg, "NEXT: SOLO"), "drummer: the pedal's request said in the top bar (NEXT: SOLO)");
         ui.msg_t = 0; sng_ui_next[0] = 0; song.playing = 0; ui.force = 1; frame(); ppm("page-tracks-cued");
         live_sec = -1; sng_ui_name[0] = 0; ui.force = 1; frame();
     }
@@ -497,7 +508,39 @@ int main(int argc, char **argv)
     release(B_SAVE);
     check(!on_song_page() && saves == 0, "SAVE held and let go: no song page, no save");
     tap(B_SAVE); check(on_song_page(), "SAVE tapped on TRACKS: the song page");
-    ui.force = 1; frame(); ppm("page-song");
+    {   /* fm1-drummer: the song screen first; KNOB 1 to the end and REC: SLOOP's chain; opened again: the song screen */
+        ui.force = 1; frames(16); ppm("page-song-drummer-none");   /* (after SAVE: the knobs quiet, #39) */
+        check(drummer_on() && kb_grid == 2u, "drummer: the song page is the song screen (its keys taken)");
+        encs[panel.enc[EN_K1]] = 20; frame(); tap(B_REC); frame();
+        check(!drummer_on() && on_song_page() && sng_req == 0xFFu && kb_grid == 0u, "drummer: KNOB 1 to the end, REC: SLOOP's chain on the page");
+        sng_req = 0;
+        ui.force = 1; frame(); ppm("page-song");
+        studio_open(SC_SONG); frame();
+        check(drummer_on() && sng_pick == 0u, "drummer: the page opened again: the song screen");
+        key(key_of_white(2)); check(sng_req == 3u, "drummer: no song: white key 3 loads song 3");
+        sng_req = 0;
+        /* a song loaded (as sng_load would): the keys are the pedal's */
+        sng_cur = 0; str_cpy(sng_ui_song, "TIME", sizeof sng_ui_song); live_sec = 0; live_req = -1; pedal.count = 0;
+        song.playing = 0; ui.force = 1; frame(); ppm("page-song-drummer-cued");
+        key(key_of_white(1)); frames(3);
+        check(song.playing && live_sec == 1 && !strcmp(sng_ui_name, "VERSE"), "drummer: white key 2, stopped: VERSE starts the loop");
+        key(key_of_white(2)); frames(2);
+        check(live_req == 2 && pedal_at_end, "drummer: white key 3, playing: CHORUS cued for VERSE's end");
+        ui.force = 1; frame(); ppm("page-song-drummer");
+        check((keys_lit() >> key_of_white(1)) & 1u, "drummer: the section playing's key lit");
+        key(key_of_white(9)); frames(2);
+        check(live_req == 1 && pedal_wait && pedal_fill, "drummer: white key 10: VERSE now (a whole fill bar first, CC 27)");
+        key(5); frames(2);                                  /* A#3: the fill */
+        check(pedal_fill_hold != 0u, "drummer: A#3: the fill to the pattern's end");
+        key(10); frames(3);                                 /* D#4: stop */
+        check(!song.playing, "drummer: D#4: stop");
+        tap(B_PLAY); frames(3);
+        check(song.playing && live_sec >= 0, "drummer: PLAY: the section cued plays");
+        tap(B_PLAY); frames(3);
+        check(!song.playing, "drummer: PLAY again: stop");
+        sng_cur = -1; sng_ui_song[0] = 0; live_sec = -1; live_req = -1; sng_ui_name[0] = 0;
+        studio_open(SC_SONG); sng_view = 0; frame();       /* (SLOOP's page for what follows) */
+    }
 
     /* ---- the drum screen */
     song.sel = TRK_DRUM; studio_open(SC_DRUM); ui.force = 1; frames(16);   /* (after SAVE: the knobs quiet, #39) */

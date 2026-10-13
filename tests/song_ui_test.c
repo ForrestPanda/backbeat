@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Real song screen renderer and interaction code, with a framebuffer and
  * panel/flash doubles. No device access. Writes a 240x240 PPM preview. */
-#define FELUCCA_ARRANGER 1
+#define FELUCCA_DRUMMER 1
 #define main hostsim_main
 #include "hostsim.c"
 #undef main

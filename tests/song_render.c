@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* fm1-arranger: a song played by the pedal, rendered to a WAV on the host, to hear it before there is an
+/* fm1-drummer: a song played by the pedal, rendered to a WAV on the host, to hear it before there is an
  * FM-1. The same sources as the firmware (hostsim.c): the drum engine, the sequencer, the pedal (pedal.c)
  * and the songs (sng.c). tools/fm1_render.py wraps it (a song from JSON, section names).
  *
@@ -12,7 +12,7 @@
  * first). Environment: KIT=n overrides the song's kit, BPM=n its tempo, TAIL=seconds of silence after the
  * stop (default 1.5), USRKIT=image a user kit (tools/mkkit.py --image: USR3 and USR4 as the device holds
  * them), played as KIT USR3+4 unless KIT says otherwise. Prints the timeline. */
-#define FELUCCA_ARRANGER 1
+#define FELUCCA_DRUMMER 1
 #include <stdint.h>
 static uint32_t host_slots[4u * 0x14000u / 4u];     /* USR1..4 as a RAM image of the flash: USRKIT=image fills USR3+4 */
 #define SMP_USER_XIP(k) ((const uint8_t *)host_slots + (k) * 0x14000u)
@@ -121,6 +121,8 @@ int main(int argc, char **argv)
         TDRUM->p[P_E0] = (int16_t)DRUM_PAIR;
         printf("user kit: USR3 %u sounds, USR4 %u sounds (KIT USR3+4 = %u)\n", usr_nz[2], usr_nz[3], (unsigned)DRUM_PAIR);
     }
+    if ((env = getenv("COUNT_IN")) != 0)            /* the pedal's count-in: bars of clicks before the start */
+        pedal.count = (uint8_t)atoi(env);
     if ((env = getenv("KIT")) != 0)
         TDRUM->p[P_E0] = (int16_t)clamp(atoi(env), DRUM_KIT_DESC.min, DRUM_KIT_DESC.max);
     if ((env = getenv("BPM")) != 0)
@@ -143,6 +145,13 @@ int main(int argc, char **argv)
     /* the first entry starts the loop */
     cc(20, sec[0]);
     advance(CTL * 3u);
+    n = 0;
+    while (!song.playing && n < 3u * bar) {           /* (COUNT_IN: the clicks first; the song starts after them) */
+        advance(CTL);
+        n += CTL;
+    }
+    if (pedal.count)
+        printf("%8.3f s  count-in     (%u bar%s)\n", 0.0, pedal.count, pedal.count > 1u ? "s" : "");
     printf("%8.3f s  %-12s (%u bars)\n", t0 / (double)FS, sec_name(sec[0]), bars[0]);
     for (i = 0; i < ntok; i++) {
         uint32_t start = i ? jumped : t0, target;
@@ -159,9 +168,17 @@ int main(int argc, char **argv)
                 printf("%8.3f s  ending: fill, then %s once\n", now / (double)FS, sec_name(sec[i + 1u]));
             } else {
                 cc(20, sec[i + 1u]);
-                printf("%8.3f s  fill, then %s\n", now / (double)FS, sec_name(sec[i + 1u]));
+                printf("%8.3f s  %s\n", now / (double)FS, sec[i + 1u] == sec[i] ? "the section again: the next bar a fill" : "fill, then");
+                if (sec[i + 1u] != sec[i])
+                    printf("%8.3f s  fill, then %s\n", now / (double)FS, sec_name(sec[i + 1u]));
             }
             n = 0;
+            if (sec[i + 1u] == sec[i] && (int)(i + 1u) != ending) {   /* the same section again: the pedal makes it a
+                                                   * fill (the next bar), the section goes on: its next entry starts
+                                                   * on the bar, as the foot counted it */
+                advance(target - now);
+                jumped = now;
+            }
             while (jumped <= start + CTL && n < 8u * bar) {   /* until the section lands */
                 advance(CTL);
                 n += CTL;

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Exercise the actual sequencer, scene loader and synth mixer together. */
-#define FELUCCA_ARRANGER 1
+#define FELUCCA_DRUMMER 1
 #define main hostsim_main
 #include "hostsim.c"
 #undef main

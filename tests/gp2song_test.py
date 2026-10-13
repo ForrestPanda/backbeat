@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""fm1-arranger: tools/gp2song.py on a Guitar Pro file written here with PyGuitarPro (no copyrighted
+"""fm1-drummer: tools/gp2song.py on a Guitar Pro file written here with PyGuitarPro (no copyrighted
 tab needed): markers, a verse whose 8 bars repeat a 2-bar pattern with a fill in the last bar, a chorus
 of 4 identical bars with a flam (two 32nds) and an accent, an outro; a second percussion track
 (tambourine) merged in; a section repeating the verse skipped. The JSON is then packed by fm1_song.py."""
@@ -20,8 +20,8 @@ import fm1_song  # noqa: E402
 Q = 960
 
 
-def emit_bar(track, bar, events):
-    """events: {pos32: [(gm note, velocity, accent)]} -> sequential beats (notes and rests) of one 4/4 bar"""
+def emit_bar(track, bar, events, n32=32):
+    """events: {pos32: [(gm note, velocity, accent)]} -> sequential beats (notes and rests) of one bar of n32 32nds"""
     m = track.measures[bar]
     voice = m.voices[0]
     voice.beats = []
@@ -51,13 +51,13 @@ def emit_bar(track, bar, events):
     cur = 0
     for i, p in enumerate(positions):
         rests(cur, p)
-        nxt = positions[i + 1] if i + 1 < len(positions) else 32
+        nxt = positions[i + 1] if i + 1 < len(positions) else n32
         d = pow2(nxt - p)
         add(p, d, events[p])
         cur = p + d
         rests(cur, nxt)
         cur = nxt
-    rests(cur, 32)
+    rests(cur, n32)
 
 
 def make_song():
@@ -133,7 +133,68 @@ def make_song():
     return song
 
 
+def make_long_song():
+    """eight sections of 8 bars, each a dense 4-bar pattern of its own (five instruments on every 16th) with a fill,
+    under markers longer than a section's 12-character name: the packed song overflows the sector, so the importer
+    must cut patterns, finding each section by index (the names it cut used to miss the markers: a KeyError on
+    Pink Floyd's Time)"""
+    song = gp.Song()
+    song.title = "Long markers"
+    song.tempo = 120
+    t = gp.Track(song, number=1)
+    t.name = "Drums"
+    t.isPercussionTrack = True
+    t.channel.channel = 9
+    t.strings = [gp.GuitarString(i + 1, 0) for i in range(7)]
+    t.measures = []
+    song.tracks = [t]
+    titles = ["Verse 1 ticking away the moments", "Verse 2 kicking around on a piece of ground",
+              "Chorus 1 tired of lying in the sunshine", "Guitar solo", "Verse 3 and you run and you run",
+              "Bridge one long title", "Bridge two long title", "Last verse long title"]
+    song.measureHeaders = []
+    for i in range(8 * len(titles)):
+        h = gp.MeasureHeader(number=i + 1, start=Q + i * 4 * Q)
+        if i % 8 == 0:
+            h.marker = gp.Marker(title=titles[i // 8])
+        song.measureHeaders.append(h)
+        m = gp.Measure(t, h)
+        m.voices = [gp.Voice(m)]
+        t.measures.append(m)
+    for i in range(8 * len(titles)):
+        sec, bar = i // 8, i % 4
+        e = {}
+        for s in range(16):
+            for n in (42, 51, 70, 62, 56):                                   # hat, ride, shaker, conga, cowbell
+                e.setdefault(s * 2, []).append((n, 63, False))
+        for s in (0, 8):
+            e.setdefault(s * 2, []).append((36, 95, False))
+        e.setdefault(4 * 2, []).append((38, 95, False))
+        e.setdefault((12 if bar < 3 else 13) * 2, []).append((38, 95, False))
+        e.setdefault((2 + bar) * 2, []).append((36, 95, False))             # each bar of the four its own
+        e.setdefault((5 + sec) * 2, []).append((45, 95, False))             # each section its own
+        if i % 8 == 7:
+            e.setdefault(15 * 2, []).append((50, 95, False))               # the fill: the last bar of the eight only
+        emit_bar(t, i, e)
+    return song
+
+
 def main():
+    with tempfile.TemporaryDirectory() as d:
+        gpf = os.path.join(d, "long.gp4")
+        gp.write(make_long_song(), gpf)
+        out = os.path.join(d, "long.json")
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "gp2song.py"), gpf, "--out", out],
+                           capture_output=True, text=True)
+        print(r.stdout.strip())
+        assert r.returncode == 0, r.stderr
+        with open(out) as f:
+            spec = json.load(f)
+        names = [s["name"] for s in spec["sections"]]
+        assert names == ["VERSE 1 TICK", "VERSE 2 KICK", "CHORUS 1 TIR", "GUITAR SOLO", "VERSE 3 AND ", "BRIDGE ONE L",
+                         "BRIDGE TWO L", "LAST VERSE L"], names
+        assert "pattern cut to" in r.stdout and len(fm1_song.pack(spec)) <= 3800, r.stdout
+        assert any(s["steps"] < 64 for s in spec["sections"]) and any(s["steps"] == 64 for s in spec["sections"]), [s["steps"] for s in spec["sections"]]
+        print("gp2song: long markers: the cuts to fit the sector find the sections by index PASS")
     with tempfile.TemporaryDirectory() as d:
         gpf = os.path.join(d, "synthetic.gp4")
         gp.write(make_song(), gpf)
@@ -164,8 +225,66 @@ def main():
     assert o.get("outro") is True and o["steps"] == 16 and o["lanes"]["CRASH"][0] == "x", o
     assert "VERSE 2" not in names
     blob = fm1_song.pack(spec)
-    assert blob[:4] == b"SNG1" and len(blob) < 3800
+    assert blob[:4] == b"SNG2" and len(blob) < 3800
     print(f"gp2song: verse (2-bar pattern, fill as lane marks), chorus (accent, flam, tambourine), outro, duplicate skipped, {len(blob)} bytes packed PASS")
+    with tempfile.TemporaryDirectory() as d:
+        gpf = os.path.join(d, "odd.gp4")
+        gp.write(make_odd_song(), gpf)
+        out = os.path.join(d, "odd.json")
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "gp2song.py"), gpf, "--out", out],
+                           capture_output=True, text=True)
+        print(r.stdout.strip())
+        assert r.returncode == 0, r.stderr
+        with open(out) as f:
+            spec = json.load(f)
+    seven, four = spec["sections"]
+    assert seven["time"] == "7/8" and seven["steps"] == 14 and seven["lanes"]["KICK"] == "x.....x.......", seven
+    assert "time" not in four and four["steps"] == 16, four
+    blob = fm1_song.pack(spec)
+    assert fm1_song.sections(blob)[0][4] == 7 | 1 << 5 and fm1_song.sections(blob)[1][4] == 0
+    print("gp2song: a 7/8 section: 14 sixteenths, \"time\": \"7/8\", the meter byte packed; 4/4 left out PASS")
+
+
+def make_odd_song():
+    """four bars of 7/8 (Verse), then two of 4/4 (Outro)"""
+    song = gp.Song()
+    song.title = "Odd"
+    song.tempo = 120
+    t = gp.Track(song, number=1)
+    t.name = "Drums"
+    t.isPercussionTrack = True
+    t.channel.channel = 9
+    t.strings = [gp.GuitarString(i + 1, 0) for i in range(6)]
+    t.measures = []
+    song.tracks = [t]
+    song.measureHeaders = []
+    start = Q
+    for i in range(6):
+        odd = i < 4
+        h = gp.MeasureHeader(number=i + 1, start=start)
+        h.timeSignature = gp.TimeSignature(numerator=7 if odd else 4, denominator=gp.Duration(value=8 if odd else 4))
+        if i in (0, 4):
+            h.marker = gp.Marker(title="Verse" if odd else "Outro")
+        song.measureHeaders.append(h)
+        m = gp.Measure(t, h)
+        m.voices = [gp.Voice(m)]
+        t.measures.append(m)
+        start += 7 * Q // 2 if odd else 4 * Q
+    for i in range(6):
+        e = {}
+        if i < 4:
+            for s in range(0, 14, 2):
+                e.setdefault(s * 2, []).append((42, 95, False))
+            for s in (0, 6):
+                e.setdefault(s * 2, []).append((36, 95, False))
+            e.setdefault(4 * 2, []).append((38, 95, False))
+            e.setdefault(10 * 2, []).append((38, 95, False))
+            emit_bar(t, i, e, 28)
+        else:
+            e.setdefault(0, []).append((36, 95, False))
+            e.setdefault(0, []).append((49, 95, False))
+            emit_bar(t, i, e)
+    return song
 
 
 if __name__ == "__main__":

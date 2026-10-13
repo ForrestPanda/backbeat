@@ -14,7 +14,7 @@
  *   fill     (2.4) FILL ONLY / NO FILL steps follow GLO + key 9 (held) and key 10 (the next bar); STOP clears
  *   chain    (2.4) SAVE + two section taps: the sections in turn, each for its pattern's bars, looped
  * Exit status: the number of failed checks. */
-#define FELUCCA_ARRANGER 1
+#define FELUCCA_DRUMMER 1
 #define main hostsim_main
 #include "hostsim.c"
 #undef main

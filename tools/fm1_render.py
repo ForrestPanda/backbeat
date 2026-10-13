@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""fm1-arranger: hear a song on the computer, played by the pedal, before there is an FM-1.
+"""fm1-drummer: hear a song on the computer, played by the pedal, before there is an FM-1.
 
-    tools/fm1_render.py songs/example.json
-    tools/fm1_render.py songs/example.json --play "INTRO:2 VERSE:8 CHORUS:8 SOLO:8 CHORUS:8 OUTRO"
+    tools/fm1_render.py tests/example-song.json
+    tools/fm1_render.py tests/example-song.json --play "INTRO:2 VERSE:8 CHORUS:8 SOLO:8 CHORUS:8 OUTRO"
     tools/fm1_render.py songs/black.json --play "INTRO:2, VERSE 1:4, PRE - CHORUS:4, CHORUS:4"   # commas: names with spaces
-    tools/fm1_render.py songs/example.json --kit 7 --out take.wav --listen
+    tools/fm1_render.py tests/example-song.json --kit 7 --out take.wav --listen
 
 The play list names the sections (or their numbers) with the bars each plays; the next one is asked for
-on beat 3 of the last bar, as a foot would, so the fill plays into the transition. A last entry without
+on beat 3 of the last bar, as a foot would, and lands when the section's pattern ends (its last bar the
+fill), so an entry's bars round up to its pattern's: VERSE:2 with a 4-bar verse plays four. A last entry without
 bars is the ending: that section once, then the stop on the bar. Without --play: every section in order,
 2 bars each (the song's outro, if one is flagged, as the ending). The render is the firmware's own drum
 engine, sequencer and pedal (tests/song_render.c, built here on first use; needs a ./build.sh before,
@@ -47,6 +48,7 @@ def main():
     ap.add_argument("--kit", type=int, help="override the song's kit")
     ap.add_argument("--usrkit", help="a user kit image (tools/mkkit.py --image): played as KIT USR3+4")
     ap.add_argument("--bpm", type=int, help="override the song's tempo")
+    ap.add_argument("--count-in", type=int, metavar="BARS", help="the pedal's count-in: bars of clicks before the start (0, 1, 2)")
     ap.add_argument("--out", help="the WAV (default: build/host/<name>.wav)")
     ap.add_argument("--tail", type=float, default=1.5, help="seconds after the stop (default 1.5)")
     ap.add_argument("--listen", action="store_true", help="play it (sox)")
@@ -86,6 +88,8 @@ def main():
         env["KIT"] = str(a.kit)
     if a.bpm is not None:
         env["BPM"] = str(a.bpm)
+    if a.count_in:
+        env["COUNT_IN"] = str(a.count_in)
     if a.usrkit:
         env["USRKIT"] = os.path.abspath(a.usrkit)
     exe = build_renderer()

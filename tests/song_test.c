@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* fm1-arranger: songs (firmware/src/sng.c) through the real sequencer and the pedal (pedal.c). Songs are
+/* fm1-drummer: songs (firmware/src/sng.c) through the real sequencer and the pedal (pedal.c). Songs are
  * packed as tools/fm1_song.py packs them, into a host table that stands for the flash slots. Checks: the
  * packed form's checks; PC loads a song (stopped: tempo, kit and the first section at once); its sections
  * start on the bar with their length, division and fill conditions; next / previous over the song's
  * sections; the ending takes the flagged outro, for its bars; PC while playing waits for the next section;
  * a bad or empty slot leaves the song alone; PC 127 goes back to SLOOP's A..D; the pedal settings object. */
-#define FELUCCA_ARRANGER 1
+#define FELUCCA_DRUMMER 1
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
@@ -37,41 +37,43 @@ static uint32_t song_hdr(uint8_t *b, const char *name, uint32_t bpm, uint32_t ki
     b[18] = (uint8_t)kit; b[19] = 50; b[20] = 100; b[21] = 20; b[22] = (uint8_t)nsec;
     return SNG_HDR;
 }
-/* a section: lanes 0 (kick), 2 (snare), 4 (hat) from pattern strings ('.' rest, 'x' norm, 'X' hard, 'g' ghost),
- * cond: '.' normal, 'F' fill only, 'N' no fill */
+/* a section, packed as the tool packs it ("SNG2"): any lanes from pattern strings ('.' rest, 'x' norm, 'X' hard,
+ * 'g' ghost, 'o' soft), cond: '.' normal, 'F' fill only, 'N' no fill; marks: per step the lanes only during a fill
+ * (fonly) and not during one (fno); meter: the section header's meter byte (0: 4/4) */
+static uint32_t song_secm(uint8_t *b, uint32_t pos, const char *name, uint32_t len, uint32_t div, uint32_t flags,
+                          uint32_t meter, const char *const lane[DRUM_LANES], const char *cond, const uint16_t *fonly,
+                          const uint16_t *fno)
+{
+    uint32_t i, l, nf = (len + 3u) / 4u, q = pos + SNG_SEC_HDR + nf;
+    memset(b + pos, 0, SNG_SEC_HDR + nf);
+    strncpy((char *)b + pos, name, SNG_NAME);
+    b[pos + 12] = (uint8_t)len; b[pos + 13] = (uint8_t)div; b[pos + 14] = (uint8_t)flags; b[pos + 15] = (uint8_t)meter;
+    for (i = 0; i < len; i++) {
+        uint32_t c = cond && cond[i] ? (cond[i] == 'F' ? FC_FILL : cond[i] == 'N' ? FC_NOFILL : FC_NORM) : FC_NORM, on = 0;
+        b[pos + SNG_SEC_HDR + i / 4u] |= (uint8_t)(c << (2u * (i % 4u)));
+        for (l = 0; l < DRUM_LANES; l++)
+            if (lane[l] && lane[l][i] && lane[l][i] != '.')
+                on |= 1u << l;
+        w16(b + q, on);
+        q += 2;
+        for (l = 0; l < DRUM_LANES; l++) {
+            char ch;
+            if (!((on >> l) & 1u))
+                continue;
+            ch = lane[l][i];
+            b[q++] = (uint8_t)((ch == 'X' ? LV_HARD : ch == 'g' ? LV_GHOST : ch == 'o' ? LV_SOFT : LV_NORM) |
+                               (fonly && (fonly[i] >> l & 1u) ? 0x10u : 0u) | (fno && (fno[i] >> l & 1u) ? 0x20u : 0u));
+        }
+    }
+    w16(b + pos + 16, q - pos);
+    return q;
+}
+/* lanes 0 (kick), 2 (snare), 4 (hat) */
 static uint32_t song_sec(uint8_t *b, uint32_t pos, const char *name, uint32_t len, uint32_t div, uint32_t flags,
                          const char *kick, const char *snare, const char *hat, const char *cond)
 {
-    uint32_t i, nf = (len + 3u) / 4u;
-    const char *lane[3] = {kick, snare, hat};
-    const uint32_t lane_no[3] = {0, 2, 4};
-    memset(b + pos, 0, SNG_SEC_HDR + nf + len * sizeof(dstep_t));
-    strncpy((char *)b + pos + 12 - 12, name, SNG_NAME);
-    b[pos + 12] = (uint8_t)len; b[pos + 13] = (uint8_t)div; b[pos + 14] = (uint8_t)flags;
-    for (i = 0; i < len; i++) {
-        uint32_t c = cond && cond[i] ? (cond[i] == 'F' ? FC_FILL : cond[i] == 'N' ? FC_NOFILL : FC_NORM) : FC_NORM;
-        dstep_t *d = (dstep_t *)(b + pos + SNG_SEC_HDR + nf + i * sizeof(dstep_t));
-        uint32_t l;
-        b[pos + SNG_SEC_HDR + i / 4u] |= (uint8_t)(c << (2u * (i % 4u)));
-        for (l = 0; l < 3u; l++) {
-            char ch = lane[l] && lane[l][i] ? lane[l][i] : '.';
-            if (ch != '.')
-                dstep_set(d, lane_no[l], ch == 'X' ? LV_HARD : ch == 'g' ? LV_GHOST : ch == 'o' ? LV_SOFT : LV_NORM, 0);
-        }
-    }
-    return pos + SNG_SEC_HDR + nf + len * sizeof(dstep_t);
-}
-
-/* lane marks appended to a section (flag 2): per step the "only during a fill" and "not during a fill" lanes */
-static uint32_t song_marks(uint8_t *b, uint32_t secpos, uint32_t end, const uint16_t *fonly, const uint16_t *fno)
-{
-    uint32_t len = b[secpos + 12], i;
-    b[secpos + 14] |= 2;
-    for (i = 0; i < len; i++) {
-        b[end + 4 * i] = (uint8_t)fonly[i]; b[end + 4 * i + 1] = (uint8_t)(fonly[i] >> 8);
-        b[end + 4 * i + 2] = (uint8_t)fno[i]; b[end + 4 * i + 3] = (uint8_t)(fno[i] >> 8);
-    }
-    return end + 4 * len;
+    const char *lane[DRUM_LANES] = {kick, 0, snare, 0, hat};
+    return song_secm(b, pos, name, len, div, flags, 0, lane, cond, 0, 0);
 }
 static void capture(uint32_t slot) { proj_capture(&proj_slot[slot]); }
 static void cc(uint32_t ch, uint32_t num, uint32_t val) { um_byte(0xB0u | (ch - 1u)); um_byte(num); um_byte(val); }
@@ -138,11 +140,16 @@ int main(int argc, char **argv)
     {   /* slot 3: one section with lane marks: step 12's tom (lane 10) only during a fill, step 12's hat (lane 4)
          * not during one; step 0 plain */
         uint16_t fonly[16] = {0}, fno[16] = {0};
-        uint32_t p3 = song_hdr(blob[3], "MARKS", 120, 0, 1), secpos = p3;
+        const char *lane[DRUM_LANES] = {"x...............", 0, "....x.......x...", 0, "x.x.x.x.x.x.x.x.", 0, 0, 0, 0, 0,
+                                        "............x..."};
         fonly[12] = 1u << 10; fno[12] = 1u << 4;
-        p3 = song_sec(blob[3], p3, "ONE", 16, 2, 0, "x...............", "....x.......x...", "x.x.x.x.x.x.x...", 0);
-        dstep_set((dstep_t *)(blob[3] + secpos + SNG_SEC_HDR + 4 + 12 * sizeof(dstep_t)), 10, LV_NORM, 0);   /* the tom */
-        blob_n[3] = song_marks(blob[3], secpos, p3, fonly, fno);
+        blob_n[3] = song_secm(blob[3], song_hdr(blob[3], "MARKS", 120, 0, 1), "ONE", 16, 2, 0, 0, lane, 0, fonly, fno);
+    }
+    {   /* slot 4: a 7/8 groove (14 sixteenths, meter byte 7 | 1 << 5) and a 4/4 section after it */
+        const char *seven[DRUM_LANES] = {"x.....x.......", 0, "....x.....x...", 0, "x.x.x.x.x.x.x."};
+        uint32_t p4 = song_hdr(blob[4], "SEVEN", 120, 0, 2);
+        p4 = song_secm(blob[4], p4, "SEVEN", 14, 2, 0, 7u | 1u << 5, seven, 0, 0, 0);
+        blob_n[4] = song_sec(blob[4], p4, "FOUR", 16, 2, 0, "x.......x.......", 0, 0, 0);
     }
     pos = song_hdr(blob[1], "SLOW", 100, 2, 1);
     pos = song_sec(blob[1], pos, "ONLY", 16, 2, 0, "x.x.x.x.x.x.x.x.", 0, 0, 0);
@@ -151,9 +158,10 @@ int main(int argc, char **argv)
 
     /* the packed form's checks */
     assert(sng_check(blob[0], blob_n[0], &tmp) == 0 && tmp.nsec == 3u && tmp.bpm == 132u && tmp.kit == 7u);
-    assert(tmp.off[0] == SNG_HDR && tmp.off[1] == SNG_HDR + 16u + 4u + 160u && tmp.off[2] == tmp.off[1] + 16u + 8u + 320u);
+    /* (a step: 2 bytes of lanes and a byte a hit: INTRO 18 + 4 + 32 + 14 hits, VERSE 18 + 8 + 64 + 24 hits) */
+    assert(tmp.off[0] == SNG_HDR && tmp.off[1] == SNG_HDR + 68u && tmp.off[2] == tmp.off[1] + 114u);
     assert(sng_check(blob[2], blob_n[2], &tmp) == 2);
-    assert(sng_check(blob[0], blob_n[0] - 1u, &tmp) == 6);     /* truncated */
+    assert(sng_check(blob[0], blob_n[0] - 1u, &tmp) == 5);     /* truncated: the last section's size goes past it */
     assert(sng_check(blob[0], SNG_HDR + 8u, &tmp) == 4);
     {
         uint8_t bad[3800];
@@ -163,6 +171,10 @@ int main(int argc, char **argv)
         bad[22] = 3;  bad[SNG_HDR + 12] = 0;  assert(sng_check(bad, blob_n[0], &tmp) == 5);
         bad[SNG_HDR + 12] = 16; bad[SNG_HDR + 13] = 9;  assert(sng_check(bad, blob_n[0], &tmp) == 5);
         bad[SNG_HDR + 13] = 2; bad[18] = (uint8_t)DRUM_KITS;  assert(sng_check(bad, blob_n[0], &tmp) == 3);
+        bad[18] = 7; bad[SNG_HDR + 15] = 17;  assert(sng_check(bad, blob_n[0], &tmp) == 5);   /* a meter of 17 */
+        bad[SNG_HDR + 15] = 0; bad[SNG_HDR + 16]--;  assert(sng_check(bad, blob_n[0], &tmp) == 6);   /* size short */
+        bad[SNG_HDR + 18 + 4] |= 2;  bad[SNG_HDR + 16]++;  assert(sng_check(bad, blob_n[0], &tmp) == 6);   /* a hit more than the size */
+        bad[SNG_HDR + 18 + 4] &= (uint8_t)~2u;  assert(sng_check(bad, blob_n[0], &tmp) == 0);
     }
     printf("song: packed form checked (offsets, magic, sizes, ranges) PASS\n");
 
@@ -185,10 +197,13 @@ int main(int argc, char **argv)
     assert(((TDRUM->dstep[4].lvl[0] >> 4) & 3u) == LV_HARD);       /* lane 2: byte 0, bits 4..5 */
     printf("song: VERSE: 32 steps, FILL ONLY on 28..31, a hard snare PASS\n");
 
-    /* ---- NEXT: OUTRO on the bar (after VERSE's 2 bars? no: NEXT asks now, the bar comes first); NEXT again wraps to INTRO */
+    /* ---- NEXT: OUTRO when the VERSE's 2 bars have played (asked for in its first bar: cued, the second bar the
+     * fill, the OUTRO on the bar after); NEXT again wraps to INTRO */
     advance(bar / 2u);
     cc(16, 24, 0); advance(bar);
-    assert(live_sec == 2 && TDRUM->p[P_SLEN] == 16 && (jumped - t0) % bar < CTL);
+    assert(live_sec == 1 && live_req == 2 && fill_now);
+    advance(bar);
+    assert(live_sec == 2 && TDRUM->p[P_SLEN] == 16 && (jumped - t0) % bar < CTL && jumped - t0 >= 2u * bar);
     cc(16, 24, 0); advance(bar);
     assert(live_sec == 0);
     cc(16, 25, 0); advance(bar);
@@ -197,12 +212,15 @@ int main(int argc, char **argv)
     assert(live_req == -1);
     printf("song: NEXT / PREV over the song's three sections, section 5 ignored PASS\n");
 
-    /* ---- the ending with no value: the flagged OUTRO, once (1 bar), then stop on the bar */
+    /* ---- the ending with no value: the VERSE plays its 2 bars out (the second the fill), the flagged OUTRO once
+     * (1 bar), then stop on the bar */
     cc(16, 20, 1); advance(bar);                                   /* back in the VERSE */
     assert(live_sec == 1);
     advance(bar / 3u);
     cc(16, 22, 127); advance(CTL * 2u);
-    assert(fill_now && live_req == 2 && pedal_end_req == 1u);
+    assert(!fill_now && live_req == 2 && pedal_end_req == 1u && pedal_at_end);
+    advance(bar);
+    assert(live_sec == 1 && fill_now);
     advance(bar);
     assert(live_sec == 2 && song.playing && pedal_end_bars == 1u);
     advance(bar);
@@ -235,8 +253,9 @@ int main(int argc, char **argv)
      * is dropped at the bar; a PC on the pedal channel takes nothing else (CC 64 passes to the tracks) */
     bar = bar_len();                                               /* (SLOW's tempo) */
     advance(bar / 4u);
-    cc(16, 20, 0); advance(CTL);                                   /* SLOW has one section: 0 is fine.. */
-    assert(live_req == 0);
+    cc(16, 20, 0); advance(CTL);                                   /* SLOW has one section, the one playing: a fill */
+    assert(live_req == -1 && pedal_fill && pedal_fill_hold);
+    live_req = 0;                                                  /* (as the UI asks for it: SLOW's 0..) */
     pc(16, 0); advance(CTL); sng_poll();                           /* ..but TEST lands: the request was SLOW's */
     assert(sng_cur == 0 && live_req == -1 && sng.pend);
     live_req = 7;                                                  /* (as the UI or a chain could ask: no section 7) */
@@ -281,20 +300,57 @@ int main(int argc, char **argv)
     assert(drum_fill_mask(12) == (1u << 4));                                /* a fill: the hat stays out, the tom in */
     fill_now = 0;
     assert(sng_check(blob[3], blob_n[3], &tmp) == 0 && tmp.off[0] == SNG_HDR);
-    assert(sng_check(blob[3], blob_n[3] - 1u, &tmp) == 6);                  /* the marks counted in the size */
+    assert(sng_check(blob[3], blob_n[3] - 1u, &tmp) == 5);                  /* the marks counted in the size */
+    assert(lane_on(&TDRUM->dstep[12], 10) && !lane_on(&TDRUM->dstep[13], 10));
     pc(16, 0); advance(CTL); sng_poll();                                    /* a song without marks: cleared */
     assert(sng_cur == 0 && !drum_fonly[12] && !drum_fno[12]);
     printf("song: lane marks: only-during and not-during a fill, per lane and step; cleared by a plain section PASS\n");
+
+    /* ---- a section in 7/8: its bar is 14 sixteenths. A section asked for lands on its bar (the bar line inside a
+     * beat: 3.5 beats after the start), the bars count in its meter, the click ticks eighths with the bar's first
+     * accented; the 4/4 section after it is 4/4 again */
+    cc(16, 23, 0); advance(CTL * 2u);
+    pc(16, 4); advance(CTL); sng_poll();
+    assert(sng_cur == 4 && clk_meter == (7u | 1u << 5) && sng_bars(0) == 1u && sng_bars(1) == 1u && meter_b16(clk_meter) == 14u);
+    {
+        uint32_t beat = 60u * FS / 120u, b78 = beat * 7u / 2u, clicks = 0, i, start;
+        song.g[G_CLOCK] = CLICK_ON;
+        cc(16, 20, 0); advance(CTL * 2u);
+        start = t0;
+        assert(song.playing && live_sec == 0);
+        for (i = 0; i < 2u * b78 / CTL; i++) {                      /* two 7/8 bars: 14 eighths clicked */
+            uint32_t c = click_last;
+            advance(CTL);
+            clicks += click_last != c;
+        }
+        assert(clicks >= 13u && clicks <= 15u && live_bar == 1u);
+        cc(16, 20, 1);                                              /* FOUR: on the end of SEVEN (a 1-bar pattern) */
+        advance(b78 + CTL * 2u);
+        assert(live_sec == 1 && clk_meter == 0u);
+        assert(jumped > start + b78 && (jumped - start) % b78 < 2u * CTL);   /* on a 7/8 bar line (not a 4/4 one) */
+        song.g[G_CLOCK] = 0;
+    }
+    cc(16, 23, 0); advance(CTL * 2u);
+    pedal.count = 1;                                                /* the count-in: one bar of the 7/8 section */
+    cc(16, 20, 0); advance(CTL);
+    assert(ci_on && ci_pedal == 7u && ci_meter == (7u | 1u << 5));
+    advance(7u * 30u * FS / 120u + CTL * 2u);                       /* 7 eighths at 120 */
+    assert(song.playing && !ci_on && live_sec == 0);
+    pedal.count = 0;
+    cc(16, 23, 0); advance(CTL * 2u);
+    printf("song: a 7/8 section: its bars, the click's eighths, the count-in, then 4/4 again PASS\n");
 
     /* ---- the pedal settings object */
     {
         arrset_t a;
         arrset_fill(&a);
-        assert(arrset_valid(&a) && a.pedal_ch == 16u);
-        a.pedal_ch = 17; arrset_take(&a);
-        assert(pedal.ch == 17u);
+        assert(arrset_valid(&a) && a.pedal_ch == 16u && a.count_in == 0u && sizeof a == 16u);
+        a.pedal_ch = 17; a.count_in = 2; arrset_take(&a);
+        assert(pedal.ch == 17u && pedal.count == 2u);
         a.pedal_ch = 18; assert(!arrset_valid(&a));
-        a.pedal_ch = 16; arrset_take(&a);
+        a.pedal_ch = 16; a.count_in = 3; assert(!arrset_valid(&a));
+        a.count_in = 0; arrset_take(&a);
+        assert(pedal.ch == 16u && pedal.count == 0u);
     }
     printf("song: the pedal settings object PASS\n");
     return 0;

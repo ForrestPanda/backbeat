@@ -272,7 +272,7 @@ def to_int16(x):
 
 def user_slot(name, zones):
     """zones: [(int16 samples at SLOT_RATE, root, lo or None, hi or None[, rate_hz])] -> (header bytes, ADPCM data).
-    Zones without lo/hi split the keyboard between their roots. A zone may carry its own sample rate (fm1-arranger:
+    Zones without lo/hi split the keyboard between their roots. A zone may carry its own sample rate (fm1-drummer:
     44100 for the bright short drum sounds; the engine plays each zone at its rate / 44100)."""
     zs, data = [], bytearray()
     for z in zones:

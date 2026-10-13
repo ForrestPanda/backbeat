@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""fm1-arranger: a sampled drum kit for the FM-1 from a folder of WAV files, onto the user slots USR3+4.
+"""fm1-drummer: a sampled drum kit for the FM-1 from a folder of WAV files, onto the user slots USR3+4.
 
     tools/mkkit.py NAME DIR                            # what it would make: lanes, lengths, the budget
     tools/mkkit.py NAME DIR --image build/host/kit.img # a flash image of the two slots, for tools/fm1_render.py --usrkit

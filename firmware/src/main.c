@@ -180,7 +180,7 @@ static void fm1_main(void)
         uint32_t m = fm1_ms;
         fm1_wdt_feed();
         usb_retry(fm1_ms);
-        sng_poll();                                     /* fm1-arranger: a song asked for by the pedal (PC) */
+        sng_poll();                                     /* fm1-drummer: a song asked for by the pedal (PC) */
         if ((uint32_t)(m - healthy_since) >= 30000u && bootguard.pending) {
             bootguard_clear(&bootguard);     /* 30 s of this boot, even if TIMER4 survived reset */
         }
@@ -217,7 +217,7 @@ static void fm1_main(void)
                 }
             } else if (fm1_ms - t0 > 5000u) {
                 fm1_audio_stop();
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
                 persist_flush_now();                    /* (live sections, song, project: RAM-only so far) */
 #endif
                 lcd_fill(0, 0, 240, 240, C_BLACK);
@@ -234,7 +234,7 @@ static void fm1_main(void)
         if (usb.ota_req) {                              /* M-UPGRADE upgrade command */
             usb.ota_req = 0;
             panic_req = (1u << NTRK) - 1u;               /* every track (bit per track) */
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
             persist_flush_now();                        /* an update ends in a reset: RAM-only work first */
 #endif
             if (flash_ok)
@@ -245,7 +245,7 @@ static void fm1_main(void)
 #endif
         if (usb.uboot_req) {                            /* SysEx F0 22 24 35 7D F7 from the host */
             fm1_audio_stop();
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
             persist_flush_now();                    /* (live sections, song, project: RAM-only so far) */
 #endif
             lcd_fill(0, 0, 240, 240, C_BLACK);
@@ -269,7 +269,7 @@ static void fm1_main(void)
         ui_draw();
         felucca_dbg.stage = 8;
         autosave_tick();                                /* the working project into flash, when quiet */
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
         sections_flush();                               /* live sections / the recorded song, when quiet */
 #endif
         felucca_dbg.stage = 9;

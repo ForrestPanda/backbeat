@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* fm1-arranger: songs. A song is up to 8 named drum sections (intro, verse, chorus, bridge, solo,
+/* fm1-drummer: songs. A song is up to 8 named drum sections (intro, verse, chorus, bridge, solo,
  * outro...), each a drum pattern (16 lanes, 1..64 steps, a level and a ratchet per hit, the fill
  * conditions), with the song's tempo, kit, swing, drum level and reverb. Up to 8 songs live in flash
- * (storage.c OBJ_SONG0.., A/B sectors 0xA0000..: the USR1 sample slot's place, given up: the arranger keeps
+ * (storage.c OBJ_SONG0.., A/B sectors 0xA0000..: the USR1 sample slot's place, given up: the drummer keeps
  * USR2 and the kit pair USR3+4; editor.c refuses sample uploads into USR1), packed; as the FM6 bank, a song is read in place through
  * the plain XIP window (the device has little RAM left): loading it only checks the packed form and keeps a
  * pointer and the sections' offsets. A section starts on the bar as SLOOP's live sections do (seq.c
@@ -11,21 +11,25 @@
  * main loop: flash); stopped, the song's tempo and kit are set and its first section cued at once;
  * playing, they come with the next section.
  *
- * The packed song (little endian):
- *   header (32)   "SNG1", name[12], bpm u16, kit, swing, drum level, drum reverb, nsec, rsv[9]
- *   per section   name[12], len (1..64), div (N_SDIV index), flags (bit 0: the outro; bit 1: lane marks follow), rsv;
- *                 fill[(len + 3) / 4] (2 bits a step: FC_*); len x dstep_t (10 bytes: lanes u16, lvl[4], rat[4]);
- *                 with bit 1: len x (u16 "only during a fill" lanes, u16 "not during a fill" lanes)
+ * The packed song (little endian), "SNG2": a byte a hit, so that 8 sections of 64 steps fit in a sector
+ *   header (32)   "SNG2", name[12], bpm u16, kit, swing, drum level, drum reverb, nsec, rsv[9]
+ *   per section   name[12], len (1..64), div (N_SDIV index), flags (bit 0: the outro), meter (0: 4/4; else the
+ *                 numerator 1..16 in bits 0..4, the denominator in bits 5..6: SNG_DEN), size u16 (the section's
+ *                 bytes, this header included); fill[(len + 3) / 4] (2 bits a step: FC_*); then each step: its lanes
+ *                 u16, and a byte for each lane set, lowest first: level (bits 0..1, LV_*), ratchet (2..3: hits - 1),
+ *                 mark (4..5: 1 only during a fill, 2 not during one: seq.c drum_fonly / drum_fno)
+ * A section's meter is the bar the pedal counts while it plays (seq.c clk_meter): where a request lands, the fill
+ * bar, the ending, the click and the count-in. (The first form, "SNG1", 10 or 14 bytes a step, never reached a
+ * device: not read.)
  * tools/fm1_song.py writes one from a JSON file and sends it (EDITOR_PROTOCOL.md: BK_PUT object 16 + slot).
  * The pedal settings (the channel) are a small object of their own (OBJ_ARRSET, backup object 24).
  * Included from arranger_scene.c (the firmware through project.c, the host tests directly). */
-#define SNG_MAGIC 0x31474E53u                    /* "SNG1" (SNG_SLOTS, SNG_SECTIONS: seq.c) */
+#define SNG_MAGIC 0x32474E53u                    /* "SNG2" (SNG_SLOTS, SNG_SECTIONS: seq.c) */
 #define SNG_NAME 12u
 #define SNG_HDR 32u
-#define SNG_SEC_HDR 16u
+#define SNG_SEC_HDR 18u
 #define SNG_MAX 3800u                            /* a packed song (<= proj_tmp, the staging RAM; <= a sector's payload) */
 #define SNG_F_OUTRO 1u
-#define SNG_F_MARKS 2u                           /* the section's steps carry lane marks (seq.c drum_fonly / drum_fno) */
 
 typedef struct {
     const uint8_t *xip;                          /* the packed song: flash (XIP), or a RAM blob on the host */
@@ -57,19 +61,28 @@ static int sng_check(const uint8_t *b, uint32_t n, sng_t *out)
         !out->nsec || out->nsec > SNG_SECTIONS)
         return 3;
     for (k = 0; k < out->nsec; k++) {
-        uint32_t len, div;
+        uint32_t len, i, q, end;
         if (pos + SNG_SEC_HDR > n)
             return 4;
         len = b[pos + 12];
-        div = b[pos + 13];
-        if (!len || len > NSTEP || div >= NDIV_STEP)
+        end = pos + sng_u16(b + pos + 16);
+        if (!len || len > NSTEP || b[pos + 13] >= NDIV_STEP || (b[pos + 15] & 31u) > 16u || (b[pos + 15] & 0x80u) ||
+            end > n)
             return 5;
         out->off[k] = (uint16_t)pos;
-        pos += SNG_SEC_HDR + (len + 3u) / 4u + len * sizeof(dstep_t);
-        if (b[out->off[k] + 14] & SNG_F_MARKS)
-            pos += len * 4u;
-        if (pos > n)
+        q = pos + SNG_SEC_HDR + (len + 3u) / 4u;
+        for (i = 0; i < len; i++) {                 /* every step walked: its hits inside the section (a hit's byte
+                                                     * needs no check: any value is a level, a ratchet, a mark) */
+            uint32_t on;
+            if (q + 2u > end)
+                return 6;
+            on = sng_u16(b + q);
+            for (q += 2u; on; on &= on - 1u)
+                q++;
+        }
+        if (q != end)
             return 6;
+        pos = end;
     }
     return 0;
 }
@@ -79,16 +92,22 @@ static uint32_t sng_ready(void)
 {
     return sng_cur >= 0 ? (1u << sng.nsec) - 1u : 0u;
 }
-static uint32_t sng_bars(uint32_t k)             /* as section_bars: the bars its pattern takes */
+static uint32_t sng_meter(uint32_t k)            /* section k's meter byte (0: 4/4; seq.c meter_*) */
+{
+    return sng_cur >= 0 && k < sng.nsec ? sng_sec(k)[15] : 0u;
+}
+static uint32_t sng_bars(uint32_t k)             /* as section_bars: the bars its pattern takes, in its meter
+                                                  * (in 1/48 of a beat: every step and bar is a whole number of them) */
 {
     const uint8_t *s;
-    uint32_t len, u, bars;
+    uint32_t len, u, b, bars;
     if (sng_cur < 0 || k >= sng.nsec)
         return 1;
     s = sng_sec(k);
     len = s[12];
-    u = div_units((uint32_t)s[13] % NDIV_STEP);
-    bars = (len * u + 4u * BEAT_U - 1u) / (4u * BEAT_U);
+    u = div_units((uint32_t)s[13] % NDIV_STEP) / (BEAT_U / 48u);
+    b = 12u * meter_b16(s[15]);
+    bars = (len * u + b - 1u) / b;
     return !bars ? 1u : bars > 64u ? 64u : bars;
 }
 static void sng_name(uint32_t k, char *out)      /* (the names are ASCII, 0-padded in the packed form) */
@@ -99,6 +118,7 @@ static void sng_name(uint32_t k, char *out)      /* (the names are ASCII, 0-padd
         out[i] = (char)s[i];
     out[i] = 0;
 }
+static int sng_pending(void) { return sng.pend != 0u; }
 static uint32_t sng_outro(void)
 {
     uint32_t k;
@@ -124,8 +144,8 @@ static void sng_globals(void)                    /* the song's tempo, kit, swing
 static void sng_apply(uint32_t k)
 {
     track_t *t = TDRUM;
-    const uint8_t *s;
-    uint32_t len, nf;
+    const uint8_t *s, *q;
+    uint32_t len, nf, i, l;
     if (sng_cur < 0 || k >= sng.nsec)
         return;
     s = sng_sec(k);
@@ -136,17 +156,23 @@ static void sng_apply(uint32_t k)
     t->nheld = t->arp_phys = t->arp_note = t->rh_n = t->rskip_n = 0;
     t->rskip_lanes = 0;
     locks_clear(t);                              /* (no lock, no nudge, no condition: then the section's) */
-    memcpy(t->dstep, s + SNG_SEC_HDR + nf, len * sizeof(dstep_t));
     memcpy(t->fill, s + SNG_SEC_HDR, nf);
     drum_fill_masks_clear();
-    if (s[14] & SNG_F_MARKS) {                    /* the lane marks, little endian: only-during, not-during a fill */
-        const uint8_t *m = s + SNG_SEC_HDR + nf + len * sizeof(dstep_t);
-        uint32_t i;
-        for (i = 0; i < len; i++) {
-            drum_fonly[i] = (uint16_t)(m[4u * i] | m[4u * i + 1u] << 8);
-            drum_fno[i] = (uint16_t)(m[4u * i + 2u] | m[4u * i + 3u] << 8);
+    q = s + SNG_SEC_HDR + nf;
+    for (i = 0; i < len; i++) {                   /* each step: its lanes, then a byte a hit (level, ratchet, mark) */
+        uint32_t on = sng_u16(q);
+        memset(&t->dstep[i], 0, sizeof(dstep_t));
+        for (q += 2, l = 0; on; on >>= 1, l++) {
+            uint32_t v;
+            if (!(on & 1u))
+                continue;
+            v = *q++;
+            dstep_set(&t->dstep[i], l, v, v >> 2);
+            drum_fonly[i] |= (uint16_t)((v >> 4 & 1u) << l);
+            drum_fno[i] |= (uint16_t)((v >> 5 & 1u) << l);
         }
     }
+    clk_meter = s[15];
     t->p[P_SLEN] = (int16_t)len;
     t->p[P_SDIV] = (int16_t)(s[13] % NDIV_STEP);
     sng_name(k, sng_ui_name);
@@ -174,6 +200,15 @@ static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len)
 #elif !defined(SNG_HOST_FETCH)
 static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len) { (void)slot; *len = 0; return 0; }
 #endif
+static void sng_slot_name(uint32_t slot, char *out)   /* the song in a slot: its name ("": none) */
+{
+    uint32_t n, i = 0;
+    const uint8_t *p = sng_fetch(slot, &n);
+    if (p && n >= SNG_HDR && sng_u16(p) == (SNG_MAGIC & 0xFFFFu) && sng_u16(p + 2) == SNG_MAGIC >> 16)
+        for (; i < SNG_NAME && p[4 + i]; i++)
+            out[i] = (char)p[4 + i];
+    out[i] = 0;
+}
 
 /* a song (slot) loaded, or none (0xFF): the main loop, for sng_req; also the host tests */
 static int sng_load(uint32_t slot)
@@ -239,16 +274,21 @@ static void sng_poll(void)                       /* main loop */
 typedef struct {
     uint32_t magic;
     uint8_t pedal_ch;                            /* 0 off, 1..16, 17 omni */
-    uint8_t rsv[11];
+    uint8_t count_in;                            /* bars of count-in before a start from stopped: 0, 1, 2 */
+    uint8_t rsv[10];
 } arrset_t;
-static int arrset_valid(const arrset_t *a) { return a->magic == ARRSET_MAGIC && a->pedal_ch <= PEDAL_CH_OMNI; }
+static int arrset_valid(const arrset_t *a)
+{
+    return a->magic == ARRSET_MAGIC && a->pedal_ch <= PEDAL_CH_OMNI && a->count_in <= PEDAL_COUNT_MAX;
+}
 static void arrset_fill(arrset_t *a)
 {
     memset(a, 0, sizeof *a);
     a->magic = ARRSET_MAGIC;
     a->pedal_ch = pedal.ch;
+    a->count_in = pedal.count;
 }
-static void arrset_take(const arrset_t *a) { pedal.ch = a->pedal_ch; }
+static void arrset_take(const arrset_t *a) { pedal.ch = a->pedal_ch; pedal.count = a->count_in; }
 #if FELUCCA_FLASH
 static void arrset_boot(void)
 {

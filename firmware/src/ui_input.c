@@ -145,6 +145,12 @@ static uint32_t keys_lit(void)
     default:                                       /* playing, ARP roll, SAVE song, every page and the menu */
         break;
     }
+    if (kb_grid == 2u) {                           /* the song screen: the section playing lit, the one cued blinking */
+        for (i = 0; i < 8u; i++)
+            if ((song.playing && (int32_t)i == live_sec) || ((int32_t)i == live_req && blink))
+                m |= 1u << key_of_white(i);
+        return m;
+    }
     if (kb_grid) {                                 /* the DRUMS grid page: the sound's steps of this page */
         uint32_t len = trk_len(TDRUM), b0 = drum_cursor / 16u * 16u;
         for (i = 0; i < 16u; i++) {
@@ -486,7 +492,7 @@ static void edit_param(uint32_t slot, int32_t steps)
         break;
     case G_NEWPRJ:
         *vp = 0;
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
         if (song.playing && arrangement_enabled) {      /* (the song's stop would bring the old loop back) */
             ui_message("STOP THE SONG FIRST");
             break;
@@ -770,6 +776,8 @@ static int layers_input(uint32_t note_edges, uint32_t *pressed, uint32_t home)
             if ((e >> 8) == KB_GRID) {                    /* the DRUMS grid page: a step key */
                 if (((e >> 7) & 1u) && grid_keys_on())
                     grid_key(e & 31u);
+                else if (((e >> 7) & 1u) && drummer_keys_on())
+                    drummer_key(e & 31u);
             } else if (!((e >> 7) & 1u)) {
                 layer_key(e >> 8, e & 31u, 0);
             }
@@ -954,7 +962,8 @@ static void ui_input(void)
             song.seq_mode = 0;
         }
     }
-    kb_grid = (uint8_t)grid_keys_on();                  /* (seq.c: the keys are the grid's steps) */
+    kb_grid = (uint8_t)(grid_keys_on() ? 1u : drummer_keys_on() ? 2u : 0u);   /* (seq.c: the keys are the grid's
+                                                         * steps; 2: the song screen's) */
     if (ui.menu) {                                      /* HOME / REC taps do nothing here */
         punch.hold = 0;
         thr_req = 0;
@@ -999,7 +1008,11 @@ static void ui_input(void)
         for (k = 0; k < 4u; k++)                        /* a take / the count-in: KNOB 1..4 edit nothing */
             panel_enc(EN_K1 + k);
     }
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
+    if (drummer_on()) {
+        drummer_input(pressed, home);
+        return;
+    }
     if (on_song_page()) {
         song_screen_input(pressed, home);
         return;
@@ -1024,7 +1037,7 @@ static void ui_input(void)
         b = panel_btn_of(id);
         switch (b) {
         case B_PLAY:
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
             if (!song.playing && arrangement_enabled && !arr_valid(&arrangement, arrangement_ready())) {
                 ui_message("EMPTY SECTION: REC");
                 break;

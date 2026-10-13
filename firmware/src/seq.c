@@ -617,7 +617,9 @@ static volatile uint8_t rec_wait;             /* 1: armed, waits for a note */
 static uint8_t rec_tempo;                     /* REC screen MODE: 0 FREE, 1 TEMPO (an empty project) */
 static uint8_t rec_count;                     /* REC screen START: 0 NOTE, 1 COUNT (one bar of clicks) */
 static volatile uint8_t ci_on;                /* the count-in runs (armed, COUNT, PLAY) */
+static volatile uint8_t ci_pedal;             /* fm1-drummer: the pedal's count-in, its beats (0: not the pedal's) */
 static volatile uint8_t ci_beat;              /* its beats clicked so far - 1 (the UI shows 4 - ci_beat) */
+static uint8_t ci_meter;                       /* fm1-drummer: the pedal's count-in clicks this meter (clk_meter's form) */
 static uint32_t ci_u;                         /* clock units since it started */
 static volatile uint8_t rec_go;               /* recording just started (the UI says so) */
 static void seq_start(void);
@@ -812,8 +814,8 @@ static uint32_t step_plays(const track_t *t, uint32_t idx)   /* its condition ho
     uint32_t c = step_fill(t, idx);
     return c == FC_FILL ? fill_now : c == FC_NOFILL ? !fill_now : 1u;
 }
-#if FELUCCA_ARRANGER
-/* fm1-arranger: a song's section marks the drum track's hits one by one (a lane at a step): "only during a fill"
+#if FELUCCA_DRUMMER
+/* fm1-drummer: a song's section marks the drum track's hits one by one (a lane at a step): "only during a fill"
    or "not during a fill" (sng.c: section flag 2, two 16-bit masks a step), on top of SLOOP's condition of the
    whole step. The masks are the song's: cleared with the pattern (steps_clear, a project) */
 static uint16_t drum_fonly[NSTEP], drum_fno[NSTEP];
@@ -842,7 +844,7 @@ static void steps_clear(track_t *t)           /* an empty pattern (synth: REST s
     locks_clear(t);
     memset(t->fill, 0, sizeof t->fill);
     if (is_drum(t))
-        drum_fill_masks_clear();                   /* (fm1-arranger: the song's marks go with the pattern) */
+        drum_fill_masks_clear();                   /* (fm1-drummer: the song's marks go with the pattern) */
 }
 
 /* tempo x 10 of a loop of T blocks holding n bars of 4/4 */
@@ -947,7 +949,7 @@ static void ft_close(void)
     t->seq_active = 1;
     song.g[G_BPM] = (int16_t)bpm;
     ft_bars = (uint8_t)bars;
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     arrangement_enabled = 0;
 #endif
     seq_start();                                      /* this is the downbeat: the loop plays */
@@ -1216,7 +1218,7 @@ static void arm_start(track_t *t)
     } else if (rec_count) {
         return;                                   /* COUNT: PLAY counts in; a note only sounds */
     } else {
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
         arrangement_enabled = 0;
 #endif
         seq_start();                              /* the note is the downbeat */
@@ -1541,7 +1543,8 @@ static void key_down(uint32_t k)
     default:
         break;
     }
-    if (is_drum(t) && layer == LY_PLAY && kb_grid) {   /* the DRUMS grid page: a step key */
+    if ((is_drum(t) || kb_grid == 2u) && layer == LY_PLAY && kb_grid) {   /* the DRUMS grid page: a step key (2: the
+                                                                         * song screen's keys, any track) */
         kb_kind[k] = KS_UI;
         kb_nt[k][0] = (uint8_t)KB_GRID;
         lk_push(KB_GRID, k, 1);
@@ -1723,18 +1726,35 @@ static void rec_follow(uint32_t sel)
 #define CLICK_REC 1
 #define CLICK_ON 2
 static uint32_t click_last = SEQ_NONE;          /* the beat it last played */
+/* fm1-drummer: the bar is the meter of the section playing (a song's section, sng.c; 0 = 4/4, SLOOP's always):
+ * the numerator in bits 0..4, the denominator's code in bits 5..6. Bars are counted in 16ths from the section's
+ * start (seq_reset_tracks), so a 7/8 bar ends inside a beat; a beat of the click is a 1/den note */
+static uint8_t clk_meter;
+static const uint8_t METER_DEN[4] = {4, 8, 2, 16};
+static uint32_t meter_num(uint32_t m) { return m & 31u ? m & 31u : 4u; }
+static uint32_t meter_den(uint32_t m) { return METER_DEN[(m >> 5) & 3u]; }
+static uint32_t meter_b16(uint32_t m) { return 16u * meter_num(m) / meter_den(m); }   /* the bar in 16ths */
+static uint32_t clk_16th(void) { return clk_beat * 4u + clk_pos / (BEAT_U / 4u); }
+static int clk_new_bar(uint32_t *last)          /* a bar starts in this block (not seen yet: *last, its index) */
+{
+    uint32_t p = clk_16th(), b = meter_b16(clk_meter);
+    if (p % b || p / b == *last)
+        return 0;
+    *last = p / b;
+    return 1;
+}
 static void click_tick(void)
 {
-    uint32_t mode = (uint32_t)song.g[G_CLOCK];
-    if (!song.playing || clk_beat == click_last)
+    uint32_t mode = (uint32_t)song.g[G_CLOCK], p = clk_16th(), c = p / (16u / meter_den(clk_meter));
+    if (!song.playing || c == click_last)
         return;
-    click_last = clk_beat;
+    click_last = c;
     if (mode == CLICK_ON || (mode == CLICK_REC && song.rec))
-        click_on(clk_beat % 4u == 0u);
+        click_on(p % meter_b16(clk_meter) == 0u);
 }
 
 /* -------------------------------------------------------- sequencer --- */
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
 /* ---- LIVE SECTIONS (SAVE held + key, ui_layers.c): a section asked for while playing starts on the
  * next bar, every track from its step 0 (as the song does). SONG REC writes the order you play into the
  * song chain (arrangement): each section with the bars it played, from the bar after the arm. */
@@ -1789,14 +1809,16 @@ static void srec_stop(void)
         srec_finish();
     srec = 0;
 }
-/* fm1-arranger (pedal.c): a section asked for by the pedal makes the rest of the bar a fill (FILL ONLY steps
+/* fm1-drummer (pedal.c): a section asked for by the pedal makes the rest of the bar a fill (FILL ONLY steps
  * play, NO FILL steps rest) until the section starts; asked for with a whole fill bar first, the request
  * waits one bar; an ending plays the outro for its bars, then stops on the bar */
 static volatile uint8_t pedal_fill;                /* this bar is the pedal's fill */
 static volatile uint8_t pedal_wait;                /* live_req waits for the next bar (a whole fill bar first) */
+static volatile uint8_t pedal_at_end;              /* live_req (or the ending's stop) waits for the section's end: its last bar the fill */
+static volatile uint8_t pedal_fill_hold;           /* CC 21: the fill until the section's end (2: through the next cycle too) */
 static volatile uint8_t pedal_end_req;             /* bars of the outro asked for (taken when its section starts) */
-static volatile uint8_t pedal_end_bars;            /* stop when the section playing has played this many (0: none) */
-/* fm1-arranger (sng.c, arranger_scene.c): a song loaded from flash: its sections replace A..D for live_req */
+static volatile uint32_t pedal_end_bars;           /* stop when the section playing has played this many (0: none) */
+/* fm1-drummer (sng.c, arranger_scene.c): a song loaded from flash: its sections replace A..D for live_req */
 #define SNG_SLOTS 8u                               /* songs in flash */
 #define SNG_SMP_SLOT 0u                            /* the user sample slot (USR1) whose flash the songs take */
 #define SNG_SECTIONS 8u                            /* sections a song holds at most */
@@ -1805,8 +1827,11 @@ static volatile uint8_t sng_req;                   /* PC: slot + 1 to load, 0xFF
 static void sng_apply(uint32_t k);                 /* section k of the song into the drum track (at the bar) */
 static uint32_t sng_ready(void);                   /* bit k: section k exists */
 static uint32_t sng_bars(uint32_t k);              /* the bars section k takes */
+static uint32_t sng_meter(uint32_t k);             /* section k's meter (clk_meter's form) */
 static uint32_t sng_outro(void);                   /* the section flagged as the outro, 0xFF = none */
+static int sng_pending(void);                      /* a song loaded while playing waits for its first section */
 static void sng_name(uint32_t k, char *out);       /* section k's name (12 + 1 chars) */
+static void sng_slot_name(uint32_t slot, char *out);   /* the song in a slot: its name ("": none) */
 /* what the screen shows (ui_draw.c draw_head: the section playing and its bar; the pedal's events as messages) */
 static char sng_ui_name[13];                       /* the section playing: the song's name for it, or A..D */
 static char sng_ui_song[13];                       /* the song loaded, or empty */
@@ -1814,12 +1839,13 @@ static char sng_ui_next[13];                       /* the section the pedal aske
 static void sng_unload(void)                       /* SLOOP's sections A..D again (a project loaded over the song) */
 {
     sng_cur = -1;
+    clk_meter = 0;
     sng_ui_song[0] = 0;
     sng_ui_next[0] = 0;
 }
 static volatile uint8_t pedal_ui;                  /* an event to say: PU_* (the UI thread clears it) */
 static char pedal_ui_name[13];                     /* its name (the section asked for, the song) */
-enum { PU_NONE, PU_NEXT, PU_SONG, PU_ENDING, PU_FILL, PU_NOSONG, PU_STOP };
+enum { PU_NONE, PU_NEXT, PU_SONG, PU_ENDING, PU_FILL, PU_NOSONG, PU_STOP, PU_COUNT };
 static void pedal_say(uint32_t ev, const char *name)
 {
     uint32_t i;
@@ -1830,11 +1856,28 @@ static void pedal_say(uint32_t ev, const char *name)
 }
 static void seq_stop(void);
 static void seq_reset_tracks(uint32_t pos);
+static uint32_t live_sec_bars(void)                /* the bars the section playing takes (its pattern's; 1 with none) */
+{
+    if (live_sec < 0)
+        return 1;
+    return sng_cur >= 0 ? sng_bars((uint32_t)live_sec) : section_bars((uint32_t)live_sec);
+}
 static void live_block(void)                       /* once a block while playing a loop (not the song) */
 {
-    if ((clk_beat & 3u) || (clk_beat >> 2) == live_bar)
+    if (!clk_new_bar(&live_bar))                    /* a new bar (in the section's meter) */
         return;
-    live_bar = clk_beat >> 2;                       /* a new bar */
+    if (pedal_at_end || pedal_fill_hold) {          /* the pedal counts the section's bars (fm1-drummer): since the
+                                                     * section started (live_bar), its pattern's bars the period */
+        uint32_t n = live_sec_bars();
+        if (pedal_fill_hold && live_bar % n == 0u && --pedal_fill_hold == 0u)
+            pedal_fill = 0;                         /* the fill asked for (CC 21) ends with the pattern */
+        if (pedal_at_end) {                         /* a request waits for the section's end: its last bar the fill */
+            if ((live_bar + 1u) % n == 0u)
+                pedal_fill = 1;
+            if (live_bar % n == 0u)
+                pedal_at_end = 0;                   /* the end: the request lands below, the ending's stop counts */
+        }
+    }
     if (pedal_end_bars && live_req < 0 && live_bar >= pedal_end_bars) {   /* the ending: the outro has played */
         pedal_end_bars = 0;
         pedal_fill = 0;
@@ -1862,26 +1905,29 @@ static void live_block(void)                       /* once a block while playing
     if (live_req >= 0 && pedal_wait) {              /* the pedal: a whole fill bar first, the section after it */
         pedal_wait = 0;
         pedal_fill = 1;
-    } else if (live_req >= 0) {
+    } else if (live_req >= 0 && !pedal_at_end) {    /* (at_end: the section playing goes on to its end first) */
         uint32_t s = (uint32_t)live_req;
         live_req = -1;
         {                                           /* (the UI asked for a section it checked: no hash here) */
             if (sng_cur >= 0) {
-                sng_apply(s);                       /* (fm1-arranger: the song's section, named by it) */
+                sng_apply(s);                       /* (fm1-drummer: the song's section, named by it) */
             } else {
                 arrangement_apply(s);
+                clk_meter = 0;
                 sng_ui_name[0] = (char)('A' + (s & 3u));   /* (SLOOP's sections: their letter) */
                 sng_ui_name[1] = 0;
             }
             song.rec = 0;                           /* (a take does not run on into another section) */
             live_sec = (int8_t)s;
-            seq_reset_tracks(clk_pos);              /* on the bar: every track from its step 0 */
+            seq_reset_tracks(clk_pos % (BEAT_U / 4u));   /* on the bar: every track from its step 0 (a bar
+                                                     * line inside a beat: the remainder past it) */
             live_bar = 0;
             if (chain_n)
                 chain_bars = (uint8_t)section_bars(chain_sec[chain_i % CHAIN_MAX]);
             if (srec == 2u && sng_cur < 0)
                 srec_add(s);                        /* (a song's sections are not SLOOP's A..D: not recorded) */
             pedal_fill = 0;                         /* the pedal's fill ends with the section it announced */
+            pedal_fill_hold = 0;
             pedal_end_bars = pedal_end_req;         /* (the outro: its bars, then stop) */
             pedal_end_req = 0;
             sng_ui_next[0] = 0;                     /* (the screen: it is here) */
@@ -1893,7 +1939,8 @@ static void live_block(void)                       /* once a block while playing
         srec_add((uint32_t)live_sec);
     }
 }
-#include "pedal.c"                                 /* fm1-arranger: a pedalboard's CC / PC -> sections, transport */
+static int mclk_on(void);                          /* (below: the MIDI clock drives the sequencer) */
+#include "pedal.c"                                 /* fm1-drummer: a pedalboard's CC / PC -> sections, transport */
 #endif
 
 /* every track from its step 0, together, at pos units into beat 0 (a song section: the arranger's
@@ -1915,7 +1962,7 @@ static void seq_reset_tracks(uint32_t pos)
         roll[i].last = SEQ_NONE - 1u;               /* (a roll held over the start: on the grid from here) */
     clk_beat = 0;
     clk_pos = pos;
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     live_bar = 0xFFFFFFFFu;                        /* (bar 0 is a new bar: SONG REC can start on it) */
 #endif
     fill_last_bar = 0xFFFFFFFFu;                   /* (the same for an armed fill bar) */
@@ -1931,7 +1978,7 @@ static void song_restore(void);
 
 static void seq_start(void)
 {
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     if (arrangement_enabled && !song.playing) {
         rec_wait = 0;                              /* song mode plays, it does not record */
         song_backup();
@@ -1959,7 +2006,7 @@ static void seq_release(track_t *t)
 static void seq_stop(void)
 {
     uint32_t i;
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     if (song.playing)
         srec_stop();                                /* SONG REC: the order played so far is the song */
     live_req = -1;
@@ -1968,9 +2015,11 @@ static void seq_stop(void)
     fill_held = 0;                                  /* STOP ends a fill, held or armed */
     fill_arm = 0;
     fill_bar_on = 0;
-#if FELUCCA_ARRANGER
-    pedal_fill = 0;                                 /* (fm1-arranger: the pedal's fill, wait and ending too) */
+#if FELUCCA_DRUMMER
+    pedal_fill = 0;                                 /* (fm1-drummer: the pedal's fill, wait and ending too) */
     pedal_wait = 0;
+    pedal_at_end = 0;
+    pedal_fill_hold = 0;
     pedal_end_req = 0;
     pedal_end_bars = 0;
     sng_ui_next[0] = 0;
@@ -1982,7 +2031,7 @@ static void seq_stop(void)
         trk[i].rh_n = 0;                           /* a recorded note held over the stop: as far as it got */
     }
     seq_out_all_off();
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     if (arrangement_clock.running) {
         arrangement_clock.running = 0;
         song_restore();                            /* back to the loop you were making */
@@ -2487,7 +2536,7 @@ static uint32_t mclk_adv(uint32_t n)               /* units to advance this bloc
 static void events_block(uint32_t n)
 {
     uint32_t i, pr, adv;
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     pedal_elapse(n);
 #endif
     if (mo_any && !song.g[G_MIDI]) {            /* MIDI = KEYS again: end what the sequencer had sent */
@@ -2503,6 +2552,7 @@ static void events_block(uint32_t n)
             ft_close();                             /* (PLAY from elsewhere: the editor) */
         } else if (ci_on) {
             ci_on = 0;                              /* PLAY again during the count-in: back to armed */
+            ci_pedal = 0;                           /* (the pedal's: cancelled, the section stays cued) */
         } else if (!ext && rec_wait && rec_count && !song.playing && !mclk_on() &&
                    !(project_empty() && !rec_tempo)) {
             ci_on = 1;                              /* COUNT: one bar of clicks first (below) */
@@ -2519,26 +2569,30 @@ static void events_block(uint32_t n)
         transport_req = 0;
         song.rec = 0;                               /* STOP ends the take (and the wait) */
         rec_wait = 0;
+        ci_pedal = 0;                               /* (and the pedal's count-in) */
         if (ft_on) {
             ft_on = 0;                              /* a free take: dropped */
             ft_bars = 0xFF;
         }
     }
-    if (ci_on) {                                    /* the count-in: 4 beats at the tempo, then go */
-        if (!rec_wait || song.playing) {
+    if (ci_on) {                                    /* the count-in: 4 beats at the tempo, then go (the pedal's:
+                                                     * one or two bars of clicks before the section it cued) */
+        if ((!rec_wait && !ci_pedal) || song.playing) {
             ci_on = 0;                              /* (REC cancelled it, or it started some other way) */
+            ci_pedal = 0;
         } else {
-            uint32_t b;
+            uint32_t b, m = ci_pedal ? ci_meter : 0u;   /* (the pedal's: the clicks of the section cued's meter) */
             ci_u += n * (uint32_t)song.g[G_BPM];
-            b = ci_u / BEAT_U;
-            if (b >= 4u) {
+            b = ci_u / (4u * BEAT_U / meter_den(m));
+            if (b >= (ci_pedal ? (uint32_t)ci_pedal : 4u)) {
                 ci_on = 0;
+                ci_pedal = 0;
                 seq_start();
-                if (song.playing)
+                if (song.playing && rec_wait)
                     rec_begin();
             } else if (b != ci_beat) {
                 ci_beat = (uint8_t)b;
-                click_on(0);
+                click_on(b % meter_num(m) == 0u);   /* (the second bar's first beat accented too) */
             }
         }
     }
@@ -2546,7 +2600,7 @@ static void events_block(uint32_t n)
         rec_begin();                                /* started some other way: record now */
     adv = mclk_on() && song.playing ? mclk_adv(n) : n * (uint32_t)song.g[G_BPM];   /* (after a START) */
     ft_block();
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
     if (song.playing && arrangement_clock.running) {
         int scene = arr_next(&arrangement_clock, &arrangement, FS);
         if (scene == ARR_DONE) {
@@ -2561,14 +2615,12 @@ static void events_block(uint32_t n)
         live_block();
     }
 #endif
-    if (song.playing && !(clk_beat & 3u) && (clk_beat >> 2) != fill_last_bar) {   /* a new bar: the armed fill bar
-                                                                                    * (after a section: its bar 0) */
-        fill_last_bar = clk_beat >> 2;
+    if (song.playing && clk_new_bar(&fill_last_bar)) {   /* a new bar: the armed fill bar (after a section: its bar 0) */
         fill_bar_on = fill_arm;
         fill_arm = 0;
     }
-#if FELUCCA_ARRANGER
-    fill_now = (uint8_t)(fill_held || fill_bar_on || pedal_fill);   /* (pedal_fill: fm1-arranger) */
+#if FELUCCA_DRUMMER
+    fill_now = (uint8_t)(fill_held || fill_bar_on || pedal_fill);   /* (pedal_fill: fm1-drummer) */
 #else
     fill_now = (uint8_t)(fill_held || fill_bar_on);
 #endif
@@ -2648,7 +2700,7 @@ static void events_block(uint32_t n)
             mclk_event((pkt >> 8) & 0xFFu, ((pkt >> 4) & 15u) ? 2u : 1u);
             continue;
         }
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
         if ((st == 0xC0u || (st == 0xB0u && d1 >= PEDAL_CC_SECTION && d1 <= PEDAL_CC_SECTION_FILLBAR)) &&
             pedal_listens(ch)) {                      /* the pedalboard's channel: its CCs (20..27) and PC (a song)
                                                        * go to pedal.c before any track or CC map sees them; the
@@ -2748,7 +2800,7 @@ static void events_block(uint32_t n)
             clk_pos -= BEAT_U;
             clk_beat++;
         }
-#if FELUCCA_ARRANGER
+#if FELUCCA_DRUMMER
         arr_elapse(&arrangement_clock, adv, 1u);   /* (units: n x BPM, or the MIDI clock) */
 #endif
     }

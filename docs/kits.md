@@ -1,4 +1,4 @@
-# Drum kits for the arranger
+# Drum kits for the drummer
 
 The device plays one sample per lane (16 lanes), from the paired user slot USR3+4 (about 2 x 7.4 s
 of mono 22 kHz ADPCM). `tools/mkkit.py` makes that from a folder of WAVs or from an SFZ kit, as an
