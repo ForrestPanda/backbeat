@@ -38,7 +38,7 @@ static struct {
     uint8_t cursor;              /* SEQ: step being edited (STEP page KNOB 1 moves it) */
     uint8_t entry_open;          /* SEQ: keys held since the first press of this entry */
     uint8_t hot_col, hot_t;      /* column whose knob was just turned (drawn white) */
-    uint8_t menu;                /* 0 off, 1 list, 2 about (HOME held) */
+    uint8_t menu;                /* SETUP (GLO tapped, ui_menu.c): 0 off, 1 its sections, 2 ABOUT */
     uint8_t menu_sel;
     uint32_t menu_sig, home_t0;  /* HOME press time (btn_hold) */
     uint8_t force;               /* full redraw pending */
@@ -46,7 +46,7 @@ static struct {
     uint8_t bpm_t;               /* frames the BPM stays highlighted after a SELECT turn */
     uint8_t arm, arm_t;          /* destructive action armed: param id, frames left to confirm */
     uint32_t rec_t0;             /* REC press time (btn_hold) */
-    uint8_t confirm;             /* 1 = "clear the sequence?" (REC held on SEQ / ARP), 2 = "clear track n?" (TRACKS) */
+    uint8_t confirm;             /* 1 = "clear the sequence?" (REC held on SEQ / ARP), 2 = "clear track n?" (SLOOP's TRACKS) */
     uint8_t confirm_trk;         /* the track the dialog clears */
     uint8_t uslot;               /* SAVE > USER: the selected user preset slot */
     /* layers (ui_layers.c): a function button held, the keys and knobs do something else */
@@ -105,17 +105,6 @@ static void page_entered(void)
 {
     const page_t *pg = cur_page();
     song.seq_mode = !ui.home && pg->fam == FAM_SEQ;
-    if (!ui.home && pg->fam == FAM_GLO && pg->id[0] == G_DRCH && song.g[G_ROUTE]) {   /* (2.6) GLO > MIDI while IN sets
-                                                                                    * the drums' channel aside */
-        if (song.g[G_ROUTE] == 1)
-            ui_message("IN = CLOCK: NO NOTES");
-        else {
-            char b[10];
-            str_cpy(b, "IN CH ", sizeof b);
-            fmt_int(b + 6, song.g[G_ROUTE] - 1);
-            ui_say(b, " ONLY");
-        }
-    }
     ui.entry_open = 0;
     ui.hot_t = 0;                                /* the white value / focus box was the old page's */
     ui.force = 1;
@@ -184,7 +173,7 @@ static void open_family(uint32_t fam)
 }
 
 /* SELECT on a page: the previous / next page of its family, as tapping the button again but both ways,
- * stopping at the ends. Not the screens of their own (SONG, DRUMS) nor a family of one page (TRACKS):
+ * stopping at the ends. Not the screens of their own (SONG, DRUMS) nor a family of one page:
  * 0 then, and SELECT is the tempo there */
 static int page_walk(int32_t s)
 {
@@ -212,11 +201,19 @@ static int page_walk(int32_t s)
     return 1;
 }
 
-static void go_home(void)
+#if FELUCCA_DRUMMER
+enum { DV_JAM, DV_LIVE, DV_LIB };                /* the SONG page's screens: SLOOP's chain, LIVE, SONGS (ui_drummer.c) */
+static void drummer_open(uint32_t view);
+#endif
+static void go_home(void)                        /* fm1-drummer: the LIVE screen (the SONG page) */
 {
 #if FELUCCA_DRUMMER
+    uint32_t i;
     ui.home = 0;
-    ui.page = (uint8_t)page_first(FAM_TRK);
+    for (i = 0; i < NPAGES; i++)
+        if (PAGES[i].scope == SC_SONG)
+            ui.page = (uint8_t)i;
+    drummer_open(DV_LIVE);
 #else
     ui.home = 1;
 #endif
@@ -260,7 +257,7 @@ static void pc_poll(void)
         ui.force = 1;
     }
 }
-/* HOME: what KNOB k edits on the drum track: LEVEL and REV (GLO > DRUMS), PAN and LEN */
+/* HOME: what KNOB k edits on the drum track: LEVEL and REV (SETUP > DRUMS), PAN and LEN */
 static const param_desc_t *home_param(uint32_t k, int16_t **vp)
 {
     static const uint8_t DRUM_HOME[4][2] = {{1, G_DRLVL}, {1, G_DRREV}, {0, P_PAN}, {0, P_SLEN}};
@@ -274,10 +271,10 @@ static const param_desc_t *home_param(uint32_t k, int16_t **vp)
 }
 
 /* ------------------------------------------------------- MIDI LEARN --- */
-/* MIDI LEARN (SLOOP 2.6, after Felucca 1.5 by Leo Kuroshita, Discussion #170; the map: seq.c ml_tab). GLO held +
- * the black key F#3 turns it on and off. On: a knob turned on a track's page (the sound's pages, HOME, TRACKS' LEVEL
+/* MIDI LEARN (SLOOP 2.6, after Felucca 1.5 by Leo Kuroshita, Discussion #170; the map: seq.c ml_tab). SETUP > LEARN
+ * > MIDI LEARN turns it on and off (SLOOP: GLO + F#3). On: a knob turned on a track's page (the sound's pages, HOME, LEVEL
  * and PAN) picks its parameter on the selected track as it edits it; the next CC that comes (any channel IN hears) is
- * set to it, and stays until something else is learned on it or HOME > SYSTEM > LEARN CLEAR. Then turn the next knob.
+ * set to it, and stays until something else is learned on it or SETUP > LEARN > MIDI LEARN CLEAR. Then turn the next knob.
  * One CC sets one parameter, a parameter has one CC: learning one again replaces both. The settings keep the map */
 static struct { uint8_t on, pick, trk, id; } mlu;
 static uint32_t ml_code(uint32_t id) { return id >= P_E0 ? ML_E0 + id - P_E0 : id + 1u; }
@@ -310,7 +307,7 @@ static uint32_t ml_learn(uint32_t cc, uint32_t k, uint32_t id)
         }
     return 0;
 }
-static int ml_clear_all(void)                    /* HOME > SYSTEM > LEARN CLEAR; 1 = there were */
+static int ml_clear_all(void)                    /* SETUP > LEARN > MIDI LEARN CLEAR; 1 = there were */
 {
     uint32_t i, n = ml_count();
     for (i = 0; i < ML_N; i++)
@@ -319,7 +316,7 @@ static int ml_clear_all(void)                    /* HOME > SYSTEM > LEARN CLEAR;
         settings_later = 1;                      /* (saved when quiet) */
     return n != 0u;
 }
-static void ml_toggle(void)                      /* GLO + F#3 */
+static void ml_toggle(void)                      /* SETUP > LEARN > MIDI LEARN */
 {
     mlu.on = (uint8_t)!mlu.on;
     mlu.pick = 0;

@@ -4,6 +4,12 @@ The firmware side is `firmware/src/editor.c` (SLOOP is based on Felucca: the fra
 header). This fork, fm1-drummer, speaks **v11** (drums only, below); the sections after it are SLOOP's
 history (v1..v10), which v11 keeps byte for byte where it did not take something away.
 
+Where the history names a place on the device, it is SLOOP's: on fm1-drummer (2026-10-14, README "On the device")
+the GLO pages and the menu are SETUP (GLO tapped: "GLO > DRUMS" is SETUP > DRUMS, "GLO > MIDI" SETUP > MIDI,
+"GLO > TEXTURE" SETUP > TEXTURE, "GLO > SYSTEM > SYNC" SETUP > LEARN > SYNC), the TRACKS screen and the GLO layer
+(mute, solo, fill keys) are gone, and a fill is the pedal's CC 21 or the LIVE screen's black keys and SEL. The
+protocol does not change with them.
+
 ## v11: fm1-drummer, drums only
 
 The device has one track, the drum track (track 0); SLOOP's synth side (three synth tracks, the twelve
@@ -27,9 +33,10 @@ fm1-drummer firmware).
   tracks that are not selected). The editor uses `DRUM_STEP` for the steps and none of these.
 - **Unchanged:** `GET` / `SET` / `DUMP` / `DESC`, `PROJECT`, the sample slots, `WATCH` / `PING` and the pushes,
   `DRUM_STEP`, the locks, nudges and fill conditions (track 0), `BK_*`, `DSYN_*` (72..76).
-- **USR1 holds the songs** (`firmware/src/sng.c`): `SMP_BEGIN`, `SMP_ERASE` and `SMP_WRITE` on slot 0 answer rc 4
-  (`SMP_END` rc 6), `SMP_INFO` lists it empty, and the KIT value USR1 plays nothing. The kit values keep their numbers
-  (songs and projects store them); the device's knob and the editor's kit lists pass over USR1.
+- **USR1 and USR2 hold the songs** (`firmware/src/sng.c`; USR2 since 2026-10-14, for songs 9..16): `SMP_BEGIN`,
+  `SMP_ERASE` and `SMP_WRITE` on slots 0 and 1 answer rc 4 (`SMP_END` rc 6), `SMP_INFO` lists them empty, and the KIT
+  values USR1 and USR2 play nothing. The kit values keep their numbers (songs and projects store them); the device's knob
+  and the editor's kit lists pass over both.
 - **Backup objects** (`ED_BK_IDS`): 0 the working project, 1 the settings, 2..5 the projects A..D, 9 the SYN kits, 10
   the MIDI part (listed only while not at its defaults), 32..35 the sample slots (32, USR1, always with length 0).
   Objects 6..7 (the user preset banks) and 8 (the FM6 bank) are gone: a `BK_PUT` of them is refused (rc 1 at the
@@ -126,7 +133,7 @@ An absent status byte retains the original reply format.
 | cmd (v3) | Request args | Reply args |
 | --- | --- | --- |
 | 27 TRACK | — (query), or track (select it) | selected track, NTRK, then per track: engine byte, preset, level v14, mute (0/1), armed (0/1, live recording) |
-| 28 TRACK_MIX | track (get), or track, level v14 (0..127), mute (set) | track, level v14, mute. The drum track's level is global `G_DRLVL` (GLO > DRUMS LEVEL); mute is the track's `P_MUTE` |
+| 28 TRACK_MIX | track (get), or track, level v14 (0..127), mute (set) | track, level v14, mute. The drum track's level is global `G_DRLVL` (SETUP > DRUMS > LEVEL); mute is the track's `P_MUTE` |
 | 29 TRACK_DUMP | track | track, engine byte, preset, P_COUNT × v14 (that track's parameters; no globals) |
 | 30 TRACK_STEP | track, index (get), or track, index, n, note0..3, time, flags, vel [, lvl, hi, rat] (set) | track, index, n, note0..3, time, flags, vel, then (v5) lvl, hi, rat |
 
@@ -234,7 +241,7 @@ C, MIX; ANALOG's filter FTYPE; ESYNC; LFO 2's LSYNC, LTRIG, LPOL): P_COUNT 71, P
 CH3, OTHER for GLO > MIDI; SRC, LEVEL, TONE, MOVE, RATE, WHEN, DUCK for GLO > TEXTURE; BEND for GLO > MIDI 2):
 G_COUNT 45. An editor reads both from `INFO` and maps a patch file by its own count (61 or 71 values; `pCount`,
 `pE0` in the file). User preset records of 61 values load with the new parameters at their defaults. Backup object
-10 holds the MIDI LEARN map and the GLO > MIDI settings (40 bytes; listed only when not the default).
+10 holds the MIDI LEARN map and the SETUP > MIDI settings (40 bytes; listed only when not the default).
 
 ## v2: live sync
 
@@ -330,11 +337,12 @@ empty). Numbers are 5 × 7 bit (u35, LSB first); data is pack7.
 | 35 BK_GET | id, offset u35, count (2 × 7 bit, 1..256) | id, rc (0 ok, 1 arguments, 5 the snapshot is gone: LIST again), offset u35, count, pack7 data |
 | 36 BK_PUT | op 0 begin: id 0..9 (8: v9, 9: v10), length u35, CRC-32 u35 · op 1 data: id, offset u35, pack7 (≤ 256 bytes, in order) · op 2 commit: id · op 3 abort: id | op, id, rc: 0 ok, 1 arguments, 2 not a valid object (CRC, magic, sizes, ranges), 3 stop the song first (projects and preset banks; since 2.5 the settings too when their song order differs), 4 flash, 5 no begin for this object (or more than 15 s ago) |
 
-**fm1-drummer (objects 16..24):** `BK_GET` and `BK_PUT` also reach the songs (object 16 + slot, slots 0..7,
+**fm1-drummer (objects 16..24, 40..47):** `BK_GET` and `BK_PUT` also reach the songs (object 16 + slot for slots 0..7,
+object 40 + slot - 8 for slots 8..15 since 2026-10-14,
 the packed form of `firmware/src/sng.c`; a PUT of length 0 erases the slot) and the pedal settings (object 24,
-16 bytes: "ARS1", the pedal channel 0..17, the count-in's bars 0..2, 10 zero bytes). They are not in `BK_LIST`, so a backup made by the
-SLOOP editor stays one it can restore; USR1 (object 32) is listed with length 0, since its flash holds the songs. The songs take the flash of the USR1 sample slot: `SMP_BEGIN`,
-`SMP_ERASE` and `SMP_WRITE` on slot 0 answer rc 4. `tools/fm1_song.py` writes and sends songs, and so does the editor's Songs tab (`SNG` in editor.html:
+16 bytes: "ARS1", the pedal channel 0..17, the count-in's bars 0..2, SETUP's "load the last song at start" 0/1 and that song's slot + 1 (0 none, up to 16), 8 zero bytes). They are not in `BK_LIST`, so a backup made by the
+SLOOP editor stays one it can restore; USR1 and USR2 (objects 32, 33) are listed with length 0, since their flash holds the songs. The songs take the flash of the USR1 and USR2 sample slots: `SMP_BEGIN`,
+`SMP_ERASE` and `SMP_WRITE` on slots 0 and 1 answer rc 4. `tools/fm1_song.py` writes and sends songs, and so does the editor's Songs tab (`SNG` in editor.html:
 the same packed form, byte for byte; the simulated device holds the song objects too).
 
 A restore stages one object in RAM (the project load buffer), checks it at the commit as a load checks it

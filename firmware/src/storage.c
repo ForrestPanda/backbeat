@@ -22,12 +22,15 @@
  * (0xDC000..0xDFFFF, objects 5 and 6) and FM6 patch bank (0xE5000 / 0xE6000, object 8) are gone; their ids stay
  * retired, not reused (a sector's header names its object: renumbering would orphan every song and project saved) */
 enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_AUTOSAVE = OBJ_PROJECT0 + 6, OBJ_SONG0 = OBJ_AUTOSAVE + 2,
-       OBJ_ARRSET = OBJ_SONG0 + 8, OBJ_COUNT };              /* fm1-drummer: 8 songs 0xA0000..0xAFFFF (A/B) and the
-                                                              * pedal settings 0xB0000 / 0xB1000: the USR1 sample slot's
-                                                              * place (samples.c SMP_USER_BASE), which the drummer
-                                                              * gives up (editor.c refuses SMP_* on it); 0xE7000.. is
-                                                              * USR4's (sng.c) */
-_Static_assert(OBJ_AUTOSAVE == 7 && OBJ_SONG0 == 9 && OBJ_ARRSET == 17 && OBJ_COUNT == 18, "object ids as stored in flash");
+       OBJ_ARRSET = OBJ_SONG0 + 8, OBJ_SONG8, OBJ_COUNT = OBJ_SONG8 + 8 };   /* fm1-drummer: songs 1..8 0xA0000..0xAFFFF (A/B)
+                                                              * and the pedal settings 0xB0000 / 0xB1000, the USR1 sample
+                                                              * slot's place; songs 9..16 (2026-10-14) 0xB4000..0xC3FFF,
+                                                              * USR2's (samples.c SMP_USER_BASE + SMP_USER_SIZE). The
+                                                              * drummer gives both slots up (editor.c refuses SMP_* on
+                                                              * them); USR3 and USR4 (0xE7000..) stay the user kit */
+_Static_assert(OBJ_AUTOSAVE == 7 && OBJ_SONG0 == 9 && OBJ_ARRSET == 17 && OBJ_SONG8 == 18 && OBJ_COUNT == 26,
+               "object ids as stored in flash");
+static uint32_t sng_obj(uint32_t slot) { return slot < 8u ? OBJ_SONG0 + slot : OBJ_SONG8 + (slot - 8u); }   /* song slot 0..15 */
 #define OBJ_RETIRED (1u << 5 | 1u << 6 | 1u << 8)   /* the user preset banks, the FM6 bank: no sector, never read or written */
 static int st_obj_ok(uint32_t obj) { return obj < OBJ_COUNT && !((OBJ_RETIRED >> obj) & 1u); }
 
@@ -65,6 +68,8 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
         return copy ? 0xFE000u : 0x9F000u;
     if (obj >= OBJ_SONG0 && obj <= OBJ_ARRSET)             /* fm1-drummer: 0xA0000.., OBJ_ARRSET at 0xB0000 (USR1's place) */
         return 0xA0000u + (obj - OBJ_SONG0) * 2u * ST_SECTOR + copy * ST_SECTOR;
+    if (obj >= OBJ_SONG8 && obj < OBJ_COUNT)               /* songs 9..16: 0xB4000.. (USR2's place) */
+        return 0xB4000u + (obj - OBJ_SONG8) * 2u * ST_SECTOR + copy * ST_SECTOR;
     return 0x97000u + (obj - OBJ_PROJECT0) * 2u * ST_SECTOR + copy * ST_SECTOR;
 }
 

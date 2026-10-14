@@ -27,7 +27,7 @@
 #define PROJ_NG 32u                            /* the globals of formats 4..6 and DRM1 (G_COUNT until 2.4). SLOOP 2.5's
                                                 * G_DRDLY rides in a byte of its own */
 _Static_assert(G_DRDLY == PROJ_NG && G_TXSRC == PROJ_NG + 5u && G_COUNT == G_BEND + 1u,
-               "the globals a project holds, then G_DRDLY (then 2.6's GLO > MIDI: settings of the FM-1)");
+               "the globals a project holds, then G_DRDLY (then 2.6's SETUP > MIDI: settings of the FM-1)");
 #define PROJ_NC6 ((uint32_t)P_ITYPE)           /* the parameters kept in 16 bits, P_LEVEL .. P_VLEAD (as format 5), */
 #define PROJ_NX6 ((uint32_t)(P_E0 - P_ITYPE))  /* the 2.6 ones in a byte (0..127), then P_E0 .. P_E7 */
 _Static_assert(PROJ_NC6 == PROJ_NP_V5 - 8u && PROJ_NX6 == 10u, "format 6: format 5's parameters, then ten bytes");
@@ -46,7 +46,7 @@ typedef struct {                               /* one track (format 6; DRM1's dr
 typedef struct {                               /* DRM1 */
     uint32_t magic, size;
     int16_t g[PROJ_NG];
-    uint8_t drdly, rsv[3];                     /* G_DRDLY (SLOOP 2.5); rsv[0..1]: GLO > TEXTURE (proj_tx_*) */
+    uint8_t drdly, rsv[3];                     /* G_DRDLY (SLOOP 2.5); rsv[0..1]: SETUP > TEXTURE (proj_tx_*) */
     proj_trk_t t;                              /* the drum track */
     uint32_t sum;
 } project_t;
@@ -222,7 +222,7 @@ static int proj_import(project_t *q, const void *b, int n)
 }
 
 /* ---- the working project <-> a project_t */
-/* 2.6: GLO > TEXTURE in a project (a song section has its own): in the slots of two globals a project no longer
+/* 2.6: SETUP > TEXTURE in a project (a song section has its own): in the slots of two globals a project no longer
  * applies (G_DRCH: a setting of the FM-1 now; G_INFO: the CPU readout) and the spare bytes. rsv[0]: 0x80 (there) | SRC
  * | WHEN << 4 | DUCK << 5, rsv[1]: RATE, g[G_DRCH]: LEVEL | (TONE + 64) << 7, g[G_INFO]: MOVE. Without the 0x80 (a
  * project before it, converted): the defaults, OFF */
@@ -281,11 +281,11 @@ static void proj_apply(const project_t *p, int all)
     for (i = 0; i < PROJ_NG; i++)
         if (all ? i != G_SLOT && i != G_LOAD && i != G_SAVE && i != G_SYNC && i != G_MIDI && i != G_ROUTE && i != G_DRCH &&
                       i != G_INFO
-                : i == G_DRLVL || i == G_DRREV)                 /* (2.6: the drum channel a setting of the FM-1, GLO > MIDI;
+                : i == G_DRLVL || i == G_DRREV)                 /* (2.6: the drum channel a setting of the FM-1, SETUP > MIDI;
                                                                  * its slot and G_INFO's hold the TEXTURE) */
             song.g[i] = (int16_t)clamp(p->g[i], GP[i].min, GP[i].max);
     song.g[G_DRDLY] = (int16_t)clamp(p->drdly, GP[G_DRDLY].min, GP[G_DRDLY].max);   /* (a load and a section, as REV) */
-    proj_tx_get(p);                                     /* GLO > TEXTURE (2.6): a load and a section */
+    proj_tx_get(p);                                     /* SETUP > TEXTURE (2.6): a load and a section */
     t->lk_n = 0;                                        /* (the locks in force: the values come from the project) */
     for (i = 0; i < P_COUNT; i++) {                     /* every value back inside its range */
         const param_desc_t *d = i >= P_E0 ? e_desc(t, i) : &TP[i];   /* (P_E0: the kit) */
@@ -328,6 +328,34 @@ static union {
     project_v5_t v5;
     project_v4_t v4;
 } proj_tmp;
+#if FELUCCA_DRUMMER
+/* EDIT, SAVE held (ui_input.c): the section playing written into its song, packed again in the staging RAM
+ * (sng.c sng_pack_section); stopped only (a flash write stops the audio). The song's copy moves: indexed again
+ * at once, the drum track keeps what it holds. 0 saved, 1 playing, 2 no room (SNG_MAX), 3 flash, 4 no song */
+static int sng_save_section(void)
+{
+    uint32_t slot = (uint32_t)sng_cur, n;
+    const uint8_t *p;
+    sng_t tmp;
+    if (song.playing || transport_req)
+        return 1;
+    if (sng_cur < 0 || live_sec < 0)
+        return 4;
+    n = sng_pack_section((uint32_t)live_sec, (uint8_t *)&proj_tmp, sizeof proj_tmp);
+    if (!n)
+        return 2;
+    if (sng_check((const uint8_t *)&proj_tmp, n, &tmp) || !flash_ok || st_save(sng_obj(slot), &proj_tmp, n))
+        return 3;
+    sng_lib_dirty = 1;                                  /* (the SONGS list: no longer the factory song) */
+    p = sng_fetch(slot, &n);
+    if (!p || sng_check(p, n, &tmp))
+        return 3;
+    fm1_irq_off();
+    sng = tmp;
+    fm1_irq_on();
+    return 0;
+}
+#endif
 static void proj_fetch(uint32_t slot)
 {
     project_t *q = &proj_slot[slot & 3u];
@@ -469,7 +497,7 @@ static void autosave_resume(void)              /* power-on: the project as it wa
         return;
     autosave_hash = q->sum;
     if (drch_seed && !(q->rsv[0] & 0x80u) && q->g[G_DRCH] >= 0 && q->g[G_DRCH] <= 16 && q->g[G_DRCH] != midi_set[3]) {
-        midi_set[3] = (uint8_t)q->g[G_DRCH];          /* (2.6) updated from 2.5: GLO > DRUMS > CH as it was there (a
+        midi_set[3] = (uint8_t)q->g[G_DRCH];          /* (2.6) updated from 2.5: SETUP > DRUMS > CH as it was there (a
                                                      * project's then, a setting of the FM-1 now), kept in the settings */
         settings_later = 1;
     }
@@ -522,7 +550,7 @@ static void persist_boot(void)                    /* before settings_init / pane
     {
         uint32_t k;
         for (k = 0; k < SMP_USER_SLOTS; k++)
-            if (k != SNG_SMP_SLOT)                 /* (fm1-drummer: USR1's flash holds the songs: never a slot) */
+            if (!SNG_SMP_TAKEN(k))                 /* (fm1-drummer: USR1's and USR2's flash hold the songs: never a slot) */
                 smp_user_scan(k);
     }
     {
@@ -589,7 +617,7 @@ static int project_used(uint32_t slot) { return proj_ok(&proj_slot[slot & 3u]); 
  * map (seq.c ml_tab, ML_N entries), only while something is learned; 2.5 reads an object with the map as one without
  * its SYN kits (their defaults), one without it as its own */
 /* the settings object's third part (2.6): the MIDI LEARN map (seq.c ml_tab, ML_N entries, 2 bytes each, low first),
- * then GLO > MIDI: CH1 CH2 CH3, the drum channel | OTHER << 7, GLO > MIDI 2's BEND, 3 spare. Written only while it is not
+ * then SETUP > MIDI: CH1 CH2 CH3, the drum channel | OTHER << 7, SETUP > MIDI 2's BEND, 3 spare. Written only while it is not
  * the default (nothing learned, channels 1 2 3 10, OTHER SEL, BEND 2): else the object is exactly 2.5's. 2.6 test
  * builds wrote 32 (the map) or 36 bytes (and the channels) */
 #define MIDI_PART (2u * ML_N + 8u)
@@ -868,19 +896,19 @@ static void sections_flush(void)                        /* main loop */
         }
         srec_done = 0;
     }
-    if ((uint32_t)song.g[G_SYNC] != lights_sync) {      /* GLO > SYSTEM > SYNC: kept with the settings */
+    if ((uint32_t)song.g[G_SYNC] != lights_sync) {      /* SETUP > LEARN > SYNC: kept with the settings */
         lights_sync = (uint8_t)song.g[G_SYNC];
         settings_later = 1;
     }
-    if ((uint32_t)(song.g[G_MIDI] != 0) != lights_mout) {   /* GLO > SYSTEM > MIDI: the same */
+    if ((uint32_t)(song.g[G_MIDI] != 0) != lights_mout) {   /* SETUP > MIDI > OUT: the same */
         lights_mout = (uint8_t)(song.g[G_MIDI] != 0);
         settings_later = 1;
     }
-    if ((uint32_t)song.g[G_ROUTE] != lights_min) {        /* GLO > SYSTEM > IN: the same (2.6: CH n too) */
+    if ((uint32_t)song.g[G_ROUTE] != lights_min) {        /* SETUP > MIDI > IN: the same (2.6: CH n too) */
         lights_min = (uint8_t)song.g[G_ROUTE];
         settings_later = 1;
     }
-    {   /* 2.6: GLO > MIDI (CH1 CH2 CH3 OTHER) and GLO > DRUMS > CH: the same */
+    {   /* 2.6: SETUP > MIDI (CH1 CH2 CH3 OTHER) and SETUP > DRUMS > CH: the same */
         static const uint8_t gid[6] = {G_CH1, G_CH2, G_CH3, G_DRCH, G_CHOTH, G_BEND};
         uint32_t k;
         for (k = 0; k < 6u; k++)
@@ -889,6 +917,12 @@ static void sections_flush(void)                        /* main loop */
                 settings_later = 1;
             }
     }
+#if FELUCCA_FLASH
+    if (arrset_dirty && !song.playing && !transport_req && fm1_ms - ui_input_ms >= 1500u) {
+        arrset_dirty = 0;                               /* fm1-drummer: SETUP > PEDAL, the last song (sng.c) */
+        arrset_save();
+    }
+#endif
     if (settings_later) {                               /* the menu closed while playing */
         settings_later = 0;
         song_dirty = 1;                                 /* (settings_save when quiet, with the song) */

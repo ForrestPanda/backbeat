@@ -62,7 +62,7 @@ static void draw_head(void)
         x += 14;
     }
     x = cv_text(x, 1, &FONT_S, b, ui.bpm_t ? C_WHITE : C_HI);   /* white while SELECT turns it */
-    if (mlu.on) {                                     /* MIDI LEARN on (2.6, GLO + F#3): in the octave's place */
+    if (mlu.on) {                                     /* MIDI LEARN on (2.6, SETUP > LEARN): in the octave's place */
         cv_text(x + 12, 1, &FONT_S, "LEARN", C_AMB);
 #if FELUCCA_DRUMMER
     } else if (sng_ui_name[0] && live_sec >= 0) {     /* fm1-drummer: the section playing and its bar, in the
@@ -265,175 +265,6 @@ static void graph_slots(void)
     }
 }
 
-/* TRACKS page: a channel strip per track (mixer style; drums only: one, the drums): number + MUTE, the sound's
- * short name, then a level fader with the output meter, the pattern over its LEN (time running down; bar width = the
- * sounds of the step) and the play head. Every part is
- * its own small canvas with its own signature: while the transport runs only the
- * head markers and the meters move. (No ZOOM focus here.) */
-#define TS_HEAD_Y (Y_GRAPH + 2)
-#define TS_NAME_Y (Y_GRAPH + 20)
-#define TS_Y (Y_GRAPH + 38)
-#define TS_H 84                                      /* body: rows Y_GRAPH + 38 .. + 121 */
-static struct {
-    uint32_t head[NTRK], name[NTRK], fader[NTRK], ov[NTRK], mark[NTRK];
-    uint8_t meter[NTRK];
-} ts;
-
-static int32_t meter_px(int32_t a)                   /* |sample| (Q15) -> px: 6 dB = TS_H / 10 */
-{
-    int32_t lg = 0, v;
-    if (a < 64)
-        return 0;
-    while ((a >> lg) > 1)
-        lg++;
-    v = lg * 8 + (((a << 3) >> lg) & 7);             /* 8 log2(a): 48 (-54 dB) .. 128 (+6 dB) */
-    return clamp((v - 48) * (TS_H - 2) / 80, 0, TS_H - 2);
-}
-
-static uint32_t trk_level(uint32_t c)                /* LEVEL 0..127 (the drum track: GLO > DRUMS LEVEL) */
-{
-    return (uint32_t)(c == TRK_DRUM ? song.g[G_DRLVL] : trk[c].p[P_LEVEL]) & 127u;
-}
-
-static void trk_short_name(uint32_t c, char *b)      /* the track's sound, b holds 13 (drums only: the others none) */
-{
-    str_cpy(b, c == TRK_DRUM ? "DRUM" : "-", 13);
-}
-
-static void draw_tracks(void)
-{
-    uint32_t c;
-    if (ui.force) {
-        lcd_fill(0, Y_GRAPH, 240, H_GRAPH, C_BLACK);
-        for (c = 0; c < NTRK; c++)
-            ts.meter[c] = 0;
-    }
-    for (c = 0; c < NTRK; c++) {
-        track_t *t = &trk[c];
-        uint32_t x0 = c * 60u + 4u, sel = 1, lvl = trk_level(c), mute = !lvl || t->p[P_MUTE];
-        uint32_t st = mute ? 3u : 0u, sig;
-        uint32_t len = t->p[P_SLEN] > 0 ? (uint32_t)t->p[P_SLEN] : 1u, row = 0xFFFFu;
-        int32_t pk, m;
-        char b[16];
-        pk = drums.peak;
-        drums.peak = 0;
-        /* head: number (white = selected), REC / ARM / MUTE */
-        sig = 1u + sel + st * 2u;
-        if (ui.force || sig != ts.head[c]) {
-            ts.head[c] = sig;
-            b[0] = (char)('1' + c);
-            b[1] = 0;
-            cv_begin(54, 16, C_BLACK);
-            cv_text(0, 0, &FONT_S, b, sel ? C_WHITE : C_GRAY);
-            if (sel)
-                cv_rect(0, 15, 8, 1, C_WHITE);
-            if (st == 1u || st == 2u) {
-                cv_rect(14, 5, 6, 6, st == 1u ? C_WHITE : C_AMB);
-                cv_text(24, 0, &FONT_S, st == 1u ? "REC" : "ARM", st == 1u ? C_WHITE : C_AMB);
-            } else if (st) {
-                cv_text(14, 0, &FONT_S, "MUTE", C_DIM);
-            }
-            cv_blit(x0, TS_HEAD_Y);
-        }
-        /* the sound: preset name (user preset, DRUM), cut to the column */
-        trk_short_name(c, b);
-        while (b[0] && text_w(&FONT_S, b) > 54)
-            b[str_len(b) - 1u] = 0;
-        sig = str_hash(2u + sel, b);
-        if (ui.force || sig != ts.name[c]) {
-            ts.name[c] = sig;
-            cv_begin(54, 16, C_BLACK);
-            cv_text(0, 0, &FONT_S, b, sel ? C_HI : C_DIM);
-            cv_blit(x0, TS_NAME_Y);
-        }
-        /* fader (LEVEL) + meter of the output */
-        m = mute ? 0 : meter_px(pk);
-        if (m < ts.meter[c] - 3)
-            m = ts.meter[c] - 3;                     /* falls ~20 dB/s */
-        ts.meter[c] = (uint8_t)(m < 0 ? 0 : m);
-        sig = 1u + lvl + ts.meter[c] * 128u + sel * 65536u + (sel && ui.hot_t && ui.hot_col == 1u) * 131072u +
-              (t->p[P_MUTE] != 0) * 262144u;
-        if (ui.force || sig != ts.fader[c]) {
-            int32_t fy = (int32_t)(TS_H - 2u) - (int32_t)lvl * (TS_H - 4) / 127;
-            ts.fader[c] = sig;
-            cv_begin(12, TS_H, C_BLACK);
-            cv_rect(3, 0, 1, TS_H, C_LINE);
-            if (lvl) {
-                cv_rect(2, fy, 3, TS_H - fy, C_DIM);
-                cv_rect(0, fy - 1, 7, 2, (sig & 131072u) ? C_WHITE : sel ? C_HI : C_GRAY);
-            } else {
-                cv_rect(0, TS_H - 2, 7, 2, C_DIM);
-            }
-            if (ts.meter[c])
-                cv_rect(9, TS_H - ts.meter[c], 3, ts.meter[c], C_AMB);
-            cv_blit(x0, TS_Y);
-        }
-        /* the pattern: one band per step over LEN, a step as wide as its sounds */
-        sig = steps_hash(t) * 31u + len * 7u + sel;
-        if (ui.force || sig != ts.ov[c]) {
-            uint32_t i;
-            ts.ov[c] = sig;
-            cv_begin(34, TS_H, C_BLACK);
-            cv_rect(17, 0, 1, TS_H, C_LINE);
-            for (i = 0; i < len; i++) {
-                uint32_t n = (uint32_t)__builtin_popcount(dstep_mask(&t->dstep[i]));
-                int32_t r0 = (int32_t)(i * TS_H / len), r1 = (int32_t)((i + 1u) * TS_H / len), h = r1 - r0;
-                if (h > 2)
-                    h--;                             /* a gap between steps when there is room */
-                if (h < 1)
-                    h = 1;
-                if (n) {
-                    int32_t w = 2 + 6 * (int32_t)(n > 4u ? 4u : n);
-                    cv_rect(17 - w / 2, r0, w, h, sel ? C_HI : C_GRAY);
-                }
-            }
-            cv_blit(x0 + 14u, TS_Y);
-        }
-        /* play head: a small arrow right of the pattern (white while recording) */
-        if (song.playing)
-            row = ((t->seq_idx % len) * 2u + 1u) * TS_H / (2u * len);
-        sig = 1u + row + (st == 1u) * 65536u;
-        if (ui.force || sig != ts.mark[c]) {
-            int32_t i;
-            ts.mark[c] = sig;
-            cv_begin(5, TS_H, C_BLACK);
-            if (row != 0xFFFFu)
-                for (i = -2; i <= 2; i++) {
-                    int32_t w = 5 - 2 * (i < 0 ? -i : i);
-                    cv_rect(5 - w, (int32_t)row + i, w, 1, st == 1u ? C_WHITE : C_AMB);
-                }
-            cv_blit(x0 + 49u, TS_Y);
-        }
-    }
-}
-
-/* oscilloscope of the output, triggered on a rising zero crossing */
-static void graph_scope(uint16_t c)
-{
-    static int16_t snap[SCOPE_N];
-    uint32_t w = scope_w, i, trig = 0;
-    int32_t py = 50, x, peak = 1500;
-    for (i = 0; i < SCOPE_N; i++) {
-        snap[i] = scope_buf[(w + i) & (SCOPE_N - 1u)];
-        if (snap[i] > peak)
-            peak = snap[i];
-        else if (-snap[i] > peak)
-            peak = -snap[i];
-    }
-    for (i = 1; i < SCOPE_N - 240u; i++)
-        if (snap[i - 1] < 0 && snap[i] >= 0) {
-            trig = i;
-            break;
-        }
-    cv_line(0, 50, 239, 50, C_LINE);
-    for (x = 0; x < 240; x++) {
-        int32_t y = 50 - snap[trig + (uint32_t)x] * 44 / peak;   /* auto-scaled */
-        if (x)
-            cv_line(x - 1, py, x, y, c);
-        py = y;
-    }
-}
-
 /* SLOOP 2.4: a page without a graph (EDIT, VOICE, the DEST pages, GLOBAL, MASTER, SYSTEM...): its values
  * large in the empty space, 2 x 2 as the knobs (KNOB 1 2 / KNOB 3 4), the one turned in white; one value
  * alone (FILTER) across the width. The columns (draw_columns, drawn first) fill ui.big_* */
@@ -467,20 +298,13 @@ static void draw_graph(void)
     const track_t *t = TDRUM;
     uint16_t c = TE_COL[0];                           /* LIVE: the curves in the track's colour */
     uint32_t sig, top;
-    if (!ui.home && pg->graph == GR_TRK) {
-        draw_tracks();
-        ui.graph_top = 1;                            /* the next graph draws its top rows again */
-        return;
-    }
     sig = graph_signature();
     if (!ui.force && sig == ui.graph_sig)
         return;
     ui.graph_sig = sig;
     cv_begin(240, H_GRAPH, C_BLACK);
     cv_oy = G_OY;
-    if (ui.home) {
-        graph_scope(c);
-    } else {
+    if (!ui.home) {
         switch (pg->graph) {
         case GR_STEPS:
             graph_steps(t, c);
@@ -600,25 +424,6 @@ static void draw_columns(void)
         }
         return;
     }
-    if (cur_page()->scope == SC_TRK) {                 /* SWING LEVEL LEN PAN (ui_input.c tracks_edit) */
-        const track_t *t = TDRUM;
-        uint32_t lvl = trk_level(TRK_DRUM);
-        param_format(&GP[G_SWING], song.g[G_SWING], val, &unit);
-        draw_column(0, "SWING", val, unit, VAL(0u), RATIO(&GP[G_SWING], song.g[G_SWING]), ICON_AUTO);
-        if (!lvl || t->p[P_MUTE]) {                    /* (MUTE: a turn of KNOB 2 unmutes, tracks_edit) */
-            str_cpy(val, "MUTE", 12);
-            unit = "";
-        } else {
-            fmt_int(val, (int32_t)lvl);
-            unit = "";
-        }
-        draw_column(1, "LEVEL", val, unit, lvl && !t->p[P_MUTE] ? VAL(1u) : C_DIM, (int32_t)lvl * 1000 / 127, ICON_AUTO);
-        param_format(&TP[P_SLEN], t->p[P_SLEN], val, &unit);
-        draw_column(2, "LEN", val, unit, VAL(2u), RATIO(&TP[P_SLEN], t->p[P_SLEN]), ICON_AUTO);
-        param_format(&TP[P_PAN], t->p[P_PAN], val, &unit);
-        draw_column(3, "PAN", val, unit, VAL(3u), RATIO(&TP[P_PAN], t->p[P_PAN]), param_icon(&TP[P_PAN], t->p[P_PAN]));
-        return;
-    }
     for (c = 0; c < 4u; c++) {
         int16_t *vp;
         const param_desc_t *d = page_desc(cur_page(), c, &vp);
@@ -663,9 +468,6 @@ static void ui_timers(void)
         ui.hot_t--;
 }
 
-static void vis_draw(void);                     /* ui_vis.c */
-static int vis_shown(void);
-static uint8_t vis_on, vis_shown_last, vis_name_t;   /* the visualiser (ui_vis.c): on, drawn last frame, its name's time */
 static void ui_draw(void)
 {
     ui.frame++;
@@ -724,24 +526,6 @@ static void ui_draw(void)
 #endif
     if (ui.menu) {
         draw_menu();
-        ui_timers();
-        ui.force = 0;
-        return;
-    }
-    if (vis_shown()) {                                  /* the visualiser over the TRACKS screen */
-        vis_draw();
-        ui_timers();
-        ui.force = 0;
-        return;
-    }
-    if (vis_shown_last) {                               /* back from it */
-        vis_shown_last = 0;
-        vis_on = 0;
-        lcd_fill(0, 0, 240, 240, C_BLACK);
-        ui.force = 1;
-    }
-    if (!ui.home && cur_page()->scope == SC_TRK) {
-        studio_tracks_draw();
         ui_timers();
         ui.force = 0;
         return;

@@ -4,6 +4,8 @@
 > it describes, the drum track, its steps and layers, sections A..D and the chain, the master, TEXTURE and MIDI remain; the
 > synth tracks and engines, presets, the sampled instruments, the punch-in effects, the SLICER, live recording, the
 > arpeggiator, scales and chords are gone. See [README.md](README.md) and [docs/drums-only.md](docs/drums-only.md).
+> The screens differ too: fm1-drummer starts on LIVE (HOME), SAVE opens SONGS, SEQ the drum grid (EDIT), GLO opens
+> SETUP; SLOOP's TRACKS screen, visualiser, GLO pages and layer and HOME-held menu are gone (README, "On the device").
 
 # SLOOP 2.6 — The Complete Guide
 

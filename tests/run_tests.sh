@@ -45,6 +45,7 @@ $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/pedal_test" tests/pedal_test.c -l
 run "pedal: sections, next / previous, stop, tap tempo over TRS MIDI" "$OUT/pedal_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/song_test" tests/song_test.c -lm
 run "songs: packed form, PC loads one, its sections on the bar, the outro, back to A..D" "$OUT/song_test"
+run "songs: a section is whole bars of its time signature (tools/fm1_song.py bar_fit)" python3 tests/song_bars_test.py
 run "songs: the example packed by tools/fm1_song.py passes the firmware's check" sh -c \
     "python3 tools/fm1_song.py tests/example-song.json --out $OUT/example-song.bin >/dev/null && $OUT/song_test $OUT/example-song.bin"
 run "songs: the example played by the pedal and rendered (tools/fm1_render.py, tests/song_render.c)" sh -c \

@@ -2,12 +2,11 @@
 /* LIVE screens, 240 x 240, in a teenage-engineering-like style: black, four colours (one per
  * track and per knob: blue, green, yellow, orange), white for what you touch, red for recording,
  * big numbers, lowercase labels, four dials at the bottom that show what KNOB 1..4 do.
- * Screens: TRACKS (the performance view), DRUMS (GRID / KIT, pads that flash on each hit), the
+ * Screens: DRUMS (EDIT: GRID / KIT, pads that flash on each hit; fm1-drummer's LIVE and SONGS: ui_drummer.c), the
  * LAYERS (a function button held: what the 16 white keys and the knobs do now), HOLD (a hold to
  * confirm: clear, save), REC (armed / free take). Every band is drawn into the canvas only when its
  * signature changed. */
 static uint8_t drum_page, drum_lane, drum_cursor;   /* drum_page: 0 GRID, 1 KIT */
-static void trk_short_name(uint32_t c, char *b);
 static int on_drum_page(void) { return !ui.home && cur_page()->scope == SC_DRUM; }
 
 /* ---------------------------------------------------------------- style --- */
@@ -108,10 +107,8 @@ static void te_dials(int32_t y0, const char *const lab[4], const char *const val
 static void studio_open(uint32_t scope)
 {
     uint32_t i;
-    if (scope == SC_SONG) {                             /* fm1-drummer: the song screen first (ui_drummer.c) */
-        sng_view = 1;
-        sng_pick = (uint8_t)(sng_cur >= 0 ? sng_cur : 0);
-    }
+    if (scope == SC_SONG)                               /* fm1-drummer: the SONGS list (ui_drummer.c) */
+        drummer_open(DV_LIB);
     for (i = 0; i < NPAGES; i++) if (PAGES[i].scope == scope) {
         ui.page = (uint8_t)i; ui.home = 0; song.seq_mode = 0; ui.force = 1;
         ui.msg_t = 0; ui.entry_open = 0; return;
@@ -136,7 +133,7 @@ static void te_header(const char *title, uint16_t tc, uint32_t *cache)
     uint32_t sig = studio_hash((uint32_t)song.g[G_BPM] * 7u + playing * 3u +
                                (playing ? beat * 131u + TDRUM->seq_idx * 7919u : 0u) + (uint32_t)song.g[G_CLOCK] * 77u +
                                arrangement_enabled * 5u + (ui.bpm_t != 0) * 104729u, title);
-    sig = sig * 31u + tc;
+    sig = sig * 31u + tc + (uint32_t)(sng_cur + 1) * 7u;
 #if FELUCCA_DRUMMER
     sig = studio_hash(sig + live_bar * 17u + (uint32_t)(live_sec + 1) * 23u, sng_ui_name);   /* (fm1-drummer) */
     sig = studio_hash(sig, sng_ui_next);
@@ -186,6 +183,10 @@ static void te_header(const char *title, uint16_t tc, uint32_t *cache)
             str_cpy(b, "bar ", 5);
             fmt_int(b + 4, (int32_t)(live_bar == 0xFFFFFFFFu ? 1u : live_bar + 1u));
             cv_text(236 - text_w(&FONT_S, b), 22, &FONT_S, b, TE_G3);
+        } else if (sng_cur >= 0) {                     /* stopped: whose section (EDIT: SAVE held writes it there) */
+            str_cpy(b, "song ", 6);
+            fmt_int(b + 5, sng_cur + 1);
+            cv_text(236 - text_w(&FONT_S, b), 22, &FONT_S, b, TE_G3);
         } else {
             cv_text(236 - text_w(&FONT_S, "cued"), 22, &FONT_S, "cued", TE_G3);
         }
@@ -198,91 +199,10 @@ static void te_header(const char *title, uint16_t tc, uint32_t *cache)
     cv_blit(0, 0);
 }
 
-/* --------------------------------------------------------------- TRACKS --- */
 /* swing, MPC style: "62%" */
 static void swing_str(char *b, int32_t v)            /* 0 straight .. 100 the most (params.c F_SWING) */
 {
     fmt_int(b, clamp(v, 0, 100));
-}
-
-static void studio_tracks_draw(void)
-{
-    static uint32_t head, rows[NTRK], footer;
-    uint32_t i, j;
-    te_header("tracks", TE_G3, &head);
-    for (i = 0; i < NTRK; i++) {
-        track_t *t = &trk[i];
-        char b[24], e[16];
-        uint32_t selected = 1, len = (uint32_t)clamp(t->p[P_SLEN], 1, 64);   /* (one track: the drums, always shown) */
-        uint32_t level = (uint32_t)song.g[G_DRLVL];
-        uint32_t silent = trk_silent(t) || !level, pos = t->seq_idx % len, rec = 0;
-        uint32_t bank = song.playing ? pos / 16u : 0u, h;
-        uint16_t col = TE_COL[i], dim = TE_DIM[i];
-        str_cpy(b, DRUM_KIT_NAMES[drum_kit()], sizeof b);
-        te_lower(e, "drums", sizeof e);
-        b[13] = 0;
-        h = studio_hash(selected + level * 7u + silent * 997u + rec * 1999u + len * 37u +
-                        song.playing * 7u + pos * 71u + bank * 13u, b);
-        for (j = 0; j < len; j++) h = h * 31u + (uint32_t)trk_step_on(t, j);
-        if (!ui.force && h == rows[i]) continue;
-        rows[i] = h;
-        cv_begin(240, 36, C_BLACK);
-        cv_rect(2, 3, 26, 30, selected ? col : dim);   /* the track tile */
-        {
-            char n[2] = {(char)('1' + i), 0};
-            cv_text(11, 10, &FONT_S, n, selected ? C_BLACK : col);
-        }
-        cv_text(34, 1, &FONT_S, b, selected ? C_WHITE : TE_G4);
-        if (34 + text_w(&FONT_S, b) + 6 + text_w(&FONT_S, e) < 196)
-            cv_text(34 + text_w(&FONT_S, b) + 6, 1, &FONT_S, e, selected ? col : TE_G3);
-        if (rec) {
-            cv_rect(200, 2, 36, 15, TE_RED);
-            cv_text(206, 1, &FONT_S, "rec", C_WHITE);
-        } else if (silent) {
-            cv_text(204, 1, &FONT_S, "mute", TE_G3);
-        }
-        for (j = 0; j < 16u; j++) {                    /* the 16 steps in view */
-            uint32_t p = bank * 16u + j, on = 0;
-            if (len <= 16u) {
-                if (p < len) on = trk_step_on(t, p) ? 2u : 1u;
-            } else {                                    /* > 16 and stopped: the whole pattern, folded */
-                uint32_t a = j * len / 16u, z = (j + 1u) * len / 16u, k;
-                if (song.playing) {
-                    if (p < len) on = trk_step_on(t, p) ? 2u : 1u;
-                } else {
-                    on = 1;
-                    for (k = a; k < z; k++) if (trk_step_on(t, k)) on = 2;
-                }
-            }
-            cv_rect(34 + (int32_t)j * 10, 21, 8, 9,
-                    !on ? C_BLACK : on == 2u ? (silent ? TE_G3 : selected ? col : dim) : TE_G1);
-            if (on == 2u && !selected && !silent)
-                cv_rect(34 + (int32_t)j * 10, 21, 8, 2, col);
-            if (song.playing && p == pos)
-                cv_rect(34 + (int32_t)j * 10, 31, 8, 2, C_WHITE);
-        }
-        cv_rect(198, 23, 38, 5, TE_G1);                /* the level */
-        if (!silent)
-            cv_rect(198, 23, (int32_t)level * 38 / 127, 5, selected ? col : TE_G3);
-        cv_blit(0, 40 + i * 36);
-    }
-    {   /* KNOB 1 swing (the global groove), 2 level, 3 steps, 4 pan of the drum track */
-        track_t *t = TDRUM;
-        static char v[4][8];
-        static const char *const lab[4] = {"swing", "level", "steps", "pan"};
-        const char *val[4] = {v[0], v[1], v[2], v[3]};
-        int32_t ratio[4];
-        uint32_t lvl = (uint32_t)song.g[G_DRLVL];
-        swing_str(v[0], song.g[G_SWING]);
-        fmt_int(v[1], t->p[P_MUTE] ? 0 : (int32_t)lvl * 100 / 127);
-        fmt_int(v[2], t->p[P_SLEN]);
-        fmt_int(v[3], t->p[P_PAN]);
-        ratio[0] = song.g[G_SWING] * 10;
-        ratio[1] = t->p[P_MUTE] ? 0 : (int32_t)lvl * 1000 / 127;
-        ratio[2] = (t->p[P_SLEN] - 1) * 1000 / 63;
-        ratio[3] = (t->p[P_PAN] + 64) * 1000 / 127;
-        te_dials(184, lab, val, ratio, 0, &footer);
-    }
 }
 
 /* ---------------------------------------------------------------- DRUMS --- */
@@ -449,7 +369,7 @@ static void grid_key(uint32_t k)
     st = &TDRUM->dstep[idx];
     fm1_irq_off();
     if (dstep_has(st, drum_lane)) {
-        dstep_clr(st, drum_lane);
+        drum_hit_clr(TDRUM, idx, drum_lane);
         if (!dstep_mask(st)) {                          /* an empty step keeps no lock, no nudge, no condition */
             lock_del(TDRUM, idx, P_COUNT);
             TDRUM->micro[idx] = 0;
@@ -482,9 +402,6 @@ static void drum_screen_input(uint32_t pressed, uint32_t home)
             drum_page = (uint8_t)((drum_page + 1u) % 2u);
             ui.msg_t = 0;
             ui.force = 1;
-        } else if (b == B_SAVE) {
-            studio_open(SC_SONG);
-            return;
         }
     }
     if ((s = panel_enc(EN_SELECT)) && (uint32_t)(s > 0) != drum_page) {   /* SELECT: grid <- -> kit (its pages) */
@@ -515,7 +432,7 @@ static void drum_screen_input(uint32_t pressed, uint32_t home)
                 fm1_irq_off();
                 if (k == 2) {
                     if (s > 0) dstep_set(st, drum_lane, LV_NORM, 0);
-                    else dstep_clr(st, drum_lane);
+                    else drum_hit_clr(TDRUM, drum_cursor, drum_lane);
                 } else if (dstep_has(st, drum_lane)) {
                     uint32_t r = (uint32_t)clamp((int32_t)lvl_rank(dstep_lvl(st, drum_lane)) + (s > 0 ? 1 : -1), 0, 3);
                     dstep_set(st, drum_lane, LV_UP[r], dstep_rat(st, drum_lane));

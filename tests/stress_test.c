@@ -5,12 +5,12 @@
  *           random text (every byte 1..255) at random places, partly or wholly off random canvases
  *   fuzz    FRAMES frames (16 ms each, the audio between them as on the device) of hard random use: dense drum
  *           steps with ratchets at up to 240 BPM, the keys (white and black, changed while held), the kits, the
- *           drum track's INSERT and FILTER swept, the sends, the throws, the visualiser (every style), the menu,
+ *           drum track's INSERT and FILTER swept, the sends, the throws, LIVE and SONGS (with a song and without), the menu,
  *           SELECT spun, layers, MIDI in. Every block: the output bounded; every frame: every draw on the screen.
  *           At the end, everything let go and stopped: no drum hit left after 30 s, and the output back to silence
  *   bench   (BENCH=1) host time per audio block of a worst case (every lane on every step, x4 ratchets, 1/16 at
- *           240 BPM) with the INSERT and the FILTER on against the same without them; the visualiser's draw
- *           time per style against the TRACKS screen; FONT_L text drawn from S against a stored 2x copy
+ *           240 BPM) with the INSERT and the FILTER on against the same without them; the draw time of a frame of
+ *           LIVE, SONGS and the drum grid; FONT_L text drawn from S against a stored 2x copy
  * (fm1-drummer, drums only: the FM6 parts, chords, strum and voice leading went with the synth.)
  * Run it under -fsanitize=address,undefined too: any read or write out of bounds stops it.
  *   stress_test [FRAMES [SEED]]   (default 40000: about 11 minutes of use) */
@@ -93,7 +93,7 @@ static void t_font(void)
 
 /* ---- fuzz ---- */
 static int32_t peak;
-static uint32_t loud_blocks, play_blocks, vis_frames, menu_seen;
+static uint32_t loud_blocks, play_blocks, live_frames, menu_seen;
 static double blk_ns;
 static uint32_t blk_hist[2001];                       /* host time per block, 1 us buckets */
 static uint32_t blk_n;
@@ -111,10 +111,6 @@ static void sframe(void)                              /* frame(), the output che
             int32_t v = o[i] < 0 ? -o[i] : o[i];
             if (v > peak) peak = v;
         }
-        for (i = 1; i < CTL; i += 2u) {
-            scope_bufr[scope_w & (SCOPE_N - 1u)] = vis_tap[2u * i + 1u];
-            scope_buf[scope_w++ & (SCOPE_N - 1u)] = vis_tap[2u * i];
-        }
         {
             int32_t bp = 0;
             for (i = 0; i < CTL * 2u; i++) if ((o[i] < 0 ? -o[i] : o[i]) > bp) bp = o[i] < 0 ? -o[i] : o[i];
@@ -123,7 +119,7 @@ static void sframe(void)                              /* frame(), the output che
         }
     }
     ui_input(); ui_leds(); ui_draw(); fm1_ms += 16;
-    vis_frames += vis_shown();
+    live_frames += drummer_on() && sng_view == DV_LIVE;
     menu_seen += ui.menu != 0;
 }
 
@@ -143,7 +139,7 @@ static void drum_steps(void)                        /* dense random drum steps: 
 
 static void t_fuzz(uint32_t nframes)
 {
-    uint32_t home_hold = 0, f, nf, k, i, held_btn = 0, vis_seen = 0, menu_frames = 0, mods = 0;
+    uint32_t home_hold = 0, f, nf, k, i, held_btn = 0, scr_seen = 0, menu_frames = 0, mods = 0;
     for (k = 0; k < 27u; k++) {
         if ((0x54Au >> ((53u + k) % 12u)) & 1u) black_keys[nblack++] = k;   /* C# D# F# G# A# */
         else if (nwhite < 16u) white[nwhite++] = k;
@@ -197,8 +193,13 @@ static void t_fuzz(uint32_t nframes)
         } else if (r < 63) {
             transport_req = song.playing ? 2 : 1;
         } else if (r < 64) {
-            vis_style = (uint8_t)rn(VIS_N);
-            if (rn(8) == 0 && !ui.menu) { go_home(); vis_open(); }   /* (back to TRACKS, the visualiser open) */
+            if (rn(3) == 0) {                         /* a song loaded (as sng_load would), or none */
+                sng_cur = (int8_t)(rn(3) ? (int)rn(SNG_SLOTS) : -1);
+                str_cpy(sng_ui_song, sng_cur >= 0 ? "FUZZ SONG" : "", sizeof sng_ui_song);
+                live_sec = (int8_t)(sng_cur >= 0 ? (int)rn(3) : -1);
+                sng_name(live_sec >= 0 ? (uint32_t)live_sec : 9u, sng_ui_name);
+            }
+            if (rn(4) == 0 && !ui.menu) { go_home(); if (rn(2)) drummer_open(DV_LIB); }   /* LIVE or SONGS */
         } else if (r < 65) {
             trk[rn(NTRK)].p[P_MUTE] = (int16_t)(rn(4) == 0);
         }
@@ -209,9 +210,9 @@ static void t_fuzz(uint32_t nframes)
         if (rn(700) == 0) home_hold = 60u;          /* HOME held: the menu, then fuzzed like the rest */
         if (home_hold) { home_hold--; fm1_in.buttons |= 1u << panel.btn[B_HOME]; }
         sframe();
-        vis_seen |= vis_shown() ? 1u << vis_style : 0u;
+        scr_seen |= drummer_on() ? (sng_view == DV_LIVE ? (sng_cur >= 0 ? 1u : 2u) : 4u) : on_drum_page() ? 8u : 0u;
         if (ui.menu && ++menu_frames % 300u == 0u) { ui.menu = 0; ui.force = 1; }
-        scheck(ui.page < NPAGES && vis_style < VIS_N, "fuzz: UI state in range");
+        scheck(ui.page < NPAGES && sng_view <= DV_LIB && sng_pick <= SNG_SLOTS, "fuzz: UI state in range");
         if (sfails > 20) break;
     }
     nf = f;
@@ -245,13 +246,13 @@ static void t_fuzz(uint32_t nframes)
             mix_block(o, CTL);
             for (i = 0; i < CTL * 2u; i++) if ((o[i] < 0 ? -o[i] : o[i]) > q) q = o[i] < 0 ? -o[i] : o[i];
         }
-        printf("fuzz: %u frames (%.1f min), peak %d, tail %d, visualiser styles seen %u/12, key changes %u\n",
-               nf, nf * 16.0 / 60000.0, peak, q, (unsigned)__builtin_popcount(vis_seen), mods);
+        printf("fuzz: %u frames (%.1f min), peak %d, tail %d, screens seen %u/4 (LIVE with a song, without, SONGS, "
+               "the grid), key changes %u\n", nf, nf * 16.0 / 60000.0, peak, q, (unsigned)__builtin_popcount(scr_seen), mods);
         scheck(q < 64, "end: silence after stop");
     }
     scheck(peak < (1 << 24), "fuzz: output bounded");
     if (nframes >= 30000u)                            /* (a short run may not reach them all) */
-        scheck(__builtin_popcount(vis_seen) == (int)VIS_N, "fuzz: every visualiser style drawn");
+        scheck(scr_seen == 15u, "fuzz: LIVE (a song, none), SONGS and the grid all drawn");
 }
 
 /* ---- bench ---- */
@@ -283,13 +284,13 @@ static double bench_blocks(uint32_t on, uint32_t nb)
     return best;
 }
 
-static double bench_draw(int vis, uint32_t style, uint32_t n)
+static double bench_draw(uint32_t scr, uint32_t n)   /* 0 LIVE, 1 SONGS, 2 the drum grid */
 {
     uint32_t i;
     double t = 0;
-    vis_style = (uint8_t)style;
-    if (vis && !vis_on) vis_open();
-    if (!vis) { vis_on = 0; go_home(); }
+    go_home();
+    if (scr == 1u) drummer_open(DV_LIB);
+    if (scr == 2u) studio_open(SC_DRUM);
     for (i = 0; i < 8u; i++) frame();
     for (i = 0; i < n; i++) {
         double t0;
@@ -297,8 +298,8 @@ static double bench_draw(int vis, uint32_t style, uint32_t n)
         static int32_t o[CTL * 2];
         for (q = 0; q < 22u; q++) {
             uint32_t j;
+            (void)j;
             mix_block(o, CTL);
-            for (j = 1; j < CTL; j += 2u) { scope_bufr[scope_w & (SCOPE_N - 1u)] = vis_tap[2u * j + 1u]; scope_buf[scope_w++ & (SCOPE_N - 1u)] = vis_tap[2u * j]; }
         }
         ui_input(); ui_leds();
         t0 = st_ns(); ui_draw(); t += st_ns() - t0;
@@ -309,18 +310,16 @@ static double bench_draw(int vis, uint32_t style, uint32_t n)
 
 static void t_bench(void)
 {
-    double off, on, home, v[VIS_N], a = 0, b = 0;
+    double off, on, v[3], a = 0, b = 0;
     uint32_t s, i;
     static const char *const TXT[] = {"120.0", "-64", "FILTER", "SLOOP", "C#m7", "2BAR"};
     off = bench_blocks(0, 6000);
     on = bench_blocks(1, 6000);
     printf("bench: worst case (every lane on every step x4, 1/16 at 240 BPM): %.2f us a block plain, %.2f us with the "
            "INSERT (FLANG) and the FILTER (%+.1f %%)\n", off / 1000, on / 1000, (on / off - 1) * 100);
-    home = bench_draw(0, 0, 300);
-    for (s = 0; s < VIS_N; s++) v[s] = bench_draw(1, s, 300);
-    printf("bench: draw a frame: TRACKS screen %.1f us;", home / 1000);
-    for (s = 0; s < VIS_N; s++) printf(" %s %.1f%s", VIS_NAME[s], v[s] / 1000, s + 1u < VIS_N ? "," : " us\n");
-    vis_on = 0; go_home(); frames(4);
+    for (s = 0; s < 3u; s++) v[s] = bench_draw(s, 300);
+    printf("bench: draw a frame: LIVE %.1f us, SONGS %.1f us, the drum grid %.1f us\n", v[0] / 1000, v[1] / 1000, v[2] / 1000);
+    go_home(); frames(4);
     for (i = 0; i < 3000u; i++) {                     /* FONT_L from S (shifts) against the stored 2x copy */
         double t0 = st_ns();
         cv_begin(240, 32, C_BLACK); cv_text(2, 0, &FONT_L, TXT[i % 6u], C_HI);
@@ -352,8 +351,8 @@ int main(int argc, char **argv)
     frames(4);
     t_font();
     t_fuzz(nframes);
-    printf("fuzz: audio playing in %.0f %% of blocks, sounding in %.0f %%; visualiser on %.0f %% of frames, menu %.0f %%\n",
-           100.0 * play_blocks / blk_n, 100.0 * loud_blocks / blk_n, 100.0 * vis_frames / nframes, 100.0 * menu_seen / nframes);
+    printf("fuzz: audio playing in %.0f %% of blocks, sounding in %.0f %%; LIVE on %.0f %% of frames, menu %.0f %%\n",
+           100.0 * play_blocks / blk_n, 100.0 * loud_blocks / blk_n, 100.0 * live_frames / nframes, 100.0 * menu_seen / nframes);
     {   /* (a max on a shared host is its scheduler's, not ours: the 99.9 and 99.99 percentiles) */
         uint32_t i, acc = 0, p3 = 0, p4 = 0;
         for (i = 0; i <= 2000u; i++) {

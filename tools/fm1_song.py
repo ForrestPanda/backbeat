@@ -12,7 +12,7 @@
 
 The JSON (see docs/design.md):
 
-    {"name": "MY SONG", "bpm": 120, "kit": 0, "swing": 50, "drum_level": 100, "drum_reverb": 20,
+    {"name": "MY SONG", "bpm": 120, "kit": 0, "swing": 0, "drum_level": 100, "drum_reverb": 20,
      "sections": [
        {"name": "VERSE", "steps": 16, "div": "1/16", "time": "4/4", "outro": false,
         "lanes": {"KICK": "x...x...x...x...", "SNARE": "....x.......x...", "HAT": "x.x.x.x.x.x.x.x."},
@@ -21,11 +21,13 @@ The JSON (see docs/design.md):
 
 A lane string has one character a step: '.' rest, 'g' ghost, 'o' soft, 'x' normal, 'X' hard. A ratchet
 string: '.' or 1, or 2..4 repeats inside the step. "fills" marks a lane's hits one by one: '.' plays
-always, 'F' only during a fill (the pedal's transition, CC 21, or the device's GLO + key 9 / 10), 'N' never
+always, 'F' only during a fill (the pedal's CC 21, or the LIVE screen's black keys and SEL), 'N' never
 during one. The older "fill" string does the same for a whole step, every lane at once. Lanes:
 KICK, KICK2, SNARE, CLAP, HAT, OPENHAT, PEDAL, RIM, SNARE2, LOWTOM, HITOM, CRASH, RIDE, SHAKER, CONGA,
 COWBELL (spaces and case do not matter). div: 1/4 1/8 1/16 1/32 8T 16T 1/2 1BAR 2BAR. time: the section's meter,
-n/d with n 1..16 and d 2, 4, 8 or 16 (none: 4/4); the pedal's bars, the click and the count-in follow it. kit: the
+n/d with n 1..16 and d 2, 4, 8 or 16 (none: 4/4); the pedal's bars, the click and the count-in follow it. A section is
+whole bars of its time (a change waits for the bar line): a pickup is a short bar, a 4-step intro of 1/16 "1/4";
+a section that is not gets a warning with the signature that fits. kit: the
 index in the device's KIT list (0 ACOUSTIC .. as the web editor shows them). Up to 8 sections; the packed song
 ("SNG2": a section header of 18 bytes, the fill conditions, then a step: 2 bytes of lanes and a byte a hit) must
 stay under 3800 bytes: 64 steps of three hits take about 340 bytes, so 8 full sections fit.
@@ -41,7 +43,14 @@ import zlib
 
 HDR = [0x7D, 0x46, 0x4C]
 BK_LIST, BK_GET, BK_PUT = 34, 35, 36
-OBJ_SONG0, OBJ_ARRSET = 16, 24
+OBJ_SONG0, OBJ_ARRSET, OBJ_SONG8 = 16, 24, 40     # editor.c's backup objects: songs 1..8, the pedal settings, songs 9..16
+SLOTS = 16
+
+
+def song_obj(slot):
+    if not 0 <= slot < SLOTS:
+        sys.exit(f"a song slot is 0..{SLOTS - 1}")
+    return OBJ_SONG0 + slot if slot < 8 else OBJ_SONG8 + slot - 8
 SNG_MAGIC = b"SNG2"
 HDR, SEC_HDR = 32, 18
 SNG_MAX = 3800
@@ -52,6 +61,8 @@ DIVS = ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1BAR", "2BAR"]
 LEVELS = {"x": 0, "g": 1, "o": 2, "X": 3}            # LV_NORM, LV_GHOST, LV_SOFT, LV_HARD
 CONDS = {".": 0, "F": 1, "N": 2}                     # FC_NORM, FC_FILL, FC_NOFILL
 DENS = [4, 8, 2, 16]                                 # the meter byte's denominator code
+STEP_U = {"1/4": 48, "1/8": 24, "1/16": 12, "1/32": 6, "8T": 16, "16T": 8, "1/2": 96, "1BAR": 192, "2BAR": 384}
+                                                     # a step in 1/48 of a beat (core.h div_units / 48)
 
 
 def lane_index(name):
@@ -77,6 +88,40 @@ def meter_byte(t, name):
 
 def meter_str(v):
     return None if not v & 31 else f"{v & 31}/{DENS[(v >> 5) & 3]}"
+
+
+def bar_fit(steps, div, time):
+    """a section is whole bars of its time signature (the device counts bars: a change waits for the bar line).
+    None when it is; else (its length in bars, a Fraction, and the signature whose one bar is the pattern, "1/4",
+    or None if no n/d fits)"""
+    from fractions import Fraction
+    num, den = (int(x) for x in str(time).split("/")) if time else (4, 4)
+    length = steps * STEP_U[div]                     # in 1/48 of a beat
+    bar = 192 * num // den
+    if length % bar == 0:
+        return None
+    for d in [den] + [x for x in (4, 8, 16, 2) if x != den]:
+        if length * d % 192 == 0 and 1 <= length * d // 192 <= 16:
+            return Fraction(length, bar), f"{length * d // 192}/{d}"
+    return Fraction(length, bar), None
+
+
+def bar_warnings(spec):
+    """one line per section that is not whole bars of its signature, with the signature that fits"""
+    out = []
+    for i, sec in enumerate(spec.get("sections", [])):
+        name = str(sec.get("name", f"PART {i + 1}"))[:12]
+        time = sec.get("time") or "4/4"
+        try:
+            fit = bar_fit(int(sec.get("steps", 16)), sec.get("div", "1/16"), time)
+        except (KeyError, ValueError, ZeroDivisionError):
+            continue                                 # (pack_section reports a bad div or time)
+        if fit:
+            bars, sig = fit
+            n = f"{bars} of a {time} bar" if bars < 1 else f"{float(bars):g} bars of {time}"
+            out.append(f"{name}: {sec.get('steps', 16)} steps of {sec.get('div', '1/16')} is {n}: a change waits for the "
+                       f"bar line" + (f'; set "time": "{sig}" (one bar = the pattern)' if sig else ""))
+    return out
 
 
 def pack_section(sec, index):
@@ -147,13 +192,15 @@ def pack(spec):
     if not 40 <= bpm <= 240:
         sys.exit("bpm must be 40..240")
     kit = int(spec.get("kit", 0))
-    swing = int(spec.get("swing", 50))
+    swing = int(spec.get("swing", 0))                # 0 straight .. 100 the most (MPC 50 .. 75 %): seq.c swing_units
     if not 0 <= swing <= 100:
         sys.exit("swing must be 0..100")
     name = str(spec.get("name", "SONG"))[:12].encode("ascii", "replace").ljust(12, b"\0")
     hdr = SNG_MAGIC + name + struct.pack("<HBBBBB", bpm, kit, swing, int(spec.get("drum_level", 100)),
                                           int(spec.get("drum_reverb", 20)), len(secs)) + bytes(9)
     body = b"".join(pack_section(s, i) for i, s in enumerate(secs))
+    for w in bar_warnings(spec):                     # (a warning: the device plays it, but times it in whole bars)
+        print(f"warning: {w}", file=sys.stderr)
     blob = hdr + body
     if len(blob) > SNG_MAX:
         sys.exit(f"the packed song is {len(blob)} bytes; at most {SNG_MAX} (fewer or shorter sections)")
@@ -280,9 +327,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("json", nargs="?", help="the song (JSON)")
     ap.add_argument("--out", help="write the packed song here")
-    ap.add_argument("--put", type=int, metavar="SLOT", help="send it into song slot 0..7")
-    ap.add_argument("--get", type=int, metavar="SLOT", help="read song slot 0..7 back")
-    ap.add_argument("--erase", type=int, metavar="SLOT", help="erase song slot 0..7")
+    ap.add_argument("--put", type=int, metavar="SLOT", help="send it into song slot 0..15")
+    ap.add_argument("--get", type=int, metavar="SLOT", help="read song slot 0..15 back")
+    ap.add_argument("--erase", type=int, metavar="SLOT", help="erase song slot 0..15")
     ap.add_argument("--pedal-channel", type=int, metavar="CH", help="0 off, 1..16, 17 any")
     ap.add_argument("--count-in", type=int, metavar="BARS", help="bars of clicks before a start from stopped: 0, 1, 2")
     a = ap.parse_args()
@@ -292,7 +339,7 @@ def main():
             blob = pack(json.load(f))
         describe(blob)
     if a.get is not None:
-        blob = Link().get(OBJ_SONG0 + a.get)
+        blob = Link().get(song_obj(a.get))
         if not blob.startswith(SNG_MAGIC):
             sys.exit("not a song")
         describe(blob)
@@ -303,10 +350,10 @@ def main():
     if a.put is not None:
         if blob is None:
             sys.exit("--put needs the JSON")
-        rc = Link().put(OBJ_SONG0 + a.put, blob)
+        rc = Link().put(song_obj(a.put), blob)
         print("sent" if rc == 0 else f"refused: rc {rc} (2: not a valid song, 3: stop the song first, 4: flash)")
     if a.erase is not None:
-        rc = Link().put(OBJ_SONG0 + a.erase, b"")
+        rc = Link().put(song_obj(a.erase), b"")
         print("erased" if rc == 0 else f"refused: rc {rc}")
     if a.pedal_channel is not None or a.count_in is not None:
         if a.pedal_channel is not None and not 0 <= a.pedal_channel <= 17:
@@ -323,7 +370,8 @@ def main():
             ch = a.pedal_channel
         if a.count_in is not None:
             count = a.count_in
-        rc = link.put(OBJ_ARRSET, b"ARS1" + bytes([ch, count]) + bytes(10))
+        rest = cur[6:16] if cur[:4] == b"ARS1" and len(cur) >= 16 else bytes(10)   # (SETUP's autoload and last song kept)
+        rc = link.put(OBJ_ARRSET, b"ARS1" + bytes([ch, count]) + rest)
         print(f"pedal channel {ch}, count-in {count} bar(s): set" if rc == 0 else f"refused: rc {rc}")
     if not any(x is not None for x in (a.json, a.get, a.erase, a.pedal_channel, a.count_in)):
         ap.print_help()

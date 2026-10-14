@@ -4,7 +4,9 @@
 > batterie : la piste de batterie, ses pas et ses couches, les sections A..D et la chaîne, le master, TEXTURE et le MIDI ;
 > les synthés et leurs moteurs, les sons, les instruments échantillonnés, les effets punch-in, le SLICER,
 > l'enregistrement live, l'arpégiateur, les gammes et les accords ont disparu. Voir [README.md](README.md) et
-> [docs/drums-only.md](docs/drums-only.md).
+> [docs/drums-only.md](docs/drums-only.md). Les écrans aussi ont changé : fm1-drummer démarre sur LIVE (HOME), SAVE
+> ouvre SONGS, SEQ la grille de batterie (EDIT), GLO ouvre SETUP ; l'écran TRACKS, le visualiseur, les pages et la
+> couche GLO et le menu de HOME tenu ont disparu (README, « On the device »).
 
 # SLOOP 2.6 — démarrage rapide
 

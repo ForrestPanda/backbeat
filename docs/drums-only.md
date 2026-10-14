@@ -11,6 +11,11 @@ and delay sends, TEXTURE, DUST, the DJ filter, the limiter), backup, OTA and rec
 Why: the flash is full (116 bytes left) and every device feature still open needs room. The audit below says
 the room is there.
 
+> **Since (2026-10-14).** Done in ten stages as planned. The device's screens were then redesigned around songs
+> (README "On the device", docs/design.md 6c): LIVE, SONGS, EDIT and SETUP replace the song screen, the TRACKS
+> screen, the visualiser, the GLO pages and layer and the menu that the stages below still mention; and a section
+> change brings no fill of its own any more (CC 21 asks for one). The stages are left as they were done.
+
 ## What it frees
 
 | Item | Flash | RAM |
@@ -112,7 +117,8 @@ says why if they do. The CPU and target budgets are re-based where the code they
     kept as SLOOP's manual with a note on top that the synth side is gone from this fork.
 
 Then the device features, on the room: the pedal channel and the count-in on the song screen, bar counts per
-section, the slot list with names, and whatever else the hardware shows is needed.
+section, the slot list with names, and whatever else the hardware shows is needed. (Done 2026-10-14 in the UI
+redesign: SETUP > PEDAL, LIVE's bar counts, SONGS.)
 
 ## Risks
 

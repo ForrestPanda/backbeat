@@ -2,7 +2,7 @@
   "name": "EXAMPLE",
   "bpm": 112,
   "kit": 0,
-  "swing": 50,
+  "swing": 0,
   "drum_level": 100,
   "drum_reverb": 20,
   "sections": [

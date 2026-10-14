@@ -112,6 +112,24 @@ int main(int argc, char **argv)
             for (k = 0; k < tmp.nsec; k++)
                 printf("  %u: %-12.12s %2u steps div %u flags %u at %u\n", k, (const char *)file + tmp.off[k],
                        file[tmp.off[k] + 12], file[tmp.off[k] + 13], file[tmp.off[k] + 14], tmp.off[k]);
+            host_tracks_init();                           /* and each section through the drum track and packed again
+                                                           * (EDIT, SAVE held): the same bytes */
+            memcpy(blob[0], file, n); blob_n[0] = n;
+            if (sng_load(0))
+                rc = 8;
+            for (k = 0; !rc && k < sng.nsec; k++) {
+                static uint8_t out[SNG_MAX];
+                uint32_t m;
+                sng_apply(k);
+                m = sng_pack_section(k, out, sizeof out);
+                if (m != n || memcmp(out, file, n)) {
+                    uint32_t b = 0;
+                    while (b < n && b < m && out[b] == file[b]) b++;
+                    printf("  section %u packs again as %u bytes, not %u (first difference at %u)\n", k, m, n, b);
+                    rc = 7;
+                }
+            }
+            printf("song: %s: each section packed again from the drum track:%s\n", argv[1], rc ? " FAIL" : " the same bytes");
         }
         return rc ? 1 : 0;
     }
@@ -195,11 +213,11 @@ int main(int argc, char **argv)
     assert(((TDRUM->dstep[4].lvl[0] >> 4) & 3u) == LV_HARD);       /* lane 2: byte 0, bits 4..5 */
     printf("song: VERSE: 32 steps, FILL ONLY on 28..31, a hard snare PASS\n");
 
-    /* ---- NEXT: OUTRO when the VERSE's 2 bars have played (asked for in its first bar: cued, the second bar the
-     * fill, the OUTRO on the bar after); NEXT again wraps to INTRO */
+    /* ---- NEXT: OUTRO when the VERSE's 2 bars have played (asked for in its first bar: cued, no fill of its own,
+     * the OUTRO on the bar after the second); NEXT again wraps to INTRO */
     advance(bar / 2u);
     cc(16, 24, 0); advance(bar);
-    assert(live_sec == 1 && live_req == 2 && fill_now);
+    assert(live_sec == 1 && live_req == 2 && !fill_now);
     advance(bar);
     assert(live_sec == 2 && TDRUM->p[P_SLEN] == 16 && (jumped - t0) % bar < CTL && jumped - t0 >= 2u * bar);
     cc(16, 24, 0); advance(bar);
@@ -210,7 +228,7 @@ int main(int argc, char **argv)
     assert(live_req == -1);
     printf("song: NEXT / PREV over the song's three sections, section 5 ignored PASS\n");
 
-    /* ---- the ending with no value: the VERSE plays its 2 bars out (the second the fill), the flagged OUTRO once
+    /* ---- the ending with no value: the VERSE plays its 2 bars out (no fill), the flagged OUTRO once
      * (1 bar), then stop on the bar */
     cc(16, 20, 1); advance(bar);                                   /* back in the VERSE */
     assert(live_sec == 1);
@@ -218,7 +236,7 @@ int main(int argc, char **argv)
     cc(16, 22, 127); advance(CTL * 2u);
     assert(!fill_now && live_req == 2 && pedal_end_req == 1u && pedal_at_end);
     advance(bar);
-    assert(live_sec == 1 && fill_now);
+    assert(live_sec == 1 && !fill_now);
     advance(bar);
     assert(live_sec == 2 && song.playing && pedal_end_bars == 1u);
     advance(bar);
@@ -236,6 +254,16 @@ int main(int argc, char **argv)
     assert(!song.playing && stopped - jumped >= 2u * bar && stopped - jumped < 2u * bar + CTL);
     printf("song: ending with the 2-bar VERSE as the outro PASS\n");
 
+    /* ---- the ending while the flagged OUTRO plays already (the reported case): it plays to its end, then stop */
+    cc(16, 20, 2); advance(CTL * 3u);                              /* the OUTRO (1 bar) from stopped */
+    assert(song.playing && live_sec == 2);
+    advance(bar / 3u);
+    cc(16, 22, 127); advance(CTL * 2u);
+    assert(live_req == -1 && pedal_at_end && pedal_end_bars == 1u);
+    advance(bar);
+    assert(!song.playing && stopped - t0 >= bar && stopped - t0 < bar + CTL);
+    printf("song: the ending while the OUTRO plays: to its end, then stop PASS\n");
+
     /* ---- PC while playing: the song waits for the next section; its tempo comes with it */
     cc(16, 20, 0); advance(CTL * 3u);
     assert(song.playing && song.g[G_BPM] == 132);
@@ -251,8 +279,8 @@ int main(int argc, char **argv)
      * is dropped at the bar; a PC on the pedal channel takes nothing else (CC 64 passes to the tracks) */
     bar = bar_len();                                               /* (SLOW's tempo) */
     advance(bar / 4u);
-    cc(16, 20, 0); advance(CTL);                                   /* SLOW has one section, the one playing: a fill */
-    assert(live_req == -1 && pedal_fill && pedal_fill_hold);
+    cc(16, 20, 0); advance(CTL);                                   /* SLOW has one section, the one playing: nothing */
+    assert(live_req == -1 && !pedal_fill && !pedal_fill_hold);
     live_req = 0;                                                  /* (as the UI asks for it: SLOW's 0..) */
     pc(16, 0); advance(CTL); sng_poll();                           /* ..but TEST lands: the request was SLOW's */
     assert(sng_cur == 0 && live_req == -1 && sng.pend);
@@ -348,8 +376,63 @@ int main(int argc, char **argv)
         a.pedal_ch = 18; assert(!arrset_valid(&a));
         a.pedal_ch = 16; a.count_in = 3; assert(!arrset_valid(&a));
         a.count_in = 0; arrset_take(&a);
-        assert(pedal.ch == 16u && pedal.count == 0u);
+        assert(pedal.ch == 16u && pedal.count == 0u && !sng_autoload);
+        /* SETUP > PEDAL: the last song loaded at start; kept in the object's spare bytes (0 in the tool's and the
+         * editor's: off) */
+        sng_autoload = 1; sng_last = 0; arrset_dirty = 0;
+        transport_req = 2; advance(CTL);
+        pc(16, 0); advance(CTL); sng_poll();
+        assert(sng_cur == 0 && sng_last == 1u && arrset_dirty);
+        arrset_fill(&a);
+        assert(a.autoload == 1u && a.last == 1u && arrset_valid(&a));
+        sng_autoload = 0; sng_last = 0; arrset_take(&a);
+        assert(sng_autoload == 1u && sng_last == 1u);
+        a.last = SNG_SLOTS + 1u; a.autoload = 7; arrset_take(&a);   /* (16 songs: last 1..16) */
+        assert(!sng_autoload && !sng_last);
+        sng_autoload = 0; arrset_dirty = 0;
     }
     printf("song: the pedal settings object PASS\n");
+
+    /* ---- EDIT, SAVE held: a section packed again from the drum track (sng_pack_section, the reverse of sng_apply) */
+    {
+        static uint8_t out[SNG_MAX];
+        uint32_t n0, n, k, slot;
+        sng_t tmp;
+        transport_req = 2; advance(CTL);
+        for (slot = 0; slot < SNG_SLOTS; slot++) {   /* every song the test wrote: each section, unedited, packs the same */
+            const uint8_t *src = sng_fetch(slot, &n0);
+            if (!src || sng_check(src, n0, &tmp))
+                continue;
+            pc(16, slot); advance(CTL); sng_poll();
+            assert(sng_cur == (int8_t)slot);
+            for (k = 0; k < sng.nsec; k++) {
+                fm1_irq_off(); sng_apply(k); fm1_irq_on();
+                n = sng_pack_section(k, out, sizeof out);
+                assert(n == n0 && !memcmp(out, src, n));
+            }
+        }
+        pc(16, 0); advance(CTL); sng_poll();
+        fm1_irq_off(); sng_apply(1); live_sec = 1; fm1_irq_on();
+        undo_mark(TDRUM, 77); assert(undo.valid);
+        fm1_irq_off(); sng_apply(1); fm1_irq_on();
+        assert(!undo.valid);                          /* (a section applied: no undo back into the one before) */
+        dstep_set(&TDRUM->dstep[2], 9, LV_HARD, 2);   /* an edit: a hard x3 hit, a mark taken off with its hit */
+        drum_fonly[3] |= 1u << 6; dstep_set(&TDRUM->dstep[3], 6, LV_NORM, 0);
+        drum_hit_clr(TDRUM, 3, 6);
+        assert(!(drum_fonly[3] >> 6 & 1u) && !dstep_has(&TDRUM->dstep[3], 6));
+        n = sng_pack_section(1, out, sizeof out);
+        assert(n && !sng_check(out, n, &tmp));
+        memcpy(blob[0], out, n); blob_n[0] = n;      /* (as st_save writes it), loaded again */
+        pc(16, 0); advance(CTL); sng_poll();
+        fm1_irq_off(); sng_apply(1); fm1_irq_on();
+        assert(dstep_has(&TDRUM->dstep[2], 9) && dstep_lvl(&TDRUM->dstep[2], 9) == LV_HARD && dstep_rat(&TDRUM->dstep[2], 9) == 2u);
+        assert(!sng_pack_section(1, out, 40));        /* no room: refused */
+        assert(!sng_lossy());
+        TDRUM->micro[5] = 3; assert(sng_lossy()); TDRUM->micro[5] = 0;
+        TDRUM->p[P_SLEN] = 64;                        /* the longest section: still packs and checks */
+        n = sng_pack_section(1, out, sizeof out);
+        assert(n && !sng_check(out, n, &tmp) && tmp.nsec == sng.nsec);
+    }
+    printf("song: a section packed again from the drum track (EDIT, SAVE held): same bytes, an edit kept, no room refused PASS\n");
     return 0;
 }

@@ -11,15 +11,15 @@
  *                                                 last touched first); OCT+ cycles the step's fill condition
  *                                                 (normal, fill only, no fill), OCT- clears its nudge, locks and
  *                                                 condition
- *   GLO   keys 1..4 mute, 5..8 solo,       knobs: the levels of tracks 1..4
- *         9 fill while held, 10 fill the next bar, the last white key: tap tempo
  *   SAVE  keys 1..4 play section A..D (on the next bar; two or more tapped while SAVE stays held: a chain of
  *         them, looped, each for its pattern's bars), 5..8 store the loop into A..D, 13 loop / song,
- *         14 SONG REC (the order you play becomes the song), 16 the song page
- * (SEL held opened the key of the song, its scale and chords: gone with the synth parts, drums only.)
- * The keys' part runs in the audio ISR (seq.c layer_now: no lag, no lost press); the SEQ, GLO and SAVE
- * keys come to the UI through seq.c lk_q. HOLD: REC held clears the track, SAVE held saves the
- * project (a ring fills; let go before and nothing happens). */
+ *         14 SONG REC (the order you play becomes the song), 16 SONGS (fm1-drummer: not on the drum grid,
+ *         where SAVE held writes the section into its song, ui_input.c holds_input)
+ * (SEL held opened the key of the song, its scale and chords: gone with the synth parts, drums only. GLO held
+ * was the mix: mute, solo, fill, tap tempo; fm1-drummer: GLO tapped opens SETUP, ui_menu.c.)
+ * The keys' part runs in the audio ISR (seq.c layer_now: no lag, no lost press); the SEQ and SAVE
+ * keys come to the UI through seq.c lk_q. HOLD: REC held clears the track, SAVE held on the drum grid saves
+ * the section into its song (a ring fills; let go before and nothing happens). */
 static const uint8_t LAYER_BTN[LY_COUNT] = {NB, B_FX, B_EDIT, B_ARP, B_SEQ, B_SCL, B_GLO, B_SAVE};
 static const char *const LAYER_NAME[LY_COUNT] = {"", "fx", "erase", "roll", "steps", "key", "mix", "song"};
 static void section_store(uint32_t s);                  /* project.c */
@@ -36,7 +36,8 @@ static void layers_init(void)
 {
     uint32_t l;
     for (l = LY_FX; l < LY_COUNT; l++)
-        ly_bit[l] = l == LY_SCALE ? 0u : 1u << panel.btn[LAYER_BTN[l]];   /* (SEL: no layer now) */
+        ly_bit[l] = l == LY_SCALE || l == LY_MIX ? 0u : 1u << panel.btn[LAYER_BTN[l]];   /* (SEL, GLO: no layer now;
+                                                         * GLO tapped opens SETUP, ui_menu.c) */
     dyn_bit[0] = 1u << panel.btn[B_OCTDN];
     dyn_bit[1] = 1u << panel.btn[B_OCTUP];
     ui.lock_par = P_ED_FLT;                             /* the lock parameter until a sound knob is turned */
@@ -69,6 +70,7 @@ static void pattern_rotate(track_t *t, int32_t d)       /* every step one later 
             t->dstep[i] = t->dstep[i + 1u];
         t->dstep[len - 1u] = keep;
     }
+    drum_marks_rotate(len, d);                          /* (the song's marks go round with the hits) */
     fm1_irq_on();
 }
 static void pattern_length(track_t *t, int32_t d)       /* x2 (the pattern again after itself), or half */
@@ -77,8 +79,10 @@ static void pattern_length(track_t *t, int32_t d)       /* x2 (the pattern again
     layer_undo_mark(t);
     fm1_irq_off();
     if (d > 0 && len * 2u <= NSTEP) {
-        for (i = 0; i < len; i++)
+        for (i = 0; i < len; i++) {
             t->dstep[len + i] = t->dstep[i];
+            drum_marks_move(len + i, i);
+        }
         t->p[P_SLEN] = (int16_t)(len * 2u);
     } else if (d < 0 && len >= 2u) {
         t->p[P_SLEN] = (int16_t)(len / 2u);
@@ -127,7 +131,7 @@ static void step_up(uint32_t w)
         return;
     layer_undo_mark(t);
     fm1_irq_off();
-    dstep_clr(&t->dstep[idx], pen_lane);
+    drum_hit_clr(t, idx, pen_lane);
     if (!dstep_mask(&t->dstep[idx])) {                  /* an empty step keeps no lock, no nudge, no condition */
         lock_del(t, idx, P_COUNT);
         t->micro[idx] = 0;
@@ -243,27 +247,7 @@ static void steps_held_fill(void)
     ui_message(MSG[v % 3u]);
 }
 
-/* ------------------------------------------------------------- GLO --- */
-static void tap_tempo(void)
-{
-    uint32_t now = fm1_ms, i, sum = 0;
-    if (ui.tap_n && now - ui.tap_ms[(ui.tap_n - 1u) & 3u] > 2000u)
-        ui.tap_n = 0;                                   /* a pause: a new count */
-    ui.tap_ms[ui.tap_n & 3u] = now;
-    ui.tap_n++;
-    if (ui.tap_n < 2u)
-        return;
-    {
-        uint32_t n = ui.tap_n - 1u > 3u ? 3u : ui.tap_n - 1u;
-        for (i = 0; i < n; i++)
-            sum += ui.tap_ms[(ui.tap_n - 1u - i) & 3u] - ui.tap_ms[(ui.tap_n - 2u - i) & 3u];
-        if (sum)
-            song.g[G_BPM] = (int16_t)clamp((int32_t)((60000u * n + sum / 2u) / sum), 40, 240);
-        ui.bpm_t = 40;
-    }
-}
-
-/* a key of the layers the UI runs (seq.c lk_q): SEQ steps, SEL key, GLO mix */
+/* a key of the layers the UI runs (seq.c lk_q): SEQ steps, SAVE sections */
 static void layer_key(uint32_t layer, uint32_t k, uint32_t down)
 {
     int32_t w = key_white(k);
@@ -274,8 +258,6 @@ static void layer_key(uint32_t layer, uint32_t k, uint32_t down)
             ui.step_held &= (uint16_t)~(1u << w);
             if (layer == LY_STEP)
                 step_up((uint32_t)w);
-            if (layer == LY_MIX && w == 8)
-                fill_held = 0;                              /* GLO + key 9 let go: the fill ends */
         }
         return;
     }
@@ -351,20 +333,6 @@ static void layer_key(uint32_t layer, uint32_t k, uint32_t down)
         }
         return;
     }
-    case LY_MIX:
-        if (k == 1u) {                                      /* (2.6) the black key F#3: MIDI LEARN on / off */
-            ml_toggle();
-        } else if (w == 0) {
-            TDRUM->p[P_MUTE] = (int16_t)!TDRUM->p[P_MUTE];   /* (one track: no solo) */
-        } else if (w == 8) {
-            fill_held = 1;                                  /* FILL while held */
-        } else if (w == 9) {
-            fill_arm = (uint8_t)!fill_arm;                  /* FILL NEXT BAR (again: cancelled) */
-            ui_message(fill_arm ? "FILL: NEXT BAR" : "FILL BAR OFF");
-        } else if (w == 15) {
-            tap_tempo();
-        }
-        return;
     default:
         return;
     }
@@ -460,13 +428,6 @@ static void layer_knobs(uint32_t layer)
                     ui.step_page = (uint8_t)((trk_len(t) - 1u) / 16u);
             }
             break;
-        case LY_MIX: {                                  /* the drums: LEVEL, REV, DLY (GLO > DRUMS), PAN */
-            static const uint8_t G[3] = {G_DRLVL, G_DRREV, G_DRDLY};
-            int16_t *v = k < 3u ? &song.g[G[k]] : &TDRUM->p[P_PAN];
-            const param_desc_t *d = k < 3u ? &GP[G[k]] : &TP[P_PAN];
-            *v = (int16_t)clamp(*v + accel(EN_K1 + k, s, d->max - d->min), d->min, d->max);
-            break;
-        }
         default:
             break;
         }
@@ -712,39 +673,6 @@ static void layer_screen_draw(void)
         }
         break;
     }
-    case LY_MIX: {                                      /* mute, fill / fill bar, tap; the knobs: the drums' mix */
-        col = C_WHITE;
-        str_cpy(sub, "mute  fill  tap", sizeof sub);
-        {
-            int m = TDRUM->p[P_MUTE] != 0;
-            str_cpy(tl[0].lab, "mute", 8);
-            tl[0].bg = m ? TE_G2 : TE_COL[0];
-            tl[0].fg = m ? TE_G3 : C_BLACK;
-        }
-        str_cpy(tl[8].lab, "fill", 8);                  /* key 9: held = a fill; key 10: the next bar is one */
-        tl[8].bg = fill_now ? C_WHITE : TE_G1;
-        tl[8].fg = fill_now ? C_BLACK : TE_G4;
-        str_cpy(tl[9].lab, "bar", 8);
-        tl[9].bg = fill_bar_on ? C_WHITE : TE_G1;
-        tl[9].fg = fill_bar_on ? C_BLACK : TE_G4;
-        tl[9].top = fill_arm ? C_WHITE : 0;
-        fmt_int(tl[15].lab, song.g[G_BPM]);
-        tl[15].bg = song.playing && clk_pos < BEAT_U / 4u ? C_WHITE : TE_G2;
-        tl[15].fg = tl[15].bg == C_WHITE ? C_BLACK : C_WHITE;
-        str_cpy(tl[14].lab, "tap>", 8);
-        tl[14].bg = C_BLACK;
-        {
-            static const char *const L[4] = {"level", "rev", "dly", "pan"};
-            static const uint8_t G[3] = {G_DRLVL, G_DRREV, G_DRDLY};
-            for (i = 0; i < 4u; i++) {
-                int32_t x = i < 3u ? song.g[G[i]] : TDRUM->p[P_PAN] + 64;
-                lab[i] = L[i];
-                fmt_int(v[i], i < 3u ? x * 100 / 127 : TDRUM->p[P_PAN]);
-                ratio[i] = x * 1000 / 127;
-            }
-        }
-        break;
-    }
     case LY_SONG: {                                     /* A..D (playing lit, next one framed), store, modes */
         uint32_t ready = arrangement_ready();
         static const char *const SL[4] = {"A", "B", "C", "D"};
@@ -782,7 +710,7 @@ static void layer_screen_draw(void)
         tl[13].bg = srec == 2u ? TE_RED : TE_G1;
         tl[13].fg = srec == 2u ? C_BLACK : TE_RED;
         tl[13].top = srec == 1u ? TE_RED : 0;
-        str_cpy(tl[15].lab, "chain", 8);
+        str_cpy(tl[15].lab, "songs", 8);                /* (key 16 opens SONGS; it said "chain": a chain is taps) */
         tl[15].bg = TE_G1;
         tl[15].fg = TE_G4;
         break;
@@ -835,6 +763,14 @@ static void hold_screen_draw(void)
     cv_begin(240, 60, C_BLACK);
     if (ui.hold_kind == 1u) {
         str_cpy(b, "the pattern", sizeof b);
+    } else if (sng_cur >= 0 && live_sec >= 0) {          /* fm1-drummer: the section into its song */
+        char nm[13];
+        fm1_irq_off();
+        str_cpy(nm, sng_ui_name, sizeof nm);
+        fm1_irq_on();
+        te_lower(b, nm, 13);
+        str_cpy(b + str_len(b), " into song ", 12);
+        fmt_int(b + str_len(b), sng_cur + 1);
     } else {
         str_cpy(b, "project in slot 1", sizeof b);
         b[16] = (char)('0' + clamp(song.g[G_SLOT], 1, 4));

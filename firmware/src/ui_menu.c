@@ -1,37 +1,87 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* SLOOP menu (HOME held), in sections as the pages are (2.4): SCREEN (COLOR, ZOOM), LIGHTS (LIGHTS, KEYS, NOTES),
- * AUDIO (LOWCUT, USB AUDIO, USB SERIAL), SYSTEM (HARDWARE CALIBRATION, LEARN CLEAR (2.6), ABOUT). SELECT goes to the section
- * before / after (stopping at the ends), KNOB 1..3 set the section's settings in order (the knob's colour marks
- * its row), PRESETS moves the cursor; OCT+ steps the cursor's setting round or opens it (CALIBRATION, ABOUT),
- * OCT- closes (from ABOUT: back to the section). */
+/* SETUP (fm1-drummer: GLO tapped; SLOOP's menu, its GLO pages and its GLO layer in one place), in sections of up to
+ * four rows: PEDAL, MIDI, LEARN, TEMPO, DRUMS, MASTER, TEXTURE (two), SCREEN, LIGHTS, AUDIO, SYSTEM. SELECT goes to
+ * the section before / after (stopping at the ends), KNOB 1..4 set its rows in order (the knob's colour marks its
+ * row), PRESETS moves the cursor; OCT+ steps the cursor's setting round or opens it (CALIBRATION, PROJECTS, ABOUT),
+ * OCT-, GLO or HOME close (from ABOUT: back to the section). A row is a setting of its own (MI_*), a global
+ * (song.g, as the GLO pages had them) or the drum track's parameter. The pedal's settings are saved with the songs
+ * (sng.c arrset_save, once stopped: arrset_dirty), the others as before (settings_save, the project). */
 /* ------------------------------------------------------------ menu --- */
-enum { MI_COLOR, MI_ZOOM, MI_LIGHTS, MI_KEYS, MI_NOTES, MI_LOWCUT, MI_USB, MI_SERIAL, MI_PANEL, MI_LCLEAR, MI_ABOUT,
-       MI_COUNT };
-static const char *const MI_NAME[MI_COUNT] = {"COLOR", "ZOOM", "LIGHTS", "KEYS", "NOTES", "SPEAKER LOWCUT", "USB AUDIO",
-                                              "USB SERIAL", "HARDWARE CALIBRATION", "MIDI LEARN CLEAR", "ABOUT"};
-enum { MS_SCREEN, MS_LIGHTS, MS_AUDIO, MS_SYSTEM, MS_COUNT };
-static const char *const MS_NAME[MS_COUNT] = {"SCREEN", "LIGHTS", "AUDIO", "SYSTEM"};   /* (AUDIO: and USB) */
-static const uint8_t MS_FIRST[MS_COUNT + 1] = {MI_COLOR, MI_LIGHTS, MI_LOWCUT, MI_PANEL, MI_COUNT};   /* rows of each */
+enum { MI_PCH, MI_PCOUNT, MI_AUTO, MI_LEARN, MI_LCLEAR, MI_COLOR, MI_ZOOM, MI_LIGHTS, MI_KEYS, MI_NOTES, MI_LOWCUT,
+       MI_USB, MI_SERIAL, MI_PANEL, MI_PROJ, MI_ABOUT, MI_N };
+enum { RK_MI, RK_G, RK_P };                        /* a row: a setting (MI_*), song.g[id], TDRUM->p[id] */
+typedef struct { const char *name; uint8_t kind, id; } mrow_t;
+static const mrow_t MROW[] = {
+    {"PEDAL CHANNEL", RK_MI, MI_PCH}, {"COUNT-IN", RK_MI, MI_PCOUNT}, {"LOAD LAST SONG AT START", RK_MI, MI_AUTO},
+    {"DRUMS CHANNEL", RK_G, G_DRCH}, {"IN", RK_G, G_ROUTE}, {"OTHER CHANNELS", RK_G, G_CHOTH}, {"OUT", RK_G, G_MIDI},
+    {"SYNC", RK_G, G_SYNC}, {"MIDI LEARN", RK_MI, MI_LEARN}, {"MIDI LEARN CLEAR", RK_MI, MI_LCLEAR},
+    {"TEMPO", RK_G, G_BPM}, {"SWING", RK_G, G_SWING}, {"CLICK", RK_G, G_CLOCK}, {"TUNE", RK_G, G_TUNE},
+    {"LEVEL", RK_G, G_DRLVL}, {"REVERB", RK_G, G_DRREV}, {"DELAY", RK_G, G_DRDLY}, {"PAN", RK_P, P_PAN},
+    {"DUST", RK_G, G_DUST}, {"DUCK", RK_G, G_DUCK}, {"FILTER", RK_G, G_FILT}, {"ROLL RATE", RK_G, G_ROLL},
+    {"SOURCE", RK_G, G_TXSRC}, {"LEVEL", RK_G, G_TXLVL}, {"TONE", RK_G, G_TXTONE}, {"MOVE", RK_G, G_TXMOVE},
+    {"RATE", RK_G, G_TXRATE}, {"WHEN", RK_G, G_TXWHEN}, {"DUCK", RK_G, G_TXDUCK},
+    {"COLOR", RK_MI, MI_COLOR}, {"ZOOM", RK_MI, MI_ZOOM},
+    {"LIGHTS", RK_MI, MI_LIGHTS}, {"KEYS", RK_MI, MI_KEYS}, {"NOTES", RK_MI, MI_NOTES},
+    {"SPEAKER LOWCUT", RK_MI, MI_LOWCUT}, {"USB AUDIO", RK_MI, MI_USB}, {"USB SERIAL", RK_MI, MI_SERIAL},
+    {"HARDWARE CALIBRATION", RK_MI, MI_PANEL}, {"JAM PROJECTS", RK_MI, MI_PROJ}, {"ABOUT", RK_MI, MI_ABOUT},
+};
+#define MI_COUNT (sizeof MROW / sizeof MROW[0])
+enum { MS_PEDAL, MS_MIDI, MS_LEARN, MS_TEMPO, MS_DRUMS, MS_MASTER, MS_TEX, MS_TEX2, MS_SCREEN, MS_LIGHTS, MS_AUDIO,
+       MS_SYSTEM, MS_COUNT };
+static const char *const MS_NAME[MS_COUNT] = {"PEDAL", "MIDI", "LEARN", "TEMPO", "DRUMS", "MASTER", "TEXTURE",
+                                              "TEXTURE 2", "SCREEN", "LIGHTS", "AUDIO", "SYSTEM"};
+static const uint8_t MS_FIRST[MS_COUNT + 1] = {0, 3, 7, 10, 14, 18, 22, 26, 29, 31, 34, 37, MI_COUNT};   /* rows of each */
+_Static_assert(MI_COUNT == 40, "MS_FIRST follows MROW");
 static const char *const LIGHTS_NAME[LIGHTS_N] = {"OFF", "LOW", "MID", "HIGH"};   /* every button lit, the labels readable */
 static const char *const KEYS_NAME[KEYS_N] = {"OFF", "C KEYS", "WHITE KEYS", "ALL KEYS"};      /* keys lit too, at the LIGHTS level */
-#define MI_Y0 26                                   /* the first row, under the section tabs */
-#define MI_DY 50                                   /* a row: the label, the value in large type */
+#define MI_Y0 24                                   /* the first row, under the section line */
+#define MI_DY 48                                   /* a row: the label, the value in large type */
 
-static uint32_t mi_sec(uint32_t i)                 /* the section of item i */
+static uint32_t mi_sec(uint32_t i)                 /* the section of row i */
 {
     uint32_t k = 0;
     while (k + 1u < MS_COUNT && i >= MS_FIRST[k + 1u])
         k++;
     return k;
 }
-static uint32_t mi_row(uint32_t i) { return i - MS_FIRST[mi_sec(i)]; }   /* its row: KNOB 1 + row sets it */
 
-/* item i's value as shown, and its colour */
+static uint32_t mi_row(uint32_t i) { return i - MS_FIRST[mi_sec(i)]; }   /* its row: KNOB 1 + row sets it */
+static uint32_t mi_find(uint32_t id)               /* the row of setting MI_* id */
+{
+    uint32_t i;
+    for (i = 0; i < MI_COUNT && !(MROW[i].kind == RK_MI && MROW[i].id == id); i++)
+        ;
+    return i;
+}
+
+/* row i's value as shown, and its colour */
 static const char *mi_value(uint32_t i, uint16_t *c)
 {
+    static char b[16];
+    const mrow_t *r = &MROW[i % MI_COUNT];
     *c = C_HI;
-    switch (i) {
+    if (r->kind != RK_MI) {                           /* a global or the drum track's: as its page showed it */
+        const param_desc_t *d = r->kind == RK_G ? &GP[r->id] : &TP[r->id];
+        const char *unit;
+        param_format(d, r->kind == RK_G ? song.g[r->id] : TDRUM->p[r->id], b, &unit);
+        if (unit[0] >= 'A')
+            str_cpy(b + str_len(b), " ", 2);        /* ("123 BPM"; "50%") */
+        str_cpy(b + str_len(b), unit, sizeof b - str_len(b));
+        return b;
+    }
+    switch (r->id) {
+    case MI_PCH:
+        if (!pedal.ch || pedal.ch == PEDAL_CH_OMNI) {
+            *c = pedal.ch ? C_HI : C_DIM;
+            return pedal.ch ? "ANY" : "OFF";
+        }
+        str_cpy(b, "CH ", 4);
+        fmt_int(b + 3, pedal.ch);
+        return b;
+    case MI_PCOUNT: return pedal.count == 0u ? "NONE" : pedal.count == 1u ? "1 BAR" : "2 BARS";
+    case MI_AUTO: return sng_autoload ? "ON" : "OFF";
+    case MI_LEARN: return mlu.on ? "ON" : "OFF";
     case MI_COLOR: return PALETTES[settings.palette].name;
     case MI_ZOOM: return settings.zoom ? "ON" : "OFF";
     case MI_LIGHTS: return LIGHTS_NAME[lights_lvl % LIGHTS_N];
@@ -43,7 +93,6 @@ static const char *mi_value(uint32_t i, uint16_t *c)
     case MI_USB: return usb_full ? "FULL" : "MASTER";
     case MI_SERIAL: return usb_serial ? "ON" : "OFF";
     case MI_LCLEAR: {                                 /* (2.6) the CCs MIDI LEARN holds; OCT+ clears them */
-        static char b[8];
         uint32_t n = ml_count();
         if (!n) {
             *c = C_DIM;
@@ -59,27 +108,47 @@ static const char *mi_value(uint32_t i, uint16_t *c)
     }
 }
 
+static void draw_about(void)
+{
+    cv_text(4, 4, &FONT_L, "DRUMMER", C_WHITE);
+    cv_rect(124, 10, 8, 4, TE_COL[0]), cv_rect(124, 16, 12, 4, TE_COL[1]);   /* the sail */
+    cv_rect(124, 22, 16, 4, TE_COL[2]), cv_rect(124, 28, 20, 4, TE_COL[3]);
+    cv_text(4, 36, &FONT_S, "FM1-DRUMMER: SLOOP, FELUCCA", C_AMB);
+    cv_text(4, 54, &FONT_S, FELUCCA_VERSION, C_HI);
+    cv_text(236 - text_w(&FONT_S, __DATE__), 54, &FONT_S, __DATE__, C_GRAY);   /* build date */
+    cv_text(cv_text(4, 72, &FONT_S, "LEO KUROSHITA", C_HI) + 8, 72, &FONT_S, "@KUROGEDELIC", C_AMB);
+    cv_text(4, 88, &FONT_S, "H\xDCGELTON INSTRUMENTS", C_HI);   /* Latin-1 U-umlaut */
+    cv_text(4, 104, &FONT_S, "HUGELTON.COM", C_AMB);
+    cv_text(4, 119, &FONT_S, "GPL-3.0, NO WARRANTY", C_HI);
+    cv_text(4, 132, &FONT_S, "GITHUB.COM/ISOD89/SLOOP-FM1", C_AMB);   /* (the source it forks) */
+    cv_text(4, 146, &FONT_S, "FONT: TERMINUS (OFL)", C_DIM);
+    cv_text(4, 159, &FONT_S, "SAMPLES: VERSILIAN (CC0)", C_DIM);
+    cv_text(4, 172, &FONT_S, "+ SONIC PI (CC0)", C_DIM);
+}
+
 static void draw_menu(void)
 {
     uint32_t i, pass, sec = mi_sec(ui.menu_sel % MI_COUNT);
-    uint32_t sig = ui.menu * 7u + ui.menu_sel * 131u + settings.palette * 1009u + settings.lowcut * 7919u +
-                   settings.zoom * 104729u + lights_lvl * 1299709u + lights_keys * 15485863u + ml_count() * 2654435u +
-                   lights_notes * 32452843u + usb_full * 49979687u + usb_serial * 86028121u;
+    uint32_t sig = ui.menu * 7u + ui.menu_sel * 131u + ml_count() * 2654435u + mlu.on * 5u;
+    for (i = MS_FIRST[sec]; i < MS_FIRST[sec + 1u]; i++) {
+        uint16_t c;
+        sig = str_hash(sig * 31u, mi_value(i, &c)) + c;
+    }
     if (!ui.force && sig == ui.menu_sig)
         return;
     ui.menu_sig = sig;
-    if (ui.force)                                   /* head + rule + two bands cover rows 0..229 */
+    if (ui.force)                                   /* head + rule + two bands cover rows 0..239 */
         lcd_fill(0, H_HEAD + 1 + 124 + 95, 240, 240 - (H_HEAD + 1 + 124 + 95), C_BLACK);
     cv_begin(240, H_HEAD, C_BLACK);
-    cv_text(4, 1, &FONT_S, ui.menu == 2 ? "ABOUT" : "MENU", C_HI);
+    cv_text(4, 1, &FONT_S, ui.menu == 2 ? "ABOUT" : "SETUP", C_HI);
     if (ui.menu != 2) {                             /* the section and its number, as a page's "ENV DEST 2/2" */
-        char t[16];
+        char t[20];
         str_cpy(t, MS_NAME[sec], sizeof t);
         str_cpy(t + str_len(t), " ", 2);
         fmt_int(t + str_len(t), (int32_t)sec + 1);
         str_cpy(t + str_len(t), "/", 2);
         fmt_int(t + str_len(t), MS_COUNT);
-        cv_text(236 - text_w(&FONT_S, t), 1, &FONT_S, t, C_GRAY);
+        cv_text(236 - text_w(&FONT_S, t), 1, &FONT_S, t, C_WHITE);
     }
     cv_blit(0, Y_HEAD);
     lcd_fill(0, H_HEAD, 240, 1, C_LINE);
@@ -87,30 +156,19 @@ static void draw_menu(void)
         cv_begin(240, pass ? 95u : 124u, C_BLACK);
         cv_oy = pass ? -124 : 0;
         if (ui.menu == 2) {
-            cv_text(4, 4, &FONT_L, "SLOOP", C_WHITE);
-            cv_rect(96, 10, 8, 4, TE_COL[0]), cv_rect(96, 16, 12, 4, TE_COL[1]);   /* the sail */
-            cv_rect(96, 22, 16, 4, TE_COL[2]), cv_rect(96, 28, 20, 4, TE_COL[3]);
-            cv_text(4, 36, &FONT_S, "BASED ON FELUCCA", C_AMB);
-            cv_text(4, 54, &FONT_S, FELUCCA_VERSION, C_HI);
-            cv_text(236 - text_w(&FONT_S, __DATE__), 54, &FONT_S, __DATE__, C_GRAY);   /* build date */
-            cv_text(cv_text(4, 72, &FONT_S, "LEO KUROSHITA", C_HI) + 8, 72, &FONT_S, "@KUROGEDELIC", C_AMB);
-            cv_text(4, 88, &FONT_S, "H\xDCGELTON INSTRUMENTS", C_HI);   /* Latin-1 U-umlaut */
-            cv_text(4, 104, &FONT_S, "HUGELTON.COM", C_AMB);
-            cv_text(4, 119, &FONT_S, "GPL-3.0, NO WARRANTY", C_HI);
-            cv_text(4, 132, &FONT_S, "GITHUB.COM/ISOD89/SLOOP-FM1", C_AMB);   /* (the source of this firmware) */
-            cv_text(4, 146, &FONT_S, "FONT: TERMINUS (OFL)", C_DIM);
-            cv_text(4, 159, &FONT_S, "SAMPLES: VERSILIAN (CC0)", C_DIM);
-            cv_text(4, 172, &FONT_S, "+ SONIC PI (CC0)", C_DIM);
-            cv_text(4, 185, &FONT_S, "PHASE: CRISPYZEBRA (GPL)", C_DIM);
-            cv_text(4, 198, &FONT_S, "VOICE: REF. KLATTSCH (MIT)", C_DIM);
+            draw_about();
         } else {
-            int32_t x = 4;
-            for (i = 0; i < MS_COUNT; i++) {        /* the sections as tabs: this one lit */
-                int32_t w = text_w(&FONT_S, MS_NAME[i]);
-                if (i == sec)
-                    cv_rect(x - 2, 3, w + 4, 18, C_LINE);
-                cv_text(x, 4, &FONT_S, MS_NAME[i], i == sec ? C_WHITE : C_DIM);
-                x += w + 10;
+            char t[16];
+            if (sec) {                              /* the sections either side, SELECT's way there */
+                t[0] = '<';
+                t[1] = ' ';
+                str_cpy(t + 2, MS_NAME[sec - 1u], sizeof t - 2u);
+                cv_text(4, 4, &FONT_S, t, C_DIM);
+            }
+            if (sec + 1u < MS_COUNT) {
+                str_cpy(t, MS_NAME[sec + 1u], sizeof t - 2u);
+                str_cpy(t + str_len(t), " >", 3);
+                cv_text(236 - text_w(&FONT_S, t), 4, &FONT_S, t, C_DIM);
             }
             for (i = MS_FIRST[sec]; i < MS_FIRST[sec + 1u]; i++) {
                 uint32_t r = i - MS_FIRST[sec];
@@ -119,26 +177,24 @@ static void draw_menu(void)
                 uint16_t vc;
                 const char *v = mi_value(i, &vc);
                 char k[4] = {'K', (char)('1' + r), 0, 0};
-                cv_rect(4, y + 2, 4, MI_DY - 8, cur ? C_WHITE : TE_COL[r & 3u]);   /* the knob's colour */
+                cv_rect(4, y + 2, 4, MI_DY - 6, cur ? C_WHITE : TE_COL[r & 3u]);   /* the knob's colour */
                 xv = cv_text(14, y, &FONT_S, k, TE_COL[r & 3u]);
-                cv_text(xv + 6, y, &FONT_S, MI_NAME[i], cur ? C_WHITE : C_GRAY);
+                cv_text(xv + 6, y, &FONT_S, MROW[i].name, cur ? C_WHITE : C_GRAY);
                 if (v[0] && text_w(&FONT_L, v) <= 222) {
-                    xv = cv_text(14, y + 16, &FONT_L, v, cur && vc == C_HI ? C_WHITE : vc);
+                    xv = cv_text(14, y + 15, &FONT_L, v, cur && vc == C_HI ? C_WHITE : vc);
                 } else if (v[0]) {                      /* (too wide for the large type: WHITE KEYS) */
-                    xv = cv_text(14, y + 24, &FONT_S, v, cur && vc == C_HI ? C_WHITE : vc);
+                    xv = cv_text(14, y + 22, &FONT_S, v, cur && vc == C_HI ? C_WHITE : vc);
                 } else {
-                    xv = cv_text(14, y + 24, &FONT_S, "OCT+ OPENS", cur ? C_WHITE : C_DIM);
+                    xv = cv_text(14, y + 22, &FONT_S, "OCT+ OPENS", cur ? C_WHITE : C_DIM);
                 }
-                if (i == MI_COLOR) {                    /* the palette's colours */
+                if (MROW[i].kind == RK_MI && MROW[i].id == MI_COLOR) {   /* the palette's colours */
                     uint32_t q;
                     for (q = 0; q < 5u; q++)
-                        cv_rect(xv + 10 + (int32_t)q * 14, y + 28, 10, 10, pal[q]);
+                        cv_rect(xv + 10 + (int32_t)q * 14, y + 26, 10, 10, pal[q]);
                 }
-                if (i == MI_SERIAL && usb_serial != usb_cdc_now())
-                    cv_text(xv + 8, y + 30, &FONT_S, "RESTART", C_AMB);   /* (usb.c: at the next start) */
+                if (MROW[i].kind == RK_MI && MROW[i].id == MI_SERIAL && usb_serial != usb_cdc_now())
+                    cv_text(xv + 8, y + 28, &FONT_S, "RESTART", C_AMB);   /* (usb.c: at the next start) */
             }
-            cv_text(4, MI_Y0 + 3 * MI_DY + 6, &FONT_S, "SELECT SECTION  KNOB SETS", C_DIM);
-            cv_text(4, MI_Y0 + 3 * MI_DY + 22, &FONT_S, "OCT+ OK   OCT- CLOSE", C_DIM);   /* (rows .. 218) */
         }
         cv_oy = 0;
         cv_blit(0, H_HEAD + 1 + pass * 124u);
@@ -152,6 +208,17 @@ static void enc_drop(void)                             /* knob turns nobody take
         panel_enc(k);
 }
 
+static void layer_unlock(void);                        /* ui_input.c */
+static void menu_open(void)                            /* GLO tapped: SETUP, where it was left */
+{
+    layer_unlock();
+    ui.menu = 1;
+    ui.menu_sel = (uint8_t)(ui.menu_sel % MI_COUNT);
+    ui.confirm = 0;
+    ui.force = 1;
+    song.seq_mode = 0;
+}
+
 static void menu_close(void)
 {
     if (song.playing || transport_req)
@@ -163,17 +230,48 @@ static void menu_close(void)
     go_home();
 }
 
-/* item i: a knob turned s (> 0 right, < 0 left), or 0: OCT+ (steps round, toggles, or opens) */
+/* row i: a knob turned s (> 0 right, < 0 left), or 0: OCT+ (steps round, toggles, or opens) */
 static void mi_set(uint32_t i, int32_t s)
 {
-    switch (i) {
+    const mrow_t *r = &MROW[i % MI_COUNT];
+    if (r->kind != RK_MI) {                            /* a value: the knob (OCT+ nothing) */
+        const param_desc_t *d = r->kind == RK_G ? &GP[r->id] : &TP[r->id];
+        int16_t *vp = r->kind == RK_G ? &song.g[r->id] : &TDRUM->p[r->id];
+        if (!s)
+            return;
+        *vp = (int16_t)(d->fmt != F_ENUM && d->names ? names_turn(d, *vp, s)   /* (a 0-terminated name list: a name a
+                                                                                * detent; F_ENUM: a value a detent) */
+                                                    : clamp(*vp + accel(EN_K1 + mi_row(i), s, d->max - d->min), d->min, d->max));
+        if (r->kind == RK_G && r->id == G_BPM)
+            ui.bpm_t = 40;
+        return;
+    }
+    switch (r->id) {
+    case MI_PCH:                                       /* OFF, CH 1..16, ANY; OCT+ round */
+        pedal.ch = (uint8_t)(s ? clamp((int32_t)pedal.ch + s, 0, PEDAL_CH_OMNI) : (pedal.ch + 1u) % (PEDAL_CH_OMNI + 1u));
+        arrset_dirty = 1;
+        break;
+    case MI_PCOUNT:
+        pedal.count = (uint8_t)(s ? clamp((int32_t)pedal.count + s, 0, PEDAL_COUNT_MAX) : (pedal.count + 1u) % (PEDAL_COUNT_MAX + 1u));
+        arrset_dirty = 1;
+        break;
+    case MI_AUTO:
+        sng_autoload = (uint8_t)(s > 0 ? 1u : s < 0 ? 0u : !sng_autoload);
+        if (sng_autoload && sng_cur >= 0)
+            sng_last = (uint8_t)(sng_cur + 1);         /* (the song loaded now is the last one) */
+        arrset_dirty = 1;
+        break;
+    case MI_LEARN:                                     /* (2.6) on: a knob turned on a page, then a CC */
+        if (!s || (s > 0) != (mlu.on != 0))
+            ml_toggle();
+        break;
     case MI_COLOR:                                     /* both ways round; OCT+ the next */
         settings.palette = (settings.palette + (s < 0 ? NPALETTES - 1u : 1u)) % NPALETTES;
         palette_set(settings.palette);
         break;
     case MI_ZOOM:
     case MI_LOWCUT: {                                  /* right ON, left OFF; OCT+ toggles */
-        uint32_t *v = i == MI_LOWCUT ? &settings.lowcut : &settings.zoom;
+        uint32_t *v = r->id == MI_LOWCUT ? &settings.lowcut : &settings.zoom;
         *v = s > 0 ? 1u : s < 0 ? 0u : !*v;
         fx_lowcut = (uint8_t)(settings.lowcut != 0);
         break;
@@ -189,15 +287,15 @@ static void mi_set(uint32_t i, int32_t s)
         break;
     case MI_LIGHTS:
     case MI_KEYS: {                                    /* brighter / dimmer (stops at the ends); OCT+ steps round */
-        uint8_t *v = i == MI_LIGHTS ? &lights_lvl : &lights_keys;
-        uint32_t n = i == MI_LIGHTS ? LIGHTS_N : KEYS_N;
+        uint8_t *v = r->id == MI_LIGHTS ? &lights_lvl : &lights_keys;
+        uint32_t n = r->id == MI_LIGHTS ? LIGHTS_N : KEYS_N;
         if (s > 0 && *v + 1u < n)
             (*v)++;
         else if (s < 0 && *v > 0u)
             (*v)--;
         else if (!s)
             *v = (uint8_t)((*v + 1u) % n);
-        if (i == MI_KEYS && lights_keys && !lights_lvl)
+        if (r->id == MI_KEYS && lights_keys && !lights_lvl)
             lights_lvl = LIGHTS_LOW;                   /* keys lit need a level: the lowest */
         break;
     }
@@ -211,6 +309,12 @@ static void mi_set(uint32_t i, int32_t s)
             ui.force = 1;
         }
         break;
+    case MI_PROJ:                                      /* SLOOP's project slots (JAM): their pages */
+        if (!s) {
+            menu_close();
+            open_family(FAM_SAVE);
+        }
+        break;
     case MI_ABOUT:
         if (!s) {
             ui.menu = 2;
@@ -222,12 +326,18 @@ static void mi_set(uint32_t i, int32_t s)
     }
 }
 
-/* menu: SELECT the section, KNOB 1..3 its settings, PRESETS the cursor, OCT+ ok, OCT- close (ABOUT -> the section) */
-static void menu_input(uint32_t pressed)
+/* SETUP: SELECT the section, KNOB 1..4 its rows, PRESETS the cursor, OCT+ ok, OCT- / GLO / HOME close (ABOUT ->
+ * the section) */
+static void menu_input(uint32_t pressed, uint32_t home)
 {
     int32_t s;
-    uint32_t k, ok = (pressed >> panel.btn[B_OCTUP]) & 1u, back = (pressed >> panel.btn[B_OCTDN]) & 1u;
+    uint32_t k, ok = (pressed >> panel.btn[B_OCTUP]) & 1u;
+    uint32_t back = ((pressed >> panel.btn[B_OCTDN]) | (pressed >> panel.btn[B_GLO])) & 1u;
     uint32_t sel = ui.menu_sel % MI_COUNT, sec = mi_sec(sel), n = MS_FIRST[sec + 1u] - MS_FIRST[sec];
+    if (home == 1u) {                                  /* BT_TAP */
+        menu_close();
+        return;
+    }
     if (back) {
         if (ui.menu == 2)
             ui.menu = 1, ui.force = 1;
@@ -257,5 +367,7 @@ static void menu_input(uint32_t pressed)
         }
     if (ok)
         mi_set(ui.menu_sel % MI_COUNT, 0);
-    enc_drop();                                        /* swallow the rest while the menu is up */
+    panel_enc(EN_ALGO);                                /* (the one knob SETUP has no use for; not enc_drop: a step of
+                                                        * SELECT landing after its read above, the input IRQ coming as
+                                                        * a read turns it back on, was lost; read next pass now) */
 }

@@ -10,12 +10,13 @@
  *
  * Drums only (docs/drums-only.md): the drum track's steps are 16 lanes, one per white key; each lane of a step
  * has a level (ghost .. hard) and a ratchet (x1..x4 hits in its step). The keys play the drum track; MIDI notes
- * on the DRUMS channel (GLO > DRUMS, default 10), and on the others unless GLO > MIDI > OTHER is OFF, play it too.
+ * on the drums' channel (SETUP > MIDI > DRUMS CHANNEL, default 10), and on the others unless SETUP > MIDI > OTHER is OFF, play it too.
  *
  * Layers: a function button held turns the keys into something else (TE style: hold + touch):
  *   FX   the master filter, DUST, the throws  EDIT  erase that sound (while held, as it plays)
  *   ARP  note repeat (roll) at G_ROLL     SEQ   steps 1..16 (the UI: ui_layers.c)
- *   GLO  mute / solo / fill / tap tempo (the UI)
+ *   SAVE the sections A..D (the UI; not on the drum grid, where SAVE held writes the section into its song)
+ * (GLO's layer, mute / fill / tap tempo, is gone: GLO tapped opens SETUP, ui_menu.c.)
  * OCT- / OCT+ held play ghost / hard hits. */
 #define SEQ_NONE 0xFFFFFFFFu
 
@@ -30,7 +31,7 @@ static volatile uint8_t transport_req;   /* 1 start, 2 stop (from the UI); 3 sta
 
 static uint32_t trk_index(const track_t *t) { return (uint32_t)(t - trk); }
 
-static uint32_t trk_midi_ch(uint32_t i)    /* MIDI channel 0..15 of track i (keys -> MIDI out): the drums' (GLO > MIDI) */
+static uint32_t trk_midi_ch(uint32_t i)    /* MIDI channel 0..15 of track i (keys -> MIDI out): the drums' (SETUP > MIDI) */
 {                                          /* (2.6: OFF is OFF, in and out: 0xFF, nothing sent) */
     int32_t c = song.g[G_DRCH];
     (void)i;
@@ -45,12 +46,12 @@ static void midi_out_note(uint32_t ch, uint32_t note, uint32_t vel)
                        : 0x08u | (0x80u | ch) << 8 | (note & 127u) << 16);
 }
 
-/* MIDI OUT of what the sequencer, the arp and the rolls play (GLO > SYSTEM > MIDI = SEQ; the keys always
+/* MIDI OUT of what the sequencer, the arp and the rolls play (SETUP > MIDI > OUT = SEQ; the keys always
  * go out: key_down / key_up). Notes from a computer or the jack are never echoed (no MIDI loop). A set per
  * track of the notes sent on, so a note is ended once, and STOP or MIDI = KEYS end them all */
 static uint32_t mo_set[NTRK][4];
 static uint8_t mo_ch[NTRK];                /* (2.6) the channel the notes of mo_set went out on: their note-offs too,
-                                            * whatever GLO > MIDI says now (no note left hanging on the other gear) */
+                                            * whatever SETUP > MIDI says now (no note left hanging on the other gear) */
 static void seq_out_off(const track_t *t, uint32_t note)
 {
     uint32_t i = trk_index(t) % NTRK;
@@ -340,8 +341,9 @@ static int step_locked(const track_t *t, uint32_t step)   /* the step carries a 
     return 0;
 }
 
-/* ---- step conditions (SLOOP 2.4 fill, core.h FC_*): 2 bits a step in t->fill; GLO + key 9 held, or key 10
- * for the next bar, makes the fill: FC_FILL steps play only then, FC_NOFILL steps are silent then */
+/* ---- step conditions (SLOOP 2.4 fill, core.h FC_*): 2 bits a step in t->fill; a fill (fm1-drummer: the pedal's or
+ * LIVE's FILL, pedal.c; SLOOP's GLO layer held it or armed it for the next bar, gone) makes FC_FILL steps play only
+ * then, FC_NOFILL steps silent then */
 static uint32_t step_fill(const track_t *t, uint32_t idx)
 {
     idx %= NSTEP;
@@ -354,8 +356,8 @@ static void step_fill_set(track_t *t, uint32_t idx, uint32_t v)
     sh = 2u * (idx % 4u);
     t->fill[idx / 4u] = (uint8_t)((t->fill[idx / 4u] & ~(3u << sh)) | (v & 3u) << sh);
 }
-static volatile uint8_t fill_held;           /* GLO + key 9 down (the UI) */
-static volatile uint8_t fill_arm;            /* GLO + key 10: the next bar is a fill (the UI; the ISR clears it) */
+static volatile uint8_t fill_held;           /* a fill while held (SLOOP's GLO + key 9; nothing sets it now) */
+static volatile uint8_t fill_arm;            /* the next bar is a fill (SLOOP's GLO + key 10; nothing sets it now) */
 static uint8_t fill_bar_on;                  /* that bar, while it plays (the ISR) */
 static uint8_t fill_now;                     /* this block is a fill: fill_held || fill_bar_on, read once a block */
 static uint32_t fill_last_bar = 0xFFFFFFFFu; /* clk_beat / 4 of the last bar seen (events_block) */
@@ -379,10 +381,46 @@ static void drum_fill_masks_clear(void)
     memset(drum_fonly, 0, sizeof drum_fonly);
     memset(drum_fno, 0, sizeof drum_fno);
 }
+static void drum_marks_move(uint32_t to, uint32_t from)   /* a step's marks go with its hits (EDIT layer x2) */
+{
+    drum_fonly[to % NSTEP] = drum_fonly[from % NSTEP];
+    drum_fno[to % NSTEP] = drum_fno[from % NSTEP];
+}
+static void drum_marks_rotate(uint32_t len, int32_t d)   /* the first len steps' marks one later (d > 0) / earlier */
+{
+    uint32_t i, last = len - 1u;
+    uint16_t a, b;
+    if (!len || len > NSTEP)
+        return;
+    if (d > 0) {
+        a = drum_fonly[last], b = drum_fno[last];
+        for (i = last; i > 0; i--)
+            drum_marks_move(i, i - 1u);
+        drum_fonly[0] = a, drum_fno[0] = b;
+    } else {
+        a = drum_fonly[0], b = drum_fno[0];
+        for (i = 0; i < last; i++)
+            drum_marks_move(i, i + 1u);
+        drum_fonly[last] = a, drum_fno[last] = b;
+    }
+}
 #else
 static uint32_t drum_fill_mask(uint32_t idx) { (void)idx; return 0; }
 static void drum_fill_masks_clear(void) {}
+static void drum_marks_move(uint32_t to, uint32_t from) { (void)to; (void)from; }
+static void drum_marks_rotate(uint32_t len, int32_t d) { (void)len; (void)d; }
 #endif
+/* a hit of the drum pattern cleared: its mark goes with it (a hit set there later plays as any other) */
+static void drum_hit_clr(track_t *t, uint32_t idx, uint32_t l)
+{
+    dstep_clr(&t->dstep[idx % NSTEP], l);
+#if FELUCCA_DRUMMER
+    if (is_drum(t)) {
+        drum_fonly[idx % NSTEP] &= (uint16_t)~(1u << l);
+        drum_fno[idx % NSTEP] &= (uint16_t)~(1u << l);
+    }
+#endif
+}
 
 static void steps_clear(track_t *t)           /* an empty pattern (no lane); no lock, no nudge, no condition */
 {
@@ -411,7 +449,7 @@ static void erase_step(track_t *t, uint32_t idx)
     uint32_t l, m = dstep_mask(s) & er_lanes;
     for (l = 0; m; l++, m >>= 1)
         if (m & 1u) {
-            dstep_clr(s, l);
+            drum_hit_clr(t, idx, l);
             er_flash = 1;
         }
 }
@@ -534,8 +572,7 @@ static void key_down(uint32_t k)
         return;
     case LY_STEP:
     case LY_SCALE:
-    case LY_MIX:
-    case LY_SONG:                                     /* the UI's: steps, the mix, the sections */
+    case LY_SONG:                                     /* the UI's: steps, the sections */
         kb_kind[k] = KS_UI;
         kb_nt[k] = (uint8_t)layer;                    /* (its key-up goes to the same layer) */
         lk_push(layer, k, 1);
@@ -656,8 +693,8 @@ static void keyboard_block(void)
 
 /* -------------------------------------------------------- metronome --- */
 /* A wood block on every beat, louder on the first of the bar, from the drum kit's voices
- * (not recorded, not muted with the drum track; GLO > DRUMS LVL sets its level; drums.c click_on: its own voice).
- * GLO > GLOBAL CLICK: OFF (0, default: LIVE needs none), REC = while a track records,
+ * (not recorded, not muted with the drum track; SETUP > DRUMS LVL sets its level; drums.c click_on: its own voice).
+ * SETUP > TEMPO > CLICK: OFF (0, default: LIVE needs none), REC = while a track records,
  * ON = while playing. */
 #define CLICK_REC 1
 #define CLICK_ON 2
@@ -749,14 +786,13 @@ static void srec_stop(void)
  * play, NO FILL steps rest) until the section starts; asked for with a whole fill bar first, the request
  * waits one bar; an ending plays the outro for its bars, then stops on the bar */
 static volatile uint8_t pedal_fill;                /* this bar is the pedal's fill */
-static volatile uint8_t pedal_wait;                /* live_req waits for the next bar (a whole fill bar first) */
-static volatile uint8_t pedal_at_end;              /* live_req (or the ending's stop) waits for the section's end: its last bar the fill */
+static volatile uint8_t pedal_at_end;              /* live_req (or the ending's stop) waits for the section's end */
 static volatile uint8_t pedal_fill_hold;           /* CC 21: the fill until the section's end (2: through the next cycle too) */
 static volatile uint8_t pedal_end_req;             /* bars of the outro asked for (taken when its section starts) */
 static volatile uint32_t pedal_end_bars;           /* stop when the section playing has played this many (0: none) */
 /* fm1-drummer (sng.c, arranger_scene.c): a song loaded from flash: its sections replace A..D for live_req */
-#define SNG_SLOTS 8u                               /* songs in flash */
-#define SNG_SMP_SLOT 0u                            /* the user sample slot (USR1) whose flash the songs take */
+#define SNG_SLOTS 16u                              /* songs in flash (8 until 2026-10-14) */
+#define SNG_SMP_TAKEN(k) ((k) < 2u)                /* the user sample slots (USR1, USR2) whose flash the songs take */
 #define SNG_SECTIONS 8u                            /* sections a song holds at most */
 static int8_t sng_cur = -1;                        /* the song's slot, -1 = SLOOP's sections A..D */
 static volatile uint8_t sng_req;                   /* PC: slot + 1 to load, 0xFF to unload (sng_poll, main loop) */
@@ -767,7 +803,23 @@ static uint32_t sng_meter(uint32_t k);             /* section k's meter (clk_met
 static uint32_t sng_outro(void);                   /* the section flagged as the outro, 0xFF = none */
 static int sng_pending(void);                      /* a song loaded while playing waits for its first section */
 static void sng_name(uint32_t k, char *out);       /* section k's name (12 + 1 chars) */
-static void sng_slot_name(uint32_t slot, char *out);   /* the song in a slot: its name ("": none) */
+/* the songs in flash as the SONGS screen lists them (ui_drummer.c): read again by sng_lib_refresh (sng.c, the
+ * UI's loop) only when sng_lib_dirty is set (boot, a load, a write): a slot's read goes through its whole copy for
+ * the CRC */
+typedef struct {
+    char name[13];                                 /* "": an empty slot */
+    uint8_t nsec, factory;                         /* its sections; 1: the build's factory song (never written) */
+    uint16_t bpm;
+} sng_lib_t;
+static sng_lib_t sng_lib[SNG_SLOTS];
+static uint8_t sng_lib_dirty = 1;
+static void sng_lib_refresh(void);
+static int sng_save_section(void);               /* EDIT, SAVE held: the section into its song (project.c) */
+static int sng_lossy(void);                        /* the drum track holds nudges or locks (sng.c) */
+/* SETUP > PEDAL (ui_menu.c), kept with the pedal settings (sng.c arrset): the last song loaded comes back at start */
+static uint8_t sng_autoload;                       /* 1: load the last song at start */
+static uint8_t sng_last;                           /* that song's slot + 1, 0 none */
+static uint8_t arrset_dirty;                       /* the pedal settings changed: saved once stopped (project.c) */
 /* what the screen shows (ui_draw.c draw_head: the section playing and its bar; the pedal's events as messages) */
 static char sng_ui_name[13];                       /* the section playing: the song's name for it, or A..D */
 static char sng_ui_song[13];                       /* the song loaded, or empty */
@@ -807,12 +859,9 @@ static void live_block(void)                       /* once a block while playing
         uint32_t n = live_sec_bars();
         if (pedal_fill_hold && live_bar % n == 0u && --pedal_fill_hold == 0u)
             pedal_fill = 0;                         /* the fill asked for (CC 21) ends with the pattern */
-        if (pedal_at_end) {                         /* a request waits for the section's end: its last bar the fill */
-            if ((live_bar + 1u) % n == 0u)
-                pedal_fill = 1;
-            if (live_bar % n == 0u)
-                pedal_at_end = 0;                   /* the end: the request lands below, the ending's stop counts */
-        }
+        if (pedal_at_end && live_bar % n == 0u)    /* a request waits for the section's end (no fill of its own:
+                                                     * a fill is CC 21's, sent with it if wanted) */
+            pedal_at_end = 0;                       /* the end: the request lands below, the ending's stop counts */
     }
     if (pedal_end_bars && live_req < 0 && live_bar >= pedal_end_bars) {   /* the ending: the outro has played */
         pedal_end_bars = 0;
@@ -836,10 +885,7 @@ static void live_block(void)                       /* once a block while playing
         chain_i = (uint8_t)((chain_i + 1u) % (chain_n < CHAIN_MAX ? chain_n : CHAIN_MAX));
         live_req = (int8_t)(chain_sec[chain_i] & 3u);
     }
-    if (live_req >= 0 && pedal_wait) {              /* the pedal: a whole fill bar first, the section after it */
-        pedal_wait = 0;
-        pedal_fill = 1;
-    } else if (live_req >= 0 && !pedal_at_end) {    /* (at_end: the section playing goes on to its end first) */
+    if (live_req >= 0 && !pedal_at_end) {           /* (at_end: the section playing goes on to its end first) */
         uint32_t s = (uint32_t)live_req;
         live_req = -1;
         {                                           /* (the UI asked for a section it checked: no hash here) */
@@ -934,8 +980,7 @@ static void seq_stop(void)
     fill_arm = 0;
     fill_bar_on = 0;
 #if FELUCCA_DRUMMER
-    pedal_fill = 0;                                 /* (fm1-drummer: the pedal's fill, wait and ending too) */
-    pedal_wait = 0;
+    pedal_fill = 0;                                 /* (fm1-drummer: the pedal's fill and ending too) */
     pedal_at_end = 0;
     pedal_fill_hold = 0;
     pedal_end_req = 0;
@@ -1058,8 +1103,8 @@ static void seq_tick(track_t *t)
         seq_ratchets(t, rel < 0 ? 0u : (uint32_t)rel, slen);
 }
 
-/* MIDI in: notes and CCs play the drum track on its channel (GLO > DRUMS > CH), and on any other channel unless
- * GLO > MIDI > OTHER is OFF; 0: none */
+/* MIDI in: notes and CCs play the drum track on its channel (SETUP > DRUMS > CH), and on any other channel unless
+ * SETUP > MIDI > OTHER is OFF; 0: none */
 static track_t *midi_track(uint32_t ch)
 {
     if (song.g[G_DRCH] && ch + 1u == (uint32_t)song.g[G_DRCH])
@@ -1068,8 +1113,8 @@ static track_t *midi_track(uint32_t ch)
 }
 
 /* SLOOP 2.5: MIDI CCs set the drum track's parameters, after Felucca 1.1.5's standard CC map (#103, Leo
- * Kuroshita), as a knob would: 0..127 over the parameter's range, 64 the middle of a bipolar one. 7 GLO > DRUMS
- * LVL, 10 PAN, 74 the track's FILTER (64 off, below a low-pass, above a high-pass), 91 / 94 GLO > DRUMS REV and DLY */
+ * Kuroshita), as a knob would: 0..127 over the parameter's range, 64 the middle of a bipolar one. 7 SETUP > DRUMS
+ * LVL, 10 PAN, 74 the track's FILTER (64 off, below a low-pass, above a high-pass), 91 / 94 SETUP > DRUMS REV and DLY */
 static const uint8_t MIDI_CC_MAP[][3] = {             /* CC, the parameter, 1: a global one (song.g) */
     {7, G_DRLVL, 1}, {10, P_PAN, 0}, {74, P_TFLT, 0}, {91, G_DRREV, 1}, {94, G_DRDLY, 1},
 };
@@ -1140,7 +1185,7 @@ static void __attribute__((noinline)) midi_cc(track_t *t, uint32_t cc, uint32_t 
     }
 }
 
-/* MIDI clock in (GLO > SYSTEM > SYNC = USB or TRS; after Felucca 1.0's midi_clock.c, from contributions by
+/* MIDI clock in (SETUP > LEARN > SYNC = USB or TRS; after Felucca 1.0's midi_clock.c, from contributions by
  * ChanceTheMaker and keremimo): 24 pulses a beat. While the clock runs, the sequencer advances by the
  * pulses (a pulse = BEAT_U / 24 units), interpolated up to the next one from the last interval but never
  * past it, so it follows the master's tempo changes and cannot drift; BPM shows the master's tempo
@@ -1308,7 +1353,7 @@ static void events_block(uint32_t n)
             continue;
         }
 #if FELUCCA_DRUMMER
-        if ((st == 0xC0u || (st == 0xB0u && d1 >= PEDAL_CC_SECTION && d1 <= PEDAL_CC_SECTION_FILLBAR)) &&
+        if ((st == 0xC0u || (st == 0xB0u && d1 >= PEDAL_CC_SECTION && d1 <= PEDAL_CC_SECTION_NOW)) &&
             pedal_listens(ch)) {                      /* the pedalboard's channel: its CCs (20..27) and PC (a song)
                                                        * go to pedal.c before any track or CC map sees them; the
                                                        * other CCs (sustain, learned ones) pass as usual */

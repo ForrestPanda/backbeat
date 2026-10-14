@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* The drum track: its kits (the sampled GM kit and its treatments, tools/gen_samples.py; the synthesised kits,
- * drum_synth.c; the user slots), played by its step pattern, the keys and MIDI (GLO > MIDI > CH, default 10). NDRUM
+ * drum_synth.c; the user slots), played by its step pattern, the keys and MIDI (SETUP > MIDI > CH, default 10). NDRUM
  * voices of its own. One-shots: note-offs are ignored; a closed or
- * pedal hi-hat chokes the open one. LEVEL / REV / DLY: GLO > DRUMS (G_DRLVL, G_DRREV, G_DRDLY);
+ * pedal hi-hat chokes the open one. LEVEL / REV / DLY: SETUP > DRUMS (G_DRLVL, G_DRREV, G_DRDLY);
  * PAN and MUTE: the drum track's P_PAN / P_MUTE. Rendered from the audio ISR. */
 #define NDRUM 6
 #include "drum_synth.c"       /* synthesised kits (DS_KITS) */
@@ -24,13 +24,13 @@ static const char *const DRUM_KIT_STYLES[] = {"STUDIO", "SOFT", "PUNCHY", "BRIGH
                                               "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH"};
 _Static_assert(sizeof(DRUM_KIT_NAMES) / sizeof(DRUM_KIT_NAMES[0]) == DRUM_KITS, "a name per kit");
 static uint32_t drum_kit(void) { return (uint32_t)clamp(TDRUM->p[P_E0], 0, DRUM_KITS - 1); }
-/* the kit s detents of a knob on from kit cur: USR1 is passed over (fm1-drummer: its flash holds the songs, sng.c, so
- * as a kit it plays nothing); the kits keep their numbers (songs and projects store them) */
+/* the kit s detents of a knob on from kit cur: USR1 and USR2 are passed over (fm1-drummer: their flash holds the songs,
+ * sng.c, so as kits they play nothing); the kits keep their numbers (songs and projects store them) */
 static int16_t drum_kit_step(int32_t cur, int32_t s)
 {
     int32_t k = clamp(cur + s, 0, DRUM_KITS - 1);
-    if (k == (int32_t)DRUM_USR)
-        k = s > 0 ? k + 1 : k - 1;
+    while (k >= (int32_t)DRUM_USR && k <= (int32_t)DRUM_USR + 1 && k > 0 && k < (int32_t)DRUM_KITS - 1)
+        k += s > 0 ? 1 : -1;
     return (int16_t)clamp(k, 0, DRUM_KITS - 1);
 }
 #define DRUM_DEFAULT_KIT DRUM_SAMPLED   /* power-on: 808 */
@@ -40,7 +40,7 @@ static struct {
     uint32_t age;
     int16_t set;                 /* SMP_SETS index of "PERC" (GM map), -1 = none */
     int32_t tail;                /* declick: the last output of cut voices, decaying */
-    int32_t peak;                /* largest |output| since the UI last looked (TRACKS meter) */
+    int32_t peak;                /* largest |output| (it fed the TRACKS screen's meter, gone; the mix unchanged) */
     uint8_t kit[NDRUM];
     int32_t filter[NDRUM], env[NDRUM];
     uint8_t synth[NDRUM];        /* the voice plays a synthesised kit (ds[]) */
@@ -160,10 +160,10 @@ static uint32_t vel_lvl(uint32_t vel)
     return vel < 56u ? LV_GHOST : vel < 88u ? LV_SOFT : vel < 116u ? LV_NORM : LV_HARD;
 }
 
-/* the metronome (GLO > GLOBAL > CLICK, and the REC count-in), 2.4.1: a voice of its own, mixed after the drum
+/* the metronome (SETUP > TEMPO > CLICK, and the REC count-in), 2.4.1: a voice of its own, mixed after the drum
  * track (fx.c mix_block), so it is heard with every kit (a user kit has no wood block: it was silent), whatever
  * the drum track's mute, a solo or its filter. A short sine tick: 1568 Hz on a bar's first beat, 1047 Hz
- * on the others, about 12 ms to fade by 1/e; its level follows GLO > DRUMS > LVL (100: as loud as the old
+ * on the others, about 12 ms to fade by 1/e; its level follows SETUP > DRUMS > LVL (100: as loud as the old
  * wood block). It costs a few hundred cycles a block while it sounds, nothing after */
 static struct { uint32_t ph, inc; int32_t env, gain; } click;   /* env: Q30, 0 = silent */
 static uint32_t click_n;                         /* clicks so far, and the last one's accent (the host tests count them) */

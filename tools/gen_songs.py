@@ -14,14 +14,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fm1_song  # noqa: E402
 
 SRC = Path(__file__).resolve().parents[1]
-SLOTS = 8                                    # seq.c SNG_SLOTS
+SLOTS = 16                                   # seq.c SNG_SLOTS
 
 
 def main(out, files):
-    if not files:                            # the songs in songs/, by file name (the first 8)
+    if not files:                            # the songs in songs/, by file name (the first 16)
         files = sorted((SRC / "songs").glob("*.json"))
         for f in files[SLOTS:]:
-            print(f"songs: {f.name} left out (8 slots)")
+            print(f"songs: {f.name} left out ({SLOTS} slots)")
         files = files[:SLOTS]
     if len(files) > SLOTS:
         sys.exit(f"gen_songs: at most {SLOTS} factory songs")

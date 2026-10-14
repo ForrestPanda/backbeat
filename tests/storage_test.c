@@ -96,7 +96,8 @@ int main(void)
                 int data = a >= 0x97000u && a + 4096u <= 0xA0000u, ups = a >= 0xDC000u && a + 4096u <= 0xE0000u;
                 int glob = a >= 0xFC000u && a + 4096u <= 0xFF000u, fm6 = a >= 0xE5000u && a + 4096u <= 0xE7000u;
                 int arr = a >= 0xA0000u && a + 4096u <= 0xB2000u;   /* fm1-drummer: 8 songs A/B, the pedal settings (USR1's place) */
-                inside &= (data || ups || glob || fm6 || arr) && !(a & 0xFFFu);
+                int usr2 = a >= 0xB4000u && a + 4096u <= 0xC4000u;   /* songs 9..16 A/B (USR2's place: 0xB4000..0xC7FFF) */
+                inside &= (data || ups || glob || fm6 || arr || usr2) && !(a & 0xFFFu);
                 for (o2 = 0; o2 < OBJ_COUNT; o2++)
                     for (c2 = 0; c2 < 2u && st_obj_ok(o2); c2++)
                         if ((o2 != o || c2 != c) && st_sector(o2, c2) == a)
@@ -136,6 +137,21 @@ int main(void)
         bad += check("2.6 erase: loads 0 bytes (an empty slot)", n == 0);
         bad += check("2.6 erase: saved again", st_save(OBJ_PROJECT0 + 2u, a2, sizeof a2) == 0 &&
                      st_load(OBJ_PROJECT0 + 2u, got3, sizeof got3) == (int)sizeof a2 && !memcmp(got3, a2, sizeof a2));
+    }
+    {   /* fm1-drummer, 16 songs: slots 0..7 objects 9..16 (USR1's flash), 8..15 objects 18..25 (USR2's), each its
+         * own A/B pair, saved and loaded as any object; the pedal settings (17) stay where they were */
+        static uint8_t s1[3800], g1[3800];
+        uint32_t k, ok = 1;
+        for (k = 0; k < 16u; k++) {
+            memset(s1, (int)('a' + k), sizeof s1);
+            ok &= st_save(sng_obj(k), s1, 100u + k) == 0;
+        }
+        for (k = 0; k < 16u; k++)
+            ok &= st_load(sng_obj(k), g1, sizeof g1) == (int)(100u + k) && g1[0] == (uint8_t)('a' + k) && g1[99u + k] == (uint8_t)('a' + k);
+        bad += check("16 songs: each saved and loaded on its own", ok);
+        bad += check("16 songs: ids 9..16, 18..25; songs 9..16 in USR2's flash",
+                     sng_obj(0) == 9u && sng_obj(7) == 16u && sng_obj(8) == 18u && sng_obj(15) == 25u && OBJ_ARRSET == 17u &&
+                     st_sector(sng_obj(8), 0) == 0xB4000u && st_sector(sng_obj(15), 1) == 0xC3000u && st_sector(OBJ_ARRSET, 0) == 0xB0000u);
     }
     printf("%s\n", bad ? "STORAGE TEST FAILED" : "storage test passed");
     return bad != 0;

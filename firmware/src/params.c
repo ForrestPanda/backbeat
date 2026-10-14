@@ -8,10 +8,10 @@ static const char *const N_LWAVE[] = {"SIN", "TRI", "SAW", "SQR", "S&H"};
 static const char *const N_LSYNC[] = {"OFF", "4BAR", "2BAR", "1BAR", "1/2", "1/4", "1/8", "8T", "1/16", "16T", "1/32"};
 static const char *const N_LTRIG[] = {"NOTE", "FREE"};
 static const char *const N_LPOL[] = {"BI", "UNI"};
-/* GLO > MIDI (2.6): a synth track's MIDI channel, and the other channels */
+/* SETUP > MIDI (2.6): a synth track's MIDI channel, and the other channels */
 static const char *const N_MCH[] = {"OFF", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"};
 static const char *const N_MOTH[] = {"SEL", "OFF"};
-/* GLO > TEXTURE (2.6, fx.c texture_*): the bed's sources (the user slots last), its movement's length, when it plays */
+/* SETUP > TEXTURE (2.6, fx.c texture_*): the bed's sources (the user slots last), its movement's length, when it plays */
 static const char *const N_TXSRC[] = {"OFF", "VINYL", "TAPE", "RAIN", "WIND", "RADIO", "ROOM", "USR1", "USR2", "USR3", "USR4"};
 static const char *const N_TXRATE[] = {"1BAR", "2BAR", "4BAR", "8BAR", "16BAR"};
 static const char *const N_TXWHEN[] = {"PLAY", "ALWAYS"};
@@ -161,7 +161,7 @@ static const param_desc_t GP[G_COUNT] = {
     [G_ENGGO] = PE("SET", N_GO, 0),
     [G_CLRSEQ] = PE("CLRSQ", N_GO, 0),
     [G_INITSND] = PE("INIT", N_GO, 0),
-    [G_DRCH] = PE("CH", N_MCH, 10),                   /* the drums' MIDI channel, 0 = OFF (GLO > MIDI) */
+    [G_DRCH] = PE("CH", N_MCH, 10),                   /* the drums' MIDI channel, 0 = OFF (SETUP > MIDI) */
     [G_DRLVL] = PD("LVL", F_INT, 0, 127, 100),
     [G_DRREV] = PD("REV", F_INT, 0, 127, 16),
     [G_DUST] = PD("DUST", F_PCT, 0, 127, 0),
@@ -170,18 +170,18 @@ static const param_desc_t GP[G_COUNT] = {
     [G_ROLL] = PE("ROLL", N_ROLL, 1),
     [G_NEWPRJ] = PE("NEW", N_GO, 0),
     [G_DRDLY] = PD("DLY", F_INT, 0, 127, 0),
-    [G_CH1] = PE("CH1", N_MCH, 1),                /* 2.6, GLO > MIDI: synth track 1's channel, in and out (OFF: */
+    [G_CH1] = PE("CH1", N_MCH, 1),                /* 2.6, SETUP > MIDI: synth track 1's channel, in and out (OFF: */
     [G_CH2] = PE("CH2", N_MCH, 2),                /* no MIDI in; out on its old one) */
     [G_CH3] = PE("CH3", N_MCH, 3),
     [G_CHOTH] = PE("OTHER", N_MOTH, 0),           /* the other channels: SEL the drums too, OFF nothing */
-    [G_TXSRC] = PE("SRC", N_TXSRC, 0),            /* 2.6, GLO > TEXTURE: the bed under the mix (OFF: none) */
+    [G_TXSRC] = PE("SRC", N_TXSRC, 0),            /* 2.6, SETUP > TEXTURE: the bed under the mix (OFF: none) */
     [G_TXLVL] = PD("LEVEL", F_PCT, 0, 127, 64),
     [G_TXTONE] = PD("TONE", F_FILT, -64, 63, 0),  /* left a low-pass, right a high-pass, centre open */
     [G_TXMOVE] = PD("MOVE", F_PCT, 0, 127, 40),   /* how much it breathes (level and colour), over RATE */
     [G_TXRATE] = PE("RATE", N_TXRATE, 2),
     [G_TXWHEN] = PE("WHEN", N_TXWHEN, 0),         /* PLAY: while the transport runs (fades in / out); ALWAYS */
-    [G_TXDUCK] = PE("DUCK", N_ONOFF, 0),          /* ON: the kick pumps it too (GLO > MASTER > DUCK) */
-    [G_BEND] = PD("BEND", F_SEMI, 1, 12, 2),      /* 2.6, GLO > MIDI 2: MIDI pitch bend's range (a setting of the FM-1) */
+    [G_TXDUCK] = PE("DUCK", N_ONOFF, 0),          /* ON: the kick pumps it too (SETUP > MASTER > DUCK) */
+    [G_BEND] = PD("BEND", F_SEMI, 1, 12, 2),      /* 2.6, SETUP > MIDI 2: MIDI pitch bend's range (a setting of the FM-1) */
 };
 
 static const param_desc_t DRUM_KIT_DESC = PE("KIT", DRUM_KIT_NAMES, 0);
@@ -360,8 +360,8 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
 /* ------------------------------------------------------------ pages --- */
 enum { FAM_HOME, FAM_ENV, FAM_LFO, FAM_FX, FAM_SCL, FAM_EDIT, FAM_GLO, FAM_SAVE, FAM_ARP, FAM_SEQ, FAM_TRK,
        FAM_COUNT };
-enum { SC_TRACK, SC_GLOBAL, SC_TRK, SC_SONG, SC_DRUM };
-enum { GR_NONE, GR_STEPS, GR_SLOTS, GR_TRK, GR_INS };
+enum { SC_TRACK, SC_GLOBAL, SC_TRK, SC_SONG, SC_DRUM };   /* (SC_TRK: the TRACKS screen, gone; the visualiser's) */
+enum { GR_NONE, GR_STEPS, GR_SLOTS, GR_TRK, GR_INS };   /* (GR_TRK: the TRACKS screen's, gone) */
 
 typedef struct {
     const char *title;
@@ -377,20 +377,11 @@ static const page_t PAGES[] = {
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, 0xFF, 0xFF, 0xFF}},  /* .. its dry / wet */
     {"DLY", FAM_FX, SC_GLOBAL, GR_NONE, {G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX}},
     {"REV", FAM_FX, SC_GLOBAL, GR_NONE, {G_RSIZE, G_RDAMP, 0xFF, 0xFF}},
-    {"GLOBAL", FAM_GLO, SC_GLOBAL, GR_NONE, {G_BPM, G_SWING, G_CLOCK, G_TUNE}},
-    {"MASTER", FAM_GLO, SC_GLOBAL, GR_NONE, {G_DUST, G_DUCK, G_FILT, G_ROLL}},
-    {"SYSTEM", FAM_GLO, SC_GLOBAL, GR_NONE, {G_MIDI, G_SYNC, G_ROUTE, G_INFO}},
-    {"DRUMS", FAM_GLO, SC_GLOBAL, GR_NONE, {G_DRCH, G_DRLVL, G_DRREV, G_DRDLY}},   /* GM kit on MIDI ch 10 */
-    {"MIDI", FAM_GLO, SC_GLOBAL, GR_NONE, {G_DRCH, G_ROUTE, G_CHOTH, G_MIDI}},   /* the drums' channel, IN, OTHER, OUT: every
-                                                                           * MIDI setting (drums only: no synth channels,
-                                                                           * no BEND) */
-    {"TEXTURE", FAM_GLO, SC_GLOBAL, GR_NONE, {G_TXSRC, G_TXLVL, G_TXTONE, G_TXMOVE}},   /* 2.6: the bed under the mix */
-    {"TEXTURE 2", FAM_GLO, SC_GLOBAL, GR_NONE, {G_TXRATE, G_TXWHEN, G_TXDUCK, 0xFF}},
+    /* (GLO's pages, GLOBAL MASTER SYSTEM DRUMS MIDI TEXTURE: SETUP now, ui_menu.c) */
     {"PROJECT", FAM_SAVE, SC_GLOBAL, GR_SLOTS, {G_SLOT, 0xFF, G_LOAD, G_SAVE}},   /* (KNOB 2: ERASE, 2.6: ui_input.c) */
     {"TOOLS", FAM_SAVE, SC_GLOBAL, GR_NONE, {G_CLRSEQ, 0xFF, 0xFF, G_NEWPRJ}},   /* (INIT SOUND: a synth's) */
     {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}},
     {"SONG", FAM_SEQ, SC_SONG, GR_NONE, {0xFF, 0xFF, 0xFF, 0xFF}},
-    {"TRACKS", FAM_TRK, SC_TRK, GR_TRK, {0, 1, 2, 3}},   /* REC button; TRACK LEVEL LEN PAN */
     {"DRUMS", FAM_TRK, SC_DRUM, GR_NONE, {0xFF,0xFF,0xFF,0xFF}},
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
@@ -398,7 +389,7 @@ static const page_t PAGES[] = {
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
 {
     uint32_t id = pg->id[slot];
-    if (id == 0xFFu || pg->scope == SC_TRK) {
+    if (id == 0xFFu) {
         *valp = 0;
         return 0;
     }

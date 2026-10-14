@@ -365,8 +365,14 @@ static persist_t ed_bk_set;                             /* LIST's snapshot of th
 static uint8_t ed_bk_ml[MIDI_PART];                     /* .. and of the MIDI part (2.6, object 10: project.c) */
 static arrset_t ed_bk_ars;                              /* fm1-drummer: GET's copy of the pedal settings */
 _Static_assert(SNG_MAX <= sizeof proj_tmp && SNG_MAX <= ST_PAYLOAD_MAX, "a song is staged in the project buffer, in a sector");
-#define ED_BK_SONG0 16u                                 /* fm1-drummer: objects 16..23 the songs, 24 the pedal settings */
+#define ED_BK_SONG0 16u                                 /* fm1-drummer: objects 16..23 songs 1..8, 24 the pedal settings, */
 #define ED_BK_ARRSET 24u
+#define ED_BK_SONG8 40u                                 /* 40..47 songs 9..16 (2026-10-14; 25..31 too few, 32..35 the samples) */
+static int32_t ed_bk_song(uint32_t id)                  /* a song's object id -> its slot 0..15, -1 none */
+{
+    return id >= ED_BK_SONG0 && id < ED_BK_SONG0 + 8u ? (int32_t)(id - ED_BK_SONG0)
+         : id >= ED_BK_SONG8 && id < ED_BK_SONG8 + 8u ? (int32_t)(id - ED_BK_SONG8 + 8u) : -1;
+}
 static uint8_t ed_bk_valid, ed_bk_put, ed_bk_id;
 static uint32_t ed_bk_len, ed_bk_crc, ed_bk_pos, ed_bk_ms;
 static void ed_bk_u32(uint32_t v) { uint32_t i; for (i = 0; i < 5u; i++) ed_b((v >> (7u * i)) & 127u); }
@@ -396,7 +402,7 @@ static const uint8_t *ed_bk_obj(uint32_t id, uint32_t *len)   /* 0 = no such obj
         *len = sizeof dsu;
         return (const uint8_t *)&dsu;
     }
-    if (id == 10u) {                                      /* SLOOP 2.6: the MIDI part (the MIDI LEARN map, GLO > MIDI's
+    if (id == 10u) {                                      /* SLOOP 2.6: the MIDI part (the MIDI LEARN map, SETUP > MIDI's
                                                          * channels): listed only while it is not the default (a backup
                                                          * without it stays one an older editor reads; its restore leaves
                                                          * them as they are) */
@@ -404,9 +410,9 @@ static const uint8_t *ed_bk_obj(uint32_t id, uint32_t *len)   /* 0 = no such obj
             *len = sizeof ed_bk_ml;
         return ed_bk_ml;
     }
-    if (id >= ED_BK_SONG0 && id < ED_BK_SONG0 + SNG_SLOTS) {   /* fm1-drummer: a song, in flash (XIP) */
+    if (ed_bk_song(id) >= 0) {                            /* fm1-drummer: a song, in flash (XIP) */
         uint32_t n = 0;
-        const uint8_t *q = sng_fetch(id - ED_BK_SONG0, &n);
+        const uint8_t *q = sng_fetch((uint32_t)ed_bk_song(id), &n);
         sng_t tmp;
         if (q && !sng_check(q, n, &tmp))
             *len = n;
@@ -417,9 +423,10 @@ static const uint8_t *ed_bk_obj(uint32_t id, uint32_t *len)   /* 0 = no such obj
         *len = sizeof ed_bk_ars;
         return (const uint8_t *)&ed_bk_ars;
     }
-    if (id == 32u + SNG_SMP_SLOT) {                       /* fm1-drummer: USR1's flash holds the songs: listed empty */
+    if (id >= 32u && SNG_SMP_TAKEN(id - 32u)) {           /* fm1-drummer: USR1's and USR2's flash hold the songs: listed
+                                                         * empty */
         *len = 0;
-        return smp_user_xip(SNG_SMP_SLOT);
+        return smp_user_xip(id - 32u);
     }
     if (id >= 32u && id < 32u + SMP_USER_SLOTS) {
         const smp_user_hdr_t *h = (const smp_user_hdr_t *)smp_user_xip(id - 32u);
@@ -462,15 +469,16 @@ static uint32_t ed_bk_commit(void)
         persist_saved = p;
         return 0;
     }
-    if (id >= ED_BK_SONG0 && id < ED_BK_SONG0 + SNG_SLOTS) {   /* fm1-drummer: a song (n 0: erased) */
-        uint32_t k = id - ED_BK_SONG0;
+    if (ed_bk_song(id) >= 0) {                            /* fm1-drummer: a song (n 0: erased) */
+        uint32_t k = (uint32_t)ed_bk_song(id);
         sng_t tmp;
         if (ed_flash_busy())
             return 3;
         if (n && (n > SNG_MAX || sng_check(raw, n, &tmp)))
             return 2;
-        if (!flash_ok || st_save(OBJ_SONG0 + k, raw, n))
+        if (!flash_ok || st_save(sng_obj(k), raw, n))
             return 4;
+        sng_lib_dirty = 1;                                  /* (the SONGS list reads it again) */
         if (sng_cur == (int8_t)k)
             sng_req = (uint8_t)(n ? k + 1u : 0xFFu);        /* the song playing: reloaded (or gone) */
         return 0;
@@ -546,8 +554,8 @@ static int ed_backup(uint32_t cmd, const uint8_t *a, uint32_t na)   /* 1: a back
         rc = 1;
         if (!flash_ok) {
             rc = 4;
-        } else if (op == 0u && na == 12u && (id <= 10u || (id >= ED_BK_SONG0 && id <= ED_BK_ARRSET))) {   /* begin: id,
-                                                       * length (5), CRC-32 (5); 16..24: fm1-drummer */
+        } else if (op == 0u && na == 12u && (id <= 10u || ed_bk_song(id) >= 0 || id == ED_BK_ARRSET)) {   /* begin: id,
+                                                       * length (5), CRC-32 (5); 16..24, 40..47: fm1-drummer */
             len = ed_bk_r32(a + 2);
             if (id >= 2u || len) {                        /* (the working project and the settings are never empty) */
                 if (len <= sizeof proj_tmp) {
@@ -706,7 +714,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         uint32_t rc;
         if (na < 1u || a[0] >= SMP_USER_SLOTS || !flash_ok)
             return;
-        if (a[0] == SNG_SMP_SLOT) {                        /* fm1-drummer: USR1's flash holds the songs */
+        if (SNG_SMP_TAKEN(a[0])) {                         /* fm1-drummer: USR1's and USR2's flash hold the songs */
             ed_b(a[0]);
             ed_b(4);
             break;
@@ -721,7 +729,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         uint32_t off, len, rc = 0, took;
         if (na < 5u || a[0] >= SMP_USER_SLOTS || !flash_ok)
             return;
-        if (a[0] == SNG_SMP_SLOT) {                        /* fm1-drummer: USR1's flash holds the songs */
+        if (SNG_SMP_TAKEN(a[0])) {                         /* fm1-drummer: USR1's and USR2's flash hold the songs */
             ed_b(a[0]);
             ed_b(a[1]);
             ed_b(a[2]);

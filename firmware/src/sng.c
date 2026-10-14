@@ -153,6 +153,7 @@ static void sng_apply(uint32_t k)
     nf = (len + 3u) / 4u;
     seq_release(t);
     locks_clear(t);                              /* (no lock, no nudge, no condition: then the section's) */
+    undo.valid = 0;                              /* (EDIT + OCT- would bring the section before back) */
     memcpy(t->fill, s + SNG_SEC_HDR, nf);
     drum_fill_masks_clear();
     q = s + SNG_SEC_HDR + nf;
@@ -191,7 +192,7 @@ static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len)
     *len = 0;
     if (!flash_ok || slot >= SNG_SLOTS)
         return 0;
-    c = st_current(OBJ_SONG0 + slot, &h);
+    c = st_current(sng_obj(slot), &h);
     if (c < 0 && slot < SNG_NFACTORY) {
         *len = SNG_FACTORY[slot].n;
         return SNG_FACTORY[slot].b;
@@ -199,19 +200,97 @@ static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len)
     if (c < 0 || !h.len)
         return 0;
     *len = h.len;
-    return fm1_xip_ptr(st_sector(OBJ_SONG0 + slot, (uint32_t)c) + ST_PAYLOAD_OFF);
+    return fm1_xip_ptr(st_sector(sng_obj(slot), (uint32_t)c) + ST_PAYLOAD_OFF);
 }
 #elif !defined(SNG_HOST_FETCH)
 static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len) { (void)slot; *len = 0; return 0; }
 #endif
-static void sng_slot_name(uint32_t slot, char *out)   /* the song in a slot: its name ("": none) */
+static void sng_lib_refresh(void)                /* seq.c sng_lib: every slot read again (the UI's loop) */
 {
-    uint32_t n, i = 0;
-    const uint8_t *p = sng_fetch(slot, &n);
-    if (p && n >= SNG_HDR && sng_u16(p) == (SNG_MAGIC & 0xFFFFu) && sng_u16(p + 2) == SNG_MAGIC >> 16)
-        for (; i < SNG_NAME && p[4 + i]; i++)
-            out[i] = (char)p[4 + i];
-    out[i] = 0;
+    uint32_t k, n, i;
+    sng_t tmp;
+    if (!sng_lib_dirty)
+        return;
+    sng_lib_dirty = 0;
+    for (k = 0; k < SNG_SLOTS; k++) {
+        sng_lib_t *e = &sng_lib[k];
+        const uint8_t *p = sng_fetch(k, &n);
+        memset(e, 0, sizeof *e);
+        if (!p || sng_check(p, n, &tmp))
+            continue;
+        for (i = 0; i < SNG_NAME && p[4 + i]; i++)
+            e->name[i] = (char)p[4 + i];
+        if (!i)
+            e->name[i++] = '?';                  /* (a song with no name is still there) */
+        e->name[i] = 0;
+        e->nsec = tmp.nsec;
+        e->bpm = tmp.bpm;
+#if FELUCCA_FLASH
+        e->factory = k < SNG_NFACTORY && p == SNG_FACTORY[k].b;
+#endif
+    }
+}
+
+/* ---- a section edited on the device (EDIT, SAVE held) back into its song: the reverse of sng_apply */
+/* the song loaded, packed again with section k taken from the drum track (its hits, levels, ratchets and marks, its
+ * length, division and fill conditions; its name, flags and meter kept), into out (room bytes): its size, 0 = it
+ * does not fit (SNG_MAX). Nudges and locks are not kept: SNG2 has no room for them (sng_lossy says so) */
+static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t room)
+{
+    const track_t *t = TDRUM;
+    uint32_t j, n = SNG_HDR, len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), nf = (len + 3u) / 4u;
+    if (room > SNG_MAX)
+        room = SNG_MAX;
+    if (sng_cur < 0 || k >= sng.nsec || room < SNG_HDR)
+        return 0;
+    memcpy(out, sng.xip, SNG_HDR);
+    for (j = 0; j < sng.nsec; j++) {
+        const uint8_t *s = sng_sec(j);
+        uint32_t size = sng_u16(s + 16), i, at = n;
+        if (j != k) {                            /* the other sections as they are */
+            if (n + size > room)
+                return 0;
+            memcpy(out + n, s, size);
+            n += size;
+            continue;
+        }
+        if (n + SNG_SEC_HDR + nf > room)
+            return 0;
+        memcpy(out + n, s, SNG_NAME);            /* name */
+        out[n + 12] = (uint8_t)len;
+        out[n + 13] = (uint8_t)(t->p[P_SDIV] % NDIV_STEP);
+        out[n + 14] = s[14];                     /* flags (the outro) */
+        out[n + 15] = s[15];                     /* meter */
+        memcpy(out + n + SNG_SEC_HDR, t->fill, nf);
+        n += SNG_SEC_HDR + nf;
+        for (i = 0; i < len; i++) {              /* each step: its lanes, then a byte a hit */
+            const dstep_t *d = &t->dstep[i];
+            uint32_t on = dstep_mask(d), l;
+            if (n + 2u + (uint32_t)__builtin_popcount(on) > room)
+                return 0;
+            out[n++] = (uint8_t)on;
+            out[n++] = (uint8_t)(on >> 8);
+            for (l = 0; on; on >>= 1, l++)
+                if (on & 1u)
+                    out[n++] = (uint8_t)(dstep_lvl(d, l) | dstep_rat(d, l) << 2 | ((drum_fonly[i] >> l) & 1u) << 4 |
+                                         ((drum_fno[i] >> l) & 1u) << 5);
+        }
+        out[at + 16] = (uint8_t)(n - at);        /* its size */
+        out[at + 17] = (uint8_t)((n - at) >> 8);
+    }
+    return n;
+}
+static int sng_lossy(void)                       /* the drum track holds what a packed section cannot keep */
+{
+    const track_t *t = TDRUM;
+    uint32_t i;
+    for (i = 0; i < NSTEP; i++)
+        if (t->micro[i])
+            return 1;
+    for (i = 0; i < NLOCK; i++)
+        if (t->lock[i].step != LOCK_FREE)
+            return 1;
+    return 0;
 }
 
 /* a song (slot) loaded, or none (0xFF): the main loop, for sng_req; also the host tests */
@@ -230,7 +309,9 @@ static int sng_load(uint32_t slot)
     }
     p = sng_fetch(slot, &n);
     if (!p || sng_check(p, n, &tmp)) {
-        char b[4] = {'0' + (char)slot, 0, 0, 0};
+        char b[4];
+        fmt_int(b, (int32_t)slot + 1);           /* "NO SONG 12": the slot as the screens count it, 1..16 (it said
+                                                  * '0' + slot: 0-based, and ':' and on past 9) */
         pedal_say(PU_NOSONG, b);
         return 1;
     }
@@ -238,7 +319,6 @@ static int sng_load(uint32_t slot)
     sng = tmp;
     sng_cur = (int8_t)slot;
     live_req = -1;                               /* a section asked for before: it was the old song's */
-    pedal_wait = 0;
     pedal_end_req = 0;
     sng_ui_next[0] = 0;
     {
@@ -256,6 +336,11 @@ static int sng_load(uint32_t slot)
         sng.pend = 1;                            /* with the next section, on the bar */
     }
     fm1_irq_on();
+    sng_lib_dirty = 1;                           /* (the SONGS list: its copy may have moved, editor.c BK_PUT) */
+    if (sng_autoload && sng_last != slot + 1u) {
+        sng_last = (uint8_t)(slot + 1u);         /* (the one to load at the next start: saved once stopped) */
+        arrset_dirty = 1;
+    }
     pedal_say(PU_SONG, sng_ui_song);
     return 0;
 }
@@ -277,7 +362,9 @@ typedef struct {
     uint32_t magic;
     uint8_t pedal_ch;                            /* 0 off, 1..16, 17 omni */
     uint8_t count_in;                            /* bars of count-in before a start from stopped: 0, 1, 2 */
-    uint8_t rsv[10];
+    uint8_t autoload;                            /* SETUP: the last song loaded at start (0 in the tool's and the editor's) */
+    uint8_t last;                                /* that song's slot + 1, 0 none */
+    uint8_t rsv[8];
 } arrset_t;
 static int arrset_valid(const arrset_t *a)
 {
@@ -289,13 +376,30 @@ static void arrset_fill(arrset_t *a)
     a->magic = ARRSET_MAGIC;
     a->pedal_ch = pedal.ch;
     a->count_in = pedal.count;
+    a->autoload = sng_autoload;
+    a->last = sng_last;
 }
-static void arrset_take(const arrset_t *a) { pedal.ch = a->pedal_ch; pedal.count = a->count_in; }
+static void arrset_take(const arrset_t *a)
+{
+    pedal.ch = a->pedal_ch;
+    pedal.count = a->count_in;
+    sng_autoload = (uint8_t)(a->autoload == 1u);
+    sng_last = (uint8_t)(a->last <= SNG_SLOTS ? a->last : 0u);
+}
 #if FELUCCA_FLASH
-static void arrset_boot(void)
+static void arrset_boot(void)                    /* the pedal settings; the last song asked for (sng_poll loads it) */
 {
     arrset_t a;
     if (flash_ok && st_load(OBJ_ARRSET, &a, sizeof a) == (int)sizeof a && arrset_valid(&a))
         arrset_take(&a);
+    if (sng_autoload && sng_last)
+        sng_req = sng_last;
+}
+static void arrset_save(void)                    /* main loop, stopped (project.c sections_flush) */
+{
+    arrset_t a;
+    arrset_fill(&a);
+    if (flash_ok)
+        (void)st_save(OBJ_ARRSET, &a, sizeof a);
 }
 #endif

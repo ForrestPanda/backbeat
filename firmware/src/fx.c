@@ -128,7 +128,6 @@ static uint8_t usb_full_now;             /* this render fills usb_out (audio.c) 
 static int32_t usb_out[2u * CTL];
 /* the visualiser's input (audio.c fills the scope with it): the mix as if MASTER were all the way up, so the
  * picture does not follow the volume knob, even at 0 (2.4). The same soft knee as the output, no limiter state */
-static int16_t vis_tap[2u * CTL];
 static struct { int32_t dc[2], dce[2], lc[4], lce[4]; } uo;
 static void master_pre_usb(int32_t *l, int32_t *r)      /* (USB AUDIO = FULL: its own state) */
 {
@@ -639,12 +638,12 @@ static void drum_insert(int32_t *l, int32_t *r, int32_t *v, int32_t *d, uint32_t
     run |= ins_run(&ins[3], t->p, d, n);
     t->ins_run = (uint8_t)run;
 }
-/* ---- TEXTURE (SLOOP 2.6, GLO > TEXTURE): a looping bed under the mix, the glue of lo-fi and ambient tracks, without
+/* ---- TEXTURE (SLOOP 2.6, SETUP > TEXTURE): a looping bed under the mix, the glue of lo-fi and ambient tracks, without
  * taking a track. SRC: a generated noise (no memory, nothing to load) or a user sample slot looped (USR1..4, its first
  * zone at its own pitch; a looped zone from its loop, else whole), LEVEL, TONE (the DJ filter: left a low-pass, right a
  * high-pass), MOVE: how much it breathes over RATE (1 .. 16 bars of the tempo; its level and brightness, a sine from the
  * transport's start), WHEN: PLAY (fades in and out with the transport) or ALWAYS, DUCK: the kick pumps it as the
- * parts (GLO > MASTER > DUCK). Into the dry mix (no sends), before DUST and the master filter.
+ * parts (SETUP > MASTER > DUCK). Into the dry mix (no sends), before DUST and the master filter.
  *   VINYL  hiss, rumble, crackle and the odd pop, each crackle somewhere left to right
  *   TAPE   hiss tilted dark, its level drifting slowly (flutter)
  *   RAIN   a soft bed and droplets, left and right apart
@@ -936,7 +935,7 @@ static void mix_block(int32_t *out, uint32_t n)
         }
     }
     click_render(mix_l, mix_r, n);                      /* the metronome: its own voice (drums.c), any kit, any mute */
-    texture_mix(mix_l, mix_r, n);                       /* GLO > TEXTURE (2.6): the bed, dry */
+    texture_mix(mix_l, mix_r, n);                       /* SETUP > TEXTURE (2.6): the bed, dry */
     fx_buses(send_d, send_r, wet_l, wet_r, n);
     for (i = 0; i < n; i++) {
         mix_l[i] += wet_l[i];
@@ -957,10 +956,6 @@ static void mix_block(int32_t *out, uint32_t n)
             ol[i] = ((mix_l[i] >> 2) * m) >> 10;
             orr[i] = ((mix_r[i] >> 2) * m) >> 10;
             master_pre(&ol[i], &orr[i]);
-            if ((i & 1u)) {                             /* the visualiser: every other sample, as audio.c reads it */
-                vis_tap[2u * i] = (int16_t)knee(mix_l[i]);
-                vis_tap[2u * i + 1u] = (int16_t)knee(mix_r[i]);
-            }
             if (usb_full_now) {                         /* USB AUDIO = FULL: MASTER all the way up (4096) */
                 ul[i] = (mix_l[i] >> 2) << 2, ur[i] = (mix_r[i] >> 2) << 2;
                 master_pre_usb(&ul[i], &ur[i]);

@@ -55,11 +55,10 @@
 #include "panel.c"
 #include "ui.c"
 #include "ui_song.c"
-#include "ui_drummer.c"       /* fm1-drummer: the song screen, on the SONG page */
 #include "ui_studio.c"
+#include "ui_drummer.c"       /* fm1-drummer: LIVE and SONGS, on the SONG page */
 #include "icons.c"           /* parameter icons (FELUCCA_ICONS), used by ui_draw.c */
 #include "ui_draw.c"
-#include "ui_vis.c"           /* the full-screen visualiser (HOME on HOME, 2.4) */
 #include "ui_layers.c"       /* hold a function button: what the keys and knobs do (TE style) */
 #include "ui_menu.c"
 #include "ui_input.c"

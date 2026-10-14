@@ -364,7 +364,7 @@ def convert(source, sections=None, track=None, kit=0, keep_duplicates=False, aut
         log(f"  {out[i]['name']}: pattern cut to {p} bar{'s' if p > 1 else ''} ({score:.0%}) so the song fits its flash sector")
     if not any(s.get("outro") for s in out):
         log("  no section named OUTRO / ENDING / END: the ending stops on the next bar (set \"outro\": true in the JSON)")
-    spec = {"name": name, "bpm": int(song.tempo), "kit": kit, "swing": 50, "drum_level": 100, "drum_reverb": 20,
+    spec = {"name": name, "bpm": int(song.tempo), "kit": kit, "swing": 0, "drum_level": 100, "drum_reverb": 20,
             "sections": out}
     if detail:
         spec["bars"] = [bar_strings([t.measures[k] for t in tracks]) for k in range(len(song.measureHeaders))]

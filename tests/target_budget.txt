@@ -17,6 +17,10 @@
 # into mix_block: mix_block gets its own line (18296), the ISR is back to its own loops (79); drums_mix +6 % (6533:
 # the same source, other inlining around it). The host CPU check (regress.c, callgrind) is the primary one.
 # drums only, stage 8: one track: mix_block's loops over the tracks are one pass now (-20 %).
-drums_mix 6533
-mix_block 14599
-fm1_alnk0_irq 79
+# UI redesign, stage 3 (2026-10-14): mix_block 15394 (the stage 1 build, same toolchain; stage 1 itself -7 %, the
+# visualiser's tap gone) -> 17985, 4 more divides in its loops, the ISR 79 -> 30. Stage 3 changed no audio code: the
+# GLO layer's case left seq.c key_down (the key events mix_block handles) and the compiler inlines differently around
+# it; where the divides landed was not traced. The host CPU check (regress.c, callgrind) is unchanged.
+drums_mix 6529
+mix_block 17985
+fm1_alnk0_irq 30

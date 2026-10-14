@@ -15,7 +15,12 @@ song objects at 0xA0000.., copy A, a valid header), and the unchanged firmware f
 it would after tools/fm1_song.py --put. --pedal-channel and --count-in write the pedal settings object too.
 The copy is build/emu/felucca-emu.fwsc: for the emulator only.
 
-The demo script: SAVE tapped (the song screen), white key 1 (song 1 loaded), PLAY (its first section), the
+The emulator shows the loaded image through XIP as it was loaded: what the firmware writes over SPI into the image's
+range reads back stale there (the chip itself is right; the device reads it). So songs given here, or pedal
+settings, put the song sectors into the image, and a song saved on the device (EDIT, SAVE held) does not read back
+in that run. With no songs given the image stops at the firmware and the factory songs play: the saves read back.
+
+The demo script: SAVE tapped (SONGS), white key 1 (song 1 loaded, LIVE again), PLAY (its first section), the
 pedal's CC 20 1 (the second section when the first ends), A#3 (a fill), the pedal's CC 22 (the ending).
 Keys (fm1-emu --keys): t:NAME presses a button (PLAY, REC, SAVE, HOME...) for 150 ms; t:nK the key K (0..26 from
 F3: the white keys 0 2 4 6 7 9 11 12.., the black ones 1 3 5 8 10..); t:K1:+3 turns KNOB 1; t:midi:bf1401 sends
@@ -39,7 +44,8 @@ DEMO_KEYS = "3000:SAVE,3800:n0,4600:PLAY,6000:midi:bf1401,9000:n5,11000:midi:bf1
 DEMO_SNAP = "3600,4400,6400,9400,11400,15000"
 # storage.c: the objects' numbers (OBJ_SONG0.., OBJ_ARRSET), sectors, the header
 ST_MAGIC, ST_SECTOR, ST_PAYLOAD_OFF = 0x554C4546, 4096, 256
-OBJ_SONG0, OBJ_ARRSET = 9, 17
+OBJ_SONG0, OBJ_ARRSET, OBJ_SONG8 = 9, 17, 18
+SONG8_BASE = 0xB4000                      # songs 9..16 (USR2's place, storage.c st_sector)
 SONG_BASE = 0xA0000
 
 
@@ -79,18 +85,21 @@ def main():
     a = ap.parse_args()
     if not a.emu.exists():
         sys.exit(f"no fm1-emu at {a.emu} (cargo build --release -p fm1-emu in the emulator's checkout)")
-    if len(a.songs) > 8:
-        sys.exit("8 songs at most")
+    if len(a.songs) > 16:
+        sys.exit("16 songs at most")
     pkg = ROOT / "build" / "felucca.fwsc"
     if not pkg.exists():
         sys.exit("no build/felucca.fwsc: ./build.sh first")
     flash, ota, product = unpack_fwsc(pkg.read_bytes())
-    img = bytearray(flash) + b"\xFF" * (SONG_BASE + 18 * ST_SECTOR - len(flash))   # (to the pedal settings' sectors)
+    img = bytearray(flash)
+    if a.songs or a.pedal_channel is not None or a.count_in is not None:   # (to the pedal settings' sectors)
+        end = SONG8_BASE + 16 * ST_SECTOR if len(a.songs) > 8 else SONG_BASE + 18 * ST_SECTOR
+        img += b"\xFF" * (end - len(flash))
     for k, path in enumerate(a.songs):
         with open(path) as f:
             blob = fm1_song.pack(json.load(f))
-        at = SONG_BASE + 2 * k * ST_SECTOR
-        img[at:at + ST_SECTOR] = st_object(OBJ_SONG0 + k, blob)
+        at = SONG_BASE + 2 * k * ST_SECTOR if k < 8 else SONG8_BASE + 2 * (k - 8) * ST_SECTOR
+        img[at:at + ST_SECTOR] = st_object(OBJ_SONG0 + k if k < 8 else OBJ_SONG8 + k - 8, blob)
         print(f"slot {k} (PC {k}, key {k + 1}): {blob[4:16].rstrip(bytes(1)).decode()}, {len(blob)} bytes")
     if a.pedal_channel is not None or a.count_in is not None:
         ch = 16 if a.pedal_channel is None else a.pedal_channel

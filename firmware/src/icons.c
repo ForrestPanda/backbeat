@@ -46,7 +46,7 @@ static const icon_map_t ICON_MAP[] = {
     {"LOAD", ICON_LOAD}, {"SAVE", ICON_SAVE}, {"ENG", ICON_WAVE}, {"CLRSQ", ICON_CLEAR},
     {"INIT", ICON_CLEAR}, {"ERASE", ICON_CLEAR}, {"CH", ICON_MIDI}, {"LEVEL", ICON_LEVEL},
     {"OUT", ICON_MIDI}, {"IN", ICON_MIDI}, {"CH1", ICON_MIDI}, {"CH2", ICON_MIDI}, {"CH3", ICON_MIDI}, {"CH4", ICON_MIDI},   /* (2.6:
-                                                                 * GLO > MIDI, MIDI 2) */
+                                                                 * SETUP > MIDI, MIDI 2) */
     {"OTHER", ICON_MIDI}, {"BEND", ICON_TUNE},
     /* engines (eng_*.c edit[] labels) */
     {"DTN", ICON_DETUNE}, {"NOIS", ICON_NOISE}, {"CUT", ICON_CUTOFF}, {"RES", ICON_RESO},
@@ -66,7 +66,7 @@ static const icon_map_t ICON_MAP[] = {
     {"BUZZ", ICON_PULSE}, {"BRTH", ICON_NOISE}, {"Q", ICON_RESO}, {"RAND", ICON_PROB},
     /* fixed columns drawn by ui_draw.c (STEP page, preset browser, SYSTEM) */
     {"NOTE", ICON_PITCH}, {"STEP", ICON_STEPS}, {"FLAG", ICON_ACCENT}, {"ACC", ICON_ACCENT}, {"SLD", ICON_SLIDE}, {"USB", ICON_MIDI},
-    {"TRACK", ICON_MIX},                  /* TRACKS page (LEVEL, LEN, PAN: above) */
+    {"TRACK", ICON_MIX},                  /* (SLOOP's TRACKS page; LEVEL, LEN, PAN: above) */
     {"SLCR", ICON_SLICE}, {"PAT", ICON_STEPS}, {"DEPTH", ICON_MIX},   /* SLICER page (RATE: param_icon) */
 };
 
