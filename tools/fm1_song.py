@@ -12,7 +12,7 @@
 
 The JSON (see docs/design.md):
 
-    {"name": "MY SONG", "bpm": 120, "kit": 0, "swing": 0, "drum_level": 100, "drum_reverb": 20,
+    {"name": "MY SONG", "bpm": 120, "kit": 46, "swing": 0, "drum_level": 100, "drum_reverb": 20,
      "sections": [
        {"name": "VERSE", "steps": 16, "div": "1/16", "time": "4/4", "outro": false,
         "lanes": {"KICK": "x...x...x...x...", "SNARE": "....x.......x...", "HAT": "x.x.x.x.x.x.x.x."},
@@ -23,8 +23,8 @@ A lane string has one character a step: '.' rest, 'g' ghost, 'o' soft, 'x' norma
 string: '.' or 1, or 2..4 repeats inside the step. "fills" marks a lane's hits one by one: '.' plays
 always, 'F' only during a fill (the pedal's CC 21, or the LIVE screen's black keys and SEL), 'N' never
 during one. The older "fill" string does the same for a whole step, every lane at once. Lanes:
-KICK, KICK2, SNARE, CLAP, HAT, OPENHAT, PEDAL, RIM, SNARE2, LOWTOM, HITOM, CRASH, RIDE, SHAKER, CONGA,
-COWBELL (spaces and case do not matter). div: 1/4 1/8 1/16 1/32 8T 16T 1/2 1BAR 2BAR. time: the section's meter,
+KICK, KICK2, SNARE, CLAP, HAT, OPENHAT, PEDAL, RIM, SNARE2, LOWTOM, MIDTOM, HITOM, CRASH, RIDE, SHAKER, COWBELL
+(MIDTOM since 2026-10-14, where the conga was: "CONGA" still reads as it; spaces and case do not matter). div: 1/4 1/8 1/16 1/32 8T 16T 1/2 1BAR 2BAR. time: the section's meter,
 n/d with n 1..16 and d 2, 4, 8 or 16 (none: 4/4); the pedal's bars, the click and the count-in follow it. A section is
 whole bars of its time (a change waits for the bar line): a pickup is a short bar, a 4-step intro of 1/16 "1/4";
 a section that is not gets a warning with the signature that fits. kit: the
@@ -55,10 +55,11 @@ def song_obj(slot):
 SNG_MAGIC = b"SNG2"
 HDR, SEC_HDR = 32, 18
 SNG_MAX = 3800
+KIT_DEFAULT = 46                                     # drums.c DRUM_REAL: MULDJORD, the layered kit (0 ACOUSTIC before)
 SNG_SECTIONS = 16                                    # seq.c SNG_SECTIONS (8 until 2026-10-14)
 NSTEP = 64
 LANES = ["KICK", "KICK2", "SNARE", "CLAP", "HAT", "OPENHAT", "PEDAL", "RIM",
-         "SNARE2", "LOWTOM", "HITOM", "CRASH", "RIDE", "SHAKER", "CONGA", "COWBELL"]
+         "SNARE2", "LOWTOM", "MIDTOM", "HITOM", "CRASH", "RIDE", "SHAKER", "COWBELL"]
 DIVS = ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1BAR", "2BAR"]
 LEVELS = {"x": 0, "g": 1, "o": 2, "X": 3}            # LV_NORM, LV_GHOST, LV_SOFT, LV_HARD
 CONDS = {".": 0, "F": 1, "N": 2}                     # FC_NORM, FC_FILL, FC_NOFILL
@@ -69,6 +70,11 @@ STEP_U = {"1/4": 48, "1/8": 24, "1/16": 12, "1/32": 6, "8T": 16, "16T": 8, "1/2"
 
 def lane_index(name):
     key = "".join(ch for ch in name.upper() if ch.isalnum())
+    if key == "CONGA":                               # (lane 14 was the conga until 2026-10-14: an old song's congas on it)
+        if not getattr(lane_index, "warned", False):
+            print("note: lane CONGA is the mid tom now (MIDTOM); the song's conga hits play it", file=sys.stderr)
+            lane_index.warned = True
+        key = "MIDTOM"
     if key not in LANES:
         sys.exit(f"unknown lane {name!r}; lanes: {' '.join(LANES)}")
     return LANES.index(key)
@@ -193,7 +199,7 @@ def pack(spec):
     bpm = int(spec.get("bpm", 120))
     if not 40 <= bpm <= 240:
         sys.exit("bpm must be 40..240")
-    kit = int(spec.get("kit", 0))
+    kit = int(spec.get("kit", KIT_DEFAULT))
     swing = int(spec.get("swing", 0))                # 0 straight .. 100 the most (MPC 50 .. 75 %): seq.c swing_units
     if not 0 <= swing <= 100:
         sys.exit("swing must be 0..100")

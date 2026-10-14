@@ -891,7 +891,8 @@ static void t_usbfull(void)
     master_cur = -1;
     usb_full_now = 1;
     for (k = 0; k < 600u; k++) {
-        if (!(k % 12u)) trk_note_on(TDRUM, k % 24u ? 38u : 36u, 120);   /* kicks and snares */
+        if (!(k % 12u)) trk_note_on(TDRUM, k % 24u ? 38u : 36u, 90);   /* kicks and snares (90: twelve voices since the layered kit, their tails
+                                                                           * add up: under the limiter) */
         mix_block(out, CTL);
         if (k > 100u)
             for (i = 0; i < 2u * CTL; i++) {

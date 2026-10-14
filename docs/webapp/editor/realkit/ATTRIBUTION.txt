@@ -1,0 +1,20 @@
+The built-in layered kit (KIT MULDJORD on the device), rendered by tools/gen_realkit.py from tools/realkit.json:
+LANE-<layer><take>.wav, layer 1 the hardest, takes a, b, c (round robins); mono 16-bit, 22050 or 32000 Hz; every
+hit its microphones mixed down, trimmed, cut and levelled. kit.json lists them.
+
+SNARE, SNARE2, RIM: the DRSKit by the DrumGizmo team with Jes Eiler of DRS Drums (https://www.drumgizmo.org), from the
+SFZ port https://github.com/sfzinstruments/DrumGizmo.DRSKit, licensed CC BY 4.0 (chosen by ear, 2026-10-14).
+
+KICK, KICK2, LOWTOM, MIDTOM, HITOM (Tom4, Tom2, Tom1), CRASH, SHAKER (a ride bell stands in): MuldjordKit by Lars Muldjord
+and the DrumGizmo team (https://www.drumgizmo.org), a Tama Superstar kit, from the SFZ port
+https://github.com/sfzinstruments/DrumGizmo.MuldjordKit (mapped by kinwie), licensed CC BY 4.0
+(https://creativecommons.org/licenses/by/4.0/).
+
+HAT, OPENHAT, PEDAL: AVL Drumkits "Black Pearl"; RIDE: AVL Drumkits "Red Zeppelin" (a Zildjian A 24" ride); both by
+Glen MacArthur (Bandshed / AV Linux, http://www.bandshed.net/avldrumkits/), licensed CC BY-SA 3.0
+(https://creativecommons.org/licenses/by-sa/3.0/). These files carry that licence.
+
+CLAP, COWBELL: SLOOP's CC0 studio recordings (assets/samples-cc0/KIT: Versilian Studios VSCO-2 CE and VCSL).
+
+Credit when sharing: "MuldjordKit by Lars Muldjord / DrumGizmo and the DRSKit's snare by DrumGizmo / DRS Drums, CC BY 4.0; hi-hats from AVL Drumkits Black Pearl and
+the ride from Red Zeppelin, by Glen MacArthur, CC BY-SA 3.0; clap and cowbell from Versilian Studios, CC0".

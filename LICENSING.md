@@ -73,5 +73,11 @@ Felucca never enables the Bluetooth / Wi-Fi radio of the hardware.
 
 `web/kit/`: the MuldjordKit by Lars Muldjord and the DrumGizmo team (drumgizmo.org; the SFZ port by kinwie),
 CC BY 4.0, one sound a lane as `tools/mkkit.py` makes them; the three hi-hat lanes from AVL Drumkits "Black Pearl"
-by Glen MacArthur, CC BY-SA 3.0; CLAP, CONGA and COWBELL from the CC0 studio recordings (see `web/kit/ATTRIBUTION.txt` and `docs/kits.md`). Preloaded on the editor's Drum kit page and
+by Glen MacArthur, CC BY-SA 3.0; CLAP and COWBELL from the CC0 studio recordings (see `web/kit/ATTRIBUTION.txt` and `docs/kits.md`). Preloaded on the editor's Drum kit page and
 played by its Songs tab.
+
+`assets/realkit/` (also served as the editor's `realkit/`, and built into the firmware as KIT MULDJORD): the same
+sources rendered by `tools/gen_realkit.py` with their velocity layers and round robins: the MuldjordKit and the DRSKit's
+snare, snare edge and rim (DrumGizmo, CC BY 4.0),
+AVL Drumkits "Black Pearl" (hi-hats) and "Red Zeppelin" (ride) by Glen MacArthur (CC BY-SA 3.0), the CC0 studio
+recordings (see `assets/realkit/ATTRIBUTION.txt`). A firmware package carries these sounds: share it with that credit.

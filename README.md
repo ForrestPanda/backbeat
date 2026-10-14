@@ -20,8 +20,10 @@ time signature per section), the fills, the renderer, the Guitar Pro importer, t
 Song tab with its section editor and a player the real pedal can drive, the device's own screens (LIVE, SONGS,
 EDIT, SETUP) are done and pass the host tests; the firmware builds and packages, and runs on the fm1-emu emulator.
 Nothing here has run on an FM-1 yet: the TRS jack, the cable type and the speaker are still to be verified
-(`docs/design.md`, milestone 7). Drums only, the firmware is 245 KB of its 581 KB slot: the room is for a more
-realistic kit (longer samples, more velocity layers, round robins) and the next device features.
+(`docs/design.md`, milestone 7). The firmware is 541 KB of its 581 KB slot, 290 KB of it the built-in layered
+kit **MULDJORD**, the power-on kit and new songs' default (`"kit": 46`): up to four velocity layers a drum (hard,
+normal, soft, ghost: the steps' levels), round-robin takes of the kick and snare (never the same twice running),
+twelve voices so cymbals and toms ring on (`docs/kits.md`).
 
 ## The pedal
 
@@ -82,7 +84,8 @@ ratchet, m for the mark, [ ] between sections), a lane's sound on a click of its
 loop it, and, for a song read from Guitar Pro, the file's bars to pick as a section's pattern or its fill; then
 Play, Send or Save JSON. The
 Drum kit page opens with the Muldjord Kit on its pads (served from `web/kit/`, CC BY 4.0, see `docs/kits.md`), and
-the player plays those pads, or WAVs you pick. The page must be served, not opened as a file: from the project
+the player plays the device's layered kit MULDJORD (`web/realkit/`, its layers and takes as the device picks them),
+or those pads once you edit them, or WAVs you pick. The page must be served, not opened as a file: from the project
 root `python3 -m http.server 8000`, then `http://localhost:8000/web/editor.html?mock=1` for the simulated
 FM-1 (serving `web/` itself works too: the importer is linked there).
 
@@ -184,7 +187,8 @@ click, tune), DRUMS (level, reverb, delay, pan), MASTER, TEXTURE and TEXTURE 2, 
 (calibration, the JAM project pages, ABOUT). The pedal settings are saved once the music stops.
 
 What else is on it, from SLOOP: one track, the drums (the kits: the sampled GM kit and its treatments, the
-synthesised kits, SYN1..SYN4 from the editor's Drum synth, your own sampled kits on the user slots), a pattern of
+synthesised kits, SYN1..SYN4 from the editor's Drum synth, your own sampled kits on the user slots; and this fork's
+MULDJORD), a pattern of
 up to 64 steps over 16 lanes with levels, ratchets, nudges, parameter locks and fill conditions, rolls, erase and
 mutes; sections A..D, their quick chain and SLOOP's song order; the drum track's INSERT and FILTER, the delay and
 reverb sends, the master (DUST, DUCK, the DJ filter, the limiter), TEXTURE; MIDI in, out, clock and learn. The web
@@ -218,6 +222,7 @@ firmware ([BUILDING.md](BUILDING.md)): at your own risk.
 | `tools/fm1_song.py`, `songs/` | songs from JSON: check, pack, send, read back; `songs/` holds your songs (the build carries them as factory songs, `tools/gen_songs.py`) |
 | `web/editor.html` | the web editor (SLOOP's, drums only, protocol v11) with a Song tab (no FM-1 needed but to send and set the pedal): the pedal channel, Guitar Pro import (Pyodide), the section editor, a player; a Setlist tab: the device's sixteen slots; `web/test_web.mjs` tests it against the simulated FM-1 |
 | `web/kit/` | the kit the editor serves (the Muldjord Kit with two velocity layers), the files `tools/mkkit.py` makes the device image from |
+| `tools/gen_realkit.py`, `tools/realkit.json`, `assets/realkit/` | the built-in layered kit MULDJORD: the recipe, rendered once from the source kits into WAVs (layers, takes, levels, fitted to 290 KB); `tools/gen_samples.py` builds them in as set REAL, the editor's player plays them (`web/realkit/`) |
 | `tools/fm1_render.py`, `tests/song_render.c` | a song played by the pedal, rendered to a WAV on the host |
 | `tools/gp2song.py`, `tests/gp2song_test.py` | the drum track of a Guitar Pro file into a song (markers, patterns, fills, levels, ratchets) |
 | `tools/mkkit.py` | a sampled kit from a folder of WAVs or an SFZ kit onto USR3+4: lanes by name, two velocity layers, trim, cut, level; an image for the renderer, or the upload |

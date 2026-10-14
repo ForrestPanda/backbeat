@@ -12,7 +12,7 @@
 
 The files are sorted onto the 16 lanes by their names (kick, bd; snare, sd; hat, hh, closed; open, ohh;
 pedal; rim, side, stick, clave; clap; tom + lo / floor, tom + hi / rack; crash, china, splash; ride;
-shaker, tamb; conga, bongo; cowbell, bell; kick2 / snare2 for the second ones). The first file for a
+shaker, tamb; tom + mid (the mid tom, where the conga was); cowbell, bell; kick2 / snare2 for the second ones). The first file for a
 lane wins; --map LANE=file overrides. Each sound: mono, 22050 Hz, the silence before the hit cut, the
 tail cut at the lane's length (a fade of 20 ms) and shortened further if the slot runs out (a slot holds
 about 7.4 s of IMA ADPCM: lanes KICK..RIM in USR3, SNARE2..COWBELL in USR4, as the device looks them up),
@@ -36,9 +36,9 @@ sys.path.insert(0, HERE)
 import sampleio as sio  # noqa: E402
 
 LANES = ["KICK", "KICK2", "SNARE", "CLAP", "HAT", "OPENHAT", "PEDAL", "RIM",
-         "SNARE2", "LOWTOM", "HITOM", "CRASH", "RIDE", "SHAKER", "CONGA", "COWBELL"]
+         "SNARE2", "LOWTOM", "MIDTOM", "HITOM", "CRASH", "RIDE", "SHAKER", "COWBELL"]
 LANE_NOTE = dict(KICK=36, KICK2=35, SNARE=38, CLAP=39, HAT=42, OPENHAT=46, PEDAL=44, RIM=37,
-                 SNARE2=40, LOWTOM=43, HITOM=48, CRASH=49, RIDE=51, SHAKER=70, CONGA=63, COWBELL=56)
+                 SNARE2=40, LOWTOM=43, HITOM=48, CRASH=49, RIDE=51, SHAKER=70, MIDTOM=45, COWBELL=56)
 WORDS = [                                         # (lane, its words, second-choice words); the word nearest the
     ("OPENHAT", ("openhat", "open", "ohat", "ohh"), ("oh_", "_oh", "hho")),   # start of the file name names the lane
     ("PEDAL", ("pedal", "phat"), ("_ph", "footh", "hhp")),
@@ -50,28 +50,28 @@ WORDS = [                                         # (lane, its words, second-cho
     ("RIM", ("rim", "side", "stick"), ("clave", "wood", "click")),
     ("CLAP", ("clap",), ()),
     ("LOWTOM", ("tomlo", "lowtom", "floor", "tom_l", "toml", "ftom", "tom1"), ("low",)),
+    ("MIDTOM", ("midtom", "tommid", "tom_m", "tomm", "mtom", "tom3"), ("mid",)),   # (before HITOM: "tom" is its fallback)
     ("HITOM", ("tomhi", "hitom", "rack", "tom_h", "tomh", "tom2"), ("high", "tom")),
     ("CRASH", ("crash", "china", "splash"), ("cymb",)),
     ("RIDE", ("ride",), ()),
     ("SHAKER", ("shaker", "tamb", "maraca", "cabasa"), ("egg",)),
-    ("CONGA", ("conga", "bongo"), ("djembe",)),
     ("COWBELL", ("cowbell", "agogo"), ("bell",)),
 ]
 MAX_S = dict(KICK=0.7, KICK2=0.7, SNARE=0.9, CLAP=0.5, HAT=0.45, OPENHAT=1.2, PEDAL=0.35, RIM=0.4,
-             SNARE2=0.9, LOWTOM=1.0, HITOM=0.9, CRASH=1.9, RIDE=1.5, SHAKER=0.4, CONGA=0.5, COWBELL=0.4)
+             SNARE2=0.9, LOWTOM=1.0, HITOM=0.9, CRASH=1.9, RIDE=1.5, SHAKER=0.4, MIDTOM=0.95, COWBELL=0.4)
 GAIN_DB = dict(KICK=0, KICK2=0, SNARE=-1, CLAP=-3, HAT=-9, OPENHAT=-8, PEDAL=-10, RIM=-6,
-               SNARE2=-2, LOWTOM=-2, HITOM=-2.5, CRASH=-6, RIDE=-8, SHAKER=-12, CONGA=-4, COWBELL=-6)
-MIN_S = dict(CRASH=1.2, RIDE=1.2, OPENHAT=0.5, LOWTOM=0.5, HITOM=0.5)   # when a slot overflows: these keep this much
+               SNARE2=-2, LOWTOM=-2, HITOM=-2.5, CRASH=-6, RIDE=-8, SHAKER=-12, MIDTOM=-2.25, COWBELL=-6)
+MIN_S = dict(CRASH=1.2, RIDE=1.2, OPENHAT=0.5, LOWTOM=0.5, HITOM=0.5, MIDTOM=0.5)   # when a slot overflows: these keep this much
 MIN_DEFAULT = 0.25
 SOFT_MAX = dict(KICK=0.45, KICK2=0.45, SNARE=0.45, SNARE2=0.45, OPENHAT=0.5, LOWTOM=0.5, HITOM=0.5)   # soft hits: shorter
-EXTRA_MAX = dict(KICK2=0.45, CLAP=0.3, SHAKER=0.3, CONGA=0.35, COWBELL=0.3)   # the rare lanes, in the second slot
+EXTRA_MAX = dict(KICK2=0.45, CLAP=0.3, SHAKER=0.3, COWBELL=0.3)   # the rare lanes, in the second slot
 SLOTS = {2: LANES[:8], 3: LANES[8:]}              # USR3: KICK..RIM, USR4: SNARE2..COWBELL (drums.c: USR3 first, else USR4)
 # an SFZ kit: the GM keys each lane takes, in order of preference ("36:3" = key 36, its 3rd layer from the top:
 # KICK2 and SNARE2 as softer hits of the same drum when the kit has no second one)
 SFZ_LANES = {"KICK": ["36", "35"], "KICK2": ["35", "36:3"], "SNARE": ["38"], "SNARE2": ["40", "38:3"], "RIM": ["37"],
              "CLAP": ["39"], "HAT": ["42"], "OPENHAT": ["46", "48"], "PEDAL": ["44"], "LOWTOM": ["43", "41", "45", "63"],
              "HITOM": ["48", "47", "50", "45", "61"], "CRASH": ["49", "57", "55", "52"], "RIDE": ["51", "59", "53"],
-             "SHAKER": ["70", "54", "69", "82", "64"], "CONGA": ["63", "62", "64", "61"], "COWBELL": ["56", "67", "68"]}
+             "SHAKER": ["70", "54", "69", "82", "64"], "MIDTOM": ["45", "47", "43", "61"], "COWBELL": ["56", "67", "68"]}
 FADE = 0.02
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
@@ -364,7 +364,7 @@ def main():
     # the layouts: SLOOP's split (KICK..RIM in USR3, the rest in USR4), or two layers: USR3 the hard hits of the
     # drums, hats and cymbals, USR4 their soft hits plus the hard hits of the extras (the device looks in the
     # other slot for a lane it does not find)
-    EXTRAS = ["KICK2", "CLAP", "SHAKER", "CONGA", "COWBELL", "CRASH", "RIDE"]   # (the cymbals: long, one layer)
+    EXTRAS = ["KICK2", "CLAP", "SHAKER", "COWBELL", "CRASH", "RIDE"]   # (the cymbals: long, one layer)
     main_lanes = [l for l in LANES if l not in EXTRAS]
     layout = {2: ("hard", main_lanes), 3: ("soft", LANES)} if a.layers else {2: ("hard", LANES[:8]), 3: ("hard", LANES[8:])}
     if a.layers:

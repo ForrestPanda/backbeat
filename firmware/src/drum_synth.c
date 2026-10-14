@@ -31,8 +31,8 @@ typedef struct {
     uint8_t chip;                /* CHIP noise: clock note */
     uint8_t drive, level;        /* drive 0..127; level: 128 + 4 x dB (-32 .. +31.75 dB) */
 } dsnd_t;
-#define DS_LANES 16              /* kick snare clap hat open-hat tom-lo tom-hi crash ride shaker conga
-                                  * rim cowbell clave kick-2 snare-2 */
+#define DS_LANES 16              /* kick snare clap hat open-hat tom-lo tom-mid tom-hi crash ride shaker
+                                  * rim cowbell clave kick-2 snare-2 (tom-mid since 2026-10-14, the conga gone) */
 typedef struct {
     const char *name, *style;
     uint8_t crush;               /* low nibble: bits dropped, high nibble: sample-and-hold - 1 */
@@ -43,10 +43,10 @@ typedef struct {
 /* GM note -> synth lane and a pitch offset in semitones */
 static const struct { uint8_t lane; int8_t semi; } DS_MAP[128 - 35] = {
     /* 35 */ {14, 0}, {0, 0}, {11, 0}, {1, 0}, {2, 0}, {15, 0}, {5, -3}, {3, 0}, {5, 0}, {3, -1},
-    /* 45 */ {5, 3}, {4, 0}, {6, -3}, {6, 0}, {7, 0}, {6, 3}, {8, 0}, {7, 3}, {8, 6}, {9, 4},
-    /* 55 */ {7, 5}, {12, 0}, {7, 1}, {9, -5}, {8, 1}, {10, 9}, {10, 6}, {10, 3}, {10, 0}, {10, -5},
-    /* 65 */ {6, 5}, {6, 1}, {12, 7}, {12, 3}, {9, -3}, {9, 0}, {13, 9}, {13, 6}, {9, -7}, {9, -9},
-    /* 75 */ {13, 0}, {13, 4}, {13, -1}, {10, 12}, {10, 8}, {8, 24}, {8, 20}, {9, 2},
+    /* 45 */ {6, 0}, {4, 0}, {6, 2}, {7, 0}, {8, 0}, {7, 3}, {9, 0}, {8, 3}, {9, 6}, {10, 4},
+    /* 55 */ {8, 5}, {12, 0}, {8, 1}, {10, -5}, {9, 1}, {7, 9}, {7, 6}, {6, 7}, {6, 5}, {6, 3},
+    /* 65 */ {7, 5}, {7, 1}, {12, 7}, {12, 3}, {10, -3}, {10, 0}, {13, 9}, {13, 6}, {10, -7}, {10, -9},
+    /* 75 */ {13, 0}, {13, 4}, {13, -1}, {10, 4}, {10, 2}, {9, 24}, {9, 20}, {10, 2},
     /* 83..127: shaker */
 };
 static uint32_t ds_lane(uint32_t note, int32_t *semi)
@@ -55,7 +55,7 @@ static uint32_t ds_lane(uint32_t note, int32_t *semi)
     if (note < 35u)
         return 0;
     if (note >= 83u)
-        return 9;
+        return 10;                                  /* (the shaker) */
     *semi = DS_MAP[note - 35u].semi;
     return DS_MAP[note - 35u].lane;
 }
@@ -385,4 +385,4 @@ static const dsu_kit_t *dsu_kit(uint32_t k)       /* (RAM never set up: the defa
     return &dsu.k[k % DSU_N];
 }
 /* the GM note each synthesised lane answers to with no pitch offset (DS_MAP): the editor's audition */
-static const uint8_t DS_LANE_NOTE[DS_LANES] = {36, 38, 39, 42, 46, 43, 48, 49, 51, 70, 63, 37, 56, 75, 35, 40};
+static const uint8_t DS_LANE_NOTE[DS_LANES] = {36, 38, 39, 42, 46, 43, 45, 48, 49, 51, 70, 37, 56, 75, 35, 40};

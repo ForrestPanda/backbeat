@@ -125,7 +125,7 @@ static void finish(void)
 
 /* --------------------------------------------------------- the drums --- */
 /* the lanes (drums.c LANE_NOTE order) */
-enum { LANE_KICK = 0, LANE_SNARE = 2, LANE_HAT = 4, LANE_OHAT = 5, LANE_LTOM = 9, LANE_HTOM = 10, LANE_CRASH = 11 };
+enum { LANE_KICK = 0, LANE_SNARE = 2, LANE_HAT = 4, LANE_OHAT = 5, LANE_LTOM = 9, LANE_HTOM = 11, LANE_CRASH = 12 };
 /* a hit as the keys and MIDI give it (seq.c drum_input): GM note n's lane at velocity v's level */
 static void hit(uint32_t n, uint32_t v) { drum_input(lane_of_note(n), vel_lvl(v)); }
 
@@ -212,7 +212,7 @@ static void job_groove(const job_t *j)          /* two passes of the groove, the
 }
 static void job_insert(const job_t *j)          /* the drum track's INSERT (fx.c): type arg, its knobs half up */
 {
-    groove(DRUM_DEFAULT_KIT, 0);
+    groove(DRUM_SAMPLED, 0);   /* (808: the renders before the layered kit became the default) */
     TDRUM->p[P_ITYPE] = j->arg;
     TDRUM->p[P_IA] = TDRUM->p[P_IB] = TDRUM->p[P_IC] = 64;
     TDRUM->p[P_IMIX] = 100;
@@ -226,7 +226,7 @@ static void job_insert(const job_t *j)          /* the drum track's INSERT (fx.c
 }
 static void job_master(const job_t *j)          /* arg 0: DUST, 1: the DJ filter low-pass, 2: high-pass */
 {
-    groove(DRUM_DEFAULT_KIT, 0);
+    groove(DRUM_SAMPLED, 0);   /* (808: the renders before the layered kit became the default) */
     if (j->arg == 0u)
         song.g[G_DUST] = 90;
     else
@@ -285,7 +285,7 @@ static void job_cpu(const job_t *j)
     if (j->kit == 0xFEu)
         host_tracks_init();                     /* idle: nothing plays */
     else if (j->busy || j->kit != 0xFFu)
-        groove(j->kit == 0xFFu ? DRUM_DEFAULT_KIT : j->kit, j->busy);
+        groove(j->kit == 0xFFu ? DRUM_SAMPLED : j->kit, j->busy);
     else
         host_tracks_init();
     if (j->busy || (j->kit != 0xFFu && j->kit != 0xFEu))
@@ -428,7 +428,7 @@ static int chk_hang(char *msg, uint32_t n)
     char who[96] = "";
     int bad = 0;
     for (round = 0; round < 3u && !bad; round++) {
-        groove(DRUM_DEFAULT_KIT, 0);
+        groove(DRUM_SAMPLED, 0);   /* (808: the renders before the layered kit became the default) */
         transport_req = 1;
         for (k = 0; k < 6u * FS / CTL; k++) {
             uint32_t r = rnd(16);
@@ -551,6 +551,13 @@ int main(int argc, char **argv)
         j = add(J_GROOVE, name);
         j->kit = (uint8_t)i;
     }
+    {                                           /* the layered kit (its ghosts and hards: the layers; the takes in turn) */
+        job_t *j;
+        slug(s, DRUM_KIT_NAMES[DRUM_REAL], sizeof s);
+        snprintf(name, sizeof name, "drums/groove/%02u_%s", (unsigned)DRUM_REAL, s);
+        j = add(J_GROOVE, name);
+        j->kit = (uint8_t)DRUM_REAL;
+    }
     for (i = IT_SOFT; i < IT_N; i++) {
         snprintf(name, sizeof name, "drums/insert/%u", i);
         add(J_INSERT, name)->arg = (uint8_t)i;
@@ -586,6 +593,16 @@ int main(int argc, char **argv)
         slug(s, DRUM_KIT_NAMES[i], sizeof s);
         snprintf(name, sizeof name, "cpu/groove/%02u_%s", i, s);
         add(J_CPU, name)->kit = (uint8_t)i;
+    }
+    {                                                 /* the layered kit: its groove, and the busy pattern on it (every
+                                                       * lane, long tails: the twelve voices' worst) */
+        job_t *j;
+        slug(s, DRUM_KIT_NAMES[DRUM_REAL], sizeof s);
+        snprintf(name, sizeof name, "cpu/groove/%02u_%s", (unsigned)DRUM_REAL, s);
+        add(J_CPU, name)->kit = (uint8_t)DRUM_REAL;
+        j = add(J_CPU, "cpu/drums/busy_real");
+        j->kit = (uint8_t)DRUM_REAL;
+        j->busy = 1;
     }
     c1 = nj;
     if (getenv("CPU_JOB")) {                          /* one CPU job in this process (cpu_callgrind's child) */

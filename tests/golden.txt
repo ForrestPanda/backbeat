@@ -1,6 +1,6 @@
 # FELUCCA golden renders (tests/regress.c): name, FNV-1a 64 of the output samples.
 # Rewritten by GOLDEN_UPDATE=1 tests/run_tests.sh -- only for an intended change of the sound.
-drums/gm_kit 97750328f0896d25
+drums/gm_kit 3763afcd178d85b7
 drums/groove/00_ACOUSTIC c87cca78c4015444
 drums/groove/01_DEEP 3538474f434ce7bd
 drums/groove/02_TIGHT 5f910d704254a8b2
@@ -38,6 +38,7 @@ drums/groove/33_INDUSTR 0abc8cf5549adb63
 drums/groove/34_HYPER 81ebd38442a34caa
 drums/groove/35_AMBIENT af11a64dbe10da5f
 drums/groove/36_JAZZ 5b9aba9306924494
+drums/groove/46_MULDJORD 4606ce236c1a94ed
 drums/insert/1 578c7b301d395262
 drums/insert/2 70f50c41cea8a1f8
 drums/insert/3 5df66c4bf51f61e0

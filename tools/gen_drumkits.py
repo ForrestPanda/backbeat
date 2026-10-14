@@ -3,7 +3,8 @@
 """Synthesised drum kits for firmware/src/drum_synth.c -> felucca_drumkits.h
 
 Each kit has 16 sounds (lanes), one per white key of the drum track:
-KICK SNARE CLAP CHH OHH TOMLO TOMHI CRASH RIDE SHAKER CONGA RIM COWBELL CLAVE KICK2 SNARE2.
+KICK SNARE CLAP CHH OHH TOMLO MIDTOM TOMHI CRASH RIDE SHAKER RIM COWBELL CLAVE KICK2 SNARE2. (MIDTOM since
+2026-10-14, the conga gone: each kit's mid tom is made from its two toms, midtom() below.)
 A sound is written in musical units (Hz, ms, octaves, dB) and converted to the table indices
 the firmware uses (MIDI note + 1/16, DECAY_K and CUTOFF_HZ indices). The level of every sound
 (LEVELS, tools/drumkit_levels.json) is measured, not guessed: tests/drum_level.c renders each
@@ -17,8 +18,8 @@ import math
 import sys
 from pathlib import Path
 
-LANES = ["KICK", "SNARE", "CLAP", "CHH", "OHH", "TOMLO", "TOMHI", "CRASH", "RIDE", "SHAKER",
-         "CONGA", "RIM", "COWBELL", "CLAVE", "KICK2", "SNARE2"]
+LANES = ["KICK", "SNARE", "CLAP", "CHH", "OHH", "TOMLO", "MIDTOM", "TOMHI", "CRASH", "RIDE",
+         "SHAKER", "RIM", "COWBELL", "CLAVE", "KICK2", "SNARE2"]
 WAVE = {None: 0, "sine": 1, "tri": 2, "square": 3, "fm": 4, "bell": 5}
 SRC = {None: 0, "white": 1, "metal": 2, "cym": 3, "chip": 4, "clap": 0x11}
 FMODE = {None: 0, "lp": 1, "bp": 2, "hp": 3}
@@ -102,7 +103,6 @@ K808 = dict(
     CRASH=S(None, 205, src="cym", nlev=108, nhold=10, ndec=1800, filt=("hp", 4600, .22)),
     RIDE=S(None, 262, src="metal", nlev=104, ndec=1300, filt=("bp", 5200, .6), hpf=3000, click=12),
     SHAKER=S(None, src="white", nlev=96, nhold=12, ndec=55, filt=("bp", 7200, .3)),
-    CONGA=S("sine", 310, 3, 25, 4, 230, 116, 1.5, 30, 24),
     RIM=S("tri", 1700, 0, 5, 0, 22, 92, 1.47, 70, 40, "white", 40, 0, 6, ("bp", 2600, .4, "all")),
     COWBELL=S("bell", 540, 0, 5, 6, 290, 108, filt=("bp", 2600, .5, "all")),
     CLAVE=S("sine", 2500, 0, 5, 0, 48, 108, click=12),
@@ -144,7 +144,6 @@ KCR78 = kit(K808,
     TOMLO=S("sine", 180, 2, 20, 4, 170, 112, click=8),
     TOMHI=S("sine", 260, 2, 20, 4, 150, 110, click=8),
     SHAKER=S(None, src="white", nlev=92, nhold=6, ndec=30, filt=("bp", 8000, .35)),
-    CONGA=S("sine", 400, 2, 15, 4, 130, 112, click=14),
     RIM=S("sine", 1600, 0, 5, 0, 30, 100, 1.5, 50, 30),
     COWBELL=S("bell", 800, 0, 5, 4, 160, 104, filt=("bp", 3000, .5, "all")),
 )
@@ -174,7 +173,6 @@ KCHIP = dict(
     CRASH=S(None, src="chip", nlev=96, nhold=20, ndec=900, chip=4200),
     RIDE=S("square", 1500, 0, 5, 0, 300, 50, src="chip", nlev=60, ndec=200, chip=12500),
     SHAKER=S(None, src="chip", nlev=84, ndec=45, chip=13000),
-    CONGA=S("tri", 330, 5, 30, 4, 120, 110),
     RIM=S("square", 1200, 0, 5, 0, 25, 90),
     COWBELL=S("square", 700, 0, 5, 4, 150, 90),
     CLAVE=S("square", 2000, 0, 5, 0, 35, 90),
@@ -192,7 +190,6 @@ KFM = dict(
     CRASH=S("fm", 900, 0, 5, 0, 1200, 50, src="cym", nlev=90, ndec=1300, filt=("hp", 4000, .2)),
     RIDE=S("fm", 1300, 0, 5, 0, 900, 60, src="metal", nlev=50, ndec=700, filt=("bp", 6000, .5)),
     SHAKER=S(None, src="white", nlev=80, nhold=8, ndec=50, filt=("bp", 7000, .3)),
-    CONGA=S("fm", 330, 12, 40, 4, 160, 108),
     RIM=S("fm", 1500, 4, 5, 0, 25, 96, click=30),
     COWBELL=S("fm", 600, 0, 5, 4, 200, 96),
     CLAVE=S("fm", 2300, 0, 5, 0, 40, 100),
@@ -269,7 +266,7 @@ KITS = [
         KICK2=S("sine", 52, 10, 14, 8, 240, 124, click=30),
         SNARE=S("tri", 1100, 0, 5, 0, 18, 90, 1.5, 50, 40, "white", 60, 0, 25, ("hp", 3000, .3)),
         CLAP=dict(ndec=90), CHH=dict(ndec=18, filt=("hp", 10000, .3), hpf=9500), OHH=dict(ndec=120),
-        CONGA=dict(decay=90, hz=420), RIM=dict(decay=12))),
+        RIM=dict(decay=12))),
     ("ELECTRO", "ELECTRO", 0, kit(K808,
         KICK=S("sine", 52, 24, 70, 10, 520, 124, click=40, drive=24),
         SNARE=dict(ndec=120, filt=("hp", 2000, .2), click=36),
@@ -304,19 +301,19 @@ KITS = [
         KICK2=S("sine", 55, 24, 120, 20, 700, 124, 2.0, 50, 30, drive=56,             # the log drum
                 filt=("lp", 1400, .5, "all"), fenv=1.5),
         SHAKER=S(None, src="white", nlev=104, nhold=16, ndec=70, filt=("bp", 6500, .35)),
-        CLAP=dict(ndec=260), CONGA=dict(decay=260),
+        CLAP=dict(ndec=260),
         COWBELL=dict(hz=900, decay=160))),
     ("AFRO", "AFROBEAT", 0, kit(K808,
         KICK=S("sine", 60, 10, 30, 6, 260, 120, click=20, filt=("lp", 2000, .1, "all")),
         SNARE=S("tri", 330, 3, 10, 0, 60, 92, 1.5, 50, 30, "white", 70, 0, 60, ("bp", 5000, .3)),
-        CONGA=dict(decay=260, bend=2), TOMLO=S("sine", 160, 2, 20, 6, 260, 114, click=20),
+        TOMLO=S("sine", 160, 2, 20, 6, 260, 114, click=20),
         TOMHI=S("sine", 230, 2, 20, 6, 220, 112, click=20), SHAKER=dict(ndec=80, nlev=100),
         COWBELL=dict(hz=900, decay=180))),
     ("LATIN", "LATIN", 0, kit(KCR78,
         KICK=S("sine", 62, 6, 20, 6, 230, 116, click=16, filt=("lp", 1800, .1, "all")),
         TOMLO=S("sine", 200, 3, 15, 4, 200, 114, 1.6, 40, 40, "white", 26, 0, 15, ("bp", 4000, .3)),   # timbales
         TOMHI=S("sine", 300, 3, 15, 4, 180, 114, 1.6, 40, 40, "white", 26, 0, 15, ("bp", 4500, .3)),
-        CONGA=dict(hz=330, decay=240, click=30), COWBELL=dict(hz=650, decay=240),
+        COWBELL=dict(hz=650, decay=240),
         CLAVE=dict(hz=2400, decay=55))),
     ("TRIBAL", "TRIBAL", 0, kit(K808,
         KICK=S("sine", 52, 14, 60, 10, 600, 124, click=30, src="white", nlev=30, ndec=10, filt=("lp", 1500, .2)),
@@ -324,8 +321,7 @@ KITS = [
         TOMLO=S("sine", 75, 8, 90, 10, 600, 120, 1.5, 40, 30, "white", 26, 0, 30, ("lp", 1500, .2)),
         TOMHI=S("sine", 115, 8, 90, 10, 520, 118, 1.5, 40, 30, "white", 26, 0, 30, ("lp", 2000, .2)),
         CHH=S(None, src="white", nlev=90, ndec=40, filt=("bp", 6000, .3), hpf=5000),
-        OHH=S(None, src="white", nlev=92, nhold=10, ndec=160, filt=("bp", 5000, .3), hpf=4000),
-        CONGA=dict(decay=320))),
+        OHH=S(None, src="white", nlev=92, nhold=10, ndec=160, filt=("bp", 5000, .3), hpf=4000))),
     # -- synths and games
     ("SYNTHWV", "SYNTHWAVE", 0, kit(K707,
         SNARE=dict(ndec=360, drive=50, nlev=120, hold=10),
@@ -367,6 +363,19 @@ KITS = [
 ]
 
 
+def midtom(k):
+    """the kit's mid tom, between its two: the low tom's sound at the geometric mean of their pitches, their mean
+    hold and decay, the filter's cutoff between theirs"""
+    lo, hi = k["TOMLO"], k["TOMHI"]
+    m = copy.deepcopy(lo)
+    m["hz"] = math.sqrt(lo["hz"] * hi["hz"])
+    for f in ("hold", "decay", "tlev", "click", "bend", "bt"):
+        m[f] = (lo[f] + hi[f]) / 2
+    if lo["filt"] and hi["filt"] and lo["filt"][0] == hi["filt"][0]:
+        m["filt"] = (lo["filt"][0], math.sqrt(lo["filt"][1] * hi["filt"][1])) + tuple(lo["filt"][2:])
+    return m
+
+
 def main(path):
     levels = json.loads(LEVELS_FILE.read_text()) if LEVELS_FILE.exists() else {}
     L = ["/* generated by tools/gen_drumkits.py */", "#pragma once",
@@ -374,8 +383,12 @@ def main(path):
     for name, style, crush, k in KITS:
         assert len(name) <= 8 and len(style) <= 12, name
         L.append(f'    {{"{name}", "{style}", 0x{crush:02X}, {{')
+        lv = levels.get(name, {})
         for lane in LANES:
-            v = enc(k[lane], levels.get(name, {}).get(lane, 0.0))
+            snd = midtom(k) if lane == "MIDTOM" else k[lane]
+            trim = (lv.get("TOMLO", 0.0) + lv.get("TOMHI", 0.0)) / 2 if lane == "MIDTOM" else lv.get(lane, 0.0)   # (the
+                                                       # toms' measured trims: the other lanes' levels untouched)
+            v = enc(snd, trim)
             assert len(v) == 22 and all(0 <= x <= 255 for x in v), (name, lane, v)
             assert -128 <= v[17] <= 127, (name, lane)
             L.append("        {" + ", ".join(str(x) for x in v) + f"}},   /* {lane} */")

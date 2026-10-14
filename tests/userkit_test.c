@@ -79,7 +79,7 @@ int main(void)
     song.g[G_DRREV] = 0;                                 /* (no reverb tail between the checks) */
     slot_build(0, notes, lens, 4);
     check(usr_nz[0] == 4u && !usr_nz[1], "USR1 read by smp_user_scan: 4 zones; USR2 empty");
-    check(DRUM_SYN == DRUM_USR + 5u && DRUM_KITS == DRUM_SYN + 4u && !strcmp(DRUM_KIT_NAMES[DRUM_USR], "USR1") && !strcmp(DRUM_KIT_NAMES[DRUM_USR + 3u], "USR4") &&
+    check(DRUM_SYN == DRUM_USR + 5u && DRUM_KITS == DRUM_SYN + 5u && !strcmp(DRUM_KIT_NAMES[DRUM_USR], "USR1") && !strcmp(DRUM_KIT_NAMES[DRUM_USR + 3u], "USR4") &&
           !strcmp(DRUM_KIT_NAMES[DRUM_PAIR], "USR3+4") && DRUM_PAIR == DRUM_SYN - 1u && !strcmp(DRUM_KIT_NAMES[DRUM_SAMPLED], "808"),
           "KIT: USR1..USR4, USR3+4 after the synthesised kits (the old kit numbers kept)");
     check(SMP_USER_OFF(0u) == 0xA0000u && SMP_USER_OFF(2u) == 0xC8000u && SMP_USER_OFF(3u) == 0xE7000u &&
@@ -199,6 +199,52 @@ int main(void)
         check(pk[2] > 8000, "the click with the drum track muted: heard");
         check(pk[3] < 64, "the click at GLO > DRUMS > LVL 0: silent (its level)");
         song.g[G_CLOCK] = 0;
+    }
+    {   /* the layered kit (KIT MULDJORD, samples.c set REAL): the layer by velocity, the takes in turn, never the same
+         * twice running; a layer plays at its own level (its velocity: full); the power-on kit */
+        uint32_t z0 = SMP_SETS[SMP_REAL_SET].z0, sn = 2u, rd = 13u,   /* (lanes: SNARE 2, RIDE 13) */ k, ok, last = 0xFFu, seen = 0;
+        static const uint8_t V[4] = {127, 100, 72, 42};
+        int32_t pk[4];
+        check(DRUM_DEFAULT_KIT == DRUM_REAL && !strcmp(DRUM_KIT_NAMES[DRUM_REAL], "MULDJORD") && RK_LANE[sn].nl == 4u &&
+              RK_LANE[rd].nl == 2u && !strcmp(SMP_SET_NAMES[SMP_REAL_SET], "REAL"), "MULDJORD: the power-on kit; snare 4 layers, ride 2");
+        host_tracks_init();
+        TDRUM->p[P_E0] = (int16_t)DRUM_REAL;
+        for (k = 0, ok = 1; k < 4u; k++) {
+            uint32_t i, zid;
+            quiet();
+            drum_on(LANE_NOTE[sn], V[k]);
+            for (i = 0; i < NDRUM && !drums.v[i].active; i++)
+                ;
+            zid = (uint32_t)drums.v[i].s[4] - z0;
+            ok &= zid >= RK_LANE[sn].z[k] && zid < RK_LANE[sn].z[k] + RK_LANE[sn].nt[k] && drums.v[i].vel == 127u;
+            pk[k] = run_peak(20);
+        }
+        check(ok, "MULDJORD: velocities 127, 100, 72, 42 play the snare's layers 1..4, each at its own level");
+        check(pk[0] > pk[1] && pk[1] > pk[2] && pk[2] > pk[3] && pk[3] > 600, "MULDJORD: hard > normal > soft > ghost, the ghost heard");
+        quiet(); drum_on(LANE_NOTE[rd], 100); for (k = 0; k < NDRUM && !drums.v[k].active; k++) ;
+        ok = (uint32_t)drums.v[k].s[4] - z0 == RK_LANE[rd].z[0] && drums.v[k].vel == 100u;
+        quiet(); drum_on(LANE_NOTE[rd], 72); for (k = 0; k < NDRUM && !drums.v[k].active; k++) ;
+        ok &= (uint32_t)drums.v[k].s[4] - z0 == RK_LANE[rd].z[1] && drums.v[k].vel == 127u;
+        check(ok, "MULDJORD: two layers: a normal hit (100) the hard layer a little under, a soft one (72) the soft layer");
+        for (k = 0, ok = 1; k < 60u; k++) {        /* the hard snare, 60 times: its takes in turn, never twice running */
+            uint32_t i, t;
+            quiet();
+            drum_on(LANE_NOTE[sn], 127);
+            for (i = 0; i < NDRUM && !drums.v[i].active; i++)
+                ;
+            t = (uint32_t)drums.v[i].s[4] - z0 - RK_LANE[sn].z[0];
+            ok &= t < RK_LANE[sn].nt[0] && t != last;
+            seen |= 1u << t;
+            last = t;
+        }
+        check(ok && seen == (1u << RK_LANE[sn].nt[0]) - 1u, "MULDJORD: 60 snares: every take, never the same twice running");
+        quiet();
+        for (k = 0; k < 12u; k++)                  /* twelve voices: a crash rings under eleven hits */
+            drum_on(k ? LANE_NOTE[k % 2u ? 0u : 2u] : LANE_NOTE[12], 127);   /* (lane 12: the crash) */
+        for (k = 0, ok = 0; k < NDRUM; k++)
+            ok += drums.v[k].active && drums.v[k].note == LANE_NOTE[12];
+        check(NDRUM == 12u && ok == 1u, "MULDJORD: 12 voices: the crash still rings after eleven more hits");
+        quiet();
     }
     printf("userkit: %s\n", fails ? "FAILED" : "KIT USR1..USR4, USR3+4 PASS");
     return fails != 0;

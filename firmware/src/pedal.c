@@ -90,12 +90,31 @@ static void pedal_name(uint32_t s, char *out)    /* the section's name for the s
     }
 }
 
-static void pedal_fill_req(void)                  /* CC 21: the fill until the pattern's end; in its last bar: the next cycle too */
+/* the drum track's fill-only hits (a step's FILL ONLY condition, a hit's own F mark) on steps from..to-1 */
+static int pedal_fill_hits(uint32_t from, uint32_t to)
 {
+    const track_t *t = TDRUM;
+    uint32_t i;
+    for (i = from; i < to && i < NSTEP; i++)
+        if (drum_fonly[i] || (step_fill(t, i) == FC_FILL && dstep_mask(&t->dstep[i])))
+            return 1;
+    return 0;
+}
+/* CC 21: the fill until the pattern's end. It carries through the next cycle too when the pattern's fill hits are all
+ * behind the request (asked too late to hear them: a one-bar verse's fill on its last beats, asked on beat 1, plays
+ * now, 2026-10-14; before, any request in the last bar carried, so a one-bar pattern always filled twice); a pattern
+ * with no fill hits: when asked in its last bar, as before */
+static void pedal_fill_req(void)
+{
+    uint32_t len = trk_len(TDRUM), next = (uint32_t)TDRUM->seq_idx + 1u, late;
     if (!song.playing)
         return;
     pedal_fill = 1;
-    pedal_fill_hold = (uint8_t)((live_bar + 1u) % live_sec_bars() == 0u ? 2u : 1u);
+    if (pedal_fill_hits(0, len))
+        late = !pedal_fill_hits(next, len);
+    else
+        late = (live_bar + 1u) % live_sec_bars() == 0u;
+    pedal_fill_hold = (uint8_t)(late ? 2u : 1u);
     pedal_say(PU_FILL, "");
 }
 

@@ -32,6 +32,7 @@ SRC = Path(__file__).resolve().parents[1]
 GENDIR = SRC / "build" / "genwav"
 CACHE = SRC / "build" / "gen_samples.cache"
 CC0 = SRC / "assets" / "samples-cc0"
+REAL = SRC / "assets" / "realkit"            # fm1-drummer: the built-in layered kit (tools/gen_realkit.py: set REAL)
 TR = 22050                                   # stored sample rate
 
 # set -> kind ("oneshot" decaying, "sus" looped sustain, "piano" its attack then a steady loop that the
@@ -257,6 +258,33 @@ class Builder:
         self.sets.append(("PERC", z0, len(self.zones) - z0))
         self.kinds["PERC"] = "kit"
 
+    def real_kit(self):
+        """fm1-drummer: the layered kit (assets/realkit, tools/gen_realkit.py), set REAL: a zone a take, lane by lane, its
+        layers hardest first; RK_LANE (below) says where each lane's layers and takes are"""
+        meta = REAL / "kit.json"
+        self.rk = []
+        if not meta.exists():
+            return
+        import json
+        kit = json.loads(meta.read_text())
+        z0 = len(self.zones)
+        for L in kit["lanes"]:
+            layers = []
+            for files in L["files"]:
+                layers.append((len(self.zones) - z0, len(files)))
+                for f in files:
+                    sr, x = wav(REAL / f)
+                    if sr != L["rate"]:
+                        raise SystemExit(f"{f}: {sr} Hz, kit.json says {L['rate']}")
+                    smp = [max(-32768, min(32767, int(round(v * 32768)))) for v in x]
+                    off, st = self.add(smp, len(smp))
+                    self.zones.append(dict(off=off, n=len(smp), ls=len(smp), le=len(smp), looped=False, sr=L["rate"],
+                                           root16=L["note"] * 16, pred=st[0], idx=st[1], lo=L["note"], hi=L["note"]))
+            self.rk.append((L["lane"], L["note"], layers, L["vel"]))
+        self.sets.append(("REAL", z0, len(self.zones) - z0))
+        self.kinds["REAL"] = "kit"
+        self.real_name = kit["name"]
+
     def cc0_set(self, name, kind):
         entries = []
         for k, (_, s, loop, root) in enumerate(cc0_entries(name, kind)):
@@ -292,6 +320,22 @@ class Builder:
             L.append('    {"NONE", 0, 1},')
         L.append("};")
         L.append(f"#define SMP_NSETS {max(1, len(sets))}")
+        # fm1-drummer: the layered kit: per lane (drums.c's order, LANE_NOTE) its layers' first zone (from the set's
+        # first) and takes, and the velocity each layer stands for; nl 0: no such lane (or no kit)
+        lanes = ["KICK", "KICK2", "SNARE", "CLAP", "HAT", "OPENHAT", "PEDAL", "RIM", "SNARE2", "LOWTOM", "MIDTOM", "HITOM", "CRASH",
+                 "RIDE", "SHAKER", "COWBELL"]
+        rk = {lane: (layers, vel) for lane, _, layers, vel in getattr(self, "rk", [])}
+        real = next((i for i, (n, _, _) in enumerate(sets) if n == "REAL"), -1)
+        L.append(f"#define SMP_REAL_SET {real}")
+        L.append(f'#define SMP_REAL_NAME "{getattr(self, "real_name", "")}"')
+        L.append("static const struct { uint8_t nl, z[4], nt[4], vel[4]; } RK_LANE[16] = {")
+        for lane in lanes:
+            layers, vel = rk.get(lane, ([], []))
+            z = [a for a, _ in layers] + [0] * (4 - len(layers))
+            nt = [b for _, b in layers] + [0] * (4 - len(layers))
+            v = list(vel) + [0] * (4 - len(vel))
+            L.append(f"    {{{len(layers)}, {{{', '.join(map(str, z))}}}, {{{', '.join(map(str, nt))}}}, {{{', '.join(map(str, v))}}}}},   /* {lane} */")
+        L.append("};")
         names = ", ".join(f'"{n}"' for n, _, _ in sets or [("NONE", 0, 0)])
         L.append("#define SMP_SET_NAMES_INIT " + names)
         L.append("static const char *const SMP_SET_NAMES[] = {" + names + "};")
@@ -308,7 +352,7 @@ def input_key(have_cc0):
     for p in (here / "gen_samples.py", here / "sampleio.py"):
         h.update(p.read_bytes())
     h.update(repr((sys.version_info[:2], have_cc0)).encode())   # sum() differs across versions
-    files = sorted(GENDIR.glob("*.wav"))
+    files = sorted(GENDIR.glob("*.wav")) + sorted(REAL.glob("*.wav")) + sorted(REAL.glob("*.json"))
     if have_cc0:
         files += sorted(CC0.glob("*/*.wav"))
     for p in files:
@@ -337,6 +381,7 @@ def main(out):
             if kind != "kit":                       # the CC0 KIT feeds the GM kit
                 b.cc0_set(name, kind)
     b.gm_kit(have_cc0)
+    b.real_kit()
     text = b.header()
     Path(out).write_text(text)
     CACHE.parent.mkdir(parents=True, exist_ok=True)

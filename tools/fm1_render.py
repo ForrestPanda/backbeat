@@ -31,8 +31,12 @@ def build_renderer():
     src = os.path.join(ROOT, "tests", "song_render.c")
     if not os.path.isdir(os.path.join(ROOT, "build", "gen")):
         sys.exit("no build/gen: run ./build.sh once (the generated tables)")
-    if not os.path.exists(exe) or os.path.getmtime(exe) < max(os.path.getmtime(src),
-                                                              os.path.getmtime(os.path.join(ROOT, "firmware", "src", "sng.c"))):
+    import glob
+    deps = [src] + glob.glob(os.path.join(ROOT, "firmware", "src", "*.[ch]")) + glob.glob(os.path.join(ROOT, "build", "gen", "*.h"))
+    if not os.path.exists(exe) or os.path.getmtime(exe) < max(os.path.getmtime(p) for p in deps):   # (any firmware source
+                                                                                                    # or generated table: a
+                                                                                                    # stale renderer once
+                                                                                                    # played kit 46 as 45)
         os.makedirs(os.path.dirname(exe), exist_ok=True)
         cmd = ["cc", "-O2", "-w", "-Ibuild/gen", "-Ifirmware/src", "-o", exe, src, "-lm"]
         r = subprocess.run(cmd, cwd=ROOT)

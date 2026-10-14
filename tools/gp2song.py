@@ -17,8 +17,8 @@ is dropped. Every percussion track of the file goes into the pattern (drums and 
 pattern repeats an earlier one (Chorus 2, Chorus 3) are skipped; at most 16 are kept, the outro always
 (--sections picks and orders them by their marker titles). A section called OUTRO, ENDING, END or CODA is
 the outro. GM drum notes go to the 16 lanes (kick 35 36, snare 38 40, side stick 37, clap 39, hats 42 44
-46, toms 41..50, crash 49 52 55 57, ride 51 53 59, cowbell 56, shaker and tambourine 54 69 70 82, congas
-60..64); accents and ghost notes become HARD and GHOST hits, velocities otherwise the four levels (under
+46, toms 41 43 low, 45 47 mid, 48 50 high, crash 49 52 55 57, ride 51 53 59, cowbell 56, shaker and tambourine 54 69 70 82;
+the congas and bongos 60..64 are left out: no lane since the mid tom took the conga's); accents and ghost notes become HARD and GHOST hits, velocities otherwise the four levels (under
 50 ghost, under 80 soft, under 110 normal, else hard); two 32nd hits in one 16th step become a ratchet.
 A section's meter is its pattern bars' time signature ("time": "7/8" in the JSON; 4/4 is left out): the
 device counts the pedal's bars, the click and the count-in in it. Tempo changes inside the file are ignored
@@ -34,13 +34,13 @@ except ImportError:
     sys.exit("needs PyGuitarPro: pip install pyguitarpro")
 
 LANES = ["KICK", "KICK2", "SNARE", "CLAP", "HAT", "OPENHAT", "PEDAL", "RIM",
-         "SNARE2", "LOWTOM", "HITOM", "CRASH", "RIDE", "SHAKER", "CONGA", "COWBELL"]
+         "SNARE2", "LOWTOM", "MIDTOM", "HITOM", "CRASH", "RIDE", "SHAKER", "COWBELL"]
 GM = {35: "KICK", 36: "KICK", 38: "SNARE", 40: "SNARE", 37: "RIM", 31: "RIM", 39: "CLAP",
       42: "HAT", 44: "PEDAL", 46: "OPENHAT",
-      41: "LOWTOM", 43: "LOWTOM", 45: "LOWTOM", 47: "HITOM", 48: "HITOM", 50: "HITOM",
+      41: "LOWTOM", 43: "LOWTOM", 45: "MIDTOM", 47: "MIDTOM", 48: "HITOM", 50: "HITOM",
       49: "CRASH", 52: "CRASH", 55: "CRASH", 57: "CRASH", 51: "RIDE", 53: "RIDE", 59: "RIDE",
       56: "COWBELL", 67: "COWBELL", 68: "COWBELL", 54: "SHAKER", 69: "SHAKER", 70: "SHAKER", 82: "SHAKER",
-      60: "CONGA", 61: "CONGA", 62: "CONGA", 63: "CONGA", 64: "CONGA", 65: "HITOM", 66: "LOWTOM",
+      65: "HITOM", 66: "MIDTOM",
       75: "RIM", 76: "RIM", 77: "RIM", 58: "RIM", 80: "SHAKER", 81: "SHAKER"}
 QUARTER = 960                                 # Duration.quarterTime
 LEVEL_CHAR = {0: "x", 1: "g", 2: "o", 3: "X"}  # LV_NORM, LV_GHOST, LV_SOFT, LV_HARD
@@ -291,7 +291,7 @@ def bar_strings(measures, tps=QUARTER // 4):
     return out
 
 
-def convert(source, sections=None, track=None, kit=0, keep_duplicates=False, auto=False, log=print, title=None, detail=False):
+def convert(source, sections=None, track=None, kit=46, keep_duplicates=False, auto=False, log=print, title=None, detail=False):
     """a Guitar Pro file (a path, or a file-like object) -> the song JSON (a dict); what main() prints goes to log.
     sections: marker titles to keep, in order; track: one track's number; auto: sections from the drums alone.
     detail: the dict also carries "bars" (every bar of the file as strings at 1/16) and "ranges" (each section's
@@ -379,7 +379,7 @@ def main():
     ap.add_argument("--out", help="the song JSON to write")
     ap.add_argument("--sections", help="the marker titles to keep, in order, comma separated")
     ap.add_argument("--track", type=int, help="one track's number (default: every percussion track)")
-    ap.add_argument("--kit", type=int, default=0, help="the kit index (default 0, ACOUSTIC)")
+    ap.add_argument("--kit", type=int, default=46, help="the kit index (default 46, MULDJORD: the layered kit; 0 ACOUSTIC)")
     ap.add_argument("--keep-duplicates", action="store_true", help="keep sections whose pattern repeats an earlier one")
     ap.add_argument("--auto", action="store_true", help="find the sections from the drums alone, ignoring the markers")
     a = ap.parse_args()

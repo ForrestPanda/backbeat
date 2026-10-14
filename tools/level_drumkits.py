@@ -19,10 +19,10 @@ from scipy.signal import lfilter
 FS = 44100
 N = FS * 2 // 32 * 32
 HERE = Path(__file__).parent
-LANES = "KICK SNARE CLAP CHH OHH TOMLO TOMHI CRASH RIDE SHAKER CONGA RIM COWBELL CLAVE KICK2 SNARE2".split()
+LANES = "KICK SNARE CLAP CHH OHH TOMLO MIDTOM TOMHI CRASH RIDE SHAKER RIM COWBELL CLAVE KICK2 SNARE2".split()
 KICK = -12.0                                   # the kick's loudness, LUFS-like (100 ms window)
 REL = dict(KICK=0, KICK2=0, SNARE=-1, SNARE2=-2.5, CLAP=-2, CHH=-15, OHH=-12, TOMLO=-3, TOMHI=-3.5,
-           CRASH=-10, RIDE=-13, SHAKER=-17, CONGA=-5, RIM=-6, COWBELL=-6, CLAVE=-7)
+           CRASH=-10, RIDE=-13, SHAKER=-17, MIDTOM=-3.25, RIM=-6, COWBELL=-6, CLAVE=-7)
 KIT = {"AMBIENT": -1.5, "JAZZ": -1.5, "VINTAGE": -0.5, "LATIN": -0.5}
 PEAK = -4.0
 

@@ -315,10 +315,10 @@ function editorPlay() {
   P.fillNext(st); P.request(st, 1);                       /* CC 21 with CC 20 (a section brings no fill of its own): the
                                                               rest of the bar is the fill */
   const fillHits = [];
-  for (let i = 12; i < 16; i++) { ev = P.tick(st); fillHits.push(ev.hits.some((h) => h.lane === 10)); }
+  for (let i = 12; i < 16; i++) { ev = P.tick(st); fillHits.push(ev.hits.some((h) => h.lane === E.SNG.laneIndex("HITOM"))); }
   ok(ev.fill && fillHits.join() === "true,false,true,false" && ev.newBar, "play: the fill: FILL ONLY toms play on 13 and 15, the bar ends");
   ev = P.tick(st);
-  ok(st.sec === 1 && ev.sec === 1 && ev.step === 0 && !ev.fill && ev.hits.some((h) => h.lane === 11) && st.req < 0, "play: B on the bar with its crash, the fill over");
+  ok(st.sec === 1 && ev.sec === 1 && ev.step === 0 && !ev.fill && ev.hits.some((h) => h.lane === E.SNG.laneIndex("CRASH")) && st.req < 0, "play: B on the bar with its crash, the fill over");
   for (let i = 1; i < 16; i++) ev = P.tick(st);
   ok(ev.newBar && st.bar === 1 && st.sec === 1, "play: B's second bar (32 steps = 2 bars)");
   {   /* a section asked for waits for the one playing to end its pattern: B (2 bars) asked for in its first bar plays
@@ -357,12 +357,19 @@ function editorPlay() {
   for (let i = 0; i < 16; i++) ev = P.tick(st);            /* the rest of bar 2 */
   ok(st.sec === 0 && !st.fill && st.req < 0, "play: ..the section on the next bar");
   for (let i = 0; i < 16; i++) ev = P.tick(st);            /* (a bar of A) */
-  P.fillNext(st);                                          /* CC 21 in A (1 bar): the fill now, and through the next bar */
-  ok(st.fill && st.fillHold === 2, "play: the fill (CC 21) from now");
-  for (let i = 0; i < 16; i++) ev = P.tick(st);
-  ok(st.fill && st.fillHold === 1, "play: ..and the next bar (the next cycle of a 1-bar section)");
+  P.fillNext(st);                                          /* CC 21 at A's start (1 bar, its fill toms on 13 and 15 still
+                                                              ahead): the fill this bar only (until 2026-10-14 the next bar
+                                                              too: a 1-bar section filled twice) */
+  ok(st.fill && st.fillHold === 1, "play: the fill (CC 21) from now, its toms still ahead: this bar");
   for (let i = 0; i < 16; i++) ev = P.tick(st);
   ok(!st.fill && !st.fillHold && st.sec === 0, "play: ..over after it");
+  for (let i = 0; i < 15; i++) ev = P.tick(st);            /* past A's fill toms (13, 15): asked too late for them */
+  P.fillNext(st);
+  ok(st.fill && st.fillHold === 2, "play: asked after the fill's hits: through the next bar too");
+  for (let i = 15; i < 24; i++) ev = P.tick(st);            /* the middle of the next bar */
+  ok(st.fill && st.fillHold === 1 && ev.fill, "play: ..the next bar the fill");
+  for (let i = 24; i < 32; i++) ev = P.tick(st);
+  ok(!st.fill && !st.fillHold, "play: ..over after it");
   {   /* in B (2 bars): asked for in the first bar, the fill runs to the pattern's end; in the last bar, the next cycle too */
     const h = P.create(spec);
     P.request(h, 1); for (let i = 0; i < 4; i++) P.tick(h);
@@ -394,7 +401,7 @@ function editorPlay() {
       && Math.abs(evs[0].secs - 0.5) < 1e-9 && evs[3].newBar && !evs[2].newBar && c1.sec === 1 && c1.counting === 0,
       "play: count-in of a bar: four clicks a beat, the first accented, counted 4..1, nothing else");
     const e5 = P.tick(c1);
-    ok(e5.sec === 1 && e5.step === 0 && e5.hits.some((h) => h.lane === 11) && c1.req < 0, "play: ..then the section from its first step (B with its crash)");
+    ok(e5.sec === 1 && e5.step === 0 && e5.hits.some((h) => h.lane === E.SNG.laneIndex("CRASH")) && c1.req < 0, "play: ..then the section from its first step (B with its crash)");
     const c2 = P.create(spec, 2);
     P.request(c2, 0);
     { const e0 = P.tick(c2); ok(e0.ci === 1 && e0.ciN === 8 && e0.ciNum === 4 && e0.req === 0, "play: the count-in's steps carry COUNT 1 / 8 for the view"); }
@@ -539,7 +546,7 @@ function editorSed() {
     ok(steps[12].hits.map((x) => x.lane).sort().join() === "4" && steps[0].hits.length === 1, "play: outside a fill the tom (F) is out, the hat (N) and the kick (N) in");
     E.PLAY.fillNext(st);                                   /* (a 1-bar section: the fill from now, and the next bar too) */
     const f = []; for (let i = 0; i < 16; i++) f.push(E.PLAY.tick(st));
-    ok(f[12].fill && f[12].hits.map((x) => x.lane).sort().join() === "10", "play: in a fill the tom in, the hat out");
+    ok(f[12].fill && f[12].hits.map((x) => x.lane).sort().join() === String(E.SNG.laneIndex("HITOM")), "play: in a fill the tom in, the hat out");
   }
   ok(S.outro(fb, true).outro === true && !("outro" in S.outro(fb, false)) && S.rename(fb, "end part long name").name === "END PART LON", "sed: outro and names");
   ok(S.hits(fb) === 19 && E.SNG.pack({ name: "T", bpm: 100, sections: [wf.sec, parts[0]] }).length > 32, "sed: hit count; the result packs");
@@ -634,6 +641,28 @@ function editorMeter() {
   const q = P.create(spec, 1);
   P.load(q, other);
   ok(q.spec === other && q.countIn === 1 && !q.playing && q.bpm === 90, "load: stopped: the song cued, the count-in setting kept");
+}
+
+async function editorRealKit() {
+  /* the layered kit in the player, as drums.c plays it: the layer whose velocity is nearest, a take never the last */
+  const P = E.PLAY, four = [127, 100, 72, 42], two = [127, 72];
+  ok(js(P.VEL.map((v) => P.rkLayer(four, v))) === js([1, 3, 2, 0]) && js(P.VEL.map((v) => P.rkLayer(two, v))) === js([0, 1, 1, 0])
+    && P.rkLayer([127], 42) === 0, "realkit: levels normal, ghost, soft, hard -> layers 2, 4, 3, 1 (two layers: hard for normal and hard)");
+  const dc = readFileSync(join(HERE, "../firmware/src/drums.c"), "utf8");
+  ok(/if \(vel \* 2u >= \(uint32_t\)RK_LANE\[ln & 15u\]\.vel\[l\] \+ RK_LANE\[ln & 15u\]\.vel\[l \+ 1u\]\)/.test(dc)
+    && /t = \(rk_last\[ln & 15u\] \+ 1u \+ \(rk_seed >> 24\) % \(nt - 1u\)\) % nt;/.test(dc), "realkit: the same rules as drums.c rk_layer / rk_take");
+  let last = -1, rep = 0, seen = new Set();
+  for (let i = 0; i < 300; i++) { const t = P.rkTake(last, 3, Math.random()); rep += t === last; seen.add(t); last = t; }
+  ok(!rep && seen.size === 3 && P.rkTake(5, 1, 0.5) === 0, "realkit: 300 takes of 3: all used, never one twice running");
+  const kits = vm.runInNewContext((/const KIT_NAMES = (\[[^\]]*\]);/.exec(html) || [])[1] || "[]"), dcs = readFileSync(join(HERE, "../firmware/src/ui_studio.c"), "utf8");
+  ok(kits.length === 47 && kits[46] === "MULDJORD" && kits.indexOf("MULDJORD") === E.SNG.KIT_DEFAULT && /KIT_NAMES\.indexOf\("MULDJORD"\)/.test(html)
+    && /<select id="sed-kit"><\/select>/.test(html) && /kit >= DRUM_SYN && kit < DRUM_SYN \+ DSU_N/.test(dcs),
+    "realkit: kit 46 MULDJORD in the editor's list, the songs' default, the simulated FM-1's power-on kit; the song editor's kit by name; EDIT's header not a SYN name");
+  const meta = JSON.parse(readFileSync(join(HERE, "realkit/kit.json"), "utf8"));
+  ok(meta.name === "MULDJORD" && meta.lanes.length === 16 && meta.lanes.every((L) => L.files.flat().every((f) => existsSync(join(HERE, "realkit", f))))
+    && /fetch\("realkit\/kit\.json"\)/.test(html) && /PLAY\.rkLayer\(R\.vel, vel\)/.test(html)
+    && /"assets" \/ "realkit", ed \/ "realkit"/.test(readFileSync(join(HERE, "make_site.py"), "utf8")),
+    "realkit: served next to the editor (web/realkit, the site's editor/realkit), every take's WAV there; the player loads it first");
 }
 
 async function editorPedalIn() {
@@ -916,8 +945,8 @@ async function editorV8() {
 
 /* ------------------------------------------------- 2.4: the drum kit page --- */
 await (async () => {
-  const lanes = { "BD Kick 808.wav": 0, "Snare_01.wav": 2, "HH closed.wav": 4, "OH open.wav": 5, "Crash cymbal.wav": 11, "Clap.wav": 3,
-    "Low Tom.wav": 9, "Hi Tom.wav": 10, "rimshot.aif": 7, "Cowbell 1.wav": 15, "shaker.wav": 13, "Conga hi.wav": 14, "ride.wav": 12,
+  const lanes = { "BD Kick 808.wav": 0, "Snare_01.wav": 2, "HH closed.wav": 4, "OH open.wav": 5, "Crash cymbal.wav": 12, "Clap.wav": 3,
+    "Low Tom.wav": 9, "Hi Tom.wav": 11, "rimshot.aif": 7, "Cowbell 1.wav": 15, "shaker.wav": 14, "Mid Tom.wav": 10, "Tom 3.wav": 10, "ride.wav": 13,
     "pedal hat.wav": 6, "piano C4.wav": -1, "kick2.wav": 1, "Snare 2.wav": 8 };
   const got = Object.entries(lanes).filter(([n, l]) => E.kitLaneOf(n) !== l).map(([n]) => `${n}->${E.kitLaneOf(n)}`);
   ok(!got.length, "drum kit: file names sorted onto the lanes" + (got.length ? ` (${got.join(", ")})` : ""));
@@ -1380,6 +1409,7 @@ await editorSongs();
 editorPlay();
 editorSed();
 editorMeter();
+await editorRealKit();
 await editorPedalIn();
 await editorSong();
 await editorDsyn();

@@ -328,6 +328,25 @@ int main(int argc, char **argv)
     assert(sng_check(blob[3], blob_n[3], &tmp) == 0 && tmp.off[0] == SNG_HDR);
     assert(sng_check(blob[3], blob_n[3] - 1u, &tmp) == 5);                  /* the marks counted in the size */
     assert(lane_on(&TDRUM->dstep[12], 10) && !lane_on(&TDRUM->dstep[13], 10));
+    {   /* CC 21 in this one-bar section (its tom only during a fill, on step 12): asked before the tom, the fill this bar;
+         * asked after it, through the next bar too (2026-10-14: before, any request in a pattern's last bar carried) */
+        uint32_t bar = bar_len();
+        cc(16, 20, 0); advance(CTL * 2u);
+        advance(bar + bar / 8u);                                            /* the second cycle, step 2 */
+        cc(16, 21, 127); advance(CTL * 2u);
+        assert(pedal_fill && pedal_fill_hold == 1u);
+        advance(bar);
+        assert(!pedal_fill && !pedal_fill_hold);                            /* over at the bar line */
+        while (TDRUM->seq_idx != 13u)                                       /* past the tom (step 12) */
+            advance(CTL);
+        cc(16, 21, 127); advance(CTL * 2u);
+        assert(pedal_fill && pedal_fill_hold == 2u);
+        advance(bar / 8u + bar / 2u);
+        assert(pedal_fill && pedal_fill_hold == 1u);                        /* the next bar: the fill */
+        advance(bar);
+        assert(!pedal_fill);
+        cc(16, 23, 0); advance(bar * 2u);
+    }
     pc(16, 0); advance(CTL); sng_poll();                                    /* a song without marks: cleared */
     assert(sng_cur == 0 && !drum_fonly[12] && !drum_fno[12]);
     printf("song: lane marks: only-during and not-during a fill, per lane and step; cleared by a plain section PASS\n");

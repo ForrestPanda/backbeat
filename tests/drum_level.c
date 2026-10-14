@@ -6,7 +6,7 @@
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
-static const uint8_t LANE_GM[16] = {36, 38, 39, 42, 46, 43, 48, 49, 51, 70, 63, 37, 56, 75, 35, 40};
+static const uint8_t LANE_GM[16] = {36, 38, 39, 42, 46, 43, 45, 48, 49, 51, 70, 37, 56, 75, 35, 40};
 int main(int argc, char **argv)
 {
     FILE *f = fopen(argv[1], "wb");

@@ -235,7 +235,8 @@ static void drum_screen_draw(void)
     {
         char st[16], nm[9];
         const char *style = DRUM_KIT_STYLES[kit];
-        if (kit >= DRUM_SYN) {                          /* SYN1..4: the name you gave it (editor DRUM SYNTH) */
+        if (kit >= DRUM_SYN && kit < DRUM_SYN + DSU_N) {   /* SYN1..4: the name you gave it (editor DRUM SYNTH; not
+                                                          * MULDJORD after them) */
             memcpy(nm, dsu_kit(kit - DRUM_SYN)->name, 8);
             nm[8] = 0;
             if (nm[0])

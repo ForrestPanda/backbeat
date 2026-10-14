@@ -104,7 +104,7 @@ def make_song():
             put(e, 10, 36)                         # the second bar of the pair: an extra kick
         if fill:
             for s, n in ((12, 50), (13, 50), (14, 45), (15, 45)):
-                put(e, s, n)                       # toms on the last beat, no hats there
+                put(e, s, n)                       # toms on the last beat, no hats there (high 50, mid 45)
         return e
 
     for i in range(8):
@@ -164,7 +164,8 @@ def make_long_song():
         sec, bar = i // 8, i % 4
         e = {}
         for s in range(16):
-            for n in (42, 51, 70, 62, 56):                                   # hat, ride, shaker, conga, cowbell
+            for n in (42, 51, 70, 37, 56):                                   # hat, ride, shaker, side stick, cowbell
+                                                                             # (a conga until the mid tom took its lane)
                 e.setdefault(s * 2, []).append((n, 63, False))
         for s in (0, 8):
             e.setdefault(s * 2, []).append((36, 95, False))
@@ -215,8 +216,8 @@ def main():
     assert v["lanes"]["SNARE"][:16] == "....x.......x...", v["lanes"]["SNARE"]
     # the fill's toms (16ths 12..15) are marked F lane by lane; the pattern's hats and snare on 12 and 14, which the
     # fill leaves out, are marked N; nothing is dropped
-    assert "fill" not in v and v["fills"]["HITOM"][28:32] == "FF.." and v["fills"]["LOWTOM"][28:32] == "..FF", v.get("fills")
-    assert v["lanes"]["HITOM"][28:30] == "xx" and v["lanes"]["LOWTOM"][30:32] == "xx", (v["lanes"].get("HITOM"), v["lanes"].get("LOWTOM"))
+    assert "fill" not in v and v["fills"]["HITOM"][28:32] == "FF.." and v["fills"]["MIDTOM"][28:32] == "..FF", v.get("fills")
+    assert v["lanes"]["HITOM"][28:30] == "xx" and v["lanes"]["MIDTOM"][30:32] == "xx" and "LOWTOM" not in v["lanes"], (v["lanes"].get("HITOM"), v["lanes"].get("MIDTOM"))
     assert v["lanes"]["HAT"][28:32] == "o.o." and v["fills"]["HAT"][28:32] == "N.N." and v["fills"]["SNARE"][28] == "N", (v["lanes"]["HAT"], v["fills"].get("HAT"), v["fills"].get("SNARE"))
     assert c["steps"] == 16 and c["lanes"]["CRASH"][0] == "X" and c["lanes"]["KICK"][0] == "X", c["lanes"]
     assert c["lanes"]["SNARE"][12] == "x" and c.get("ratchets", {}).get("SNARE", "")[12] == "2", c.get("ratchets")

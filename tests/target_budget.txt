@@ -21,6 +21,9 @@
 # visualiser's tap gone) -> 17985, 4 more divides in its loops, the ISR 79 -> 30. Stage 3 changed no audio code: the
 # GLO layer's case left seq.c key_down (the key events mix_block handles) and the compiler inlines differently around
 # it; where the divides landed was not traced. The host CPU check (regress.c, callgrind) is unchanged.
-drums_mix 6529
-mix_block 17985
+# Layered kit, stage 2 (2026-10-14): NDRUM 6 -> 12 (the loops' bodies unchanged: a voice costs what it did, twice as
+# many may sound; the host's cpu/drums/busy 1785 -> 3132); drums_mix 6529 -> 6492, mix_block 17985 -> 15487 (the build
+# with the REAL set; inlined differently, no audio code in mix_block changed).
+drums_mix 6492
+mix_block 15487
 fm1_alnk0_irq 30

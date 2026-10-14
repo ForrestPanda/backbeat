@@ -81,6 +81,8 @@ def app_files(out, version, fw_name):
     keep["editor/gp2song.py"] = app / "editor" / "gp2song.py"                  # (fm1-drummer: the importer and the
     for f in sorted((app / "editor" / "kit").iterdir()):                       # player's kit offline too; Pyodide
         keep["editor/kit/" + f.name] = f                                       # itself still needs the internet once)
+    for f in sorted((app / "editor" / "realkit").iterdir()):                   # (the layered kit: the player's first)
+        keep["editor/realkit/" + f.name] = f
     h = hashlib.sha256()
     for k in sorted(keep):
         h.update(k.encode() + b"\0" + keep[k].read_bytes())
@@ -150,6 +152,8 @@ def main(pkg, version, out):
     (ed / "gp2song.py").write_text((HERE.parent / "tools" / "gp2song.py").read_text(encoding="utf-8"), encoding="utf-8")   # (fm1-drummer:
                                                                                                                             # the editor's From Guitar Pro)
     shutil.copytree(HERE / "kit", ed / "kit", dirs_exist_ok=True)                                                           # (its player's kit)
+    shutil.copytree(HERE.parent / "assets" / "realkit", ed / "realkit", dirs_exist_ok=True)                                  # (the device's
+                                                                                                                            # layered kit, layers and takes)
     (inst / "index.html").write_text(html.replace('download="backbeat-editor.html"', dl), encoding="utf-8")
     for f in ("fukiai.ttf", "FUKIAI-LICENSE.txt"):
         if (HERE / f).exists():

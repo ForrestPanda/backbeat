@@ -6,7 +6,7 @@
 #include "hostsim.c"
 #undef main
 #include <assert.h>
-static const uint8_t DS_NOTE[DS_LANES] = {36, 38, 39, 42, 46, 43, 48, 49, 51, 70, 63, 37, 56, 75, 35, 40};   /* one GM note per synth lane */
+static const uint8_t DS_NOTE[DS_LANES] = {36, 38, 39, 42, 46, 43, 45, 48, 49, 51, 70, 37, 56, 75, 35, 40};   /* one GM note per synth lane */
 static uint32_t one_hit(uint32_t kit, uint32_t note, int32_t *peak, uint64_t *energy)
 {
     uint32_t j, k, blocks = 0;
@@ -82,7 +82,7 @@ int main(int argc, char **argv)
     }
     if (argc > 1) {   /* demo: each kit, one bar: K . H . S . H . K K H . S . H O */
         static const uint8_t P[16][3] = {{36, 42, 0}, {0}, {42, 0}, {0}, {38, 42, 0}, {0}, {42, 0}, {70, 0},
-                                         {36, 42, 0}, {36, 0}, {42, 0}, {37, 0}, {38, 39, 0}, {0}, {42, 63, 0}, {46, 0}};
+                                         {36, 42, 0}, {36, 0}, {42, 0}, {37, 0}, {38, 39, 0}, {0}, {42, 45, 0}, {46, 0}};
         uint32_t step = FS * 60u / 120u / 4u, total = (DRUM_USR - DRUM_SAMPLED) * 16u * step;
         FILE *f = fopen(argv[1], "wb");
         int32_t l[CTL], r[CTL], rv[CTL];

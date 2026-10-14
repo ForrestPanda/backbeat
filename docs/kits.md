@@ -7,7 +7,7 @@ image for `tools/fm1_render.py --usrkit` (hear it first) or straight into the FM
 ## The chosen kit: Muldjord (2026-10-11)
 
 After renders of Another Brick in the Wall with five kits, the user chose the **Muldjord Kit**: it is in
-`web/kit/` (ten lanes, the three hi-hats from Black Pearl and the ride from Red Zeppelin at the user's wish, CLAP, CONGA and COWBELL from the
+`web/kit/` (ten lanes, the three hi-hats from Black Pearl and the ride from Red Zeppelin at the user's wish, CLAP and COWBELL from the
 CC0 studio kit), preloaded on the editor's
 Drum kit page and played by its Songs tab. Recipe and licence below, under the three more realistic kits.
 For the FM-1, the same files make the device image (or the upload with `--load`):
@@ -22,8 +22,40 @@ the rim are kept at 44.1 kHz (the rest at 22.05 kHz: twice the flash a second). 
 folder with `LANE_note-soft.wav` files. The second slot is the tight one: when it overflows, the longest
 sound above its floor loses a tenth at a time until it fits (`MIN_S` in `tools/mkkit.py`: crash and ride
 keep 1.2 s, open hat and toms 0.5 s, the rest 0.25 s); soft hits are cut to 0.45 s and the rare lanes
-(KICK2, CLAP, SHAKER, CONGA, COWBELL) to about 0.3 s before that, so the cymbals stay whole (1.2 s here).
+(KICK2, CLAP, SHAKER, COWBELL) to about 0.3 s before that, so the cymbals stay whole (1.2 s here).
 Only the files of `--soft-lanes` (KICK, SNARE, SNARE2, HAT, OPENHAT, PEDAL) are taken as soft layers from a folder.
+
+## MULDJORD, the built-in layered kit (2026-10-14)
+
+The device's power-on kit and new songs' default (KIT 46, `"kit": 46`): the same mix as above (Muldjord kick and toms, the DRS Kit's snare,
+Black Pearl's hats, Red Zeppelin's ride, CC0 clap and cowbell), now with velocity layers and round robins,
+built into the firmware (290 KB of the app's flash), so the user slots USR3+4 stay yours.
+
+| Lane | Source | Layers x takes | Length | Rate |
+| --- | --- | --- | --- | --- |
+| KICK | Muldjord 36 | 4 x 2 (the softest 1) | 0.5 s | 22050 |
+| SNARE | DRS Kit 38 (chosen by ear from six, 2026-10-14) | 4 x 3 | 0.49 s | 22050 |
+| HAT | Black Pearl 42 | 4 x 1 | 0.3 s | 32000 |
+| OPENHAT, PEDAL | Black Pearl 46, 44 | 2 x 1 | 0.8, 0.3 s | 32000 |
+| RIM | DRS Kit 37 (the same snare's rim) | 2 x 1 | 0.4 s | 32000 |
+| LOWTOM, MIDTOM, HITOM | Muldjord 41, 47, 48 (Tom4 the floor 69 Hz, Tom2 98 Hz, Tom1 127 Hz: a 5-piece's) | 2 x 1 | 1.0, 0.95, 0.9 s | 22050 |
+| CRASH | Muldjord 49 | 1 | 2.0 s | 32000 |
+| RIDE | Red Zeppelin 51 | 2 x 1 | 1.35 s | 32000 |
+| KICK2, SHAKER | Muldjord 35, 55 | 1 | 0.4..0.45 s | 22050 |
+| SNARE2 | DRS Kit 38 (layer 3, another take) | 1 | 0.5 s | 22050 |
+| CLAP, COWBELL | CC0 | 1 | 0.35 s | 22050 |
+
+A hit's level picks the layer (hard, normal, soft, ghost; a MIDI note's velocity the nearest layer), the take is
+another than the drum's last. The recipe is `tools/realkit.json`; `python3 tools/gen_realkit.py` renders it from the
+source kits (in `fm1-mvave/kits`, decoded by sox) into `assets/realkit/` (a WAV a take, `kit.json`,
+`ATTRIBUTION.txt`), which the firmware build encodes and the editor's player plays. The layers are levelled on the
+velocity curve x 1.5 (`"dyn"`), the sources' own range being too wide on a small speaker; `"budget"` is the bytes of
+ADPCM (the fit shortens the longest sounds above their floor); `--report` lists what the folder holds. To hear it:
+`python3 tools/fm1_render.py song.json --kit 46`.
+
+Credit when sharing: "MuldjordKit by Lars Muldjord / DrumGizmo and the DRSKit's snare by DrumGizmo / DRS Drums, CC BY
+4.0; hi-hats from AVL Drumkits Black Pearl and the ride from Red Zeppelin, by Glen MacArthur, CC BY-SA 3.0; clap
+and cowbell from Versilian Studios, CC0".
 
 ## Red Zeppelin (AVL Drumkits), the first rock kit tried
 
@@ -42,7 +74,7 @@ python3 tools/mkkit.py REDZEP --sfz ../../kits/avl-drumkits/Red_Zeppelin_5pc.sfz
 What the tool takes from the SFZ (`SFZ_LANES` in `tools/mkkit.py`): the hardest layer of each GM key,
 KICK 36, RIM 37 (side stick), SNARE 38, CLAP 39, SNARE2 40 (the snare's edge), HAT 42, PEDAL 44,
 OPENHAT 46 (semi-open), LOWTOM 43 (the 18" floor tom), HITOM 48 (the 14" tom), CRASH 49 (Zildjian A 20"),
-RIDE 51 (Zildjian A 24"), SHAKER 54 (tambourine), CONGA 63 (the low roto tom stands in), COWBELL 56,
+RIDE 51 (Zildjian A 24"), SHAKER 54 (tambourine), MIDTOM 45 (the lane was CONGA 63 until 2026-10-14), COWBELL 56,
 and KICK2 as the kick's third layer (a softer hit). Black Pearl: the same with `Black_Pearl_5pc.sfz`.
 
 Credit to give with the kit: "AVL Drumkits by Glen MacArthur (bandshed.net), CC BY-SA 3.0". (It was the
@@ -59,15 +91,15 @@ mics full, overheads -3 dB, ambience -6 dB, the other drums' mics -14 dB, a trig
 
 - **Muldjord Kit** (DrumGizmo team, Lars Muldjord; a Tama Superstar, "a metal or rock kit"; CC BY 4.0;
   347 MB): `git clone --depth 1 https://github.com/sfzinstruments/DrumGizmo.MuldjordKit.git`, then
-  `python3 tools/mkkit.py MULDJORD --sfz "../../kits/DrumGizmo.MuldjordKit/DrumGizmo/MuldjordKit/Stereo/DrumGizmo MuldjordKit.sfz" --map PEDAL=42:4 --map HITOM=47 --map LOWTOM=41 --map SHAKER=55 --image build/host/muldjord.img`.
-  No clap, conga or cowbell in the kit.
+  `python3 tools/mkkit.py MULDJORD --sfz "../../kits/DrumGizmo.MuldjordKit/DrumGizmo/MuldjordKit/Stereo/DrumGizmo MuldjordKit.sfz" --map PEDAL=42:4 --map HITOM=48 --map MIDTOM=47 --map LOWTOM=41 --map SHAKER=55 --image build/host/muldjord.img`.
+  No clap or cowbell in the kit.
 - **DRS Kit** (DrumGizmo team with Jes Eiler of DRS Drums, a handcrafted kit; CC BY 4.0; 754 MB):
   `git clone --depth 1 https://github.com/sfzinstruments/DrumGizmo.DRSKit.git`, then
   `python3 tools/mkkit.py DRSKIT --sfz "../../kits/DrumGizmo.DRSKit/DrumGizmo/DRSKit/Stereo/DrumGizmo DRSKit.sfz" --map LOWTOM=43 --map HITOM=47 --image build/host/drskit.img`. No clap.
 - **Salamander Drumkit** (Alexander Holm's own birch stave kit, Paiste and Stagg cymbals; CC BY-SA 3.0;
   360 MB, one overhead mic pair, many round robins): `curl -O http://download.linuxaudio.org/musical-instrument-libraries/sfz/salamander_drumkit_v1.tar.7z`,
   `7z x` then `tar xf`, then `python3 tools/mkkit.py SALAMAND --sfz ".../salamander_drumkit_v1/ALL.sfz" --map KICK=35 --map KICK2=36 --map SNARE=40 --map SNARE2=38 --map RIM=41 --map CLAP=39 --map HAT=42 --map OPENHAT=46 --map PEDAL=44 --map LOWTOM=43 --map HITOM=45 --map CRASH=55 --map RIDE=52 --map COWBELL=47 --map SHAKER=63 --map CONGA=57 --image build/host/salamander.img`
-  (its keys are its own; a splash stands in for the shaker, a crash for the conga). All 16 lanes.
+  (its keys are its own; a splash stands in for the shaker, a crash on the lane that was the conga's: map MIDTOM to a tom now). All 16 lanes.
 - **Black Pearl** (AVL Drumkits, the Pearl kit; CC BY-SA 3.0, in the same download as Red Zeppelin):
   `python3 tools/mkkit.py BLKPEARL --sfz ../../kits/avl-drumkits/Black_Pearl_5pc.sfz --image build/host/blackpearl.img`.
 

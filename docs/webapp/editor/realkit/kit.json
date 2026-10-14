@@ -1,0 +1,508 @@
+{
+ "name": "MULDJORD",
+ "lanes": [
+  {
+   "lane": "KICK",
+   "note": 36,
+   "rate": 22050,
+   "layers": 4,
+   "takes": [
+    2,
+    2,
+    2,
+    1
+   ],
+   "vel": [
+    127,
+    100,
+    72,
+    42
+   ],
+   "files": [
+    [
+     "KICK-1a.wav",
+     "KICK-1b.wav"
+    ],
+    [
+     "KICK-2a.wav",
+     "KICK-2b.wav"
+    ],
+    [
+     "KICK-3a.wav",
+     "KICK-3b.wav"
+    ],
+    [
+     "KICK-4a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     12127,
+     12127
+    ],
+    [
+     12127,
+     10164
+    ],
+    [
+     12127,
+     12127
+    ],
+    [
+     7784
+    ]
+   ]
+  },
+  {
+   "lane": "KICK2",
+   "note": 35,
+   "rate": 22050,
+   "layers": 1,
+   "takes": [
+    1
+   ],
+   "vel": [
+    127
+   ],
+   "files": [
+    [
+     "KICK2-1a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     9922
+    ]
+   ]
+  },
+  {
+   "lane": "SNARE",
+   "note": 38,
+   "rate": 22050,
+   "layers": 4,
+   "takes": [
+    3,
+    3,
+    3,
+    3
+   ],
+   "vel": [
+    127,
+    100,
+    72,
+    42
+   ],
+   "files": [
+    [
+     "SNARE-1a.wav",
+     "SNARE-1b.wav",
+     "SNARE-1c.wav"
+    ],
+    [
+     "SNARE-2a.wav",
+     "SNARE-2b.wav",
+     "SNARE-2c.wav"
+    ],
+    [
+     "SNARE-3a.wav",
+     "SNARE-3b.wav",
+     "SNARE-3c.wav"
+    ],
+    [
+     "SNARE-4a.wav",
+     "SNARE-4b.wav",
+     "SNARE-4c.wav"
+    ]
+   ],
+   "samples": [
+    [
+     11907,
+     11907,
+     11907
+    ],
+    [
+     10734,
+     9817,
+     9080
+    ],
+    [
+     7224,
+     8201,
+     8313
+    ],
+    [
+     11907,
+     11907,
+     5500
+    ]
+   ]
+  },
+  {
+   "lane": "CLAP",
+   "note": 39,
+   "rate": 22050,
+   "layers": 1,
+   "takes": [
+    1
+   ],
+   "vel": [
+    127
+   ],
+   "files": [
+    [
+     "CLAP-1a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     7437
+    ]
+   ]
+  },
+  {
+   "lane": "HAT",
+   "note": 42,
+   "rate": 32000,
+   "layers": 4,
+   "takes": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "vel": [
+    127,
+    100,
+    72,
+    42
+   ],
+   "files": [
+    [
+     "HAT-1a.wav"
+    ],
+    [
+     "HAT-2a.wav"
+    ],
+    [
+     "HAT-3a.wav"
+    ],
+    [
+     "HAT-4a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     9600
+    ],
+    [
+     9600
+    ],
+    [
+     9600
+    ],
+    [
+     7945
+    ]
+   ]
+  },
+  {
+   "lane": "OPENHAT",
+   "note": 46,
+   "rate": 32000,
+   "layers": 2,
+   "takes": [
+    1,
+    1
+   ],
+   "vel": [
+    127,
+    72
+   ],
+   "files": [
+    [
+     "OPENHAT-1a.wav"
+    ],
+    [
+     "OPENHAT-2a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     18381
+    ],
+    [
+     12342
+    ]
+   ]
+  },
+  {
+   "lane": "PEDAL",
+   "note": 44,
+   "rate": 32000,
+   "layers": 2,
+   "takes": [
+    1,
+    1
+   ],
+   "vel": [
+    127,
+    72
+   ],
+   "files": [
+    [
+     "PEDAL-1a.wav"
+    ],
+    [
+     "PEDAL-2a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     9600
+    ],
+    [
+     9600
+    ]
+   ]
+  },
+  {
+   "lane": "RIM",
+   "note": 37,
+   "rate": 32000,
+   "layers": 2,
+   "takes": [
+    1,
+    1
+   ],
+   "vel": [
+    127,
+    72
+   ],
+   "files": [
+    [
+     "RIM-1a.wav"
+    ],
+    [
+     "RIM-2a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     6634
+    ],
+    [
+     4801
+    ]
+   ]
+  },
+  {
+   "lane": "SNARE2",
+   "note": 40,
+   "rate": 22050,
+   "layers": 1,
+   "takes": [
+    1
+   ],
+   "vel": [
+    127
+   ],
+   "files": [
+    [
+     "SNARE2-1a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     9502
+    ]
+   ]
+  },
+  {
+   "lane": "LOWTOM",
+   "note": 43,
+   "rate": 22050,
+   "layers": 2,
+   "takes": [
+    1,
+    1
+   ],
+   "vel": [
+    127,
+    72
+   ],
+   "files": [
+    [
+     "LOWTOM-1a.wav"
+    ],
+    [
+     "LOWTOM-2a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     22050
+    ],
+    [
+     22050
+    ]
+   ]
+  },
+  {
+   "lane": "MIDTOM",
+   "note": 45,
+   "rate": 22050,
+   "layers": 2,
+   "takes": [
+    1,
+    1
+   ],
+   "vel": [
+    127,
+    72
+   ],
+   "files": [
+    [
+     "MIDTOM-1a.wav"
+    ],
+    [
+     "MIDTOM-2a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     20947
+    ],
+    [
+     20947
+    ]
+   ]
+  },
+  {
+   "lane": "HITOM",
+   "note": 48,
+   "rate": 22050,
+   "layers": 2,
+   "takes": [
+    1,
+    1
+   ],
+   "vel": [
+    127,
+    72
+   ],
+   "files": [
+    [
+     "HITOM-1a.wav"
+    ],
+    [
+     "HITOM-2a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     19845
+    ],
+    [
+     19845
+    ]
+   ]
+  },
+  {
+   "lane": "CRASH",
+   "note": 49,
+   "rate": 32000,
+   "layers": 1,
+   "takes": [
+    1
+   ],
+   "vel": [
+    127
+   ],
+   "files": [
+    [
+     "CRASH-1a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     64000
+    ]
+   ]
+  },
+  {
+   "lane": "RIDE",
+   "note": 51,
+   "rate": 32000,
+   "layers": 2,
+   "takes": [
+    1,
+    1
+   ],
+   "vel": [
+    127,
+    72
+   ],
+   "files": [
+    [
+     "RIDE-1a.wav"
+    ],
+    [
+     "RIDE-2a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     43200
+    ],
+    [
+     43200
+    ]
+   ]
+  },
+  {
+   "lane": "SHAKER",
+   "note": 70,
+   "rate": 22050,
+   "layers": 1,
+   "takes": [
+    1
+   ],
+   "vel": [
+    127
+   ],
+   "files": [
+    [
+     "SHAKER-1a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     8820
+    ]
+   ]
+  },
+  {
+   "lane": "COWBELL",
+   "note": 56,
+   "rate": 22050,
+   "layers": 1,
+   "takes": [
+    1
+   ],
+   "vel": [
+    127
+   ],
+   "files": [
+    [
+     "COWBELL-1a.wav"
+    ]
+   ],
+   "samples": [
+    [
+     7717
+    ]
+   ]
+  }
+ ],
+ "bytes": 307314
+}

@@ -183,7 +183,7 @@ next bar). No named sections, one song, no fill tied to a section change.
    Guitar Pro 3 / 4. `tools/gp2song.py` (PyGuitarPro) takes the drum track of a .gp3 / .gp4: the measures between the
    score's section markers (Intro, Verse, Chorus...) become the sections, GM drum notes become the 16
    lanes (kick 35/36, snare 38/40, side stick 37 -> RIM, hats 42/44/46, toms 41..50, crash 49/57, ride
-   51/59, cowbell 56, shaker 70, congas 62..64, clap 39), velocities become the four levels, a fill
+   51/59, cowbell 56, shaker 70, congas 62..64 (left out since 2026-10-14: the mid tom has their lane), clap 39), velocities become the four levels, a fill
    marked in the last bar (or the bar before a marker) becomes FILL ONLY steps, at 1/16 (or 1/32 when
    the bar needs it), sections up to 64 steps (the drum pattern repeats inside longer sections if it
    is the same). Later, other tracks of the file (the bass line) when bass comes back. The JSON stays
@@ -327,7 +327,8 @@ the only big lever is `SMP_DATA`, and the acoustic kit is in it.
 | Drums only (2026-10-14, `docs/drums-only.md`): the sampled instrument sets, punch FX, SLICER, live recording, the synth parts, engines, presets and FM6, three of the four tracks | 248780 B: **332784 B left** |
 | Static RAM (.data + .bss) / the pool, drums only | 64672 of 98304 B / 200124 of 344064 B |
 | After the UI redesign (2026-10-14, 6c: LIVE, SONGS, SETUP, the section save; the visualiser out) | 244556 B: **337008 B left**; static RAM 57664 B, the pool 194620 B |
-| Data region (0x93000..0xE0000): projects, 3 user sample slots of 80 KB (drums only: the user preset banks at 0xDC000..0xDFFFF and the FM6 bank at 0xE5000..0xE6FFF are free) | about 308 KB |
+| With the layered kit MULDJORD (2026-10-14: 289642 B of ADPCM, set REAL; 12 drum voices) | 541192 B: **40372 B left**; static RAM 59408 B |
+| Data region (0x93000..0xE0000): projects, the user sample slots of 80 KB (USR1 and USR2 now hold the songs: USR3 and USR4 are the user's; free: 0xC4000..0xC7FFF, the old user preset banks 0xDC000..0xDFFFF, the FM6 bank 0xE5000..0xE6FFF, 0xFB000) | about 308 KB |
 | Songs 1..8 (0xA0000..0xAFFFF, A/B) and the pedal settings (0xB0000 / 0xB1000); songs 9..16 (0xB4000..0xC3FFF, A/B, since 2026-10-14) | 72 KB of USR1's 80 KB, 64 KB of USR2's; the kit pair USR3+4 stays the user's |
 | ADPCM sample audio | about 11 KB per second (mono 22 kHz, 4 bit) |
 
@@ -444,15 +445,25 @@ hazard; what it found and what was done:
   locks and fill conditions, rolls, erase, the mutes), sections A..D and their chain, the songs and the pedal,
   the INSERT and FILTER, the delay and reverb, the master (DUST, DUCK, the DJ filter, the limiter), TEXTURE, MIDI
   in / out / clock / learn, the visualiser, the web editor (protocol v11).
-- **A more realistic kit** (asked 2026-10-14, now that the flash and RAM are there): longer samples (the cymbals'
-  and toms' tails, today cut to fit), more velocity layers than the two of `mkkit.py --layers`, and round robins
-  (two or three takes of the snare and the hats, chosen in turn so repeated hits do not machine-gun). Where it
-  can live: the app's own flash now has about 325 KB free besides the code (as a built-in kit next to the GM kit,
-  from `tools/gen_samples.py`), plus the user slots USR2..USR4 (240 KB) and the freed user-preset and FM6 sectors;
-  at about 11 KB a second of ADPCM, that is some 50 seconds of audio for one kit. To do: a kit description with
-  layers and takes per lane (drums.c picks the layer from the hit's level, the take in turn; NDRUM voices may need
-  to grow for long tails, RAM allows it), the build and the editor's kit page to make one, `docs/kits.md` for the
-  sources (the Muldjord Kit has more layers and takes than we use), CPU checked on the host budget and on the device.
+- (done 2026-10-14, but by ear and on hardware) **A more realistic kit** (asked 2026-10-14): KIT **MULDJORD** (46), the
+  power-on kit and new songs' default, built into the app's flash (289642 B of IMA ADPCM, set REAL; the user's
+  USR3+4 stays theirs). Decided with the user: built in; balanced (4 layers on kick, snare, hats; takes on kick and
+  snare; 2 layers on toms, open and pedal hats, rim, ride; the crash and ride long); today's mix of sources. Five
+  stages: (1) `tools/gen_realkit.py` renders `tools/realkit.json` once from the source kits (fm1-mvave/kits, sox)
+  into `assets/realkit/` (a WAV a take, `kit.json`), each hit its mics summed, trimmed, cut, the layers levelled
+  on the velocity curve x 1.5 (0 / -3 / -7.5 / -14.5 dB: the sources' own range, 25 dB on the snare, lost ghosts
+  under a guitar) and fitted to the budget; `tools/gen_samples.py` encodes it (set REAL, `RK_LANE`: per lane its
+  layers' first zone, takes and velocities), so the build needs no source kit. (2) drums.c: `rk_layer` the layer
+  whose velocity is nearest the hit's (a step's 127 / 100 / 72 / 42), `rk_take` a take other than the lane's last
+  (an LCG: deterministic renders), the voice's velocity raised to full at its layer's own (a MIDI velocity between
+  two layers a little under); NDRUM 6 -> 12 (static RAM +1.6 KB). (3) userkit_test (the layers, the levels, 60
+  snares never twice the same take, a crash under eleven hits), the golden groove `46_MULDJORD`, CPU: its groove
+  1094 per mille (the other kits 760..1290), the busy pattern on it 2165, the busy one on 808 1785 -> 3132 (twelve
+  voices sound where six did; the loops' bodies unchanged; device static check `drums_mix` within budget); on
+  fm1-emu the real image boots on MULDJORD and plays a song. Its loudness is the user kit's (the same sources,
+  two layers: RMS about -25 dB in a song), some 7 dB under the synthesised 808 (the power-on kit before). (4) The editor's player plays it from `realkit/` next to the editor with the same rules.
+  (5) these notes, `docs/kits.md`. Black Pearl's hats have one take a layer (no round robin there). To do: listen
+  (renders: `fm1_render.py song.json --kit 46`), adjust the recipe; on hardware the CPU with twelve voices.
 - **The drummer without the device** (lower priority, asked 2026-10-13): the PC, phone or tablet as the
   drummer, driven by the pedal, when no FM-1 is at hand, with higher-fidelity samples than the device
   can hold (longer samples, more velocity layers, round robins). Two routes: (a) the web editor's player,
@@ -483,6 +494,37 @@ hazard; what it found and what was done:
   that hit's mark as OCT+ does a step's) and a mark on the grid where the selected lane's hit has one (the
   step tile's F / x corner, ui_layers.c, is the step's). To check: which lane the gesture means on a step with
   several hits (the selected sound, as SEQ's SOUND knob), the undo, and that the editor's live sync sees it.
+- (done 2026-10-14, the user's report on Time's verse) **A fill carries into the next cycle only when it is too late
+  for this one.** CC 21 (LIVE's black keys, SEL, the editor's f) made the fill last to the pattern's end, and through
+  the next cycle too when asked in the pattern's last bar: a one-bar pattern (Time's verse) therefore always filled
+  twice. Now it carries only when the pattern's fill hits (a step's FILL ONLY, a hit's F mark) are all behind the
+  request (pedal.c `pedal_fill_req` from the drum track's step, the editor's `PLAY.fillNext` / `fillHits` alike); a
+  pattern with no fill hits keeps the last-bar rule. Checked: song_test (a one-bar section: before its tom, this bar;
+  after it, the next bar too), the web tests, and both engines on Time's verse (beats 1-3: this bar; beat 4: the next).
+- (done 2026-10-14) **A mid tom instead of the conga.** The lanes renumbered, the toms together: ... SNARE2 8, LOWTOM 9, MIDTOM 10 (GM 45;
+  "MID TOM", "tom m"), HITOM 11, CRASH 12, RIDE 13, SHAKER 14, COWBELL 15 (the synthesised kits' lanes likewise: TOMLO 5,
+  MIDTOM 6, TOMHI 7 ... SHAKER 10); songs name their lanes, so the JSON stays as it is; the user's songs' tom hits
+  were moved onto MIDTOM where their Guitar Pro files play 45 or 47 (each bar matched to the file's: Time, Shine On,
+  Back in Black; 25 hits). Why:
+  the user's twelve Guitar Pro files had no conga, and five of them (Time, Money, Shine On, Hotel California,
+  Hurricane) move between three toms (Money: 33 of its 52 tom changes fell on one lane with two). Every kit: the GM
+  toms map 41 43 low, 45 47 mid, 48 50 high (drums.c LANE_OF_GM; congas 62..64 the mid tom, bongos the high: the
+  nearest sound, as every note); the synthesised kits' lane 10 (DS_MAP, gen_drumkits.py `midtom`: the low tom's
+  sound at the geometric mean of the two toms' pitches, their mean decay; level: the toms' mean trim, so no other
+  lane's level and no other golden moved); the GM sample kit plays 45 from its low tom 2 semitones up (as before);
+  MULDJORD the Muldjord toms of a 5-piece: Tom4 the floor (69 Hz), Tom2 the mid (98), Tom1 the high (127; it was
+  Tom2), budget 290000 -> 312000 B (the image 558952 B, about 22 KB left: the user's choice, "this firmware does
+  pretty much everything I want"). gp2song maps the three toms and leaves congas out; fm1_song.py and the editor read
+  an old song's "CONGA" as MIDTOM; mkkit, the editor's kit page (KIT_WORDS: mid tom, tom 3) and its served kit
+  (web/kit/MIDTOM_A2.wav) follow. Not migrated (no device has them yet): a user kit image with a zone at 63 (its lane
+  14 is silent: make it again), a SYN bank's lane 10 (it plays its stored conga sound).
+- (asked 2026-10-14; not started) **A little random variation per hit (humanize).** MULDJORD's hi-hats (Black
+  Pearl, kept by ear over the DRS, Muldjord and Salamander hats auditioned) have one recording a layer, so a run of
+  16ths at one level plays the same sample every time. Wanted: each hit of a sampled kit a little different, at no
+  flash cost: its level about +-1 dB and its pitch about +-1 % (drum_on: the gain from the voice's velocity, the
+  pitch from `v->s[5]`, the step), from the LCG `rk_take` already uses (deterministic renders and goldens). To
+  decide: on the hats only or on every lane (the snare and kick already have takes), on MULDJORD only or on the GM
+  and user kits too, a SETUP switch or always on; checked by ear on a 16th run, the goldens updated on purpose.
 - (asked 2026-10-14; not started) **MIDI clock out over USB.** The device follows a clock (SETUP > SYNC = USB /
   TRS, seq.c `mclk_event`) but sends none: MIDI OUT (SETUP > MIDI > OUT: KEYS / SEQ) has no F8 / FA / FB / FC, so
   BackBeat cannot be the master of a DAW, a looper or the Ampero (whose USB port takes a clock in: MIDI IN SOURCE).

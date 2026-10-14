@@ -301,7 +301,8 @@ G_COUNT 45. An editor reads both from `INFO` and maps a patch file by its own co
   v1-v4 commands only.
 - **Drum lanes** (`firmware/src/drums.c` `LANE_NOTE`), one per white key from F3: 0 kick (36), 1 kick 2
   (35), 2 snare (38), 3 clap (39), 4 hat (42), 5 open hat (46), 6 pedal (44), 7 rim (37), 8 snare 2 (40),
-  9 low tom (43), 10 hi tom (48), 11 crash (49), 12 ride (51), 13 shaker (70), 14 conga (63), 15 cowbell
+  9 low tom (43), 10 mid tom (45), 11 hi tom (48), 12 crash (49), 13 ride (51), 14 shaker (70), 15 cowbell (since 2026-10-14: the
+  conga, 63, gone; until then 10 hi tom, 11 crash, 12 ride, 13 shaker, 14 conga)
   (56). A black key plays the lane of the white key left of it.
 - **Levels** (2 bits): 0 NORM (as played), 1 GHOST, 2 SOFT, 3 HARD. **Ratchets** (2 bits): 0..3 = x1..x4
   hits in the step.
@@ -471,7 +472,7 @@ is put into range before a voice sees it.
 | --- | --- | --- |
 | 72 DSYN_LIST | — | factory count (32), user count (4), stored (0: an edit not stored yet), the factory names, then per user kit: its name, the factory kit it started from |
 | 73 DSYN_GET | which: a factory kit 0..31, or 64 + k (SYN k+1) | which, rc (1: no such kit), name, pack7 (crush, src, 16 x 22 bytes) |
-| 74 DSYN_PUT | k 0..3, part, pack7 data | k, part, rc (0 ok, 1 arguments). part 0..15: a sound (22 bytes, in the synthesised lanes' order KICK SNARE CLAP HAT OPEN-HAT TOM-LO TOM-HI CRASH RIDE SHAKER CONGA RIM COWBELL CLAVE KICK-2 SNARE-2); 16: name (8 ASCII) + crush + src; 17: the whole kit from a factory kit (1 byte) |
+| 74 DSYN_PUT | k 0..3, part, pack7 data | k, part, rc (0 ok, 1 arguments). part 0..15: a sound (22 bytes, in the synthesised lanes' order KICK SNARE CLAP HAT OPEN-HAT TOM-LO TOM-MID TOM-HI CRASH RIDE SHAKER RIM COWBELL CLAVE KICK-2 SNARE-2); 16: name (8 ASCII) + crush + src; 17: the whole kit from a factory kit (1 byte) |
 | 75 DSYN_STORE | — | rc: 0 ok, 3 stop the song first, 4 flash |
 | 76 DSYN_PLAY | k, lane 0..15, velocity 1..127 | k, lane, rc: the sound on the drum voices (at the next audio block) |
 
