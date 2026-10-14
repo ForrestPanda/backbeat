@@ -20,7 +20,6 @@ static uint32_t host_slots[4u * 0x14000u / 4u];     /* USR1..4 as a RAM image of
 #include "hostsim.c"
 #undef main
 #define PROJ_HOST 1
-static uint32_t trk_def_engine(uint32_t i) { return i < NPART ? i : 0; }
 #include "../firmware/src/project.c"
 static struct { uint8_t force; } ui;
 static uint8_t sync_reload;
@@ -97,8 +96,6 @@ int main(int argc, char **argv)
         return 2;
     }
     host_tracks_init();
-    for (i = 0; i < NPART; i++)
-        trk[i].p[P_LEVEL] = 0;                      /* only the drums (the synth tracks are empty anyway) */
     pc(0);
     advance(0);
     mix_block(out, CTL);                            /* (the PC into sng_req; not written: silence) */

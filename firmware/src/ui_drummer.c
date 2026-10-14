@@ -18,7 +18,7 @@ static void drummer_key(uint32_t k)                 /* a key down (ui_input.c: s
 {
     static const uint8_t CC[14] = {0, PEDAL_CC_PREV, 0, PEDAL_CC_NEXT, 0, PEDAL_CC_FILL, 0, 0, PEDAL_CC_ENDING, 0,
                                    PEDAL_CC_STOP, 0, 0, PEDAL_CC_TAP};   /* the black keys F#3 .. F#4 */
-    int32_t w = punch_key(k);
+    int32_t w = key_white(k);
     if (sng_cur < 0) {
         if (w >= 0 && w < (int32_t)SNG_SLOTS)
             sng_req = (uint8_t)(w + 1);             /* (sng_poll loads it, as a PC) */
@@ -43,7 +43,7 @@ static void drummer_input(uint32_t pressed, uint32_t home)
         sng_pick = (uint8_t)clamp((int32_t)sng_pick + s, 0, (int32_t)SNG_SLOTS);
         ui.force = 1;
     }
-    if (((pressed >> panel.btn[B_PLAY]) & 1u) && !ft_owns_press()) {
+    if ((pressed >> panel.btn[B_PLAY]) & 1u) {
         fm1_irq_off();
         if (song.playing || sng_cur < 0)
             transport_req = song.playing ? 2u : 1u;

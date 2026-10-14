@@ -15,6 +15,5 @@ static int arrangement_start(void)
     scene = arr_begin(&arrangement_clock, &arrangement, arrangement_ready());
     if (scene < 0) return 0;
     arrangement_apply((uint32_t)scene);
-    song.rec = 0;                                    /* song playback does not overwrite patterns */
     return 1;
 }

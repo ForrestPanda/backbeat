@@ -152,9 +152,6 @@ static void sng_apply(uint32_t k)
     len = s[12];
     nf = (len + 3u) / 4u;
     seq_release(t);
-    trk_all_off(t);
-    t->nheld = t->arp_phys = t->arp_note = t->rh_n = t->rskip_n = 0;
-    t->rskip_lanes = 0;
     locks_clear(t);                              /* (no lock, no nudge, no condition: then the section's) */
     memcpy(t->fill, s + SNG_SEC_HDR, nf);
     drum_fill_masks_clear();
@@ -182,8 +179,11 @@ static void sng_apply(uint32_t k)
     ui.force = 1;
 }
 
-/* the song's packed form from flash: the current copy, read in place (0: none) */
+/* the song's packed form from flash: the current copy, read in place (0: none). A slot never written (no copy at
+ * all: the device fresh from the installer, the emulator) plays its factory song (tools/gen_songs.py, from songs/);
+ * one erased (a copy of no bytes) stays empty */
 #if FELUCCA_FLASH
+#include "felucca_songs.h"
 static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len)
 {
     st_hdr_t h;
@@ -192,6 +192,10 @@ static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len)
     if (!flash_ok || slot >= SNG_SLOTS)
         return 0;
     c = st_current(OBJ_SONG0 + slot, &h);
+    if (c < 0 && slot < SNG_NFACTORY) {
+        *len = SNG_FACTORY[slot].n;
+        return SNG_FACTORY[slot].b;
+    }
     if (c < 0 || !h.len)
         return 0;
     *len = h.len;
@@ -231,8 +235,6 @@ static int sng_load(uint32_t slot)
         return 1;
     }
     fm1_irq_off();
-    if (ft_on)
-        transport_req = 2;                       /* (a free take on the drum track: dropped, as a project load) */
     sng = tmp;
     sng_cur = (int8_t)slot;
     live_req = -1;                               /* a section asked for before: it was the old song's */

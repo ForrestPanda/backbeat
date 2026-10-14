@@ -1,5 +1,10 @@
 <p align="center"><img src="assets/logo/sloop-logo.png" alt="SLOOP" width="420"></p>
 
+> **fm1-drummer note (2026-10-14).** This is SLOOP 2.6's own manual, kept as it was. fm1-drummer is drums only: of what
+> it describes, the drum track, its steps and layers, sections A..D and the chain, the master, TEXTURE and MIDI remain; the
+> synth tracks and engines, presets, the sampled instruments, the punch-in effects, the SLICER, live recording, the
+> arpeggiator, scales and chords are gone. See [README.md](README.md) and [docs/drums-only.md](docs/drums-only.md).
+
 # SLOOP 2.6 — The Complete Guide
 
 Everything SLOOP does, every button, every combination, every page, in one place. This guide is written to be read from the top the first time, then used as a reference: the [cheat sheet](#26-cheat-sheet) at the end has every combination on one page.

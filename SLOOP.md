@@ -1,5 +1,10 @@
 <p align="center"><img src="assets/logo/sloop-logo.png" alt="SLOOP" width="480"></p>
 
+> **fm1-drummer note (2026-10-14).** This is SLOOP 2.6's own manual, kept as it was. fm1-drummer is drums only: of what
+> it describes, the drum track, its steps and layers, sections A..D and the chain, the master, TEXTURE and MIDI remain; the
+> synth tracks and engines, presets, the sampled instruments, the punch-in effects, the SLICER, live recording, the
+> arpeggiator, scales and chords are gone. See [README.md](README.md) and [docs/drums-only.md](docs/drums-only.md).
+
 # SLOOP 2.6
 
 **A live groovebox firmware for the M-VAVE FM-1 — for any style.** Four tracks — three synths and a drum machine with 16 sounds on the white keys — twelve synthesis engines (six-operator FM with DX7 patches, and now physical models and noise), 153 sounds, 37 drum kits (808, 909, trap, phonk, house, techno, UK garage, jungle, amapiano, reggaeton, synthwave, chiptune, ambient, jazz…), your own samples, ghost notes and ratchets, parameter locks, micro timing and fills, note repeat, one-key chords, 27 punch-in effects, a vinyl / sidechain / DJ-filter master, and a teenage-engineering-style screen that always shows what your hands can do next. No factory patterns, nothing to load: everything you hear, you play.

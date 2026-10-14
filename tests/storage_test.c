@@ -91,19 +91,21 @@ int main(void)
          * the update staging (0xE0000..0xE4FFF; the FM6 bank's two sectors follow it), and no two sectors shared */
         uint32_t o, c, o2, c2, inside = 1, apart = 1;
         for (o = 0; o < OBJ_COUNT; o++)
-            for (c = 0; c < 2u; c++) {
+            for (c = 0; c < 2u && st_obj_ok(o); c++) {   /* (drums only: the retired ids have no sector) */
                 uint32_t a = st_sector(o, c);
                 int data = a >= 0x97000u && a + 4096u <= 0xA0000u, ups = a >= 0xDC000u && a + 4096u <= 0xE0000u;
                 int glob = a >= 0xFC000u && a + 4096u <= 0xFF000u, fm6 = a >= 0xE5000u && a + 4096u <= 0xE7000u;
                 int arr = a >= 0xA0000u && a + 4096u <= 0xB2000u;   /* fm1-drummer: 8 songs A/B, the pedal settings (USR1's place) */
                 inside &= (data || ups || glob || fm6 || arr) && !(a & 0xFFFu);
                 for (o2 = 0; o2 < OBJ_COUNT; o2++)
-                    for (c2 = 0; c2 < 2u; c2++)
+                    for (c2 = 0; c2 < 2u && st_obj_ok(o2); c2++)
                         if ((o2 != o || c2 != c) && st_sector(o2, c2) == a)
                             apart = 0;
             }
         bad += check("data stays in the Felucca regions (autosave too)", inside);
         bad += check("every object copy has its own sector", apart);
+        bad += check("the retired ids (user presets 5, 6, the FM6 bank 8) are neither saved nor loaded",
+                     st_save(5, "x", 1) < 0 && st_save(8, "x", 1) < 0 && st_load(6, got, sizeof got) < 0);
     }
     {   /* SLOOP 2.5: the settings in two parts (persist_t, then the SYN kits): one record, A/B as any other */
         static char p1[88], p2[1464], all[88 + 1464], got2[88 + 1464];

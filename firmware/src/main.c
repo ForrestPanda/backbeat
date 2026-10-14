@@ -96,25 +96,18 @@ static void fm1_fault(const fm1_crash_t *c)
     fm1_reboot();
 }
 
-/* power-on: three parts with their default sounds (TRK_DEF), the drum track, empty patterns */
+/* power-on: the tracks' defaults, the default kit, empty patterns */
 static void felucca_init(void)
 {
     uint32_t i;
     for (i = 0; i < G_COUNT; i++)
         song.g[i] = GP[i].def;
-    fm6_init();                               /* every part's FM6 patch: the init voice */
     for (i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
         track_defaults(t);
-        if (i < NPART) {
-            set_engine_of(t, TRK_DEF[i][0]);
-            apply_preset_to(t, TRK_DEF[i][1]);   /* with its sends */
-            t->engine = t->eng_req;
-        }
         track_defaults_steps(t);              /* the sequencers start empty */
     }
     TDRUM->p[P_E0] = DRUM_DEFAULT_KIT;        /* the 808 kit */
-    song.sel = 0;
     song.master_q12 = 2048;
     autosave_resume();                        /* the project as it was left (project.c) */
     song.g[G_SYNC] = (int16_t)lights_sync;    /* a setting of the FM-1 (panel.c) */
@@ -233,7 +226,6 @@ static void fm1_main(void)
         ota_service();                                  /* M-UPGRADE handshake */
         if (usb.ota_req) {                              /* M-UPGRADE upgrade command */
             usb.ota_req = 0;
-            panic_req = (1u << NTRK) - 1u;               /* every track (bit per track) */
 #if FELUCCA_DRUMMER
             persist_flush_now();                        /* an update ends in a reset: RAM-only work first */
 #endif

@@ -13,7 +13,6 @@
 #undef main
 #include <assert.h>
 #define PROJ_HOST 1
-static uint32_t trk_def_engine(uint32_t i) { return i < NPART ? i : 0; }
 #include "../firmware/src/project.c"
 static struct { uint8_t force; } ui;
 static uint8_t sync_reload;
@@ -56,26 +55,23 @@ int main(void)
     uint32_t i, k, bar;
     setvbuf(stdout, 0, _IONBF, 0);
     host_tracks_init();
-    host_preset(&trk[0], 0, 4);
     for (i = 0; i < NTRK; i++) {
         trk[i].p[P_SLEN] = 16;
         trk[i].p[P_SDIV] = 2;
         trk[i].p[P_AMODE] = 0;
         trk[i].p[P_LEVEL] = 90;
     }
+    TDRUM->p[P_PAN] = 36;                                 /* the section's marker (drums only: no bass track) */
     for (k = 0; k < 16; k++) {
-        uint8_t bass[] = {36}, drum[] = {42, (uint8_t)(k % 8u == 4u ? 38 : 36)};
-        if (!(k % 4u)) put_step(&trk[0], k, 1, bass, ST_NOTE, 0);
+        uint8_t drum[] = {42, (uint8_t)(k % 8u == 4u ? 38 : 36)};
         put_step(TDRUM, k, k % 4u ? 1 : 2, drum, ST_NOTE, 0);
     }
-    capture(0);                                           /* A: bass on 36 */
-    for (k = 0; k < 16; k++)
-        for (i = 0; i < trk[0].step[k].n; i++) trk[0].step[k].note[i] += 5;
-    capture(1);                                           /* B: bass on 41 */
-    for (k = 0; k < 16; k++)
-        for (i = 0; i < trk[0].step[k].n; i++) trk[0].step[k].note[i] += 5;
+    capture(0);                                           /* A: PAN 36 */
+    TDRUM->p[P_PAN] += 5;
+    capture(1);                                           /* B: PAN 41 */
+    TDRUM->p[P_PAN] += 5;
     TDRUM->p[P_E0] = 4;
-    capture(3);                                           /* D: bass on 46, kit 4; C stays empty */
+    capture(3);                                           /* D: PAN 46, kit 4; C stays empty */
     assert(arrangement_ready() == 0xBu);
     bar = 4u * 60u * FS / (uint32_t)song.g[G_BPM];
     assert(pedal.ch == 16u);
@@ -84,7 +80,7 @@ int main(void)
     assert(!song.playing && live_sec == -1);
     cc(16, 24, 0);
     advance(CTL * 3u);
-    assert(song.playing && live_sec == 0 && live_req == -1 && trk[0].step[0].note[0] == 36);
+    assert(song.playing && live_sec == 0 && live_req == -1 && TDRUM->p[P_PAN] == 36);
     assert(jumped == t0);                                 /* applied on bar 0 of the start */
     printf("pedal: NEXT from nothing starts A at %u PASS\n", t0);
 
@@ -96,7 +92,7 @@ int main(void)
     /* stopped: section B starts the loop with B */
     cc(16, 20, 1);
     advance(CTL * 3u);
-    assert(song.playing && live_sec == 1 && trk[0].step[0].note[0] == 41 && jumped == t0);
+    assert(song.playing && live_sec == 1 && TDRUM->p[P_PAN] == 41 && jumped == t0);
     printf("pedal: section B from stopped starts with B PASS\n");
 
     /* playing: A asked for in bar 1 (1.5 bars in) lands exactly on bar 2 */
@@ -105,7 +101,7 @@ int main(void)
     advance(CTL);
     assert(live_req == 0 && live_sec == 1);              /* pending, not yet */
     advance(bar);
-    assert(live_sec == 0 && live_req == -1 && trk[0].step[0].note[0] == 36);
+    assert(live_sec == 0 && live_req == -1 && TDRUM->p[P_PAN] == 36);
     assert(since_start() >= 2u * bar && since_start() < 2u * bar + CTL);
     printf("pedal: A on the bar (%u) PASS\n", since_start());
 
@@ -124,7 +120,7 @@ int main(void)
     cc(16, 24, 0); advance(bar);
     assert(live_sec == 1 && since_start() % bar < CTL);
     cc(16, 24, 0); advance(bar);
-    assert(live_sec == 3 && trk[0].step[0].note[0] == 46 && drum_kit() == 4 && since_start() % bar < CTL);
+    assert(live_sec == 3 && TDRUM->p[P_PAN] == 46 && drum_kit() == 4 && since_start() % bar < CTL);
     cc(16, 24, 0); advance(bar);
     assert(live_sec == 0 && since_start() % bar < CTL);
     cc(16, 25, 0); advance(bar);
@@ -165,11 +161,7 @@ int main(void)
     cc(16, 20, 3); advance(CTL * 3u);
     assert(song.playing && live_sec == 3 && jumped == t0);
     cc(16, 23, 0); advance(CTL * 2u);
-    for (i = 0; i < NPART; i++) {
-        assert(trk[i].seq_n == 0);
-        for (k = 0; k < NVOICE; k++) assert(!trk[i].v[k].gate);
-    }
-    printf("pedal: stop, stop again, restart with D, no held notes PASS\n");
+    printf("pedal: stop, stop again, restart with D PASS\n");
 
     /* ---- milestone 2: fills and endings ---- */
     bar = 4u * 60u * FS / (uint32_t)song.g[G_BPM];     /* (the tap test left 100 BPM) */
@@ -238,10 +230,6 @@ int main(void)
     assert(live_sec == 0 && song.playing && !fill_now && pedal_end_bars == 1);
     advance(bar);
     assert(!song.playing && stopped - jumped >= bar && stopped - jumped < bar + CTL);
-    for (i = 0; i < NPART; i++) {
-        assert(trk[i].seq_n == 0);
-        for (k = 0; k < NVOICE; k++) assert(!trk[i].v[k].gate);
-    }
     printf("pedal: ending with the outro A: fill, A once, stop on the bar (%u) PASS\n", stopped - jumped);
 
     /* CC 22 with no outro: the fill, stop on the next bar */

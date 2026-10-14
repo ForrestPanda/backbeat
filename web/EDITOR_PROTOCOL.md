@@ -1,11 +1,55 @@
 # SLOOP editor protocol (SysEx over USB-MIDI)
 
 The firmware side is `firmware/src/editor.c` (SLOOP is based on Felucca: the frames keep its "FL"
-header). Commands 16-26 (user presets and live sync) form protocol v2; commands 27-30 (tracks) form
+header). This fork, fm1-drummer, speaks **v11** (drums only, below); the sections after it are SLOOP's
+history (v1..v10), which v11 keeps byte for byte where it did not take something away.
+
+## v11: fm1-drummer, drums only
+
+The device has one track, the drum track (track 0); SLOOP's synth side (three synth tracks, the twelve
+engines, presets, user presets, FM6) is gone from the firmware. The frames, the command numbers and the
+parameter and global ids are unchanged (projects, locks and learned CCs name them by number; the ids of the
+synth side are unused, their `DESC` still answers). `web/editor.html` speaks v11 only: a device whose `INFO`
+ends with less than 11 (SLOOP) is refused right after `INFO` (the status line says this editor is for the
+fm1-drummer firmware).
+
+- **INFO** keeps its layout: version string, NENGINES = **0** (no engine names follow), P_COUNT 71, G_COUNT 45,
+  NSTEP 64, P_E0 63, NTRK **1**, protocol **11**.
+- **The engine byte** of `DUMP`, `RELOAD`, `TRACK` and `TRACK_DUMP` is 0, which equals NENGINES: v10's "no engine =
+  the drum track" holds for the one track. The preset bytes are 0, `TRACK`'s selected track 0 and its solo mask 0.
+  `P_E0` is the drum track's kit (`DESC`: KIT, the names of drums.c `DRUM_KIT_NAMES`); `P_E1..P_E7` are `-` (0..0).
+  `SET` of `G_ENGSEL` changes nothing.
+- **Gone (no reply):** 8 `PRESET`, 10 `NAMES`, 16..21 `UP_LIST` .. `UP_ERASE` (the user presets), 68..71 `FM6_GET` ..
+  `FM6_ERASE`.
+- **Still answered, for older tools:** `STEP_GET` / `STEP_SET` (the drum track's steps in the old note form: its
+  first four lanes as GM notes, as v5 describes), `TRACK`, `TRACK_MIX` (the drums' level is G_DRLVL), `TRACK_DUMP`,
+  `TRACK_STEP`, `TRACK_PARAM` for track 0; any other track gets no reply. `TRACK_CHANGED` is never pushed (it is for
+  tracks that are not selected). The editor uses `DRUM_STEP` for the steps and none of these.
+- **Unchanged:** `GET` / `SET` / `DUMP` / `DESC`, `PROJECT`, the sample slots, `WATCH` / `PING` and the pushes,
+  `DRUM_STEP`, the locks, nudges and fill conditions (track 0), `BK_*`, `DSYN_*` (72..76).
+- **USR1 holds the songs** (`firmware/src/sng.c`): `SMP_BEGIN`, `SMP_ERASE` and `SMP_WRITE` on slot 0 answer rc 4
+  (`SMP_END` rc 6), `SMP_INFO` lists it empty, and the KIT value USR1 plays nothing. The kit values keep their numbers
+  (songs and projects store them); the device's knob and the editor's kit lists pass over USR1.
+- **Backup objects** (`ED_BK_IDS`): 0 the working project, 1 the settings, 2..5 the projects A..D, 9 the SYN kits, 10
+  the MIDI part (listed only while not at its defaults), 32..35 the sample slots (32, USR1, always with length 0).
+  Objects 6..7 (the user preset banks) and 8 (the FM6 bank) are gone: a `BK_PUT` of them is refused (rc 1 at the
+  commit). A project object is "DRM1" (the globals and the drum track); a restore also takes SLOOP 2.x's "FUN4".."FUN6"
+  (their drum track), not SLOOP 1.x's. The editor restores a SLOOP backup without its objects 6..8 and its USR1
+  sample, says which it left out, and refuses (before writing anything) a backup whose projects the firmware cannot
+  read. The songs and the pedal settings (16..24, below) are still outside `BK_LIST`.
+- **Pages** the editor shows (params.c's page table): the Sequencer has the drum track's PATTERN (LEN DIV SWG GATE)
+  and FX (FILTER `P_TFLT`, INSERT `P_ITYPE P_IA P_IB P_IC`, INSERT 2 `P_IMIX`); the Settings GLOBAL, MASTER, DRUMS,
+  DLY, REV (SIZE DAMP: the chorus bus is gone, G_CRATE / G_CDEPTH unused), MIDI (CH = G_DRCH, the drums' channel, and
+  OTHER; IN and OUT are set on the FM-1), TEXTURE. G_CH1..G_CH3 and G_BEND are unused.
+
+## History (SLOOP)
+
+The first SLOOP protocols: commands 16-26 (user presets and live sync) form protocol v2; commands 27-30 (tracks) form
 protocol v3; commands 31-32 (any track's parameters) form protocol v4; command 33 and the extra step,
 `INFO` and `TRACK` bytes form protocol v5 (SLOOP 2.0); commands 34-36 (backup / restore) form protocol v6
 (SLOOP 2.3); commands 37-40 (the steps' nudges and parameter locks) form protocol v7, commands 41-42 (the
-steps' fill conditions) protocol v8 and commands 68-71 (the FM6 engine's patches) protocol v9 (all SLOOP 2.4).
+steps' fill conditions) protocol v8 and commands 68-71 (the FM6 engine's patches) protocol v9 (all SLOOP 2.4);
+commands 72-76 (the SYN drum kits) protocol v10 (SLOOP 2.5).
 
 **v3 (four tracks):** the device has four tracks: 1..3 are synth parts, 4 is the drum track. One
 of them is *selected* (the TRACKS page on the device, or `TRACK`). Every v1 / v2 command acts on the

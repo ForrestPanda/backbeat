@@ -169,22 +169,15 @@ static void con_flr(const char *p)                  /* flash read over SPI (no X
 
 static void con_status(void)
 {
-    const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
     con_puts("felucca ");
     con_puts(FELUCCA_VERSION);
     con_puts("\r\n");
     con_kv("uptime_ms", (int32_t)fm1_ms);
     con_kv("cpu_pct", (int32_t)(song.cpu_q8 * 100u / 256u));
     con_kv("audio_max_us", (int32_t)felucca_dbg.max_us);
-    con_kv("voices_shed", (int32_t)shed_count);
-    con_kv("voices_given_up", (int32_t)voice_kills);
-    con_kv("track", (int32_t)song.sel + 1);
     con_kv("batt_raw", song.batt_raw);
-    con_puts("engine ");
-    con_puts(e->name);
-    con_puts("\r\n");
-    con_puts("preset ");
-    con_puts(TSEL->preset < e->npresets ? e->presets[TSEL->preset].name : "-");
+    con_puts("kit ");
+    con_puts(DRUM_KIT_NAMES[drum_kit()]);
     con_puts("\r\n");
     con_kv("bpm", song.g[G_BPM]);
     con_kv("playing", song.playing);
@@ -238,7 +231,7 @@ static void con_params(void)
     for (i = 0; i < P_COUNT; i++) {
         con_dec((int32_t)i);
         con_putc('=');
-        con_dec(TSEL->p[i]);
+        con_dec(TDRUM->p[i]);
         con_puts(i % 8u == 7u || i + 1u == P_COUNT ? "\r\n" : " ");
     }
 }

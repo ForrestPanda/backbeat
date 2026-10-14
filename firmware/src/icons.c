@@ -103,27 +103,13 @@ static uint32_t param_icon(const param_desc_t *d, int32_t v)
         return ICON_LFO_WAVE;                 /* "WAVE" is also the oscillator wave */
     if (d == &TP[P_ARATE] || d == &TP[P_SLRATE])
         return ICON_DIVISION;                 /* arp / SLICER RATE is a note division, not Hz */
-    if (d->names == N_TRIO_MODE)
-        return ICON_CUTOFF;                   /* TRIO's MODE is the filter type, not the arp mode */
-#if FELUCCA_SLICE
-    if (d->names == N_SLC_DIV)
-        return ICON_SLICE;                    /* SLICE: DIV is the slicing, MODE the gate, REV the direction */
-    if (d->names == N_SLC_MODE)
-        return ICON_GATE;
-    if (d->names == N_SLC_REV)
-        return ICON_ORDER;
-#endif
     return icon_for_label(d->label);
 }
 
-/* engine name (ENGINES[]->name, or "DRUM") -> icon */
+/* the sound's name in the footer -> icon (drums only: "DRUM") */
 static uint32_t engine_icon(const char *name)
 {
     static const icon_map_t M[] = {
-        {"ANALOG", ICON_WAVE}, {"DIGITAL", ICON_ALGORITHM}, {"PHASE", ICON_PHASE}, {"LOFI", ICON_BITS},
-        {"SAMPLE", ICON_SAMPLE}, {"VOICE", ICON_MOUTH}, {"TRIO", ICON_TRIO}, {"WHEEL", ICON_DRAWBAR},
-        {"SLICE", ICON_SLICE},
-        {"GRAIN", ICON_GRAIN},
         {"DRUM", ICON_DRUM},
     };
     uint32_t i;

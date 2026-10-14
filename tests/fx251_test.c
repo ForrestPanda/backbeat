@@ -1,13 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* SLOOP 2.6, after Felucca 1.4 / 1.5 (Leo Kuroshita): the sound side of what came from there.
- *   insert   each INSERT type changes a part and stays bounded; TYPE OFF and MIX 0 leave it bit for bit; TYPE OFF
- *            again: dry once its fade ran; the drum track's INSERT works on its left, right and sends
- *   filter   ANALOG's TYPE: LP keeps the lows, HP the highs, BP the middle
- *   esync    ENV SYNC: ATK as a note value of the tempo (a quarter at 120 BPM: 0.5 s; at 60: 1 s)
- *   lfo 2    SYNC: a cycle a note value; TRIG FREE: a new phrase does not restart it; POL UNI: 0..+1
+/* SLOOP 2.6, after Felucca 1.4 / 1.5 (Leo Kuroshita): the sound side of what came from there, on the drum track.
+ *   insert   each INSERT type changes the drums and stays bounded; TYPE OFF and MIX 0 leave them bit for bit; TYPE OFF
+ *            again: dry once its fade ran; the INSERT works on the drums' left, right and sends
  *   mutes    the drum track's live mutes: the sequencer skips a muted sound (and its ratchets), the others play
  *   learn    MIDI LEARN's map: a learned CC sets its track's parameter on any channel, not the standard map; while
  *            learning a CC is handed to the UI; the CCs with a meaning of their own are never learned
+ * (drums only: the synth checks, ANALOG's filter TYPE, ENV SYNC, LFO 2, pitch bend and presets over held notes, went
+ * with the synth parts.)
  * Exit status: the number of failed checks. */
 #include <stdint.h>
 static uint32_t host_slots[4u * 0x14000u / 4u];          /* the user sample slots (a RAM image of the flash) */
@@ -24,11 +23,15 @@ static void check(int ok, const char *what)
 }
 #define NB 2000u                                      /* blocks rendered (1.45 s) */
 static int32_t out_l[NB * CTL];
+static uint32_t hit_every, rblk;                     /* render: a drum hit every hit_every blocks (0: none) */
 static void render(uint32_t nb)
 {
     static int32_t o[2u * CTL];
     uint32_t b, i;
     for (b = 0; b < nb; b++) {
+        if (hit_every && rblk % hit_every == 0u)
+            trk_note_on(TDRUM, (rblk / hit_every) & 1u ? 38u : 36u, 110);
+        rblk++;
         mix_block(o, CTL);
         for (i = 0; i < CTL; i++)
             out_l[b * CTL + i] = o[2u * i];
@@ -77,28 +80,22 @@ static double tonew(uint32_t a, uint32_t b, double hz)
     }
     return s1 * s1 + s2 * s2 - c * s1 * s2;
 }
-/* a clean start: the defaults, the INSERT states at rest, track 1 an ANALOG saw (no filter, no drive), nothing else */
+/* a clean start: the defaults, the INSERT states at rest, no send, no drum hit going */
 static void setup(void)
 {
     uint32_t i;
     host_tracks_init();
     memset(ins, 0, sizeof ins);
+    memset(&drums, 0, sizeof drums);
+    drums.set = -2;
     for (i = 0; i < NTRK; i++) {
         trk[i].ins_run = 0;
         trk[i].tail = 0;
         trk[i].p[P_REV] = trk[i].p[P_CHOR] = trk[i].p[P_DLY] = 0;
         trk[i].p[P_LEVEL] = 100;
     }
-    host_preset(&trk[0], 0, 0);
-    trk[0].p[P_E0] = 0, trk[0].p[P_E1] = 0, trk[0].p[P_E2] = 0, trk[0].p[P_E3] = 0;   /* SAW, one oscillator */
-    trk[0].p[P_E4] = 127, trk[0].p[P_E5] = 0, trk[0].p[P_E6] = 0, trk[0].p[P_E7] = 0;  /* open, no RES, DRV, KTR */
-    trk[0].p[P_ATK] = 0, trk[0].p[P_DEC] = 0, trk[0].p[P_SUS] = 127, trk[0].p[P_REL] = 0;
-    trk[0].p[P_ED_FLT] = trk[0].p[P_ED_PIT] = trk[0].p[P_ED_SHP] = 0;
-    trk[0].p[P_LD_PIT] = trk[0].p[P_LD_FLT] = trk[0].p[P_LD_SHP] = trk[0].p[P_LD_AMP] = 0;
-    trk[0].p[P_VOICE] = V_POLY, trk[0].p[P_GLIDE] = 0, trk[0].p[P_DIST] = 0, trk[0].p[P_TRANS] = 0;
-    trk[0].p[P_ED_FX] = 0;
-    for (i = 0; i < NVOICE; i++)
-        trk[0].v[i].active = 0;
+    song.g[G_DRREV] = song.g[G_DRDLY] = 0;
+    hit_every = 0, rblk = 0;
     song.playing = 0;
     song.master_q12 = 2048;
     texture_reset(0);                                   /* (GLO > TEXTURE off, at rest) */
@@ -113,19 +110,19 @@ static void t_insert(void)
     static int32_t dry[NB * CTL];
     uint32_t ty, i, same;
     setup();
-    trk_note_on(&trk[0], 45, 100);                    /* A2 */
+    hit_every = 50;                                   /* a kick, a snare.. every 50 blocks (36 ms) */
     fork_dry(400);                                    /* the same start (voices, buses, random numbers), TYPE OFF */
     memcpy(dry, shared_dry, 400u * CTL * 4u);
-    trk[0].p[P_ITYPE] = 1, trk[0].p[P_IMIX] = 0;       /* SOFT at MIX 0: nothing runs */
+    TDRUM->p[P_ITYPE] = 1, TDRUM->p[P_IMIX] = 0;       /* SOFT at MIX 0: nothing runs */
     render(400);
-    check(!memcmp(dry, out_l, 400u * CTL * 4u) && !trk[0].ins_run, "INSERT at MIX 0: the part bit for bit as with TYPE OFF");
+    check(!memcmp(dry, out_l, 400u * CTL * 4u) && !TDRUM->ins_run, "INSERT at MIX 0: the drums bit for bit as with TYPE OFF");
     for (ty = 1; ty < IT_N; ty++) {
         double d = 0, r;
         int32_t mx = 0;
         setup();
-        trk[0].p[P_ITYPE] = (int16_t)ty, trk[0].p[P_IMIX] = 127;
-        trk[0].p[P_IA] = 100, trk[0].p[P_IB] = 96, trk[0].p[P_IC] = 96;
-        trk_note_on(&trk[0], 45, 100);
+        hit_every = 50;
+        TDRUM->p[P_ITYPE] = (int16_t)ty, TDRUM->p[P_IMIX] = 127;
+        TDRUM->p[P_IA] = 100, TDRUM->p[P_IB] = 96, TDRUM->p[P_IC] = 96;
         render(400);
         for (i = 0; i < 400u * CTL; i++) {
             d += fabs((double)out_l[i] - dry[i]);
@@ -133,21 +130,21 @@ static void t_insert(void)
         }
         r = rms(100u * CTL, 400u * CTL);
         printf("  %-5s: rms %.0f, mean |diff| %.0f, peak %d\n", N_ITYPE[ty], r, d / (400.0 * CTL), mx);
-        check(d / (400.0 * CTL) > 50.0 && mx < 32767 && r > 200.0 && trk[0].ins_run,
-              ty == 1 ? "each INSERT type (SOFT .. CHOR) changes the part, bounded, heard" : N_ITYPE[ty]);
-        trk[0].p[P_ITYPE] = 0;                        /* OFF: it fades out, then the part is dry again */
+        check(d / (400.0 * CTL) > 50.0 && mx < 32767 && r > 200.0 && TDRUM->ins_run && ins[0].type == ty,
+              ty == 1 ? "each INSERT type (SOFT .. CHOR) changes the drums, bounded, heard" : N_ITYPE[ty]);
+        TDRUM->p[P_ITYPE] = 0;                        /* OFF: it fades out, then the drums are dry again */
         render(4);
-        same = !trk[0].ins_run;
+        same = !TDRUM->ins_run;
         check(same, ty == 1 ? "TYPE OFF: the INSERT stops after its fade" : "  (fade out)");
     }
-    {   /* the drum track: a kick on every beat through FUZZ, its left, right and sends */
+    {   /* the sequencer: a kick on every beat through FUZZ, its left, right and sends */
         double a, b;
         setup();
         song.g[G_BPM] = 120;
         for (i = 0; i < 16u; i++)
             if (!(i & 3u)) dstep_set(&TDRUM->dstep[i], 0, LV_NORM, 0);
         TDRUM->p[P_SLEN] = 16;
-        TDRUM->p[P_REV] = 60;
+        song.g[G_DRREV] = 60;
         transport_req = 1;
         render(1400);
         a = rms(0, 1400u * CTL);
@@ -155,106 +152,17 @@ static void t_insert(void)
         for (i = 0; i < 16u; i++)
             if (!(i & 3u)) dstep_set(&TDRUM->dstep[i], 0, LV_NORM, 0);
         TDRUM->p[P_SLEN] = 16;
-        TDRUM->p[P_REV] = 60;
+        song.g[G_DRREV] = 60;
         TDRUM->p[P_ITYPE] = 4, TDRUM->p[P_IA] = 127, TDRUM->p[P_IMIX] = 127;   /* FUZZ, full drive */
         transport_req = 1;
         render(1400);
         b = rms(0, 1400u * CTL);
         printf("  drums: rms dry %.0f, FUZZ %.0f\n", a, b);
-        check(a > 100 && fabs(b - a) > 0.05 * a && TDRUM->ins_run && ins[NPART].type == 4u && ins[NPART + 2u].w,
+        check(a > 100 && fabs(b - a) > 0.05 * a && TDRUM->ins_run && ins[0].type == 4u && ins[2].w,
               "the drum track's INSERT (FUZZ): the kick changed, left / right / sends through it");
         transport_req = 2;
         render(4);
     }
-}
-
-static void t_filter(void)
-{
-    /* each type's gain at 55 Hz (A1's fundamental), 660 Hz (the 12th harmonic, about the cutoff) and 3.3 kHz (the
-     * 60th) against the same saw unfiltered (TYPE LP, cutoff fully open), from the same start (fork_dry) */
-    static const double HZ[3] = {55, 660, 3300};
-    double g[3][3], d[3];
-    uint32_t a = 200u * CTL, b = 600u * CTL, ty, k;
-    for (ty = 0; ty < 3u; ty++) {
-        setup();
-        trk[0].p[P_E4] = 127;
-        trk_note_on(&trk[0], 33, 100);                /* A1 (55 Hz): a saw, every harmonic */
-        fork_dry(600);
-        trk[0].p[P_E4] = 64, trk[0].p[P_FTYPE] = (int16_t)ty;   /* cutoff ~ 650 Hz; LP BP HP */
-        render(600);
-        for (k = 0; k < 3u; k++)
-            g[ty][k] = 10 * log10(tonew(a, b, HZ[k]));
-        memcpy(out_l, shared_dry, 600u * CTL * 4u);
-        for (k = 0; k < 3u; k++) {
-            d[k] = 10 * log10(tonew(a, b, HZ[k]));
-            g[ty][k] -= d[k];
-        }
-        printf("  %s: 55 Hz %+.1f dB, 660 Hz %+.1f dB, 3.3 kHz %+.1f dB\n", N_FTYPE[ty], g[ty][0], g[ty][1], g[ty][2]);
-    }
-    /* two poles: 12 dB an octave (LP, HP), 6 on each side (BP); 3.3 kHz is 2.3 octaves over the cutoff, 55 Hz 3.6 under */
-    check(g[0][2] < -20 && g[2][0] < -30 && g[2][2] > -3,
-          "ANALOG filter TYPE: LP keeps the lows (3.3 kHz 20 dB down), HP the highs (55 Hz 30 dB down)");
-    check(g[1][1] > g[1][0] + 12 && g[1][1] > g[1][2] + 6, "ANALOG filter TYPE BP: the middle over both ends");
-    check(g[0][0] > -1.5 && g[0][0] < 1.5, "  (LP below its cutoff: as the open filter, within 1.5 dB)");
-}
-
-static void t_esync(void)
-{
-    uint32_t b, k, vi, bpm, want[2] = {0, 0}, got[2] = {0, 0};
-    for (k = 0; k < 2u; k++) {
-        bpm = k ? 60u : 120u;
-        setup();
-        song.g[G_BPM] = (int16_t)bpm;
-        trk[0].p[P_ESYNC] = 1;
-        trk[0].p[P_ATK] = (int16_t)((14 * 128 + 24) / 25);   /* 1/4 */
-        trk_note_on(&trk[0], 57, 100);
-        for (vi = 0; vi + 1u < NVOICE && !(trk[0].v[vi].active && trk[0].v[vi].note == 57u); vi++)
-            ;
-        for (b = 0; b < 3000u && trk[0].v[vi].stage == 1u; b++)
-            render(1);
-        got[k] = b;
-        want[k] = (uint32_t)FS * 60u / bpm / CTL;
-    }
-    printf("  ENV SYNC ATK 1/4: %u blocks at 120 BPM (%u), %u at 60 (%u)\n", got[0], want[0], got[1], want[1]);
-    check(esync_idx((14 * 128 + 24) / 25) == 14u && !strcmp(ESYNC_NAMES[14], "1/4"), "ENV SYNC: value 72 is 1/4");
-    check(abs((int)got[0] - (int)want[0]) <= 2 && abs((int)got[1] - (int)want[1]) <= 2,
-          "ENV SYNC: the attack lasts a quarter note at 120 BPM and at 60");
-}
-
-static void t_lfo2(void)
-{
-    uint32_t b, wraps = 0, old;
-    int32_t lo = 99999;
-    setup();
-    song.g[G_BPM] = 120;
-    trk[0].p[P_LSYNC] = 5;                            /* 1/4: a cycle a beat (0.5 s) */
-    trk[0].p[P_LRATE] = 0;
-    trk_note_on(&trk[0], 57, 100);
-    old = trk[0].lfo_ph;
-    for (b = 0; b < (uint32_t)FS * 2u / CTL; b++) {   /* 2 s */
-        render(1);
-        wraps += trk[0].lfo_ph < old;
-        old = trk[0].lfo_ph;
-    }
-    check(wraps == 4u, "LFO 2 SYNC 1/4: four cycles in two seconds at 120 BPM, whatever RATE");
-    setup();
-    trk[0].p[P_LTRIG] = 1;                            /* FREE */
-    trk[0].lfo_ph = 0x12345678u;
-    trk_note_on(&trk[0], 57, 100);
-    check(trk[0].lfo_ph == 0x12345678u, "LFO 2 TRIG FREE: a new phrase leaves the phase where it is");
-    trk[0].p[P_LTRIG] = 0;
-    trk_note_off(&trk[0], 57);
-    render(20);
-    for (b = 0; b < NVOICE; b++) trk[0].v[b].active = trk[0].v[b].gate = 0;
-    trk_note_on(&trk[0], 57, 100);
-    check(trk[0].lfo_ph == (uint32_t)trk[0].p[P_LPHASE] << 25, "LFO TRIG NOTE (as before): a new phrase restarts it");
-    trk[0].p[P_LPOL] = 1;                             /* UNI */
-    trk[0].p[P_LRATE] = 100;
-    for (b = 0; b < 3000u; b++) {
-        render(1);
-        lo = trk[0].lfo_val < lo ? trk[0].lfo_val : lo;
-    }
-    check(lo >= 0, "LFO 2 POL UNI: the LFO stays 0..+1");
 }
 
 static uint32_t snare;
@@ -304,29 +212,29 @@ static void cc_in(uint32_t ch, uint32_t cc, uint32_t v)
 }
 static void t_learn(void)
 {
-    int16_t f0;
     setup();
     mi_r = mi_w;
     song.g[G_ROUTE] = 0;
-    ml_tab[0] = (uint16_t)(20u | 1u << 7 | (P_DIST + 1u) << 9);   /* CC 20 -> track 2 DST */
-    ml_tab[1] = (uint16_t)(74u | 0u << 7 | (ML_E0 + 4u) << 9);    /* CC 74 -> track 1 E5 (ANALOG CUT) */
-    trk[1].p[P_DIST] = 0;
-    cc_in(5, 20, 127);                                /* channel 6 (the selected track's): anywhere */
-    check(trk[1].p[P_DIST] == TP[P_DIST].max, "MIDI LEARN: CC 20 on any channel sets track 2's DST (the learned one)");
-    f0 = trk[0].p[P_TFLT];
-    cc_in(0, 74, 0);
-    check(trk[0].p[P_E4] == ENGINES[0]->edit[4].min && trk[0].p[P_TFLT] == f0,
+    ml_tab[0] = (uint16_t)(20u | TRK_DRUM << 7 | (P_PAN + 1u) << 9);   /* CC 20 -> the drums' PAN */
+    ml_tab[1] = (uint16_t)(74u | TRK_DRUM << 7 | (P_DIST + 1u) << 9);  /* CC 74 -> the drums' DST */
+    TDRUM->p[P_PAN] = 0;
+    cc_in(5, 20, 127);                                /* channel 6: anywhere */
+    check(TDRUM->p[P_PAN] == TP[P_PAN].max, "MIDI LEARN: CC 20 on any channel sets the drums' PAN (the learned one)");
+    TDRUM->p[P_TFLT] = 7;
+    cc_in(9, 74, 127);
+    check(TDRUM->p[P_DIST] == TP[P_DIST].max && TDRUM->p[P_TFLT] == 7,
           "MIDI LEARN: a learned CC 74 sets its parameter, not the standard map's FILTER");
     ml_arm = 1, ml_heard = 0;
-    trk[1].p[P_DIST] = 5;
+    TDRUM->p[P_PAN] = 5;
     cc_in(0, 20, 99);
-    check(ml_heard == 21u && trk[1].p[P_DIST] == 5, "while learning: the CC goes to the UI (ml_heard), nothing is set");
+    check(ml_heard == 21u && TDRUM->p[P_PAN] == 5, "while learning: the CC goes to the UI (ml_heard), nothing is set");
     ml_arm = 0, ml_heard = 0;
     check(!ml_free_cc(1) && !ml_free_cc(64) && !ml_free_cc(0) && !ml_free_cc(121) && ml_free_cc(20) && ml_free_cc(74),
           "MIDI LEARN: mod wheel, sustain, bank select, the channel modes never learned");
     check(ml_id(P_DIST + 1u) == P_DIST && ml_id(ML_E0 + 7u) == P_E7 && ml_id(ML_E0 + 8u) == P_COUNT && ml_id(0) == P_COUNT,
           "MIDI LEARN: an entry's code -> its parameter (an unknown one: none)");
     memset((void *)ml_tab, 0, sizeof ml_tab);
+    TDRUM->p[P_PAN] = TDRUM->p[P_DIST] = TDRUM->p[P_TFLT] = 0;
     mi_r = mi_w;
 }
 
@@ -345,11 +253,12 @@ static void t_texture(void)
     int32_t pk;
     setup();
     tx_set(0, 64, 0, 0, 2, 1, 0);
-    trk_note_on(&trk[0], 45, 100);
+    hit_every = 50;
     fork_dry(300);
     tx_set(1, 0, 0, 0, 2, 1, 0);                        /* VINYL at LEVEL 0: nothing either */
     render(300);
     check(!memcmp(shared_dry, out_l, 300u * CTL * 4u) && !tx.g, "TEXTURE OFF (or LEVEL 0): the mix bit for bit as without");
+    hit_every = 0;
     for (s = 1; s <= 6u; s++) {                         /* each source alone, ALWAYS (stopped), LEVEL 64, no MOVE */
         setup();
         tx_set((int32_t)s, 64, 0, 0, 2, 1, 0);
@@ -425,41 +334,8 @@ static void t_texture(void)
     render(20);
 }
 
-/* 2.6: MIDI pitch bend: full up with BEND 2 is two semitones up, at BEND 12 an octave (the pitch from the waveform's
- * period: a saw's zero crossings going down) */
-static double period_of(uint32_t a, uint32_t b)
-{
-    uint32_t i, n = 0, first = 0, last = 0;
-    for (i = a + 1u; i < b; i++)
-        if (out_l[i - 1] >= 0 && out_l[i] < 0) {
-            if (!n) first = i;
-            last = i, n++;
-        }
-    return n > 1u ? (double)(last - first) / (n - 1u) : 0;
-}
-static void t_bend(void)
-{
-    double p0, p2, p12;
-    setup();
-    trk[0].p[P_E4] = 50;                              /* (a darker saw: clean crossings) */
-    trk_note_on(&trk[0], 45, 100);
-    render(400);
-    p0 = period_of(100u * CTL, 400u * CTL);
-    song.g[G_BEND] = 2, trk[0].bend = 8191;
-    render(400);
-    p2 = period_of(100u * CTL, 400u * CTL);
-    song.g[G_BEND] = 12;
-    render(400);
-    p12 = period_of(100u * CTL, 400u * CTL);
-    trk[0].bend = 0;
-    render(100);
-    printf("  bend: period %.2f, full up at BEND 2 %.2f (x%.3f), at 12 %.2f (x%.3f)\n", p0, p2, p0 / p2, p12, p0 / p12);
-    check(fabs(p0 / p2 - 1.1225) < 0.01 && fabs(p0 / p12 - 2.0) < 0.02, "MIDI pitch bend: full up = BEND semitones (2: a tone, 12: an octave)");
-    song.g[G_BEND] = 2;
-}
-
-/* 2.6, clicks: a preset loaded over held notes fades them out with the old sound (voice.c sound_change); the track's
- * FILTER and the master FILT engaging their low-pass start where the signal is (fx.c djf: the state seeded) */
+/* 2.6, clicks: the track's FILTER and the master FILT engaging their low-pass start where the signal is (fx.c djf:
+ * the state seeded) */
 static double d2_of(uint32_t a, uint32_t b)
 {
     double m = 0, d;
@@ -545,85 +421,52 @@ static void t_throw(void)
     setup();
     song.g[G_DFDBK] = 0;
     thr_req = 0, thr_rev = thr_dly = 0;
-    trk_note_on(&trk[0], 45, 100), render(60), trk_note_off(&trk[0], 45), render(400);
-    dry = rms(300u * CTL, 400u * CTL);                 /* (the release is 0: what rings after it is the sends') */
+    trk_note_on(TDRUM, 38, 120), render(460);
+    dry = rms(300u * CTL, 400u * CTL);                 /* (the drum sends are 0: what rings after the snare is theirs) */
     setup();
     song.g[G_DFDBK] = 0;
     thr_req = 1;
-    trk_note_on(&trk[0], 45, 100), render(60), trk_note_off(&trk[0], 45), render(400);
+    trk_note_on(TDRUM, 38, 120), render(460);
     rv = rms(300u * CTL, 400u * CTL);
     setup();
     song.g[G_DFDBK] = 0;
     thr_req = 2;
-    trk_note_on(&trk[0], 45, 100), render(60), trk_note_off(&trk[0], 45), render(400);
+    trk_note_on(TDRUM, 38, 120), render(460);
     ec = rms(300u * CTL, 400u * CTL);
     thr_req = 0;
     render(100);
     printf("  THROW: tail rms dry %.0f, REV THROW %.0f, ECHO THROW %.0f; the glide back %d %d\n", dry, rv, ec, thr_rev, thr_dly);
-    check(rv > 5 * dry + 50 && ec > 5 * dry + 50 && !thr_rev && !thr_dly && trk[0].p[P_REV] == 0 && trk[0].p[P_DLY] == 0 &&
-          song.g[G_DFDBK] == 0, "REV / ECHO THROW: the sends full while held (a tail rings), back after; nothing changed");
+    check(rv > 5 * dry + 50 && ec > 5 * dry + 50 && !thr_rev && !thr_dly && song.g[G_DRREV] == 0 && song.g[G_DRDLY] == 0 &&
+          song.g[G_DFDBK] == 0, "REV / ECHO THROW: the drum sends full while held (a tail rings), back after; nothing changed");
     song.g[G_DFDBK] = fb0;
 }
 static void t_clicks(void)
 {
-    static const uint8_t E[5][3] = {{0, 2, 7}, {7, 0, 3}, {2, 3, 1}, {3, 4, 1}, {9, 7, 2}};   /* engine, from, to */
-    double worst = 0, base, sw;
-    uint32_t k;
-    for (k = 0; k < 5u; k++) {
-        setup();
-        host_preset(&trk[0], E[k][0], E[k][1]);
-        trk[0].p[P_LEVEL] = 100;
-        trk_note_on(&trk[0], 48, 110), trk_note_on(&trk[0], 55, 110), trk_note_on(&trk[0], 60, 110);
-        render(360);
-        base = d2_of(260u * CTL, 360u * CTL);
-        sound_change(&trk[0]);                          /* as ui.c apply_preset_to */
-        host_preset_req(&trk[0], E[k][0], E[k][2]);
-        panic_req |= 1u;
-        for (sw = 0, k = k; sw == 0; ) {
-            uint32_t b;
-            for (b = 0; b < 20u; b++) {
-                fm6_poll();
-                render(1);
-                sw = d2_of(0, CTL) > sw ? d2_of(0, CTL) : sw;
-            }
-        }
-        if (sw / (base + 50) > worst)
-            worst = sw / (base + 50);
-    }
-    printf("  a preset over held notes: the switch's worst sample step %.1f x the note's own\n", worst);
-    check(worst < 1.5, "a preset loaded over held notes: they fade out with their own sound (no click: WHEEL, PHASE, FM6..)");
-    {
-        double lp, ms;
-        setup();
-        host_preset(&trk[0], 0, 2);
-        trk[0].p[P_LEVEL] = 110;
-        trk_note_on(&trk[0], 40, 120);
-        render(360);
-        base = d2_of(260u * CTL, 360u * CTL);
-        trk[0].p[P_TFLT] = -1;
-        render(5);
-        lp = d2_of(0, 5u * CTL);
-        song.g[G_FILT] = -1;
-        render(5);
-        ms = d2_of(0, 5u * CTL);
-        trk[0].p[P_TFLT] = 0, song.g[G_FILT] = 0;
-        render(200);
-        printf("  low-pass engaged under a note: track FILTER %.0f, master FILT %.0f (the note's own %.0f)\n", lp, ms, base);
-        check(lp < 1.5 * base + 100 && ms < 1.5 * base + 100, "track FILTER / master FILT engaging their low-pass: no click");
-    }
+    double base, lp, ms;
+    setup();
+    hit_every = 50;
+    render(360);
+    base = d2_of(260u * CTL, 360u * CTL);
+    TDRUM->p[P_TFLT] = -1;
+    render(5);
+    lp = d2_of(0, 5u * CTL);
+    song.g[G_FILT] = -1;
+    render(5);
+    ms = d2_of(0, 5u * CTL);
+    TDRUM->p[P_TFLT] = 0, song.g[G_FILT] = 0;
+    hit_every = 0;
+    render(200);
+    printf("  low-pass engaged under the drums: track FILTER %.0f, master FILT %.0f (the drums' own %.0f)\n", lp, ms, base);
+    check(lp < 1.5 * base + 100 && ms < 1.5 * base + 100, "track FILTER / master FILT engaging their low-pass: no click");
 }
 
 int main(void)
 {
     setvbuf(stdout, 0, _IONBF, 0);
     t_insert();
-    t_filter();
-    t_esync();
-    t_lfo2();
     t_mutes();
     t_learn();
     t_texture();
-    t_bend();
     t_clicks();
     t_limiter();
     t_limiter_bass();

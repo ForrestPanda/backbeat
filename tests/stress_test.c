@@ -3,17 +3,15 @@
  *   font    FONT_L is FONT_S's bitmaps drawn at 2x (no copy in flash): every L glyph, drawn by the real
  *           cv_text, is checked pixel for pixel against the same glyph enlarged from S here; then
  *           random text (every byte 1..255) at random places, partly or wholly off random canvases
- *   fuzz    FRAMES frames (16 ms each, the audio between them as on the device) of hard random use: FM6
- *           on the parts, chord steps with ratchets at up to 240 BPM, CHORD+ (white keys with black
- *           modifier keys held, changed while held), STRUM -60..60, VLEAD, the track filter swept, slicer,
- *           punch FX, the visualiser (every style), the menu, SELECT spun, layers, engines switched, MIDI in.
- *           Every block: the output bounded, the strum queue sane; every frame: every draw on the screen.
- *           At the end, everything let go and stopped: no voice, drum hit or strummed note left after 30 s,
- *           and the output back to silence
- *   bench   (BENCH=1) host time per audio block of a worst case (3 FM6 parts, 4-note chords, ratchets,
- *           240 BPM) with the 2.4 additions (strum 60 ms, voice leading, the track filter on all four
- *           tracks) against the same without them; the visualiser's draw time per style against the
- *           TRACKS screen; FONT_L text drawn from S against a stored 2x copy
+ *   fuzz    FRAMES frames (16 ms each, the audio between them as on the device) of hard random use: dense drum
+ *           steps with ratchets at up to 240 BPM, the keys (white and black, changed while held), the kits, the
+ *           drum track's INSERT and FILTER swept, the sends, the throws, the visualiser (every style), the menu,
+ *           SELECT spun, layers, MIDI in. Every block: the output bounded; every frame: every draw on the screen.
+ *           At the end, everything let go and stopped: no drum hit left after 30 s, and the output back to silence
+ *   bench   (BENCH=1) host time per audio block of a worst case (every lane on every step, x4 ratchets, 1/16 at
+ *           240 BPM) with the INSERT and the FILTER on against the same without them; the visualiser's draw
+ *           time per style against the TRACKS screen; FONT_L text drawn from S against a stored 2x copy
+ * (fm1-drummer, drums only: the FM6 parts, chords, strum and voice leading went with the synth.)
  * Run it under -fsanitize=address,undefined too: any read or write out of bounds stops it.
  *   stress_test [FRAMES [SEED]]   (default 40000: about 11 minutes of use) */
 #define UI_PAGES_HARNESS_ONLY 1
@@ -95,7 +93,7 @@ static void t_font(void)
 
 /* ---- fuzz ---- */
 static int32_t peak;
-static uint32_t loud_blocks, play_blocks, stq_max, vis_frames, menu_seen;
+static uint32_t loud_blocks, play_blocks, vis_frames, menu_seen;
 static double blk_ns;
 static uint32_t blk_hist[2001];                       /* host time per block, 1 us buckets */
 static uint32_t blk_n;
@@ -119,18 +117,10 @@ static void sframe(void)                              /* frame(), the output che
         }
         {
             int32_t bp = 0;
-            uint32_t on = 0;
             for (i = 0; i < CTL * 2u; i++) if ((o[i] < 0 ? -o[i] : o[i]) > bp) bp = o[i] < 0 ? -o[i] : o[i];
             loud_blocks += bp > 256;
             play_blocks += song.playing;
-            for (i = 0; i < STQ; i++) on += stq[i].on;
-            if (on > stq_max) stq_max = on;
         }
-        for (i = 0; i < STQ; i++)                     /* a strummed note waits at most 3 x 60 ms */
-            if (stq[i].on && (stq[i].left > 3u * 60u * FS / 1000u || stq[i].trk >= NPART)) {
-                scheck(0, "fuzz: strum queue entry out of range");
-                stq[i].on = 0;
-            }
     }
     ui_input(); ui_leds(); ui_draw(); fm1_ms += 16;
     vis_frames += vis_shown();
@@ -139,38 +129,28 @@ static void sframe(void)                              /* frame(), the output che
 
 static uint32_t white[16], nwhite, black_keys[11], nblack;
 
-static void chord_steps(uint32_t t)
+static void drum_steps(void)                        /* dense random drum steps: levels, ratchets, nudges */
 {
     uint32_t i, k;
     for (i = 0; i < NSTEP; i++) {
-        step_t *s = &trk[t].step[i];
-        memset(s, 0, sizeof *s);
-        if (rn(3) == 0) continue;
-        s->n = (uint8_t)(1u + rn(4));
-        for (k = 0; k < s->n; k++) s->note[k] = (uint8_t)(36 + rn(48));
-        s->time = (uint8_t)(rn(8) ? ST_NOTE : ST_TIE);
-        s->vel = (uint8_t)(40 + rn(88));
-        s->rat = (uint8_t)rn(256);
-        s->lvl = (uint8_t)rn(256);
-        s->flags = (uint8_t)(rn(6) == 0 ? SF_SLIDE : 0u);
+        memset(&TDRUM->dstep[i], 0, sizeof TDRUM->dstep[i]);
+        if (rn(4) == 0) continue;
+        for (k = rn(5); k; k--)
+            dstep_set(&TDRUM->dstep[i], rn(DRUM_LANES), rn(4), rn(4));
+        TDRUM->micro[i] = (int8_t)(rn(4) ? 0 : (int)rn(64) - 32);
     }
 }
 
 static void t_fuzz(uint32_t nframes)
 {
-    uint32_t home_hold = 0, f, nf, k, i, held_btn = 0, vis_seen = 0, menu_frames = 0, mods = 0, strums = 0;
+    uint32_t home_hold = 0, f, nf, k, i, held_btn = 0, vis_seen = 0, menu_frames = 0, mods = 0;
     for (k = 0; k < 27u; k++) {
-        if (chord_mod_of_key(k)) black_keys[nblack++] = k;
+        if ((0x54Au >> ((53u + k) % 12u)) & 1u) black_keys[nblack++] = k;   /* C# D# F# G# A# */
         else if (nwhite < 16u) white[nwhite++] = k;
     }
-    song.sel = 0; go_home(); ui.force = 1;
+    go_home(); ui.force = 1;
     song.g[G_BPM] = 140;
-    for (k = 0; k < NPART; k++) {
-        host_preset_req(&trk[k], ENGI_FM6, rn(ENGINES[ENGI_FM6]->npresets));
-        chord_steps(k);
-        trk[k].p[P_CHORD] = 3;
-        trk[k].p[P_STRUM] = 30;
-    }
+    drum_steps();
     transport_req = 1;
     for (f = 0; f < nframes; f++) {
         uint32_t r = rn(100);
@@ -180,7 +160,7 @@ static void t_fuzz(uint32_t nframes)
             if (bt != B_HOME && rn(3) == 0) held_btn ^= 1u << panel.btn[bt];
         } else if (r < 30) {
             encs[rn(NE)] += (int32_t)rn(9) - 4;      /* knobs, SELECT, ALGO, PRESETS */
-        } else if (r < 44) {                          /* the keys: a chord, with modifiers */
+        } else if (r < 44) {                          /* the keys: white and black, changed while held */
             uint32_t m = 0;
             if (rn(4)) m |= 1u << white[rn(nwhite)];
             for (k = 0; k < nblack; k++) if (rn(5) == 0) m |= 1u << black_keys[k];
@@ -190,34 +170,32 @@ static void t_fuzz(uint32_t nframes)
         } else if (r < 47) {
             fm1_in.notes = 0;
         } else if (r < 49) {
-            uint32_t t = rn(NPART);
-            trk[t].p[P_STRUM] = (int16_t)((int)rn(121) - 60); strums++;
+            TDRUM->p[P_ITYPE] = (int16_t)rn(IT_N); TDRUM->p[P_IMIX] = (int16_t)rn(128);   /* the INSERT */
         } else if (r < 50) {
-            trk[rn(NPART)].p[P_VLEAD] = (int16_t)rn(2);
+            song.g[G_DRREV] = (int16_t)rn(128); song.g[G_DRDLY] = (int16_t)rn(128);       /* the sends */
         } else if (r < 53) {
             trk[rn(NTRK)].p[P_TFLT] = (int16_t)((int)rn(128) - 64);
         } else if (r < 54) {
-            trk[rn(NPART)].p[P_CHORD] = (int16_t)rn(6);
+            TDRUM->p[P_E0] = (int16_t)rn(DRUM_KITS);                                    /* a kit */
         } else if (r < 55) {
-            uint32_t t = rn(NPART), e = rn(3) ? ENGI_FM6 : rn(NENGINES);
-            host_preset_req(&trk[t], e, rn(ENGINES[e]->npresets));
+            TDRUM->p[P_IA] = (int16_t)rn(128); TDRUM->p[P_IB] = (int16_t)rn(128); TDRUM->p[P_IC] = (int16_t)rn(128);
         } else if (r < 56) {
             trk[rn(NTRK)].p[P_SDIV] = (int16_t)rn(NDIV_STEP);
         } else if (r < 57) {
             song.g[G_BPM] = (int16_t)(60 + rn(181));
         } else if (r < 58) {
-            chord_steps(rn(NPART));
+            drum_steps();
         } else if (r < 59) {
-            trk[rn(NTRK)].p[P_SLCR] = (int16_t)rn(3);
+            trk[rn(NTRK)].p[P_TFLT] = (int16_t)((int)rn(128) - 64);
         } else if (r < 60) {
-            punch.req = (int8_t)(rn(3) ? -1 : (int)rn(PUNCH_NFX));
+            thr_req = (uint8_t)rn(4);
         } else if (r < 61) {
             song.g[G_FILT] = (int16_t)((int)rn(128) - 64);
         } else if (r < 62) {
             uint32_t ch = rn(16), nt = 24 + rn(80);
             if (mi_w - mi_r < MQ) { midi_in_q[mi_w % MQ] = ((rn(2) ? 0x9u : 0x8u)) | (((rn(2) ? 0x90u : 0x80u) | ch) << 8) | nt << 16 | (1u + rn(127)) << 24; mi_w++; }
         } else if (r < 63) {
-            if (!song.rec) transport_req = song.playing ? 2 : 1;
+            transport_req = song.playing ? 2 : 1;
         } else if (r < 64) {
             vis_style = (uint8_t)rn(VIS_N);
             if (rn(8) == 0 && !ui.menu) { go_home(); vis_open(); }   /* (back to TRACKS, the visualiser open) */
@@ -233,40 +211,32 @@ static void t_fuzz(uint32_t nframes)
         sframe();
         vis_seen |= vis_shown() ? 1u << vis_style : 0u;
         if (ui.menu && ++menu_frames % 300u == 0u) { ui.menu = 0; ui.force = 1; }
-        scheck(ui.page < NPAGES && vis_style < VIS_N && song.sel < NTRK, "fuzz: UI state in range");
+        scheck(ui.page < NPAGES && vis_style < VIS_N, "fuzz: UI state in range");
         if (sfails > 20) break;
     }
     nf = f;
     /* the end: everything let go, MIDI notes off, stop, 5 s */
     fm1_in.notes = 0; fm1_in.buttons = 0; held_btn = 0; ly_lock = 0; ui.menu = 0;
-    punch.hold = 0; punch.req = -1;
+    thr_req = 0;
+    song.g[G_TXSRC] = 0; song.g[G_DUST] = 0;          /* (the TEXTURE bed and DUST sound while stopped, by design) */
     sframe();
     for (k = 0; k < 16u; k++)
         for (i = 24; i < 104u; i++) {
             midi_in_q[mi_w % MQ] = 0x8u | ((0x80u | k) << 8) | i << 16; mi_w++;
             if (mi_w - mi_r >= MQ - 4u) sframe();
         }
-    song.rec = 0; rec_wait = 0;
     transport_req = 2;
-    for (k = 0; k < NTRK; k++) trk[k].p[P_AMODE] = 0;
-    for (f = 0; f < 30u * 1000u / 16u; f++) {           /* (a slow FM6 release, R4 35: several seconds) */
+    for (f = 0; f < 30u * 1000u / 16u; f++) {
         uint32_t a = 0;
         sframe();
-        for (k = 0; k < NPART; k++) for (i = 0; i < NVOICE; i++) a += trk[k].v[i].active;
         for (i = 0; i < NDRUM; i++) a += drums.v[i].active;
-        for (i = 0; i < STQ; i++) a += stq[i].on;
         if (!a && f >= 2u * 1000u / 16u) break;
     }
     for (i = 0; i < 3u * 1000u / 16u; i++) sframe();      /* (the echo and reverb tails) */
     printf("end: everything let go and stopped: all voices free after %.1f s (at most 30)\n", f * 0.016);
     scheck(!song.playing, "end: stopped");
-    for (k = 0; k < NPART; k++)
-        for (i = 0; i < NVOICE; i++)
-            scheck(!trk[k].v[i].active, "end: no synth voice left sounding");
     for (i = 0; i < NDRUM; i++)
         scheck(!drums.v[i].active, "end: no drum hit left");
-    for (i = 0; i < STQ; i++)
-        scheck(!stq[i].on, "end: no strummed note left waiting");
     {
         static int32_t o[CTL * 2];
         int32_t q = 0;
@@ -275,8 +245,8 @@ static void t_fuzz(uint32_t nframes)
             mix_block(o, CTL);
             for (i = 0; i < CTL * 2u; i++) if ((o[i] < 0 ? -o[i] : o[i]) > q) q = o[i] < 0 ? -o[i] : o[i];
         }
-        printf("fuzz: %u frames (%.1f min), peak %d, tail %d, visualiser styles seen %u/12, chords %u, strum changes %u\n",
-               nf, nf * 16.0 / 60000.0, peak, q, (unsigned)__builtin_popcount(vis_seen), mods, strums);
+        printf("fuzz: %u frames (%.1f min), peak %d, tail %d, visualiser styles seen %u/12, key changes %u\n",
+               nf, nf * 16.0 / 60000.0, peak, q, (unsigned)__builtin_popcount(vis_seen), mods);
         scheck(q < 64, "end: silence after stop");
     }
     scheck(peak < (1 << 24), "fuzz: output bounded");
@@ -293,21 +263,15 @@ static double bench_blocks(uint32_t on, uint32_t nb)
     int rep;
     for (rep = 0; rep < 5; rep++) {
         sd = 99u;
-        for (k = 0; k < NPART; k++) {
-            uint32_t i;
-            trk[k].p[P_STRUM] = on ? 60 : 0;
-            trk[k].p[P_VLEAD] = (int16_t)on;
-            trk[k].p[P_CHORD] = 0;
-            trk[k].p[P_SDIV] = 3;                     /* 1/16 */
-            trk[k].p[P_MUTE] = 0;
-            for (i = 0; i < NSTEP; i++) {
-                step_t *s = &trk[k].step[i];
-                s->n = 4; s->time = ST_NOTE; s->flags = 0; s->vel = 100; s->lvl = 0; s->rat = 0x55;
-                s->note[0] = (uint8_t)(48 + i % 7); s->note[1] = (uint8_t)(52 + i % 5);
-                s->note[2] = (uint8_t)(55 + i % 3); s->note[3] = (uint8_t)(59 + i % 4);
-            }
+        TDRUM->p[P_SDIV] = 2;                         /* 1/16 */
+        TDRUM->p[P_MUTE] = 0;
+        for (k = 0; k < NSTEP; k++) {                 /* every lane on every step, x4 */
+            uint32_t l;
+            for (l = 0; l < DRUM_LANES; l++)
+                dstep_set(&TDRUM->dstep[k], l, LV_NORM, 3);
         }
-        for (k = 0; k < NTRK; k++) trk[k].p[P_TFLT] = on ? (int16_t)(k & 1u ? 40 : -40) : 0;
+        TDRUM->p[P_TFLT] = on ? -40 : 0;
+        TDRUM->p[P_ITYPE] = on ? 7 : 0, TDRUM->p[P_IMIX] = 127;   /* FLANG */
         song.g[G_BPM] = 240;
         if (!song.playing) { transport_req = 1; mix_block(o, CTL); }
         for (b = 0; b < 2000u; b++) mix_block(o, CTL);   /* (the voices up) */
@@ -348,12 +312,10 @@ static void t_bench(void)
     double off, on, home, v[VIS_N], a = 0, b = 0;
     uint32_t s, i;
     static const char *const TXT[] = {"120.0", "-64", "FILTER", "SLOOP", "C#m7", "2BAR"};
-    for (i = 0; i < NPART; i++) host_preset(&trk[i], ENGI_FM6, i);
     off = bench_blocks(0, 6000);
     on = bench_blocks(1, 6000);
-    printf("bench: worst case (3 FM6 parts, 4-note chords x2 ratchets, 1/16 at 240 BPM): %.2f us a block without "
-           "the 2.4 additions, %.2f us with strum 60 ms + VLEAD + the filter on 4 tracks (%+.1f %%)\n",
-           off / 1000, on / 1000, (on / off - 1) * 100);
+    printf("bench: worst case (every lane on every step x4, 1/16 at 240 BPM): %.2f us a block plain, %.2f us with the "
+           "INSERT (FLANG) and the FILTER (%+.1f %%)\n", off / 1000, on / 1000, (on / off - 1) * 100);
     home = bench_draw(0, 0, 300);
     for (s = 0; s < VIS_N; s++) v[s] = bench_draw(1, s, 300);
     printf("bench: draw a frame: TRACKS screen %.1f us;", home / 1000);
@@ -379,22 +341,19 @@ int main(int argc, char **argv)
     wdt_tick_ms = 1;                                  /* (the menu's PANEL setup waits for a press: as on the FM-1, its
                                                        * clock runs while it waits, and it gives up after 30 s) */
     uint32_t i;
-    bank_resolve();
     panel = PANEL_DEFAULT;
     layers_init();
     settings.palette = 4;
     palette_set(4);
     host_tracks_init();
-    for (i = 0; i < NPART; i++) { set_engine_of(&trk[i], TRK_DEF[i][0]); apply_preset_to(&trk[i], TRK_DEF[i][1]); trk[i].engine = trk[i].eng_req; }
     TDRUM->p[P_E0] = DRUM_SAMPLED;
     song.g[G_BPM] = 120;
     go_home(); ui.force = 1;
     frames(4);
     t_font();
     t_fuzz(nframes);
-    printf("fuzz: audio playing in %.0f %% of blocks, sounding in %.0f %%; up to %u strummed notes waiting at once; "
-           "visualiser on %.0f %% of frames, menu %.0f %%\n", 100.0 * play_blocks / blk_n, 100.0 * loud_blocks / blk_n,
-           stq_max, 100.0 * vis_frames / nframes, 100.0 * menu_seen / nframes);
+    printf("fuzz: audio playing in %.0f %% of blocks, sounding in %.0f %%; visualiser on %.0f %% of frames, menu %.0f %%\n",
+           100.0 * play_blocks / blk_n, 100.0 * loud_blocks / blk_n, 100.0 * vis_frames / nframes, 100.0 * menu_seen / nframes);
     {   /* (a max on a shared host is its scheduler's, not ours: the 99.9 and 99.99 percentiles) */
         uint32_t i, acc = 0, p3 = 0, p4 = 0;
         for (i = 0; i <= 2000u; i++) {
@@ -406,6 +365,6 @@ int main(int argc, char **argv)
                blk_n, blk_ns / blk_n / 1000, p3, p4);
     }
     if (getenv("BENCH")) t_bench();
-    printf("stress: %s\n", sfails ? "FAILED" : "font, fuzz with every 2.4 addition, clean stop PASS");
+    printf("stress: %s\n", sfails ? "FAILED" : "font, fuzz of the drums and the UI, clean stop PASS");
     return sfails != 0;
 }

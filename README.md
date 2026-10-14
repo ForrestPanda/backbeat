@@ -6,16 +6,19 @@ the transitions. No backing tracks: the song's structure and the length of every
 on stage.
 
 A fork of [SLOOP](https://github.com/isod89/sloop-fm1) 2.6 (GPL-3.0, itself from
-[Felucca](https://github.com/hugelton/Felucca)). SLOOP's manual is [SLOOP.md](SLOOP.md); everything
-it describes still works. What this fork adds is in [docs/design.md](docs/design.md).
+[Felucca](https://github.com/hugelton/Felucca)), **drums only**: SLOOP's synth side (the synth engines and
+presets, the sampled instruments, the punch FX, the SLICER, live recording, the arpeggiator, scales and chords,
+three of its four tracks) is gone, see [docs/drums-only.md](docs/drums-only.md). What is left of SLOOP is its
+drum track, sequencer and sections, and [SLOOP.md](SLOOP.md), its manual, still describes those (its synth chapters
+no longer apply). What this fork adds is in [docs/design.md](docs/design.md).
 
 Status: **everything but the hardware (October 2026)**. The pedal control, songs in flash (compact, with a
 time signature per section), the fills, the renderer, the Guitar Pro importer, the kit tool, the web editor's
 Songs tab with its section editor and a player the real pedal can drive, the screen and a song screen on the
 device are done and pass the host tests; the firmware builds and packages, and runs on the fm1-emu emulator.
 Nothing here has run on an FM-1 yet: the TRS jack, the cable type and the speaker are still to be verified
-(`docs/design.md`, milestone 7). The flash is full (about 100 bytes left): a bigger feature needs some of
-SLOOP's taken out first.
+(`docs/design.md`, milestone 7). Drums only, the firmware is 249 KB of its 581 KB slot: the room is for a more
+realistic kit (longer samples, more velocity layers, round robins) and the next device features.
 
 ## The pedal
 
@@ -58,7 +61,7 @@ python3 tools/fm1_song.py --pedal-channel 16            # the pedal's MIDI chann
 python3 tools/fm1_song.py --count-in 1                  # one bar of clicks before a start from stopped (0, 1, 2)
 ```
 
-Or, with the FM-1 connected by USB, open SLOOP's web editor (`web/editor.html`): its **Songs** tab lists
+Or, with the FM-1 connected by USB, open the web editor (`web/editor.html`): its **Songs** tab lists
 the eight slots, takes a song JSON by drop or file picker, saves one back as JSON, erases a slot, and sets
 the pedal's MIDI channel. Its **From Guitar Pro or JSON** card runs `tools/gp2song.py` itself in the browser (Python
 through Pyodide, loaded from the internet the first time), or opens a song JSON as it is (one saved from the
@@ -100,8 +103,14 @@ run with a script of keys, knobs and pedal messages into the TRS jack, the scree
 on a PC:
 
 ```
+python3 tools/fm1_emu.py                                                             # the demo on the factory songs
 python3 tools/fm1_emu.py songs/black.json songs/time.json --wav build/emu/run.wav   # the demo script, slots 1 and 2
 ```
+
+**Factory songs.** The build carries every song in `songs/` (`tools/gen_songs.py`: by file name, the first 8, into
+slots 1..8): a song slot never written plays its factory song, so a fresh device or the emulator has songs to play
+at once. A song sent with `--put` replaces it; an erased slot
+stays empty.
 
 **A sampled kit of your own.** A folder of WAV files (any CC0 kit; `assets/samples-cc0/KIT` is one)
 becomes the device's kit USR3+4: the files are sorted onto the 16 lanes by name, trimmed, cut to the
@@ -123,11 +132,21 @@ one marked "not in a fill" rests then, mark by mark in the editor's grid or lane
 SLOOP's own whole-step conditions still work on top. Built for the Hotone Ampero II Stage (each footswitch sends up to three CC / PC messages), but any
 pedalboard with a MIDI out does.
 
+## What is on the device
+
+One track, the drums: the kits (the sampled GM kit and its treatments, the synthesised kits, SYN1..SYN4 from the
+editor's Drum synth, your own sampled kits on the user slots), a pattern of up to 64 steps over 16 lanes with
+levels, ratchets, nudges, parameter locks and fill conditions, rolls, erase and mutes; sections A..D, their quick
+chain and SLOOP's song order; the songs and the pedal (above); the drum track's INSERT and FILTER, the delay and
+reverb sends, the master (DUST, DUCK, the DJ filter, the limiter), TEXTURE; MIDI in, out, clock and learn; the
+visualiser. The web editor (protocol v11) edits the pattern, the kits, the drum synth, the samples, projects,
+songs and settings.
+
 ## Build and test
 
 ```
 ./build.sh                   # build/felucca.bin, build/felucca.fwsc (toolchain and SDK: BUILDING.md)
-sh tests/run_tests.sh        # SLOOP's host tests plus tests/pedal_test.c
+sh tests/run_tests.sh        # the host tests (SOAK_MIN=1 for a short soak)
 ```
 
 The TRS MIDI input is SLOOP's (`FELUCCA_UART=1`, in use since SLOOP 2.3). Install as SLOOP
@@ -138,6 +157,7 @@ The TRS MIDI input is SLOOP's (`FELUCCA_UART=1`, in use since SLOOP 2.3). Instal
 | Path | What |
 | --- | --- |
 | `docs/design.md` | the model, the pedal command map, milestones, flash budget, review notes, open questions |
+| `docs/drums-only.md` | how SLOOP's synth side was taken out, stage by stage, and what each stage kept |
 | `docs/ampero-setup.md` | what to put into the Ampero II Stage's footswitches, the cable, what to check with the FM-1 |
 | `docs/kits.md` | the drum kits: the chosen Muldjord Kit (CC BY 4.0, with Black Pearl's hats and Red Zeppelin's ride), the others tried, the recipes, the slot budget |
 | `firmware/src/pedal.c` | the pedal: CC / PC from the MIDI in queue to section, song and transport requests |
@@ -145,7 +165,7 @@ The TRS MIDI input is SLOOP's (`FELUCCA_UART=1`, in use since SLOOP 2.3). Instal
 | `firmware/src/ui_drummer.c` | the song screen (the SONG page while a song is loaded): sections, the keys as the pedal |
 | `tools/fm1_emu.py` | the firmware on the fm1-emu emulator, songs imported into its flash: a script of keys, knobs and pedal MIDI, screens and sound saved |
 | `tools/fm1_song.py`, `songs/` | songs from JSON: check, pack, send, read back; the example and four from Guitar Pro tabs (Black, Jeremy, Another Brick in the Wall, Comfortably Numb) |
-| `web/editor.html` | SLOOP's web editor with a Songs tab: the slots, the pedal channel, Guitar Pro import (Pyodide), the section editor, a player; `web/test_web.mjs` tests it against the simulated FM-1 |
+| `web/editor.html` | the web editor (SLOOP's, drums only, protocol v11) with a Songs tab: the slots, the pedal channel, Guitar Pro import (Pyodide), the section editor, a player; `web/test_web.mjs` tests it against the simulated FM-1 |
 | `web/kit/` | the kit the editor serves (the Muldjord Kit with two velocity layers), the files `tools/mkkit.py` makes the device image from |
 | `tools/fm1_render.py`, `tests/song_render.c` | a song played by the pedal, rendered to a WAV on the host |
 | `tools/gp2song.py`, `tests/gp2song_test.py` | the drum track of a Guitar Pro file into a song (markers, patterns, fills, levels, ratchets) |
@@ -153,7 +173,7 @@ The TRS MIDI input is SLOOP's (`FELUCCA_UART=1`, in use since SLOOP 2.3). Instal
 | `firmware/src/seq.c` | SLOOP's sequencer; the pedal hooks in its MIDI loop and `events_block` |
 | `tests/pedal_test.c` | the pedal through the real sequencer: sections on the bar, fills, endings, next / previous, stop, tap |
 | `tests/song_test.c` | songs through the real sequencer: the packed form's checks, PC, sections, the outro, back to A..D |
-| everything else | SLOOP 2.6 as forked |
+| everything else | SLOOP 2.6's drum side as forked |
 
 ## Licence
 

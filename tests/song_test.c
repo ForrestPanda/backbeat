@@ -11,7 +11,6 @@
 #undef main
 #include <assert.h>
 #define PROJ_HOST 1
-static uint32_t trk_def_engine(uint32_t i) { return i < NPART ? i : 0; }
 #include "../firmware/src/project.c"
 static struct { uint8_t force; } ui;
 static uint8_t sync_reload;
@@ -117,16 +116,15 @@ int main(int argc, char **argv)
         return rc ? 1 : 0;
     }
     host_tracks_init();
-    host_preset(&trk[0], 0, 4);
     for (i = 0; i < NTRK; i++) {
         trk[i].p[P_SLEN] = 16; trk[i].p[P_SDIV] = 2; trk[i].p[P_AMODE] = 0; trk[i].p[P_LEVEL] = 90;
     }
+    TDRUM->p[P_PAN] = 36;                                 /* the section's marker (drums only: no bass track) */
     for (k = 0; k < 16; k++) {
-        uint8_t bass[] = {36}, drum[] = {42, (uint8_t)(k % 8u == 4u ? 38 : 36)};
-        if (!(k % 4u)) put_step(&trk[0], k, 1, bass, ST_NOTE, 0);
+        uint8_t drum[] = {42, (uint8_t)(k % 8u == 4u ? 38 : 36)};
         put_step(TDRUM, k, k % 4u ? 1 : 2, drum, ST_NOTE, 0);
     }
-    capture(0);                                           /* SLOOP's A: bass on 36, a 16-step beat */
+    capture(0);                                           /* SLOOP's A: PAN 36, a 16-step beat */
     capture(1);
 
     /* ---- the songs: slot 0 three sections (INTRO 1 bar, VERSE 2 bars with FILL ONLY steps, OUTRO flagged),
@@ -284,8 +282,8 @@ int main(int argc, char **argv)
     assert(sng_cur == -1 && sng_req == 0 && !sng_ready() && song.playing);
     bar = bar_len();
     advance(bar / 4u);
-    cc(16, 20, 0); advance(bar);                                   /* A: the project slot, its bass and beat */
-    assert(live_sec == 0 && trk[0].step[0].note[0] == 36 && !lane_on(&TDRUM->dstep[2], 0) && lane_on(&TDRUM->dstep[4], 2));
+    cc(16, 20, 0); advance(bar);                                   /* A: the project slot, its PAN and beat */
+    assert(live_sec == 0 && TDRUM->p[P_PAN] == 36 && !lane_on(&TDRUM->dstep[2], 0) && lane_on(&TDRUM->dstep[4], 2));
     cc(16, 23, 0); advance(CTL * 2u);
     assert(!song.playing);
     printf("song: bad / empty slot ignored, PC 127 back to A..D PASS\n");

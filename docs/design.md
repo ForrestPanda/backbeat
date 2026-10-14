@@ -14,7 +14,9 @@ Base: a fork of [SLOOP](https://github.com/isod89/sloop-fm1) (GPL-3, from Felucc
 ADPCM sample engine, live sections that switch on the bar, a quick chain, **fills** (per-step
 FILL ONLY / NO FILL conditions, "fill while held" and "fill the next bar"), the TRS MIDI jack (driver
 fixed and used for MIDI clock since 2.3), per-track MIDI channels, Program Change, MIDI import and
-export in the web editor, and the installer.
+export in the web editor, and the installer. Since 2026-10-14 the fork is drums only (`docs/drums-only.md`):
+SLOOP's synth side (its engines, presets, sampled instruments, punch FX, SLICER, live recording, arpeggiator,
+scales and chords, three of its four tracks) is out, and with it 332 KB of flash for the drums.
 
 ## The pedalboard
 
@@ -243,7 +245,10 @@ on any later commit that hits the same hunk. In practice a conflict comes once p
 commit that first rewrote it), not once per commit: the README, which the fork replaced whole, is taken
 as the fork's (`git checkout --theirs README.md`); `web/editor.html` has not conflicted so far, since
 upstream's additions sit at its head and tail and the fork's in the middle. The fork's own files are
-listed in the README.
+listed in the README. Since the drums-only work (2026-10-14) the fork no longer follows upstream: SLOOP's synth
+side, most of its editor and its project format are gone here, so a rebase would conflict everywhere. A fix
+upstream to what is shared (the drum track, the sequencer, storage, USB) is ported by hand, cherry-picked
+where it applies.
 
 ## Flash budget
 
@@ -259,7 +264,9 @@ the only big lever is `SMP_DATA`, and the acoustic kit is in it.
 | App area (0x04000..0x93000) | about 572 KB |
 | App slot (`tools/fm1pkg_make.py` APP_SLOT, `firmware/app.ld` XIP) | 581564 B |
 | SLOOP 2.6 image, and this fork after milestone 3, after the fills by mark and the two layers, with the count-in, with SNG2 and the meter, with the song screen | 573052 B, 575660 B, 578532 B, 579440 B, 579876 B, 581448 B: 116 B left |
-| Data region (0x93000..0xE0000): projects, user presets, 3 user sample slots of 80 KB | about 308 KB |
+| Drums only (2026-10-14, `docs/drums-only.md`): the sampled instrument sets, punch FX, SLICER, live recording, the synth parts, engines, presets and FM6, three of the four tracks | 248780 B: **332784 B left** |
+| Static RAM (.data + .bss) / the pool, drums only | 64672 of 98304 B / 200124 of 344064 B |
+| Data region (0x93000..0xE0000): projects, 3 user sample slots of 80 KB (drums only: the user preset banks at 0xDC000..0xDFFFF and the FM6 bank at 0xE5000..0xE6FFF are free) | about 308 KB |
 | Songs (0xA0000..0xAFFFF, 8 slots, A/B) and the pedal settings (0xB0000 / 0xB1000) | 72 KB of USR1's 80 KB; USR2 and the kit pair USR3+4 stay |
 | ADPCM sample audio | about 11 KB per second (mono 22 kHz, 4 bit) |
 
@@ -269,11 +276,12 @@ reclaims the synth engines, effects and sampled instrument sets, plus the data r
 Milestone 4 took the cheap way (no code stripping; the kit on the user slots, with layers). The image
 fills the app area (milestones 1 to 3 cost about 2.6 KB together, the marks and layers about 3 KB more, SNG2
 and the meter 0.4 KB, the song screen 1.6 KB, trimmed to fit), and static RAM is at about 92.8 of 98.3 KB:
-songs are therefore read from flash in place. **The flash is now full** (the earlier "7 KB of headroom" was
-measured against a wrong slot size: the slot is 0x8DFBC). Any further firmware feature needs some of SLOOP
-taken out first; the audit above says where the room is (the sampled instrument sets, 303 KB; the synth
-engines, the punch FX, the USB serial console). The user means to make the device drums-first: that
-stripping is future work.
+songs are therefore read from flash in place. The flash was then full (the earlier "7 KB of headroom" was
+measured against a wrong slot size: the slot is 0x8DFBC).
+
+**Drums only (2026-10-14).** SLOOP's synth side is out in ten stages (`docs/drums-only.md`): the image went from
+581448 to 248780 B, static RAM from about 92.8 to 64.7 KB. The room is for the drums: a more realistic kit in the
+app's own flash (future work below), the song screen's settings rows, bar counts, more songs.
 
 ## Fills, mark by mark (2026-10-11, evening)
 
@@ -368,11 +376,20 @@ hazard; what it found and what was done:
   complexity: such a passage is written as sections of one meter each. Best done with the compact song
   format above, since both change the packed form and its three readers (sng.c, the editor,
   fm1_song.py), so songs need re-sending only once.
-- **Drums first: SLOOP's synth side taken out** (the user's leaning, 2026-10-13; not started). The flash is
-  full, so this is also what makes room for anything new on the device (the song screen's settings rows, bar
-  counts, more kits, the bass line). Candidates by size: the sampled instrument sets (303 KB of `SMP_DATA`), the
-  synth engines and their editor pages, the punch FX, the USB serial console. Plan it from the flash audit,
-  feature by feature, with SLOOP's tests that go with each.
+- (done 2026-10-14) **Drums first: SLOOP's synth side taken out**, in ten stages (`docs/drums-only.md`): 332 KB of
+  flash and about 28 KB of static RAM free. Kept: the drum track (kits, steps with levels, ratchets, nudges,
+  locks and fill conditions, rolls, erase, the mutes), sections A..D and their chain, the songs and the pedal,
+  the INSERT and FILTER, the delay and reverb, the master (DUST, DUCK, the DJ filter, the limiter), TEXTURE, MIDI
+  in / out / clock / learn, the visualiser, the web editor (protocol v11).
+- **A more realistic kit** (asked 2026-10-14, now that the flash and RAM are there): longer samples (the cymbals'
+  and toms' tails, today cut to fit), more velocity layers than the two of `mkkit.py --layers`, and round robins
+  (two or three takes of the snare and the hats, chosen in turn so repeated hits do not machine-gun). Where it
+  can live: the app's own flash now has about 325 KB free besides the code (as a built-in kit next to the GM kit,
+  from `tools/gen_samples.py`), plus the user slots USR2..USR4 (240 KB) and the freed user-preset and FM6 sectors;
+  at about 11 KB a second of ADPCM, that is some 50 seconds of audio for one kit. To do: a kit description with
+  layers and takes per lane (drums.c picks the layer from the hit's level, the take in turn; NDRUM voices may need
+  to grow for long tails, RAM allows it), the build and the editor's kit page to make one, `docs/kits.md` for the
+  sources (the Muldjord Kit has more layers and takes than we use), CPU checked on the host budget and on the device.
 - **The drummer without the device** (lower priority, asked 2026-10-13): the PC, phone or tablet as the
   drummer, driven by the pedal, when no FM-1 is at hand, with higher-fidelity samples than the device
   can hold (longer samples, more velocity layers, round robins). Two routes: (a) the web editor's player,

@@ -1,11 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* Effects: per-track DIST insert, then sends into three shared buses (chorus, tempo delay, reverb).
- * Stereo dry mix; the chorus and the reverb come back in stereo, the delay in the middle. */
+/* Effects: the drum track's INSERT and FILTER, then sends into two shared buses (tempo delay, reverb).
+ * Stereo dry mix; the reverb comes back in stereo, the delay in the middle. (Drums only: SLOOP's chorus bus went
+ * with the synth parts, the only ones that sent to it.) */
 #define DLY_LEN 65536u           /* 1.49 s: 1/4 down to 41 BPM, 1/8 dotted down to 31, 1/4 dotted down to 61 (clamped below) */
-#define CHO_LEN 2048u
 static int16_t dly_buf[DLY_LEN] __attribute__((section(".pool")));
-static int16_t cho_buf[CHO_LEN] __attribute__((section(".pool")));
 /* the reverb: two input diffusers, then four delay lines mixed by a Hadamard matrix (a feedback delay
  * network: every echo feeds all four, so it thickens instead of ringing like a comb), damped in the
  * loop, one line slowly modulated (no metallic tone on long tails); left and right take different lines */
@@ -15,43 +14,12 @@ static const uint16_t REV_AP[2] = {556, 441};
 static int16_t rev_line[1559 + 1931 + 2389 + 2791 + REV_MOD + 2];   /* (.bss: the pool is full) */
 static int16_t rev_ap[556 + 441] __attribute__((section(".pool")));
 static struct {
-    uint32_t dly_w, cho_w, cho_ph, rev_ph;
+    uint32_t dly_w, rev_ph;
     int32_t dly_lp;
     uint16_t line_i[4], ap_i[2];
     int32_t line_lp[4];
 } fx;
-static volatile uint8_t rev_frz;         /* punch-in FREEZE (punch.c): the reverb holds, no loss, no damping */
 static int32_t rev_l[CTL], rev_r[CTL];   /* the reverb's own return of this block (FREEZE plays it) */
-
-/* DIST: low cut -> drive (1x..8x, exponential) -> asymmetric soft clip
- * (a little bias = even harmonics) -> tone low-pass that closes with drive ->
- * make-up gain. State per part (track_t dist_*). */
-static void track_dist(track_t *t, int32_t *b, uint32_t n)
-{
-    int32_t d = t->p[P_DIST], i, g, k, mk, bias = 2400, b0;
-    if (!d) {
-        t->dist_on = 0;
-        return;
-    }
-    if (!t->dist_on) {                                  /* coming on: no stale high-pass state (a thump) */
-        t->dist_on = 1;
-        t->dist_hp = b[0];
-        t->dist_lp1 = t->dist_lp2 = 0;
-    }
-    g = 4096 + d * d * 2;                                /* Q12: 1x .. ~9x, gentle at first */
-    k = 32000 - d * 95;                                  /* tone: transparent at low drive .. ~3 kHz, Q15 */
-    mk = 30000 - d * 120;                                /* make-up */
-    b0 = softclip(bias);
-    for (i = 0; i < (int32_t)n; i++) {
-        int32_t x = b[i], y;
-        t->dist_hp += (x - t->dist_hp + 64) >> 7;           /* ~55 Hz low cut: keep the bass out of the clipper */
-        x = clamp(x - t->dist_hp, -230000, 230000);         /* (x >> 2) * g fits 32 bits; the clip is flat out there */
-        y = softclip((((x >> 2) * g) >> 10) + bias) - b0;   /* >> 2 first: no overflow for loud poly */
-        t->dist_lp1 += mulq15(y - t->dist_lp1, k);         /* two poles: tames the fizz */
-        t->dist_lp2 += mulq15(t->dist_lp1 - t->dist_lp2, k);
-        b[i] = mulq15(t->dist_lp2, mk);
-    }
-}
 
 /* master: peak limiter in front of the soft clipper, a 35 ms hold then ~46 ms release (2.6), threshold where tanh is still nearly linear,
  * so chords get quieter instead of crushed. SLOOP 2.6: it looks one block ahead (lim_block): the output is the mix
@@ -195,11 +163,9 @@ static uint32_t delay_samples(void)
     return s < 16u ? 16u : s >= DLY_LEN ? DLY_LEN - 1u : s;
 }
 
-/* process the three buses for one block; sends in, wet out (stereo). The LFOs (chorus, reverb line)
- * are computed per block and ramped: no sine per sample */
-#define HALF0(v) ((v) >= 0 ? (v) >> 1 : -(-(v) >> 1))   /* v / 2 towards zero */
-static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t *rev_in, int32_t *wet_l,
-                     int32_t *wet_r, uint32_t n)
+/* process the two buses for one block; sends in, wet out (stereo). The reverb line's LFO is computed per block and
+ * ramped: no sine per sample */
+static void fx_buses(const int32_t *dly_in, const int32_t *rev_in, int32_t *wet_l, int32_t *wet_r, uint32_t n)
 {
     uint32_t i, k, dl = delay_samples();
     int32_t fb = song.g[G_DFDBK] * 230, col = 2000 + song.g[G_DCOLOR] * 240;
@@ -207,35 +173,16 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         fb += ((89 * 230 - fb) * thr_dly) >> 15;
     int32_t dmix = song.g[G_DMIX] * 258;
     int32_t g = 17000 + song.g[G_RSIZE] * 104, lpk = 32767 - song.g[G_RDAMP] * 200;   /* loop gain (RT60 ~0.4..4 s), damping */
-    int32_t frnd = rev_frz ? 128 : 0;                  /* FREEZE: what is in the lines stays there (below: no
-                                                         * loss, rounded to nearest; 0: as always, bit for bit) */
-    int32_t cdepth = song.g[G_CDEPTH] * 6;
-    int32_t ca0, ca1, cb0, cb1, ma, mb, dca, dcb;
+    int32_t ma, mb;
     const uint32_t L0 = REV_LINE[0] + REV_MOD + 2u, B1 = L0, B2 = B1 + REV_LINE[1], B3 = B2 + REV_LINE[2];
-    {   /* the chorus' two read points (Q8 samples back) and line 0's extra length, at both ends of the block */
-        int32_t s0 = osc_sine(fx.cho_ph), s1, m0 = osc_sine(fx.rev_ph), m1;
-        fx.cho_ph += LFO_INC[song.g[G_CRATE] & 127];
+    {   /* line 0's extra length, at both ends of the block */
+        int32_t m0 = osc_sine(fx.rev_ph), m1;
         fx.rev_ph += LFO_INC[30];
-        s1 = osc_sine(fx.cho_ph);
         m1 = osc_sine(fx.rev_ph);
-        ca0 = (400 << 8) + ((s0 + 32768) * cdepth >> 8), ca1 = (400 << 8) + ((s1 + 32768) * cdepth >> 8);
-        cb0 = (400 << 8) + ((32767 - s0) * cdepth >> 8), cb1 = (400 << 8) + ((32767 - s1) * cdepth >> 8);
         ma = (REV_MOD << 8) + ((m0 * REV_MOD) >> 7), mb = (REV_MOD << 8) + ((m1 * REV_MOD) >> 7);
-        dca = (ca1 - ca0) >> CTL_LOG2, dcb = (cb1 - cb0) >> CTL_LOG2;
     }
     for (i = 0; i < n; i++) {
         int32_t yl, yr, x, a, o0, o1, o2, o3;
-        /* chorus: two modulated short delays, 5..15 ms, the LFO half a turn apart: left and right move apart */
-        cho_buf[fx.cho_w & (CHO_LEN - 1u)] = (int16_t)clamp(cho_in[i] >> 1, -32768, 32767);
-        {
-            int32_t r0 = ca0 + dca * (int32_t)i, r1 = cb0 + dcb * (int32_t)i;
-            uint32_t i0 = (uint32_t)r0 >> 8, i1 = (uint32_t)r1 >> 8;
-            int32_t c0 = cho_buf[(fx.cho_w - i0) & (CHO_LEN - 1u)], c1 = cho_buf[(fx.cho_w - i0 - 1u) & (CHO_LEN - 1u)];
-            int32_t d0 = cho_buf[(fx.cho_w - i1) & (CHO_LEN - 1u)], d1 = cho_buf[(fx.cho_w - i1 - 1u) & (CHO_LEN - 1u)];
-            yl = (c0 + (((c1 - c0) * (r0 & 255)) >> 8)) << 1;
-            yr = (d0 + (((d1 - d0) * (r1 & 255)) >> 8)) << 1;
-        }
-        fx.cho_w++;
         /* delay with a low-passed feedback (in the middle) */
         x = dly_buf[(fx.dly_w - dl) & (DLY_LEN - 1u)];
         fx.dly_lp += mulq15(x - fx.dly_lp, col);
@@ -243,8 +190,8 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
             (int16_t)clamp((dly_in[i] >> 1) + mulq15(fx.dly_lp, fb), -32768, 32767);
         fx.dly_w++;
         x = mulq15(x << 1, dmix);
-        yl += x;
-        yr += x;
+        yl = x;
+        yr = x;
         /* reverb: two diffusers, then the four lines */
         a = mulq15(rev_in[i], 13000);
         {
@@ -265,30 +212,19 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
             if (ri >= L0)                                   /* (the oldest sample is at line_i: reading */
                 ri -= L0;                                   /* past it shortens line 0 by 0..2 REV_MOD) */
             rj = ri + 1u >= L0 ? 0u : ri + 1u;
-            o0 = c[ri] + (((c[rj] - c[ri]) * (r & 255) + frnd) >> 8);
+            o0 = c[ri] + (((c[rj] - c[ri]) * (r & 255)) >> 8);
             o1 = c[B1 + fx.line_i[1]];
             o2 = c[B2 + fx.line_i[2]];
             o3 = c[B3 + fx.line_i[3]];
             s0 = o0 + o1, d0 = o0 - o1, s1 = o2 + o3, d1 = o2 - o3;   /* Hadamard / 2: each feeds all four */
-            if (!frnd) {
-                fx.line_lp[0] += mulq15(((s0 + s1) >> 1) - fx.line_lp[0], lpk);
-                fx.line_lp[1] += mulq15(((d0 + d1) >> 1) - fx.line_lp[1], lpk);
-                fx.line_lp[2] += mulq15(((s0 - s1) >> 1) - fx.line_lp[2], lpk);
-                fx.line_lp[3] += mulq15(((d0 - d1) >> 1) - fx.line_lp[3], lpk);
-                c[fx.line_i[0]] = (int16_t)clamp(mulq15(fx.line_lp[0], g) + a, -32768, 32767);
-                c[B1 + fx.line_i[1]] = (int16_t)clamp(mulq15(fx.line_lp[1], g) - a, -32768, 32767);
-                c[B2 + fx.line_i[2]] = (int16_t)clamp(mulq15(fx.line_lp[2], g) + a, -32768, 32767);
-                c[B3 + fx.line_i[3]] = (int16_t)clamp(mulq15(fx.line_lp[3], g) - a, -32768, 32767);
-            } else {                                    /* FREEZE: a loop gain of exactly 1, so no rounding that
-                                                         * leans one way (a DC that would grow while held): the
-                                                         * halves towards zero, no damping or gain multiply */
-                fx.line_lp[0] = HALF0(s0 + s1), fx.line_lp[1] = HALF0(d0 + d1);
-                fx.line_lp[2] = HALF0(s0 - s1), fx.line_lp[3] = HALF0(d0 - d1);
-                c[fx.line_i[0]] = (int16_t)clamp(fx.line_lp[0] + a, -32768, 32767);
-                c[B1 + fx.line_i[1]] = (int16_t)clamp(fx.line_lp[1] - a, -32768, 32767);
-                c[B2 + fx.line_i[2]] = (int16_t)clamp(fx.line_lp[2] + a, -32768, 32767);
-                c[B3 + fx.line_i[3]] = (int16_t)clamp(fx.line_lp[3] - a, -32768, 32767);
-            }
+            fx.line_lp[0] += mulq15(((s0 + s1) >> 1) - fx.line_lp[0], lpk);
+            fx.line_lp[1] += mulq15(((d0 + d1) >> 1) - fx.line_lp[1], lpk);
+            fx.line_lp[2] += mulq15(((s0 - s1) >> 1) - fx.line_lp[2], lpk);
+            fx.line_lp[3] += mulq15(((d0 - d1) >> 1) - fx.line_lp[3], lpk);
+            c[fx.line_i[0]] = (int16_t)clamp(mulq15(fx.line_lp[0], g) + a, -32768, 32767);
+            c[B1 + fx.line_i[1]] = (int16_t)clamp(mulq15(fx.line_lp[1], g) - a, -32768, 32767);
+            c[B2 + fx.line_i[2]] = (int16_t)clamp(mulq15(fx.line_lp[2], g) + a, -32768, 32767);
+            c[B3 + fx.line_i[3]] = (int16_t)clamp(mulq15(fx.line_lp[3], g) - a, -32768, 32767);
             if (++fx.line_i[0] >= L0) fx.line_i[0] = 0;
             if (++fx.line_i[1] >= REV_LINE[1]) fx.line_i[1] = 0;
             if (++fx.line_i[2] >= REV_LINE[2]) fx.line_i[2] = 0;
@@ -304,7 +240,7 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
 /* one block of the whole mix (shared with tests/hostsim.c): events -> each part
  * -> dist -> SLICER -> level / pan / sends -> drums (-> SLICER) -> buses -> master; out: stereo Q15 */
 static void events_block(uint32_t n);                    /* seq.c */
-static int32_t send_c[CTL], send_d[CTL], send_r[CTL], wet_l[CTL], wet_r[CTL], mix_l[CTL], mix_r[CTL], part_buf[CTL];
+static int32_t send_d[CTL], send_r[CTL], wet_l[CTL], wet_r[CTL], mix_l[CTL], mix_r[CTL];
 
 /* ---- mute / solo: a track that goes silent fades out over ~6 ms (and back in) */
 #define MUTE_STEP 4096                                  /* Q15 per block: 8 blocks */
@@ -315,11 +251,12 @@ static int32_t gain_next(track_t *t)                    /* the track's mute gain
     return 32767 - t->att;
 }
 
-/* ---- DUCK: every kick (the drum track's KICK / KICK 2) dips the synth parts, which come back over an
- * eighth note: depth G_DUCK, the curve (1 - t / T)^2. drum_on sets drums.kick. */
+/* ---- DUCK: every kick (the drum track's KICK / KICK 2) dips what follows it (drums only: the TEXTURE bed with its
+ * DUCK on; in SLOOP the synth parts), which comes back over an eighth note: depth G_DUCK, the curve (1 - t / T)^2.
+ * drum_on sets drums.kick. */
 static struct {
     uint32_t t;                                         /* units since the kick */
-    int32_t g0, g1;                                     /* the parts' gain at the block start, end (Q15) */
+    int32_t g0, g1;                                     /* the ducked gain at the block start, end (Q15) */
 } duck = {0xFFFFFFFFu, 32767, 32767};
 
 static void duck_block(uint32_t adv)
@@ -424,11 +361,12 @@ static void tflt_run(djf_t *f, const tsvf_t *c, int32_t *b, uint32_t n, uint32_t
  *                        0 .. 0.4. A DC blocker on the swept copy (a clipped loud input is lopsided).
  * The swept ones are the pedals': their wet is (dry + swept) / 2, the notches need both, so MIX 100 % is the whole
  * effect and less a lighter one. MIX (P_IMIX) blends dry and wet linearly; MIX 0 or TYPE OFF: the track bit for bit
- * as before (nothing runs). MIX glides (2.9 ms, SL_SLOPE); a TYPE change fades the old one out, clears the state,
+ * as before (nothing runs). MIX glides (2.9 ms, INS_SLOPE); a TYPE change fades the old one out, clears the state,
  * fades the new one in; so does a start from MIX 0 (no stale line or filter).
  * The drum track (SLOOP): its left, right, reverb send and delay send each through their own state, the same settings
  * (fx.c mix_block). State in RAM (.bss): 580 B a channel; noinline, its own loops */
 enum { IT_OFF, IT_SOFT, IT_HARD, IT_FOLD, IT_FUZZ, IT_CRUSH, IT_PHASER, IT_FLANGER, IT_CHORUS, IT_N };
+#define INS_SLOPE (32768 / 128)              /* MIX's glide: open to closed in 128 samples (2.9 ms) */
 _Static_assert(IT_N == sizeof N_ITYPE / sizeof N_ITYPE[0], "the INSERT's types as params.c names them");
 #define IL_LEN 256u                     /* FLANG / CHOR: the line, samples (a power of 2: masked) */
 #define PH_ST 4u                        /* PHASR: all-pass stages (two notches, the classic pedal's) */
@@ -450,7 +388,7 @@ typedef struct {
     int16_t line[IL_LEN];               /* FLANG / CHOR, at a quarter (headroom) */
 } ins_t;
 /* (in .bss, not the pool: tools/build.py keeps 8 KiB of the pool spare; RAM has room) */
-static ins_t ins[NPART + 4u];                    /* the parts; the drum track's L, R, REV, DLY */
+static ins_t ins[4];                            /* the drum track's L, R, REV, DLY */
 
 static inline int32_t ins_mixq(int32_t m) { return m >= 127 ? 32768 : m <= 0 ? 0 : m * 258; }   /* MIX -> Q15 */
 static inline int32_t ins_mix(int32_t x, int32_t y, int32_t w) { return w == 32768 ? y : x + mulq16(y - x, (uint32_t)w << 1); }
@@ -497,7 +435,7 @@ static __attribute__((noinline)) void ins_drive(ins_t *s, const int16_t *p, int3
         int32_t hd = s->hold;
         for (i = 0; i < n; i++) {
             x = b[i];
-            w += clamp(tw - w, -SL_SLOPE, SL_SLOPE);
+            w += clamp(tw - w, -INS_SLOPE, INS_SLOPE);
             if (!cnt) {
                 hd = ins_shape(IT_CRUSH, clamp(x, -262144, 262143), sh);
                 cnt = hold;
@@ -519,7 +457,7 @@ static __attribute__((noinline)) void ins_drive(ins_t *s, const int16_t *p, int3
         int32_t lvl = LEVEL_Q12[p[P_IC] & 127], hp = s->hp, dc = s->dc;
         for (i = 0; i < n; i++) {
             x = b[i];
-            w += clamp(tw - w, -SL_SLOPE, SL_SLOPE);
+            w += clamp(tw - w, -INS_SLOPE, INS_SLOPE);
             hp += ((x << 8) - hp) >> 8;                 /* ~27 Hz low cut (Q8: no offset left by the rounding) */
             v = clamp(x - (hp >> 8), -230000, 230000);
             y = ins_shape(ty, ((v >> 3) * g) >> 9, 0) << 4;   /* (>> 3 first: 32 bits; x16 as CRUSH) */
@@ -555,7 +493,7 @@ static __attribute__((noinline)) void ins_swept(ins_t *s, const int16_t *p, int3
         _Static_assert(PH_ST == 4u, "ins_swept: four all-pass stages");
         for (i = 0; i < n; i++) {
             int32_t x = b[i], u = clamp((x + 4) >> 3, -16383, 16383) + ((fb * fbk + 16384) >> 15), y;
-            w += clamp(tw - w, -SL_SLOPE, SL_SLOPE);
+            w += clamp(tw - w, -INS_SLOPE, INS_SLOPE);
             /* y = a (u - y1) + u1, four times */
             y = clamp(x0 + ((a * (u - y0) + 8192) >> 14), -65535, 65535), x0 = u, y0 = y, u = y;
             y = clamp(x1 + ((a * (u - y1) + 8192) >> 14), -65535, 65535), x1 = u, y1 = y, u = y;
@@ -577,7 +515,7 @@ static __attribute__((noinline)) void ins_swept(ins_t *s, const int16_t *p, int3
         for (i = 0; i < n; i++, ph += inc) {
             int32_t x = b[i], r0, r1, v, fr;
             uint32_t d;                                 /* the delay, Q16 samples */
-            w += clamp(tw - w, -SL_SLOPE, SL_SLOPE);
+            w += clamp(tw - w, -INS_SLOPE, INS_SLOPE);
             if (chorus) {
                 d = (uint32_t)((140 << 16) + ((osc_sine(ph) * (int32_t)dep * 50) >> 5));   /* 3.2 +- 2.3 ms */
             } else {
@@ -620,99 +558,6 @@ static __attribute__((noinline)) int ins_run(ins_t *s, const int16_t *p, int32_t
         ins_drive(s, p, b, n, tw);
     return s->w != 0;
 }
-/* a part's INSERT on its block b (mix_part): nothing while TYPE is OFF or MIX is 0 and faded */
-static void track_insert(track_t *t, int32_t *b, uint32_t n)
-{
-    t->ins_run = (uint8_t)ins_run(&ins[(uint32_t)(t - trk) % NPART], t->p, b, n);
-}
-/* the INSERT at rest at once (mix_part: TYPE turned OFF while the part was silent, its fade never ran) */
-static __attribute__((noinline)) void ins_rest(track_t *t)
-{
-    memset(&ins[(uint32_t)(t - trk) % NPART], 0, sizeof(ins_t));
-    t->ins_run = 0;
-}
-
-/* one synth part into the dry mix and the sends; a part with no voice sounding costs
- * the LFO tick and a cleared buffer only (after the DIST tail has run out) */
-static void mix_part_run(track_t *t, uint32_t n);
-/* (2.6) a preset's fade (voice.c sound_change): the whole part rendered with the sound it had, then the new one back */
-static void mix_part(track_t *t, uint32_t n)
-{
-    static int16_t pnew[P_COUNT];
-    if (!(t->pold && t->xf_on && t->xf)) {
-        mix_part_run(t, n);
-        return;
-    }
-    memcpy(pnew, t->p, sizeof pnew);
-    memcpy(t->p, t->p_old, sizeof t->p);
-    mix_part_run(t, n);
-    memcpy(t->p, pnew, sizeof pnew);
-}
-static void mix_part_run(track_t *t, uint32_t n)
-{
-    int32_t *b = part_buf;
-    uint32_t i;
-    int32_t g0 = 32767 - t->att, g1 = gain_next(t);
-    if (track_render(t, b, n))
-        t->tail = t->p[P_ITYPE] ? 64 : 16, t->ins_xt = 0;              /* blocks of DIST / INSERT state to run out after the last
-                                                         * voice (the INSERT's: 46 ms, a flanger's feedback) */
-    else if ((!t->tail || !(t->p[P_DIST] | t->p[P_ITYPE]) || !--t->tail) && !slicer_busy(t) &&
-             !(t->ins_run && t->ins_res > 16u && t->ins_xt < 255u && ++t->ins_xt)) {   /* (2.6: the INSERT's DC
-                                                         * blocker run out first, up to 255 blocks more: no step) */
-        slicer_track(t, 0, n);                          /* (the SLICER's step clock runs on) */
-        if (t->ins_run && !t->p[P_ITYPE])
-            ins_rest(t);                                /* TYPE OFF while silent: no fade-out left for the next note */
-        return;
-    }
-    if (!g0 && !g1) {                                   /* silent (MUTE / SOLO): the voices run, nothing is heard */
-        slicer_track(t, 0, n);
-        return;
-    }
-    {
-        int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] ? clamp(t->p[P_LEVEL] + t->p[P_ED_FX], 1, 127) : 0], pan = t->p[P_PAN];   /* (+ the sound's trim: 1/2 dB steps, as LEVEL's) */
-        int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
-        int32_t c = t->p[P_CHOR] * 258, d = send_thr(t->p[P_DLY] * 258, thr_dly), r = send_thr(t->p[P_REV] * 258, thr_rev);
-        int32_t pk = t->peak;
-        int32_t xmax = c > d ? c : d;
-        int32_t ga = mulq15(g0, duck.g0), gb = mulq15(g1, duck.g1);   /* mute x duck, ramped over the block */
-        xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);   /* sends: loud chords at a high LEVEL */
-        track_dist(t, b, n);
-        if (t->p[P_ITYPE] | t->ins_run) {
-            track_insert(t, b, n);                      /* the INSERT (2.6): off, nothing */
-            t->ins_res = (uint16_t)(b[n - 1u] < 0 ? (-b[n - 1u] > 65535 ? 65535 : -b[n - 1u])
-                                                  : (b[n - 1u] > 65535 ? 65535 : b[n - 1u]));   /* (its tail's end) */
-        }
-        slicer_track(t, b, n);                          /* slicer.c: before the level, pan and sends */
-        {
-            tsvf_t fc;                                  /* the track's FILTER (P_TFLT), after the SLICER */
-            djf_t *f = &tflt[(uint32_t)(t - trk) % NTRK];
-            if (djf_block(f, t->p[P_TFLT], &fc))
-                tflt_run(f, &fc, b, n, 0);
-        }
-        int32_t lvl0 = t->lvl ? t->lvl : lvl, dl = (lvl - lvl0) >> CTL_LOG2;   /* a new sound's trim: ramped */
-        t->lvl = lvl;
-        for (i = 0; i < n; i++) {
-            int32_t x = ((b[i] >> 2) * (lvl0 + dl * (int32_t)i)) >> 10, a;   /* pre-shift: 8 loud voices */
-            int32_t xs, g = ga + (((gb - ga) * (int32_t)i) >> CTL_LOG2);
-            if (g < 32767)
-                x = (x >> 4) * (g >> 3) >> 8;           /* (Q15 in two halves: no 32-bit overflow) */
-            a = x < 0 ? -x : x;
-            xs = clamp(x, -xmax, xmax);                 /* sends: mulq15 would overflow */
-            if (a > pk)
-                pk = a;
-            if (c)
-                send_c[i] += mulq15(xs, c);
-            if (d)
-                send_d[i] += mulq15(xs, d);
-            if (r)
-                send_r[i] += mulq15(xs, r);
-            mix_l[i] += ((x >> 4) * gl) >> 8;           /* (x may pass 2^19: >> 4 first) */
-            mix_r[i] += ((x >> 4) * gr) >> 8;
-        }
-        t->peak = pk;
-    }
-}
-
 /* ---- DUST: the master through an old sampler and a record. G_DUST 0..127 turns up together: drive
  * into a soft clip, a lower sample rate (held samples, 44.1 -> 11 kHz), fewer bits (15 -> 8), a
  * one-pole low-pass (open -> ~3 kHz), a little hiss and crackle. The hiss and the crackle are the
@@ -780,7 +625,6 @@ static void djf_process(int32_t *l, int32_t *r, uint32_t n)
     djf_run(&djf, &c, r, n, 1);
 }
 
-#include "punch.c"            /* PUNCH-IN FX on the whole mix (FX held + a white key) */
 static int32_t master_cur = -1;                        /* the volume knob, ramped per sample (no zipper) */
 /* the drum track's INSERT (2.6): its left, right and the two sends, each through its own state, the same settings */
 static void drum_insert(int32_t *l, int32_t *r, int32_t *v, int32_t *d, uint32_t n)
@@ -789,10 +633,10 @@ static void drum_insert(int32_t *l, int32_t *r, int32_t *v, int32_t *d, uint32_t
     int run;
     if (!(t->p[P_ITYPE] | t->ins_run))
         return;
-    run = ins_run(&ins[NPART], t->p, l, n);
-    run |= ins_run(&ins[NPART + 1u], t->p, r, n);
-    run |= ins_run(&ins[NPART + 2u], t->p, v, n);
-    run |= ins_run(&ins[NPART + 3u], t->p, d, n);
+    run = ins_run(&ins[0], t->p, l, n);
+    run |= ins_run(&ins[1], t->p, r, n);
+    run |= ins_run(&ins[2], t->p, v, n);
+    run |= ins_run(&ins[3], t->p, d, n);
     t->ins_run = (uint8_t)run;
 }
 /* ---- TEXTURE (SLOOP 2.6, GLO > TEXTURE): a looping bed under the mix, the glue of lo-fi and ambient tracks, without
@@ -800,7 +644,7 @@ static void drum_insert(int32_t *l, int32_t *r, int32_t *v, int32_t *d, uint32_t
  * zone at its own pitch; a looped zone from its loop, else whole), LEVEL, TONE (the DJ filter: left a low-pass, right a
  * high-pass), MOVE: how much it breathes over RATE (1 .. 16 bars of the tempo; its level and brightness, a sine from the
  * transport's start), WHEN: PLAY (fades in and out with the transport) or ALWAYS, DUCK: the kick pumps it as the
- * parts (GLO > MASTER > DUCK). Into the dry mix (no sends), before DUST, the punch-ins and the master filter.
+ * parts (GLO > MASTER > DUCK). Into the dry mix (no sends), before DUST and the master filter.
  *   VINYL  hiss, rumble, crackle and the odd pop, each crackle somewhere left to right
  *   TAPE   hiss tilted dark, its level drifting slowly (flutter)
  *   RAIN   a soft bed and droplets, left and right apart
@@ -1047,16 +891,14 @@ static void mix_block(int32_t *out, uint32_t n)
     uint32_t i;
     int32_t m0, m1;
     for (i = 0; i < n; i++)
-        send_c[i] = send_d[i] = send_r[i] = mix_l[i] = mix_r[i] = 0;
+        send_d[i] = send_r[i] = mix_l[i] = mix_r[i] = 0;
     {   /* REV / ECHO THROW (2.6): the sends glide to full and back over ~12 ms (17 blocks) */
         uint32_t q = thr_req;
         thr_rev = (q & 1u) ? (thr_rev + 1928 > 32767 ? 32767 : thr_rev + 1928) : (thr_rev > 1928 ? thr_rev - 1928 : 0);
         thr_dly = (q & 2u) ? (thr_dly + 1928 > 32767 ? 32767 : thr_dly + 1928) : (thr_dly > 1928 ? thr_dly - 1928 : 0);
     }
     events_block(n);
-    duck_block(n * (uint32_t)song.g[G_BPM]);
-    for (i = 0; i < NPART; i++)
-        mix_part(&trk[i], n);
+    duck_block(n * (uint32_t)song.g[G_BPM]);           /* (the synth parts are no longer mixed: drums only) */
     drums.a0 = TDRUM->att;                              /* the drum track's mute / solo fade */
     drums.a1 = 32767 - gain_next(TDRUM);
     {
@@ -1066,7 +908,7 @@ static void mix_block(int32_t *out, uint32_t n)
         if (n <= CTL && djf_block(f, TDRUM->p[P_TFLT], &fc)) {   /* the drum track's FILTER: left, right, the sends */
             for (i = 0; i < n; i++)
                 dl[i] = dr[i] = dv[i] = dd[i] = 0;
-            slicer_drums(dl, dr, dv, dd, n);
+            drums_render(dl, dr, dv, dd, n);
             drum_insert(dl, dr, dv, dd, n);
             tflt_run(f, &fc, dl, n, 0);
             tflt_run(f, &fc, dr, n, 1);
@@ -1081,7 +923,7 @@ static void mix_block(int32_t *out, uint32_t n)
         } else if (n <= CTL && (TDRUM->p[P_ITYPE] | TDRUM->ins_run)) {   /* the INSERT (2.6), no FILTER */
             for (i = 0; i < n; i++)
                 dl[i] = dr[i] = dv[i] = dd[i] = 0;
-            slicer_drums(dl, dr, dv, dd, n);
+            drums_render(dl, dr, dv, dd, n);
             drum_insert(dl, dr, dv, dd, n);
             for (i = 0; i < n; i++) {
                 mix_l[i] += dl[i];
@@ -1090,19 +932,17 @@ static void mix_block(int32_t *out, uint32_t n)
                 send_d[i] += dd[i];
             }
         } else {
-            slicer_drums(mix_l, mix_r, send_r, send_d, n);   /* drums_render, through the SLICER when on */
+            drums_render(mix_l, mix_r, send_r, send_d, n);
         }
     }
     click_render(mix_l, mix_r, n);                      /* the metronome: its own voice (drums.c), any kit, any mute */
     texture_mix(mix_l, mix_r, n);                       /* GLO > TEXTURE (2.6): the bed, dry */
-    punch_freeze_feed(send_r, mix_l, mix_r, n);         /* punch-in FREEZE: the dry mix into the held reverb */
-    fx_buses(send_c, send_d, send_r, wet_l, wet_r, n);
+    fx_buses(send_d, send_r, wet_l, wet_r, n);
     for (i = 0; i < n; i++) {
         mix_l[i] += wet_l[i];
         mix_r[i] += wet_r[i];
     }
     dust_process(mix_l, mix_r, n);
-    punch_process(mix_l, mix_r, n);
     djf_process(mix_l, mix_r, n);
     m1 = (int32_t)song.master_q12;
     m0 = master_cur < 0 ? m1 : master_cur;

@@ -3,10 +3,11 @@
 //
 // Node checks of the web pages' JS (no browser, no hardware). Run from the repo root:
 //   node web/test_web.mjs
-// - editor.html: the protocol section (between PROTO-BEGIN/END) against its mock device (v1 commands,
-//   the user preset bank / librarian, library files, live pushes, older-firmware fallback, the v3 tracks
-//   and the mixer), its tab layout and ja/en strings,
-//   and the user-sample pipeline byte for byte against tools/sampleio.py
+// - editor.html: the protocol section (between PROTO-BEGIN/END) against its mock device, a v11 drums-only FM-1
+//   (fm1-drummer: one track, no engine; the commands of SLOOP's synth side unanswered), live pushes, the drum lanes,
+//   locks, nudges, fill conditions, backup / restore (SLOOP's objects left out), the drum kit and synth pages, the
+//   songs and the player, its tab layout and ja/en strings, and the user-sample pipeline byte for byte against
+//   tools/sampleio.py
 // - fm1pkg.js: productOf and logicalImage on build/felucca.fwsc (skipped without a build)
 // - fm1ota.js: a full install and an unplug during the write against a simulated FM-1
 
@@ -30,76 +31,12 @@ const HERE = fileURLToPath(new URL(".", import.meta.url));
 const html = readFileSync(join(HERE, "editor.html"), "utf8");
 const proto = html.slice(html.indexOf("/*PROTO-BEGIN*/"), html.indexOf("/*PROTO-END*/"));
 const E = vm.runInNewContext(proto + `
-;({ frame, unframe, parse, req, Link, parseWav, resample, normalize, rootFromName, buildSlot, makeMockDevice, CMD, SMP,
-   CHOP, chopNovelty, chopHits, chopSnap, chopGrid, chopEqual, chopList, chopPick, chopFit, chopZones, wavFile, zipStore, crc32,
-   UP, bank, capturePatch, auditionPatch, startWatch, libraryFile, readLibraryFile, paramKeys, patternFromSteps, stepsFromPattern, upName,
-   mixer, GM_DRUM, drumName, parseNotes, fmtValue, F, DRUM_LANES, LV_NAMES, emptyDrum, lockable, MICRO, FC, fillGet, fillSet, pack7, unpack7,
-   backupCapture, backupRestore, backupObjects, b64enc, b64dec, FM6, KIT, kitPad, kitZones, kitLen, kitBytes, kitFit, kitSplit, kitLaneOf, kitPlace, zipRead, ROLL, SMF, ARR, mockSettings, fm6CartWrite, fm6CartPreset, fm6CartSlots, fm6CartPresets, DSYN, DSYN_MOCK_NAMES, DSYN_MOCK_KITS, SetGate, bkProjFormat, bkDevFormat, bkFwAtLeast, SNG, PLAY, SED, PEDALIN })`,
+;({ frame, unframe, parse, req, Link, parseWav, resample, normalize, rootFromName, buildSlot, makeMockDevice, CMD, PROTO, SMP,
+   wavFile, zipStore, crc32, startWatch, fmtValue, F, DRUM_LANES, LV_NAMES, emptyDrum, lockable, MICRO, FC, fillGet, fillSet, pack7, unpack7,
+   parseNote, backupCapture, backupRestore, backupObjects, b64enc, b64dec, BK, KIT, KIT_SONGS, kitOptions, kitPad, kitZones, kitLen, kitBytes,
+   kitFit, kitSplit, kitLaneOf, kitPlace, zipRead, ARR, mockSettings, DSYN, DSYN_MOCK_NAMES, DSYN_MOCK_KITS, SetGate, bkProjFormat, bkProjOk,
+   bkFwAtLeast, SNG, PLAY, SED, PEDALIN })`,
 { setTimeout, clearTimeout, setInterval, clearInterval, console, TextEncoder, TextDecoder, Blob, Response, DecompressionStream });
-
-async function editorMock() {
-  const m = E.makeMockDevice();
-  const inp = [...m.access.inputs.values()][0], out = [...m.access.outputs.values()][0];
-  const link = new E.Link((d) => out.send(d), { timeout: 300 });
-  inp.onmidimessage = (e) => link.receive(e.data);
-  const rq = async (r, o) => link.request(r, o);
-  const info = E.parse[E.CMD.INFO](await rq(E.req.info()));
-  ok(info.nengines === 12 && info.engines[9] === "FM6" && info.engines[10] === "PHYS" && info.engines[11] === "NOISE" && info.engines[5] === "VOICE" && info.engines[6] === "TRIO" && info.engines[7] === "WHEEL" && info.engines[8] === "GRAIN" && info.pcount === 71 && info.pe0 === 63 && info.engines[4] === "SAMPLE",
-    "editor: INFO");
-  let descs = 0;
-  for (let i = 0; i < info.pcount; i++) if (E.parse[E.CMD.DESC](await rq(E.req.desc(0, i))).label) descs++;
-  ok(descs === info.pcount, "editor: DESC for every parameter");
-  {
-    /* the SLICER (core.h P_SLCR..P_SLDEPTH = 45..48, just before P_E0): the mock as params.c has it,
-       and a factory preset turns it off as ui.c apply_preset_to does */
-    const pc = readFileSync(join(HERE, "../firmware/src/params.c"), "utf8");
-    const sd = [];
-    for (let i = 45; i < 49; i++) sd.push(E.parse[E.CMD.DESC](await rq(E.req.desc(0, i))));
-    ok(sd.map((d) => d.label).join() === "SLCR,PAT,RATE,DEPTH" && sd[0].names.join() === "OFF,GATE,STUT"
-      && sd[2].names.join() === "1/8,1/16,1/32,8T,16T,32T" && sd[2].def === 1 && sd[1].min === 1 && sd[1].max === 16 && sd[3].def === 127
-      && /\[P_SLCR\] = PE\("SLCR", N_SLCR, 0\)/.test(pc) && /\[P_SLPAT\] = PD\("PAT", F_INT, 1, 16, 1\)/.test(pc)
-      && /\[P_SLRATE\] = PE\("RATE", N_SLDIV, 1\)/.test(pc) && /\[P_SLDEPTH\] = PD\("DEPTH", F_PCT, 0, 127, 127\)/.test(pc)
-      && /N_SLDIV\[\] = \{"1\/8", "1\/16", "1\/32", "8T", "16T", "32T"\}/.test(pc),
-      "editor: SLICER parameters 45..48 (mock == params.c)");
-    await rq(E.req.set(0, 45, 2));
-    await rq(E.req.set(0, 46, 7));
-    const on = E.parse[E.CMD.DUMP](await rq(E.req.dump()), info);
-    await rq(E.req.preset(0, 1));
-    const off = E.parse[E.CMD.DUMP](await rq(E.req.dump()), info);
-    ok(on.p[45] === 2 && on.p[46] === 7 && off.p[45] === 0 && off.p[46] === 1, "editor: a factory preset turns the SLICER off");
-  }
-  const scale = E.parse[E.CMD.DESC](await rq(E.req.desc(0, 26)));
-  const scaleNames = ["CHR", "MAJ", "MIN", "DOR", "MIX", "PEN", "MPEN", "HARM", "PHRY", "LYD", "LOC", "MEL", "BLUES", "WHOLE", "DIMHW", "DIMWH"];
-  ok(scale.label === "SCL" && scale.max === 15 && eq(scale.names, scaleNames), "editor: all 16 scale names exposed");
-  const scaleSet = E.parse[E.CMD.SET](await rq(E.req.set(0, scale.id, 15)));
-  ok(scaleSet.value === 15, "editor: new scale selection is not clamped to the old range");
-  const dump = E.parse[E.CMD.DUMP](await rq(E.req.dump()), info);
-  ok(dump.p.length === info.pcount && dump.g.length === info.gcount, "editor: DUMP");
-  const set = E.parse[E.CMD.SET](await rq(E.req.set(0, 3, 500)));
-  ok(set.value === 127, "editor: SET clamps to the range");
-  const st = E.parse[E.CMD.STEP_SET](await rq(E.req.stepSet(5, { n: 2, notes: [60, 64], time: 0, flags: 1, vel: 100 })));
-  ok(st.n === 2 && st.notes[1] === 64 && st.vel === 100, "editor: STEP_SET");
-  const pj = E.parse[E.CMD.PROJECT](await rq(E.req.project(1, 2), { timeout: 4000, retries: 0 }));
-  ok(pj.used === 1, "editor: PROJECT save");
-  /* sample upload as smpUpload() does it */
-  const s = Int16Array.from({ length: 3000 }, (_, i) => Math.round(8000 * Math.sin(i / 7)));
-  const { hdr, data } = E.buildSlot("test", [{ s, root: 60 }]);
-  let rc = E.parse[E.CMD.SMP_BEGIN](await rq(E.req.smpBegin(1), { timeout: 1000, retries: 0 })).rc;
-  for (let off = 0; off < data.length && !rc; off += 256) {
-    rc = E.parse[E.CMD.SMP_WRITE](await rq(E.req.smpWrite(1, E.SMP.DATA_OFF + off, data.subarray(off, off + 256)), { timeout: 1000 })).rc;
-  }
-  rc = rc || E.parse[E.CMD.SMP_END](await rq(E.req.smpEnd(1, hdr), { timeout: 2000, retries: 0 })).rc;
-  const si = E.parse[E.CMD.SMP_INFO](await rq(E.req.smpInfo()));
-  ok(rc === 0 && si.slots[1].zones === 1 && si.slots[1].name === "TEST", "editor: sample upload (CRC checked by the mock)");
-  /* a device that never answers */
-  const dead = new E.Link(() => {}, { timeout: 30 });
-  const err = await dead.request(E.req.info(), { retries: 1 }).then(() => null, (e) => e.message);
-  ok(/^timeout/.test(err || ""), "editor: no reply -> timeout after the retries");
-  link.close();
-  m.stop();
-}
-
-/* ------------------------------------- editor protocol v2: librarian + live --- */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const js = (x) => JSON.stringify(x);
 /* a mock + Link pair; counts frames sent per cmd and timeouts reported */
@@ -114,131 +51,76 @@ function attachMock(opt, linkOpt = {}) {
   const rq = (r, o) => link.request(r, o);
   return { m, link, rq, sent, ev, done: () => { link.close(); m.stop(); } };
 }
-const emptyStep = { n: 0, notes: [0, 0, 0, 0], time: 2, flags: 0, vel: 0 };
+/* a request expected to get no reply (the command is gone, or not for this one track) */
+const noReply = (rq, r) => rq(r, { timeout: 60, retries: 0, quiet: true }).then(() => false, (e) => /^timeout/.test(e.message));
+const fw = (f) => readFileSync(join(HERE, "../firmware/src/" + f), "utf8");
 
-async function editorLibrarian() {
-  const { m, rq, done } = attachMock({});
+/* the device v11: INFO, the parameters, DUMP / SET, a project, a sample, the commands that are gone */
+async function editorMock() {
   const C = E.CMD;
+  const { rq, ev, done } = attachMock({});
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  const pdesc = [];
-  for (let i = 0; i < info.pcount; i++) pdesc.push(E.parse[C.DESC](await rq(E.req.desc(0, i))));
-  const keys = E.paramKeys(pdesc, info.pe0, info.pcount);
-  ok(keys[6] === "PIT" && keys[13] === "PIT#2" && keys[info.pe0] === "E0" && new Set(keys).size === keys.length, "librarian: parameter keys unique (label#n, E0..E7)");
-
-  const b = await E.bank.list(rq);
-  ok(b.total === 32 && b.slots.length === 32 && b.slots[1].used && b.slots[1].name === "GLASS BELL" && !b.slots[3].used
-    && b.slots[31].slot === 31, "librarian: UP_LIST, 32 slots in 2 frames");
-
-  const cap = (await E.capturePatch(rq, info, "acid test")).patch;
-  ok(cap.engine === 0 && cap.p.length === info.pcount && cap.pattern && cap.pattern[0][0] === 45 && cap.pattern[0][1] === 1,
-    "librarian: capture = DUMP + first 16 steps");
-  let rc = await E.bank.put(rq, 10, cap);
-  const g = await E.bank.get(rq, info, 10);
-  ok(rc === 0 && g.used && g.name === "acid test" && g.engine === 0 && eq(g.p, cap.p) && js(g.pattern) === js(cap.pattern),
-    "librarian: UP_PUT -> UP_GET round trip");
-  const bad = E.parse[C.UP_PUT](await rq(E.req.upPut(60, cap), { timeout: 2500, retries: 0 }));
-  ok(bad.rc === 1, "librarian: UP_PUT to a slot past the bank -> rc 1");
-  ok(E.upName("") === "PATCH" && E.upName("abcdefghijklmnop") === "abcdefghijkl" && E.upName("Bäss") === "Bss", "librarian: device names (ASCII, 1..12)");
-
-  await rq(E.req.set(0, 1, 33));
-  rc = await E.bank.store(rq, 11, "STORED");
-  const g2 = await E.bank.get(rq, info, 11);
-  const d1 = E.parse[C.DUMP](await rq(E.req.dump()), info);
-  ok(rc === 0 && g2.name === "STORED" && g2.engine === d1.engine && eq(g2.p, d1.p) && g2.p[1] === 33, "librarian: UP_STORE keeps the current sound");
-
-  /* another engine, empty sequencer, then UP_LOAD brings the sound back, not the pattern (LIVE) */
-  await rq(E.req.preset(2, 0));
-  for (let i = 0; i < info.nstep; i++) await rq(E.req.stepSet(i, emptyStep));
-  rc = await E.bank.load(rq, 10);
-  const d2 = E.parse[C.DUMP](await rq(E.req.dump()), info);
-  const st = [];
-  for (let i = 0; i < 16; i++) st.push(E.parse[C.STEP_GET](await rq(E.req.stepGet(i))));
-  ok(rc === 0 && d2.engine === 0 && eq(d2.p, cap.p) && st.every((x) => !x.n), "librarian: UP_LOAD applies the sound, the sequencer stays empty (LIVE)");
-
-  rc = await E.bank.erase(rq, 11);
-  const b2 = await E.bank.list(rq);
-  const rcEmpty = await E.bank.load(rq, 11);
-  ok(rc === 0 && !b2.slots[11].used && b2.slots[10].used && rcEmpty === 1, "librarian: UP_ERASE, UP_LOAD of an empty slot -> rc 1");
-
-  /* audition: a PHASE patch with a pattern into an empty sequencer: the sound only (as UP_LOAD in SLOOP), never
-     the pattern, and the mix / pattern / key parameters stay (ui.c param_kept) */
-  const bass = await E.bank.get(rq, info, 2);   /* PHASE RESO, with the ACID pattern */
-  for (let i = 0; i < info.nstep; i++) await rq(E.req.stepSet(i, emptyStep));
-  const KEPT = [0, 25, 26, 27, 29, 30, 31, 32, 39, 40, 49];
-  for (const [id, v] of [[0, 77], [25, 5], [29, 12], [39, -10], [49, 2]]) await rq(E.req.set(0, id, v));
-  const d2b = E.parse[C.DUMP](await rq(E.req.dump()), info);
-  const flashBefore = js(m.state.bank);
-  let a = await E.auditionPatch(rq, info, bass, { gEng: 20 });
-  const d3 = E.parse[C.DUMP](await rq(E.req.dump()), info);
-  const st3 = [];
-  for (let i = 0; i < 16; i++) st3.push(E.parse[C.STEP_GET](await rq(E.req.stepGet(i))));
-  const soundOk = (d, pt) => d.p.every((v, i) => (KEPT.includes(i) ? v === d2b.p[i] : v === pt.p[i]));
-  ok(!a.wrote && d3.engine === bass.engine && soundOk(d3, bass) && st3.every((s) => !s.n) && js(m.state.bank) === flashBefore
-    && d3.p[0] === 77 && d3.p[25] === 5 && d3.p[29] === 12 && d3.p[49] === 2,
-    "librarian: audition = G_ENGSEL + SETs of the sound; no pattern, mix, LEN or key; no flash write");
-  /* notes in the sequencer stay too */
-  await rq(E.req.stepSet(20, { n: 1, notes: [50, 0, 0, 0], time: 0, flags: 0, vel: 90 }));
-  const bell = await E.bank.get(rq, info, 1);
-  a = await E.auditionPatch(rq, info, { ...bell, pattern: [[72, 0], [74, 0]] }, { gEng: 20 });
-  const s0 = E.parse[C.STEP_GET](await rq(E.req.stepGet(0))), s20 = E.parse[C.STEP_GET](await rq(E.req.stepGet(20)));
-  const d4 = E.parse[C.DUMP](await rq(E.req.dump()), info);
-  ok(!a.wrote && !s0.n && s20.notes[0] === 50 && d4.engine === 1 && soundOk(d4, bell), "librarian: audition keeps the sequencer as it is");
-
-  /* ties as the firmware keeps them: no note; a rest has no flags */
-  const tied = [[60, 1], [61, 4], [0, 4], [0, 3], [64, 2]];
-  const norm = E.patternFromSteps(E.stepsFromPattern(tied));
-  rc = await E.bank.put(rq, 12, { ...cap, name: "TIES", pattern: tied });
-  const g3 = await E.bank.get(rq, info, 12);
-  ok(rc === 0 && js(norm.slice(0, 5)) === js([[60, 1], [0, 4], [0, 4], [0, 0], [64, 2]]) && js(g3.pattern) === js(norm),
-    "librarian: pattern ties / rests normalised like the firmware");
-  rc = await E.bank.store(rq, 13, "");
-  ok(rc === 0 && (await E.bank.get(rq, info, 13)).name === `${info.engines[d4.engine]} 14`, "librarian: UP_STORE with no name -> automatic name");
-
-  /* library files */
-  const ctx = { keys, engines: info.engines, firmware: info.version, pe0: info.pe0 };
-  const pts = [cap, { ...bass, engineName: info.engines[bass.engine], tags: ["bass", "device"] }];
-  const file = JSON.parse(JSON.stringify(E.libraryFile("library", pts, ctx)));
-  ok(file.format === "felucca-library" && file.version === 1 && file.pCount === 71 && file.paramLabels.length === 71 && file.engines.length === 12,
-    "library file: versioned, with P_COUNT, labels and engines");
-  const back = E.readLibraryFile(file, ctx);
-  ok(back.patches.length === 2 && !back.skipped && eq(back.patches[0].p, cap.p) && eq(back.patches[1].p, bass.p)
-    && js(back.patches[1].pattern) === js(bass.pattern) && back.patches[1].tags.join() === "bass,device" && back.patches[1].engineName === "PHASE",
-    "library file: write -> read round trip");
-  /* a future firmware: one more parameter at id 5, engines in another order and one of them gone */
-  const keys2 = [...keys.slice(0, 5), "NEW", ...keys.slice(5)];
-  const eng2 = ["PHASE", "ANALOG", "SAMPLE"];
-  const fut = E.readLibraryFile(file, { keys: keys2, engines: eng2 });
-  const p0 = fut.patches[0].p;
-  ok(fut.patches.length === 2 && p0.length === 72 && p0[5] === null && p0[6] === cap.p[5] && p0[71] === cap.p[70]
-    && fut.patches[0].engine === 1 && fut.patches[1].engine === 0, "library file: other ids / engine order mapped by label and name");
-  /* a library written by 2.5 (61 parameters, the engine's from 53) read by 2.6 (71, from 63): the engine's values
-   * land on the new ids, the 2.6 parameters stay unset (their defaults) */
-  const keysOld = [...keys.slice(0, 53), ...keys.slice(63)];
-  const oldFile = JSON.parse(JSON.stringify(E.libraryFile("old", [{ ...cap, p: [...cap.p.slice(0, 53), ...cap.p.slice(63)] }],
-    { keys: keysOld, engines: info.engines, firmware: "SLOOP 2.5", pe0: 53 })));
-  const up = E.readLibraryFile(oldFile, ctx), pu = up.patches[0].p;
-  ok(oldFile.pCount === 61 && pu.length === 71 && pu.slice(63).join() === cap.p.slice(63).join() && pu[52] === cap.p[52]
-    && pu.slice(53, 63).every((x) => x == null), "library file: a 2.5 one (61 parameters) read by 2.6: E1..E8 at 63..70, the new ones unset");
-  const lost = E.readLibraryFile({ ...file, patches: [{ ...file.patches[0], engineName: "WAVETABLE" }] }, ctx);
-  ok(lost.patches.length === 0 && lost.skipped === 1, "library file: a patch for an unknown engine is skipped");
-  const bankFile = E.libraryFile("bank", [{ ...g, engineName: "ANALOG", slot: 10 }], ctx);
-  ok(bankFile.kind === "bank" && bankFile.patches[0].slot === 10 && E.readLibraryFile(bankFile, ctx).patches[0].slot === 10, "library file: bank export keeps slot numbers");
-  const old = E.readLibraryFile({ format: "felucca-patch", version: 1, engine: 0, preset: 4, engineName: "ANALOG", presetName: "ACID", p: d2.p, steps: E.stepsFromPattern(cap.pattern) }, ctx);
-  ok(old.patches.length === 1 && eq(old.patches[0].p, d2.p) && js(old.patches[0].pattern) === js(cap.pattern), "library file: reads the old \"Save to file\" format");
-  /* a "Save to file" of 2.5 (61 values, the engine's from 53, no pCount) on 2.6: the engine's 8 at 63..70 */
-  const p61 = [...d2.p.slice(0, 53), ...d2.p.slice(63)];
-  const o61 = E.readLibraryFile({ format: "felucca-patch", version: 1, engine: 0, preset: 4, engineName: "ANALOG", p: p61 }, ctx).patches[0].p;
-  const p71 = E.readLibraryFile({ format: "felucca-patch", version: 1, engine: 0, preset: 4, engineName: "ANALOG", p: d2.p, pCount: 71, pE0: 63 },
-    { ...ctx, keys: keys.slice(0, 53).concat(keys.slice(63)) }).patches[0].p;
-  ok(o61.length === 71 && o61.slice(63).join() === d2.p.slice(63).join() && o61.slice(53, 63).every((x) => x == null) && o61[52] === d2.p[52]
-    && p71.length === 61 && p71.slice(53).join() === d2.p.slice(63).join(),
-    "library file: a \"Save to file\" of another version is read by count (the engine's 8 in their place, 61 <-> 71)");
-  let threw = false;
-  try { E.readLibraryFile({ format: "something" }, ctx); } catch (e) { threw = true; }
-  ok(threw, "library file: unknown format -> error");
+  ok(info.nengines === 0 && !info.engines.length && info.ntrk === 1 && info.proto === 11 && E.PROTO === 11 && info.pcount === 71 && info.gcount === 45
+    && info.pe0 === 63 && info.nstep === 64, "editor: INFO v11: no engine, one track, protocol 11 (71 / 45 / pe0 63)");
+  let descs = 0;
+  for (let i = 0; i < info.pcount; i++) if (E.parse[C.DESC](await rq(E.req.desc(0, i))).label) descs++;
+  ok(descs === info.pcount, "editor: DESC for every parameter");
+  {   /* the drum track's P_E0 is its kit, P_E1..P_E7 nothing (params.c e_desc / E_NONE); G_DRCH is "CH" */
+    const pc = fw("params.c");
+    const e = [];
+    for (let i = 0; i < 8; i++) e.push(E.parse[C.DESC](await rq(E.req.desc(0, info.pe0 + i))));
+    const ch = E.parse[C.DESC](await rq(E.req.desc(1, 24)));
+    ok(e[0].label === "KIT" && e.slice(1).every((d) => d.label === "-" && d.min === 0 && d.max === 0) && ch.label === "CH" && ch.def === 10
+      && /static const param_desc_t E_NONE = PD\("-", F_INT, 0, 0, 0\);/.test(pc) && /\[G_DRCH\] = PE\("CH", N_MCH, 10\)/.test(pc)
+      && /is_drum\(t\) && id == P_E0 \? &DRUM_KIT_DESC : &E_NONE/.test(pc), "editor: KIT on P_E0, P_E1..7 nothing, the drums' channel CH (mock == params.c)");
+  }
+  const dump = E.parse[C.DUMP](await rq(E.req.dump()), info);
+  ok(dump.engine === 0 && dump.preset === 0 && dump.p.length === info.pcount && dump.g.length === info.gcount && dump.p[info.pe0] === 5,
+    "editor: DUMP (engine byte 0 = the number of engines: the drum track; kit 808)");
+  const set = E.parse[C.SET](await rq(E.req.set(0, 50, 500)));
+  const eng = E.parse[C.SET](await rq(E.req.set(1, 20, 3)));
+  ok(set.value === 63 && eng.value === 0, "editor: SET clamps to the range; G_ENGSEL stays (no engine to change)");
+  const pj = E.parse[C.PROJECT](await rq(E.req.project(1, 2), { timeout: 4000, retries: 0 }));
+  ok(pj.used === 1, "editor: PROJECT save");
+  /* sample upload as smpUpload() does it, into USR2; USR1 holds the songs: refused (rc 4) */
+  const s = Int16Array.from({ length: 3000 }, (_, i) => Math.round(8000 * Math.sin(i / 7)));
+  const { hdr, data } = E.buildSlot("test", [{ s, root: 60 }]);
+  let rc = E.parse[C.SMP_BEGIN](await rq(E.req.smpBegin(1), { timeout: 1000, retries: 0 })).rc;
+  for (let off = 0; off < data.length && !rc; off += 256) {
+    rc = E.parse[C.SMP_WRITE](await rq(E.req.smpWrite(1, E.SMP.DATA_OFF + off, data.subarray(off, off + 256)), { timeout: 1000 })).rc;
+  }
+  rc = rc || E.parse[C.SMP_END](await rq(E.req.smpEnd(1, hdr), { timeout: 2000, retries: 0 })).rc;
+  const si = E.parse[C.SMP_INFO](await rq(E.req.smpInfo()));
+  ok(rc === 0 && si.slots[1].zones === 1 && si.slots[1].name === "TEST", "editor: sample upload (CRC checked by the mock)");
+  const u1 = [E.parse[C.SMP_BEGIN](await rq(E.req.smpBegin(0))).rc, E.parse[C.SMP_ERASE](await rq(E.req.smpErase(0))).rc,
+    E.parse[C.SMP_WRITE](await rq(E.req.smpWrite(0, 512, data.subarray(0, 256)))).rc];
+  const ec = fw("editor.c");
+  ok(E.SMP.SONGS === 0 && u1.join() === "4,4,4" && !si.slots[0].zones && /#define SNG_SMP_SLOT 0u/.test(fw("seq.c"))
+    && (ec.match(/if \(a\[0\] == SNG_SMP_SLOT\) \{/g) || []).length === 2, "editor: USR1 (the songs' flash) refuses sound: rc 4 (editor.c), listed empty");
+  /* PRESET 8, NAMES 10, UP_LIST..UP_ERASE 16..21, FM6_GET..FM6_ERASE 68..71: gone, no reply */
+  const gone = [];
+  for (const [cmd, args] of [[8, [0, 0]], [10, [0]], [16, [0, 16]], [17, [0]], [19, [0, 65, 0]], [20, [0]], [21, [0]], [68, [0, 0]], [70, []], [71, [0]]])
+    gone.push(await noReply(rq, [cmd, args]));
+  ok(gone.every(Boolean) && ev.timeouts === 0 && !("PRESET" in C) && !("NAMES" in C) && !("UP_LIST" in C) && !("FM6_GET" in C)
+    && !E.req.preset && !E.req.names && !E.req.upList && !E.req.fm6Get, "editor: PRESET, NAMES, UP_*, FM6_*: no reply, none in the editor");
+  /* a device that never answers */
+  const dead = new E.Link(() => {}, { timeout: 30 });
+  const err = await dead.request(E.req.info(), { retries: 1 }).then(() => null, (e) => e.message);
+  ok(/^timeout/.test(err || ""), "editor: no reply -> timeout after the retries");
   done();
+  /* a SLOOP (protocol 10 and before): INFO says so, nothing else answers; the page stops there and says why */
+  const o = attachMock({ proto: 10 });
+  const oi = E.parse[C.INFO](await o.rq(E.req.info()));
+  const od = await noReply(o.rq, E.req.dump());
+  const page = html.slice(html.indexOf("async function load(d)"), html.indexOf("async function getDescOrNull"));
+  ok(oi.proto === 10 && oi.nengines === 12 && oi.ntrk === 4 && od && /if \(!\(d\.info\.proto >= PROTO\)\)/.test(page)
+    && page.indexOf("proto >= PROTO") < page.indexOf("getDescOrNull(0, i)") && /sayK\("fwRefused", e\.refused\)/.test(html)
+    && /fwRefused: "[^"]*fm1-drummer[^"]*11/.test(html) && (html.match(/fwRefused: "/g) || []).length === 2,
+    "editor: a device below protocol 11: refused right after INFO, said in both languages");
+  o.done();
 }
 
+/* live pushes: CHANGED, RELOAD, STEP_CHANGED; WATCH kept on by PING; SETs coalesced */
 async function editorLive() {
   const C = E.CMD;
   const { m, link, rq, sent, ev, done } = attachMock({ watchMs: 250 });
@@ -247,26 +129,30 @@ async function editorLive() {
 
   /* a push between a request and its reply */
   const pend = rq(E.req.dump());
-  const kn = m.sim.knob(9, 4);
+  const kn = m.sim.knob(50, 4);
   const dump = E.parse[C.DUMP](await pend, info);
   const ch = ev.pushes.find((f) => f.cmd === C.CHANGED);
   const cv = ch && E.parse[C.CHANGED](ch.a);
-  ok(dump.p.length === 71 && ch && ch.pending === C.DUMP && cv.scope === 0 && cv.id === 9 && cv.value === kn.value && !ev.unknown.length,
+  ok(dump.p.length === 71 && ch && ch.pending === C.DUMP && cv.scope === 0 && cv.id === 50 && cv.value === kn.value && !ev.unknown.length,
     "live: CHANGED while DUMP waits -> push handler, reply still matched");
-  const rl = m.sim.reload();
+  m.sim.reload();
   m.sim.step(3);
-  const pend2 = rq(E.req.stepGet(7));
-  const s7 = E.parse[C.STEP_GET](await pend2);
+  const pend2 = rq(E.req.drumStep(7));
+  const s7 = E.parse[C.DRUM_STEP](await pend2);
   await sleep(10);
   const r = ev.pushes.find((f) => f.cmd === C.RELOAD), sc = ev.pushes.find((f) => f.cmd === C.STEP_CHANGED);
-  ok(s7.index === 7 && r && E.parse[C.RELOAD](r.a).preset === rl.preset && sc && E.parse[C.STEP_CHANGED](sc.a).index === 3,
-    "live: RELOAD and STEP_CHANGED routed");
+  ok(s7.index === 7 && r && js(E.parse[C.RELOAD](r.a)) === js({ engine: 0, preset: 0, track: 0 }) && sc && E.parse[C.STEP_CHANGED](sc.a).index === 3,
+    "live: RELOAD (0, 0, track 0) and STEP_CHANGED routed");
   const nr = ev.pushes.filter((f) => f.cmd === C.RELOAD).length;
-  await rq(E.req.preset(1, 2));
-  await rq(E.req.stepSet(9, { n: 1, notes: [62, 0, 0, 0], time: 0, flags: 0, vel: 90 }));
+  await rq(E.req.project(0, 0), { timeout: 4000, retries: 0 });
+  await rq(E.req.drumStep(9, { ...E.emptyDrum(), on: 1 }));
   await sleep(10);
   ok(ev.pushes.filter((f) => f.cmd === C.RELOAD).length === nr + 1 && !ev.pushes.some((f) => f.cmd === C.STEP_CHANGED && f.a[0] === 9),
-    "live: RELOAD after an editor PRESET too, nothing after its STEP_SET");
+    "live: RELOAD after an editor PROJECT load too, nothing after its DRUM_STEP");
+  const lv = m.sim.level(77);
+  await sleep(10);
+  const lc = ev.pushes.filter((f) => f.cmd === C.CHANGED).map((f) => E.parse[C.CHANGED](f.a)).find((c) => c.scope === 1);
+  ok(lc && lc.id === 25 && lc.value === lv, "live: the drums' level turned on the device: CHANGED of G_DRLVL");
 
   /* PING keeps the watch on; without requests it ends */
   for (let i = 0; i < 4; i++) { await sleep(120); await rq(E.req.ping()); }
@@ -283,88 +169,18 @@ async function editorLive() {
   /* a slider drag: 40 values at once -> one SET in flight + one coalesced, the last value wins */
   const before = sent[C.SET] || 0;
   const all = [];
-  for (let v = 0; v < 40; v++) all.push(rq(E.req.set(0, 9, v * 3), { key: "0:9" }));
+  for (let v = 0; v < 40; v++) all.push(rq(E.req.set(0, 50, v - 20), { key: "0:50" }));
   await Promise.all(all);
-  ok((sent[C.SET] || 0) - before === 2 && m.state.p[9] === 117 && link.idle, "live: drag SETs coalesce (2 frames for 40 values, latest kept)");
-  ok(ev.timeouts === 0, "live: no timeouts");
-  done();
-
-  /* older firmware: no reply to WATCH -> false without a "no reply" message; no bank */
-  const o = attachMock({ legacy: true });
-  E.parse[C.INFO](await o.rq(E.req.info()));
-  const w = await o.rq(E.req.watch(1), { timeout: 60, retries: 0, quiet: true }).then(() => true, () => false);
-  const sw = await E.startWatch(o.rq);
-  const bl = await E.bank.list((rr, oo) => o.rq(rr, { ...oo, timeout: 60, quiet: true })).then(() => "listed", (e) => e.message);
-  ok(!w && !sw && /^timeout/.test(bl) && o.ev.timeouts === 0, "live: older firmware -> WATCH unanswered (fall back to polling), no bank");
-  o.done();
-}
-
-/* ------------------------------------------------------ editor protocol v3: tracks --- */
-async function editorTracks() {
-  const C = E.CMD;
-  const { m, rq, ev, done } = attachMock({ watchMs: 1000 });
-  const info = E.parse[C.INFO](await rq(E.req.info()));
-  const tr = E.parse[C.TRACK](await rq(E.req.track()));
-  ok(info.ntrk === 4 && tr.sel === 0 && tr.ntrk === 4 && tr.tracks[0].engine === 0 && tr.tracks[1].engine === 1
-    && tr.tracks[3].engine === info.nengines, "tracks: INFO NTRK, TRACK lists 4 (track 4 = drums, engine NENGINES)");
-  /* the v1 commands follow the selected track */
-  const d0 = E.parse[C.DUMP](await rq(E.req.dump()), info);
-  const t1 = E.parse[C.TRACK](await rq(E.req.track(1)));
-  const d1 = E.parse[C.DUMP](await rq(E.req.dump()), info);
-  await rq(E.req.set(0, 1, 77));
-  const td0 = E.parse[C.TRACK_DUMP](await rq(E.req.trackDump(0)), info);
-  const td1 = E.parse[C.TRACK_DUMP](await rq(E.req.trackDump(1)), info);
-  ok(t1.sel === 1 && d1.engine === 1 && d0.engine === 0 && td1.p[1] === 77 && td0.p[1] === d0.p[1] && td0.p[1] !== 77,
-    "tracks: TRACK selects; DUMP / SET act on it, TRACK_DUMP reads any track");
-  /* steps of a track that is not selected */
-  const w = E.parse[C.TRACK_STEP](await rq(E.req.trackStep(2, 5, { n: 2, notes: [60, 67, 0, 0], time: 0, flags: 1, vel: 99 })));
-  const g2 = E.parse[C.TRACK_STEP](await rq(E.req.trackStep(2, 5)));
-  const s1 = E.parse[C.STEP_GET](await rq(E.req.stepGet(5)));
-  ok(w.track === 2 && g2.n === 2 && g2.notes[1] === 67 && g2.vel === 99 && s1.n === 0, "tracks: TRACK_STEP set / get on another track");
-  /* level / mute; the drum level is GLO > DRUMS LEVEL */
-  const mx = E.parse[C.TRACK_MIX](await rq(E.req.trackMix(0, 90, 1)));
-  const mxd = E.parse[C.TRACK_MIX](await rq(E.req.trackMix(3, 64, 0)));
-  const mx2 = E.parse[C.TRACK_MIX](await rq(E.req.trackMix(0)));
-  const tr2 = E.parse[C.TRACK](await rq(E.req.track()));
-  ok(mx.level === 90 && mx.mute === 1 && mx2.level === 90 && mxd.level === 64 && m.state.g[25] === 64
-    && tr2.tracks[0].level === 90 && tr2.tracks[0].mute === 1, "tracks: TRACK_MIX level / mute (drums: G_DRLVL)");
-  /* the drum track: no sound to store or load */
-  await rq(E.req.track(3));
-  const dd = E.parse[C.DUMP](await rq(E.req.dump()), info);
-  const us = E.parse[C.UP_STORE](await rq(E.req.upStore(20, "X"), { timeout: 2500, retries: 0 }));
-  const ul = E.parse[C.UP_LOAD](await rq(E.req.upLoad(1), { timeout: 2500, retries: 0 }));
-  ok(dd.engine === info.nengines && us.rc === 1 && ul.rc === 1, "tracks: drum track selected -> DUMP engine NENGINES, UP_STORE / UP_LOAD rc 1");
-  /* pushes carry the selected track */
-  await rq(E.req.track(0));
-  ok(await E.startWatch(rq), "tracks: WATCH on");
-  m.sim.track(2);
-  m.sim.step(4);
-  await sleep(10);
-  const rl = ev.pushes.find((f) => f.cmd === C.RELOAD), sc = ev.pushes.find((f) => f.cmd === C.STEP_CHANGED);
-  ok(rl && E.parse[C.RELOAD](rl.a).track === 2 && sc && E.parse[C.STEP_CHANGED](sc.a).track === 2 && E.parse[C.STEP_CHANGED](sc.a).index === 4,
-    "tracks: RELOAD / STEP_CHANGED carry the selected track");
-  /* projects keep all four tracks */
-  await rq(E.req.project(1, 3), { timeout: 4000, retries: 0 });
-  await rq(E.req.trackStep(2, 5, { n: 0, notes: [0, 0, 0, 0], time: 2, flags: 0, vel: 0 }));
-  await rq(E.req.track(0));
-  await rq(E.req.project(0, 3), { timeout: 4000, retries: 0 });
-  const back = E.parse[C.TRACK_STEP](await rq(E.req.trackStep(2, 5)));
-  const sel = E.parse[C.TRACK](await rq(E.req.track())).sel;
-  ok(back.n === 2 && back.notes[0] === 60 && sel === 2, "tracks: PROJECT save / load keeps every track and the selection");
-  /* older firmware: no NTRK in INFO, no RELOAD track byte */
-  const o = attachMock({ legacy: true });
-  const oi = E.parse[C.INFO](await o.rq(E.req.info()));
-  ok(oi.ntrk === 0 && E.parse[C.RELOAD]([0, 4]).track === 0 && E.parse[C.STEP_CHANGED]([7]).track === 0, "tracks: older firmware parses (no tracks)");
-  o.done();
+  ok((sent[C.SET] || 0) - before === 2 && m.state.p[50] === 19 && link.idle, "live: drag SETs coalesce (2 frames for 40 values, latest kept)");
+  ok(ev.timeouts === 0 && E.req.watch(1)[1].join() === "1" && E.req.watch(0)[1].join() === "0", "live: no timeouts; WATCH asks for pushes only (no TRACK_CHANGED: one track)");
   done();
 }
 
 /* ------------------------------- editor 2.6: SET coalescing per control (SetGate) --- */
-/* a user report: DIV 1/8 on the drum track, then 1/8 on a synth track: the second SET never left (the coalescing kept the
-   last value sent per control, whatever the track). userSet as editor.html has it, on the mock */
+/* userSet as editor.html has it, on the mock: one SET per control in flight, the same value not queued again */
 async function editorSetGate() {
   const C = E.CMD;
-  const { link, rq, sent, done } = attachMock({});
+  const { rq, link, sent, done } = attachMock({});
   const info = E.parse[C.INFO](await rq(E.req.info()));
   let div = -1;
   for (let i = 0; i < info.pcount && div < 0; i++) if (E.parse[C.DESC](await rq(E.req.desc(0, i))).label === "DIV") div = i;
@@ -375,200 +191,22 @@ async function editorSetGate() {
     gate.get(k).sent = v;
     return rq(E.req.set(0, div, v), { key: k });
   };
-  const divOf = async (t) => E.parse[C.TRACK_DUMP](await rq(E.req.trackDump(t)), info).p[div];
-  await rq(E.req.track(3));
-  const d0 = await divOf(0), want = d0 === 1 ? 2 : 1;
+  const divNow = async () => E.parse[C.DUMP](await rq(E.req.dump()), info).p[div];
+  const d0 = await divNow(), want = d0 === 1 ? 2 : 1;
   await user(want);
-  await rq(E.req.track(0));                           /* (selectTrack -> afterSoundChange: gate.clear()) */
   const n0 = sent[C.SET] || 0;
-  const p = user(want);                               /* the same value, track 1: sent, even without the clear */
+  const p = user(want);                               /* answered: the same value is sent again (a knob may have moved it) */
   if (p) await p;
-  ok(div >= 0 && (await divOf(3)) === want && (await divOf(0)) === want && sent[C.SET] === n0 + 1,
-    "SetGate: DIV set on the drum track, then the same DIV on track 1: sent, both set");
+  ok(div === 30 && (await divNow()) === want && sent[C.SET] === n0 + 1, "SetGate: DIV set; the same value again once answered: sent");
   gate.clear();
-  ok(gate.get(k) === undefined, "SetGate: clear() forgets every control (another track / sound / FM-1)");
+  ok(gate.get(k) === undefined, "SetGate: clear() forgets every control (a reload, another FM-1)");
   /* a drag: while a SET is pending, the same value is not queued again; a new one replaces the queued one */
   const a = user(5), b = user(5), c = user(6), d = user(6);
   ok(a && b === null && c && d === null, "SetGate: pending: the same value skipped, a new value sent (queued)");
   await Promise.all([a, c]);
-  ok((await divOf(0)) === 6, "SetGate: the last value wins");
-  ok(user(6) !== null, "SetGate: answered: the same value sent again (a knob may have moved it on the FM-1)");
+  ok((await divNow()) === 6, "SetGate: the last value wins");
   await rq(E.req.set(0, div, d0));
   done();
-}
-
-/* ------------------------------------------------ editor v3: the mixer (Tracks tab) --- */
-async function editorMixer() {
-  const C = E.CMD;
-  const { m, rq, ev, done } = attachMock({ watchMs: 1000 });
-  const info = E.parse[C.INFO](await rq(E.req.info()));
-  const PAN = 39, MUTE = 40;
-  const m0 = await E.mixer.read(rq, info, { pan: PAN });
-  ok(m0.ntrk === 4 && m0.tracks.length === 4 && m0.tracks[1].pan === -24 && m0.tracks[2].pan === 20 && m0.tracks[3].engine === info.nengines
-    && m0.tracks.every((x) => Number.isInteger(x.level) && (x.mute === 0 || x.mute === 1)), "mixer: read = TRACK + pan of every track (TRACK_DUMP)");
-  /* level / mute of a track that is not selected, and of the drum track (G_DRLVL) */
-  const a = await E.mixer.setMix(rq, 2, 70, 1);
-  const b = await E.mixer.setMix(rq, 3, 200, 0);
-  const m1 = await E.mixer.read(rq, info, { pan: PAN });
-  const td2 = E.parse[C.TRACK_DUMP](await rq(E.req.trackDump(2)), info);
-  ok(a.level === 70 && a.mute === 1 && b.level === 127 && m.state.g[25] === 127 && m1.tracks[2].level === 70 && m1.tracks[2].mute === 1
-    && td2.p[0] === 70 && td2.p[MUTE] === 1 && m1.sel === 0, "mixer: TRACK_MIX level / mute round trip (drums: G_DRLVL, clamped)");
-  /* pan of another track: selected for the SET, the selection put back, no RELOAD pushed */
-  ok(await E.startWatch(rq), "mixer: WATCH on");
-  const pushes = ev.pushes.length;
-  /* (the v3 path: firmware 0.8 has no TRACK_PARAM) */
-  const p2 = await E.mixer.setPan(rq, 2, 0, PAN, -40);
-  const p0 = await E.mixer.setPan(rq, 0, 0, PAN, 99);
-  await sleep(10);
-  const m2 = await E.mixer.read(rq, info, { pan: PAN });
-  const d0 = E.parse[C.DUMP](await rq(E.req.dump()), info);
-  ok(p2 === -40 && p0 === 63 && m2.sel === 0 && m2.tracks[2].pan === -40 && m2.tracks[0].pan === 63 && d0.p[PAN] === 63 && m2.tracks[1].pan === -24
-    && ev.pushes.length === pushes, "mixer: pan of any track via SET (other track selected for a moment, then back; no push)");
-  /* the device's TRACKS page: level of the selected track pushes CHANGED; REC arm shows in TRACK */
-  m.sim.level(33);
-  m.sim.arm(1);
-  await sleep(10);
-  const ch = ev.pushes.filter((f) => f.cmd === C.CHANGED).map((f) => E.parse[C.CHANGED](f.a)).pop();
-  const m3 = await E.mixer.read(rq, info, { pan: PAN });
-  ok(ch && ch.scope === 0 && ch.id === 0 && ch.value === 33 && m3.tracks[0].level === 33 && m3.tracks[1].armed === 1 && m3.tracks[0].armed === 0,
-    "mixer: device-side level (CHANGED push) and REC arm read back");
-  await rq(E.req.track(3));
-  m.sim.level(90);
-  await sleep(10);
-  const chd = E.parse[C.CHANGED](ev.pushes.filter((f) => f.cmd === C.CHANGED).pop().a);
-  ok(chd.scope === 1 && chd.id === 25 && chd.value === 90, "mixer: drum level on the device pushes G_DRLVL");
-  /* the drum track's steps: GM notes, shown and typed by name */
-  const st = [];
-  for (let i = 0; i < 16; i++) st.push(E.parse[C.TRACK_STEP](await rq(E.req.trackStep(3, i))));
-  const names = st[0].notes.slice(0, st[0].n).map(E.drumName).join(" ");
-  ok(names === "KICK CHH" && st[4].notes.slice(0, 2).map(E.drumName).join(" ") === "SNARE CHH" && E.drumName(20) === "20",
-    "mixer: the mock drum track holds a GM pattern (KICK CHH ...)");
-  ok(JSON.stringify(E.parseNotes("kick CHH 49")) === "[36,42,49]" && JSON.stringify(E.parseNotes("C4 SNARE")) === "[60,38]" && E.parseNotes("KICKS") === null
-    && Object.keys(E.GM_DRUM).length === 47 && new Set(Object.values(E.GM_DRUM)).size === 47, "mixer: GM drum names parse (unique, 35..81)");
-  done();
-}
-
-/* ------------------------------------- editor v4: TRACK_PARAM and TRACK_CHANGED --- */
-async function editorTrackParam() {
-  const C = E.CMD, PAN = 39, MUTE = 40;
-  const { m, rq, sent, ev, done } = attachMock({ watchMs: 1000 });
-  const info = E.parse[C.INFO](await rq(E.req.info()));
-  const w1 = E.parse[C.WATCH](await rq(E.req.watch(1)));
-  m.sim.param(2, PAN, 11);
-  await sleep(10);
-  ok(w1.on === 1 && !ev.pushes.some((f) => f.cmd === C.TRACK_CHANGED), "v4: WATCH 1 answers 1 as before (no TRACK_CHANGED pushes)");
-  ok(await E.startWatch(rq) === 3, "v4: WATCH 3 -> 3 (TRACK_PARAM / TRACK_CHANGED known)");
-  const tracks0 = sent[C.TRACK] || 0, pushes = ev.pushes.length;
-  const g = E.parse[C.TRACK_PARAM](await rq(E.req.trackParam(1, PAN)));
-  const p2 = await E.mixer.setPan(rq, 2, 0, PAN, -40, true);
-  const p1 = await E.mixer.setPan(rq, 1, 0, PAN, 99, true);
-  const alg = E.parse[C.TRACK_PARAM](await rq(E.req.trackParam(1, info.pe0, 50)));   /* track 2 is DIGITAL: ALG 0..7 */
-  const lv = E.parse[C.TRACK_PARAM](await rq(E.req.trackParam(3, 0, -5)));
-  const sel = E.parse[C.TRACK](await rq(E.req.track()));
-  const td2 = E.parse[C.TRACK_DUMP](await rq(E.req.trackDump(2)), info);
-  await sleep(10);
-  ok(g.track === 1 && g.id === PAN && g.value === -24 && p2 === -40 && p1 === 63 && alg.value === 7 && lv.value === 0 && td2.p[PAN] === -40
-    && sel.sel === 0 && (sent[C.TRACK] || 0) === tracks0 + 1 && ev.pushes.length === pushes,
-    "v4: TRACK_PARAM get / set on other tracks (clamped as SET, selection kept, no push)");
-  const bad = await rq(E.req.trackParam(4, PAN), { timeout: 60, retries: 0, quiet: true }).then(() => "reply", () => "none");
-  ok(bad === "none", "v4: TRACK_PARAM of track 5: no reply");
-  /* device-side changes: CHANGED for the selected track, TRACK_CHANGED for the others */
-  m.sim.param(2, PAN, 30);
-  m.sim.param(3, MUTE, 1);
-  m.sim.param(0, PAN, -7);
-  await sleep(10);
-  const tc = ev.pushes.filter((f) => f.cmd === C.TRACK_CHANGED).map((f) => E.parse[C.TRACK_CHANGED](f.a));
-  const ch = ev.pushes.filter((f) => f.cmd === C.CHANGED).map((f) => E.parse[C.CHANGED](f.a)).pop();
-  ok(tc.length === 2 && tc[0].track === 2 && tc[0].id === PAN && tc[0].value === 30 && tc[1].track === 3 && tc[1].id === MUTE && tc[1].value === 1
-    && ch && ch.scope === 0 && ch.id === PAN && ch.value === -7 && !ev.unknown.length, "v4: TRACK_CHANGED pushes for the other tracks, CHANGED for the selected one");
-  done();
-  /* firmware 0.8 (v3): WATCH 3 answers 1, TRACK_PARAM unanswered: the editor keeps the select / restore path */
-  const o = attachMock({ v3: true, watchMs: 1000 });
-  E.parse[C.INFO](await o.rq(E.req.info()));
-  const on = await E.startWatch(o.rq);
-  const tp = await o.rq(E.req.trackParam(1, PAN), { timeout: 60, retries: 0, quiet: true }).then(() => "reply", () => "none");
-  const pv = await E.mixer.setPan(o.rq, 2, 0, PAN, 5, false);
-  ok(on === 1 && tp === "none" && pv === 5 && o.ev.timeouts === 0 && !o.ev.unknown.length, "v4: v3 firmware -> WATCH 1, no TRACK_PARAM (pan by select / restore)");
-  o.done();
-}
-
-/* ------------------------------------- editor v9 (SLOOP 2.4): FM6 patches --- */
-async function editorV9() {
-  const C = E.CMD, F = E.FM6;
-  /* the editor's factory patches == the firmware's (build/gen/felucca_fm6.h, tools/gen_fm6_patches.py) */
-  const gp = join(HERE, "../build/gen/felucca_fm6.h");
-  if (existsSync(gp)) {
-    const h = readFileSync(gp, "utf8").replace(/\/\*[^*]*\*\//g, "");
-    const arr = (name) => (new RegExp(`${name}\\[[^\\]]*\\](?:\\[[^\\]]*\\])?\\s*=\\s*\\{([\\s\\S]*?)\\};`).exec(h) || [])[1] || "";
-    const nums = (x) => (x.match(/\d+/g) || []).map(Number);
-    const fac = nums(arr("FM6_FACTORY"));
-    ok(js(nums(arr("FM6_INIT"))) === js(Array.from(F.INIT_PK)) && fac.length === F.FACTORY_PK.length * 128
-      && F.FACTORY_PK.every((pk, i) => js(Array.from(pk)) === js(fac.slice(i * 128, i * 128 + 128))),
-    "v9: the editor's init and factory patches == felucca_fm6.h");
-  }
-  /* pack / unpack: every voice survives, every value into its range */
-  let rt = true;
-  for (let n = 0; n < 50; n++) {
-    const v = F.sanitize(Uint8Array.from({ length: F.SIZE }, (_, i) => (i * 37 + n * 101 + (i * n) % 13) & 127));
-    if (js(Array.from(F.unpack(F.pack(v)))) !== js(Array.from(v))) rt = false;
-  }
-  ok(rt, "v9: FM6 pack / unpack round trip (50 voices, sanitized)");
-  /* SysEx: one voice (163 bytes) and a 32-voice bank (4104 bytes), names, checksums */
-  const v1 = F.factory(0), one = F.singleSysex(v1), p1 = F.parseSysex(one);
-  ok(one.length === 163 && one[0] === 0xF0 && one[162] === 0xF7 && p1.voices.length === 1 && !p1.badSum
-    && js(Array.from(p1.voices[0].v)) === js(Array.from(v1)), "v9: single-voice SysEx: 163 bytes, read back the same");
-  const voices = Array.from({ length: 32 }, (_, k) => { const v = F.factory(k % F.FACTORY_PK.length); F.setName(v, `VOICE ${k + 1}`); return v; });
-  const bank = F.bankSysex(voices), pb = F.parseSysex(bank);
-  ok(bank.length === 4104 && pb.voices.length === 32 && !pb.badSum && pb.voices[31].name.trim() === "VOICE 32"
-    && pb.voices.every((x, k) => js(Array.from(x.v)) === js(Array.from(F.unpack(F.pack(voices[k]))))),
-  "v9: 32-voice bank SysEx: 4104 bytes, 32 voices with their names");
-  const badb = Uint8Array.from(bank); badb[4102] ^= 1;
-  ok(F.parseSysex(badb).badSum, "v9: a bank with a wrong checksum is read but flagged");
-  /* damaged and unusual files (2.4, after Felucca 1.0.3) */
-  const cut = bank.subarray(0, 6 + 128 * 10 + 50);               /* cut inside voice 11 */
-  const pc = F.parseSysex(cut);
-  ok(pc.voices.length === 10 && pc.short === 1 && pc.voices[9].name.trim() === "VOICE 10", "v9: a bank cut short: its whole voices, flagged");
-  const two = Uint8Array.from([...bank, ...one]), p2 = F.parseSysex(two);
-  ok(p2.voices.length === 33 && !p2.badSum && !p2.short, "v9: a bank and a voice in one file: 33 voices");
-  const nof7 = Uint8Array.from([...bank.subarray(0, 4102), ...one]);   /* the bank with no checksum / F7 */
-  ok(F.parseSysex(nof7).voices.length === 33, "v9: a message with no end: the next one still read");
-  const raw2 = new Uint8Array(8192); raw2.set(bank.subarray(6, 4102), 0); raw2.set(bank.subarray(6, 4102), 4096);
-  ok(F.parseSysex(raw2).voices.length === 64, "v9: raw data, two 4096-byte banks: 64 voices");
-  const fm4 = Uint8Array.from([0xF0, 0x43, 0x00, 0x04, 0x20, 0x00, ...new Array(4096).fill(0), 0, 0xF7]), p4 = F.parseSysex(fm4);
-  ok(!p4.voices.length && p4.kinds.includes("fm4") && p4.sysex, "v9: 4-operator voices: none read, said so");
-  const roland = F.parseSysex(Uint8Array.from([0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7]));
-  ok(!roland.voices.length && roland.kinds[0] === "maker:41", "v9: another maker's SysEx: its ID");
-  ok(!F.parseSysex(Uint8Array.from([1, 2, 3])).sysex, "v9: not SysEx at all: said so");
-  /* the device: FM6_LIST / GET / PUT / ERASE */
-  const { m, rq, done } = attachMock({});
-  const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.proto === 10 && info.nengines === 12 && info.engines[9] === "FM6", "v9: INFO ends with 10 (v10 includes v9), FM6 is engine 9");
-  const L = E.parse[C.FM6_LIST](await rq(E.req.fm6List()));
-  if (!(L.factory === 8 && L.bank === 27 && L.slots.length === 35)) console.log("  FM6_LIST", L.factory, L.bank, L.slots.length, js(L.slots.slice(0, 10)));
-  ok(L.factory === 8 && L.bank === 27 && L.slots.length === 35 && L.slots[0].used, "v9: FM6_LIST: 8 factory patches, 27 bank slots");
-  const mine = F.factory(3); F.setName(mine, "MY BELL");
-  let r = E.parse[C.FM6_PUT](await rq(E.req.fm6Put(F.TARGET.TRACK, 1, F.pack(mine))));
-  const g = E.parse[C.FM6_GET](await rq(E.req.fm6Get(F.TARGET.TRACK, 1)));
-  ok(r.rc === 0 && g.rc === 0 && F.name(F.unpack(g.packed)).trim() === "MY BELL", "v9: FM6_PUT to track 2, FM6_GET reads it back");
-  r = E.parse[C.FM6_PUT](await rq(E.req.fm6Put(F.TARGET.BANK, 4, F.pack(mine)), { timeout: 3000 }));
-  const L2 = E.parse[C.FM6_LIST](await rq(E.req.fm6List()));
-  ok(r.rc === 0 && L2.slots[8 + 4].used && L2.slots[8 + 4].name.trim() === "MY BELL", "v9: stored in bank slot B5, listed by name");
-  m.sim.play(true);
-  r = E.parse[C.FM6_PUT](await rq(E.req.fm6Put(F.TARGET.BANK, 5, F.pack(mine)), { timeout: 3000 }));
-  const re = E.parse[C.FM6_ERASE](await rq(E.req.fm6Erase(4), { timeout: 3000 }));
-  ok(r.rc === 3 && re.rc === 3, "v9: bank writes refused while the song plays (rc 3)");
-  m.sim.play(false);
-  const e1 = E.parse[C.FM6_ERASE](await rq(E.req.fm6Erase(4), { timeout: 3000 }));
-  const ge = E.parse[C.FM6_GET](await rq(E.req.fm6Get(F.TARGET.BANK, 4)));
-  const bad = E.parse[C.FM6_GET](await rq(E.req.fm6Get(F.TARGET.FACTORY, 30)));
-  ok(e1.rc === 0 && ge.rc === 2 && bad.rc === 1, "v9: FM6_ERASE empties the slot (GET rc 2), a bad index is rc 1");
-  done();
-  const old = attachMock({ v8: true });
-  const oi = E.parse[C.INFO](await old.rq(E.req.info()));
-  let none = false;
-  try { await old.rq(E.req.fm6List(), { timeout: 200, retries: 0 }); } catch (e) { none = true; }
-  ok(oi.proto === 8 && none, "v9: a v8 device says 8 and does not answer FM6_LIST (the editor hides the FM6 panel)");
-  old.done();
 }
 
 /* ------------------------------------- fm1-drummer: songs (the Songs tab) --- */
@@ -950,16 +588,16 @@ async function editorPedalIn() {
     && /PLAY\.step\(st, a\.dir\)/.test(page) && /PLAY\.load\(SPLAY\.st, spec\)/.test(html), "pedal in: the page applies each action to the player (request, fill, ending, stop, step, load)");
 }
 
+
 /* ------------------------------------- editor v6: backup / restore --- */
 async function editorBackup() {
   const C = E.CMD;
-  const { rq, done } = attachMock({});
+  const { m, rq, done } = attachMock({});
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.proto >= 6, "backup: INFO protocol v6 or later");
-  const ec = readFileSync(join(HERE, "../firmware/src/editor.c"), "utf8");
-  ok(/ED_BK_IDS\[\] = \{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 32, 33, 34, 35\}/.test(ec) && E.backupObjects && [10].every((id) => ec.includes("id == 10u")),
-    "backup: the object ids == editor.c ED_BK_IDS (35: USR4, 9: SYN kits, 10: MIDI LEARN)");
-  await rq(E.req.upStore(3, "BACKUP ME"));
+  const ec = fw("editor.c");
+  ok(/ED_BK_IDS\[\] = \{0, 1, 2, 3, 4, 5, 9, 10, 32, 33, 34, 35\}/.test(ec) && /if \(id == 32u \+ SNG_SMP_SLOT\) \{/.test(ec)
+    && js(E.BK.RESTORE.concat(E.BK.SAMPLES).sort((a, b) => a - b)) === js([0, 1, 2, 3, 4, 5, 9, 10, 33, 34, 35]) && js(E.BK.SKIP) === js([6, 7, 8, 32]),
+    "backup: the object ids == editor.c ED_BK_IDS (no 6..8: drums only; USR1 listed empty: the songs)");
   await rq(E.req.project(1, 2), { timeout: 4000, retries: 0 });
   const s = Int16Array.from({ length: 3000 }, (_, i) => Math.round(8000 * Math.sin(i / 7)));
   const { hdr, data } = E.buildSlot("test", [{ s, root: 60 }]);
@@ -968,66 +606,83 @@ async function editorBackup() {
   await rq(E.req.smpEnd(1, hdr), { timeout: 2000, retries: 0 });
   const A = await E.backupCapture(rq, info);
   const obj = (id) => A.objects.find((o) => o.id === id);
-  ok(A.format === "sloop-backup" && A.objects.map((o) => o.id).join() === "0,1,2,3,4,5,6,7,8,9,32,33,34,35" && obj(9).len === 1464 && obj(33).len > 512 && obj(35).len === 0
-    && obj(4).len > 0 && obj(3).len === 0 && obj(32).len === 0, "backup: LIST + GET: 14 objects (project in C, sample in USR2, B empty, the FM6 bank, the SYN kits, USR4)");
-  await rq(E.req.upErase(3));
+  ok(A.format === "sloop-backup" && A.objects.map((o) => o.id).join() === "0,1,2,3,4,5,9,32,33,34,35" && obj(9).len === 1464 && obj(33).len > 512 && obj(35).len === 0
+    && obj(4).len > 0 && obj(3).len === 0 && obj(32).len === 0 && E.bkProjFormat(E.b64dec(obj(0).data)) === "DRM1",
+    "backup: LIST + GET: 11 objects (project in C as DRM1, sample in USR2, B empty, the SYN kits, USR1 empty)");
   await rq(E.req.smpErase(1), { timeout: 2500, retries: 0 });
-  await rq(E.req.set(0, 3, 5));
+  await rq(E.req.set(0, 50, 5));
   await rq(E.req.project(1, 1), { timeout: 4000, retries: 0 });
-  await E.backupRestore(rq, JSON.parse(JSON.stringify(A)));   /* as written to disk and read back */
+  const r0 = await E.backupRestore(rq, JSON.parse(JSON.stringify(A)));   /* as written to disk and read back */
   const B = await E.backupCapture(rq, info);
-  ok(js(B.objects) === js(A.objects), "backup: restore -> the same bytes again (presets, projects, samples, settings)");
+  ok(js(B.objects) === js(A.objects) && js(r0.skipped) === "[]", "backup: restore -> the same bytes again (projects, samples, settings); nothing skipped (USR1 empty)");
+  /* a SLOOP backup: user preset banks, the FM6 bank and a sample in USR1 too: the rest restored, those left out and named */
+  const S = JSON.parse(JSON.stringify(A));
+  const blob = (id, n) => { const d = Uint8Array.from({ length: n }, (_, i) => (i * 7 + id) & 0xFF); return { id, len: n, crc: E.crc32(d) >>> 0, data: E.b64enc(d) }; };
+  S.objects = S.objects.filter((o) => o.id !== 32).concat([blob(6, 300), blob(7, 300), blob(8, 3472), { ...blob(32, 900) }]);
+  await rq(E.req.smpErase(1), { timeout: 2500, retries: 0 });
+  const r1 = await E.backupRestore(rq, S);
+  const C2 = await E.backupCapture(rq, info);
+  ok(js(r1.skipped) === js([6, 7, 8, 32]) && js(C2.objects) === js(A.objects) && !m.state.smp[0].zones,
+    "backup: a SLOOP backup restores the rest; its presets, FM6 bank and USR1 are skipped and said");
+  ok(/if \(skipped\.length\) sayK\("bkSkipped", bkSkipNames\(skipped\)\);/.test(html) && (html.match(/bkSkipUsr1: "/g) || []).length === 2,
+    "backup: the page says what was left out (both languages)");
+  /* the project formats the firmware reads: DRM1 and SLOOP 2.x's FUN4..6; SLOOP 1.x's (or an unknown one): refused, nothing written */
+  const pc = fw("project.c");
+  ok(/PROJ_MAGIC 0x44524D31u/.test(pc) && /PROJ_MAGIC_V6 0x46554E36u/.test(pc) && /PROJ_MAGIC_V4 0x46554E34u/.test(pc) && !/PROJ_MAGIC_V3/.test(pc)
+    && E.bkProjFormat(Uint8Array.of(0x31, 0x4D, 0x52, 0x44)) === "DRM1" && E.bkProjOk(Uint8Array.of(0x36, 0x4E, 0x55, 0x46, 1)) && E.bkProjOk(Uint8Array.of(0x34, 0x4E, 0x55, 0x46))
+    && !E.bkProjOk(Uint8Array.of(0x33, 0x4E, 0x55, 0x46)) && !E.bkProjOk(Uint8Array.of(1, 2, 3, 4)) && E.bkProjOk(new Uint8Array(0))
+    && E.bkFwAtLeast("SLOOP 2.6", [2, 5, 1]) && !E.bkFwAtLeast("SLOOP 2.5", [2, 5, 1]) && !E.bkFwAtLeast("FELUCCA SLOOP 2.0 (MOCK)", [2, 5, 1]),
+    "backup: project formats read (DRM1, FUN4..6 == project.c), the firmware compared");
+  {
+    const F3 = JSON.parse(JSON.stringify(A)), p2 = F3.objects.find((x) => x.id === 2);
+    const d = E.b64dec(p2.data);
+    d.set([0x33, 0x4E, 0x55, 0x46], 0);
+    p2.data = E.b64enc(d);
+    p2.crc = E.crc32(d) >>> 0;
+    let err = null, writes = 0;
+    const rqw = (r, o) => { if (r[0] !== C.INFO) writes++; return rq(r, o); };
+    try { await E.backupRestore(rqw, F3); } catch (e) { err = e; }
+    ok(err && err.code === "bkNewer" && writes === 0, "backup: a SLOOP 1.x project (FUN3) in it: refused (bkNewer), nothing written");
+  }
   const bad = JSON.parse(JSON.stringify(A));
   bad.objects[2].data = E.b64enc(E.b64dec(bad.objects[2].data).map((x, i) => i === 3 ? x ^ 1 : x));
   let caught = "";
   try { E.backupObjects(bad); } catch (e) { caught = e.code; }
   ok(caught === "bkBad", "backup: a damaged file is refused before anything is written");
   done();
-  const old = attachMock({ noBackup: true });
-  const oi = E.parse[C.INFO](await old.rq(E.req.info()));
-  ok(oi.proto === 5, "backup: firmware without it says protocol 5 (the editor hides backup)");
-  old.done();
 }
 
 /* ------------------------------------- editor v5 (SLOOP 2.0): lanes, levels, ratchets --- */
 async function editorV5() {
   const C = E.CMD;
-  const { m, rq, ev, done } = attachMock({ watchMs: 1000 });
+  const { rq, ev, done } = attachMock({ watchMs: 1000 });
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.proto === 10 && /SLOOP/.test(info.version) && info.pcount === 71 && info.gcount === 45 && info.pe0 === 63, "v5..v10: INFO ends with the protocol version (10: SYN kits); 45 globals (2.5: drum DLY; 2.6: GLO > MIDI, TEXTURE, BEND)");
-  /* the firmware says the same: ED_DRUM_STEP is command 33, INFO sends 5, P_CHORD / the master globals as the mock has them */
-  const ec = readFileSync(join(HERE, "../firmware/src/editor.c"), "utf8"), pc = readFileSync(join(HERE, "../firmware/src/params.c"), "utf8");
+  ok(info.proto === 11 && /SLOOP/.test(info.version) && info.pcount === 71 && info.gcount === 45 && info.pe0 === 63, "v5..v11: INFO ends with the protocol version (11: drums only); 45 globals");
+  /* the firmware says the same: the command numbers, INFO's layout, protocol 11 */
+  const ec = fw("editor.c"), pc = fw("params.c");
   const en = (/enum \{ ED_INFO = 1,([^}]*)\}/.exec(ec) || [])[1] || "";
-  const names = ["ED_INFO", ...en.replace(/\/\*[^*]*\*\//g, "").split(",").map((x) => x.trim()).filter(Boolean)];
-  ok(names.indexOf("ED_DRUM_STEP") + 1 === C.DRUM_STEP && names.indexOf("ED_TRACK_CHANGED") + 1 === C.TRACK_CHANGED
-    && names.indexOf("ED_BK_LIST") + 1 === C.BK_LIST && names.indexOf("ED_BK_PUT") + 1 === C.BK_PUT
-    && names.indexOf("ED_LOCK_GET") + 1 === C.LOCK_GET && names.indexOf("ED_LOCK_SET") + 1 === C.LOCK_SET
-    && names.indexOf("ED_MICRO_GET") + 1 === C.MICRO_GET && names.indexOf("ED_MICRO_SET") + 1 === C.MICRO_SET
-    && names.indexOf("ED_FILL_GET") + 1 === C.FILL_GET && names.indexOf("ED_FILL_SET") + 1 === C.FILL_SET
-    && /ED_FM6_GET = 68, ED_FM6_PUT, ED_FM6_LIST, ED_FM6_ERASE/.test(ec) && C.FM6_GET === 68 && C.FM6_ERASE === 71
-    && /#define ED_PROTO 10u/.test(ec) && /ed_b\(ED_PROTO\);/.test(ec)
-    && /enum \{ ED_DSYN_LIST = 72, ED_DSYN_GET, ED_DSYN_PUT, ED_DSYN_STORE, ED_DSYN_PLAY \};/.test(readFileSync(join(HERE, "../firmware/src/editor_dsyn.c"), "utf8"))
-    && C.DSYN_LIST === 72 && C.DSYN_PLAY === 76, "v5..v10: command numbers and INFO == editor.c / editor_dsyn.c");
+  const names = ["ED_INFO", ...en.replace(/\/\*[^*]*\*\//g, "").split(",").map((x) => x.trim().replace(/ = \d+$/, "")).filter(Boolean)];
+  const num = (n) => { const m = new RegExp(`${n} = (\\d+)`).exec(en); return m ? +m[1] : names.indexOf(n) + 1; };
+  const want = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 7, PROJECT: 9, SMP_BEGIN: 11, SMP_INFO: 15, WATCH: 22, CHANGED: 23,
+    RELOAD: 24, PING: 25, STEP_CHANGED: 26, TRACK: 27, TRACK_CHANGED: 32, DRUM_STEP: 33, BK_LIST: 34, BK_PUT: 36, LOCK_GET: 37, LOCK_SET: 38,
+    MICRO_GET: 39, MICRO_SET: 40, FILL_GET: 41, FILL_SET: 42 };
+  ok(Object.entries(want).every(([k, v]) => C[k] === v && num("ED_" + k) === v)
+    && /#define ED_PROTO 11u/.test(ec) && /ed_b\(ED_PROTO\);/.test(ec) && /ed_b\(0\);\s*\/\* the engines \(drums only: none, no names\) \*\//.test(ec)
+    && /#define ED_NOENG 0u/.test(ec) && !/case ED_PRESET:|case ED_NAMES:|case ED_UP_|case ED_FM6_/.test(ec)
+    && /enum \{ ED_DSYN_LIST = 72, ED_DSYN_GET, ED_DSYN_PUT, ED_DSYN_STORE, ED_DSYN_PLAY \};/.test(fw("editor_dsyn.c"))
+    && C.DSYN_LIST === 72 && C.DSYN_PLAY === 76, "v5..v11: command numbers and INFO == editor.c / editor_dsyn.c (11; no engine; PRESET, NAMES, UP_*, FM6_* gone)");
   const enumNames = (id) => (new RegExp(`${id}\\[\\] = \\{([^}]*)\\}`).exec(pc) || [])[1].split(",").map((x) => x.trim().replace(/"/g, ""));
-  const chord = E.parse[C.DESC](await rq(E.req.desc(0, 49)));
   const gd = [];
   for (let i = 27; i < 32; i++) gd.push(E.parse[C.DESC](await rq(E.req.desc(1, i))));
-  ok(chord.label === "CHORD" && chord.names.join() === enumNames("N_CHORD").join() && /\[P_CHORD\] = PE\("CHORD", N_CHORD, 0\)/.test(pc)
-    && gd.map((d) => d.label).join() === "DUST,DUCK,FILT,ROLL,NEW" && gd[3].names.join() === enumNames("N_ROLL").join() && gd[3].def === 1
+  ok(gd.map((d) => d.label).join() === "DUST,DUCK,FILT,ROLL,NEW" && gd[3].names.join() === enumNames("N_ROLL").join() && gd[3].def === 1
     && /\[G_DUST\] = PD\("DUST", F_PCT, 0, 127, 0\)/.test(pc) && /\[G_FILT\] = PD\("FILT", F_FILT, -64, 63, 0\)/.test(pc)
     && /\[G_ROLL\] = PE\("ROLL", N_ROLL, 1\)/.test(pc) && /\[G_NEWPRJ\] = PE\("NEW", N_GO, 0\)/.test(pc),
-    "v5: CHORD, DUST, DUCK, FILT, ROLL, NEW (mock == params.c)");
+    "v5: DUST, DUCK, FILT, ROLL, NEW (mock == params.c)");
   /* the value formats (params.c fmt_value) */
   const fv = (fmt, v, max = 127, min = 0) => E.fmtValue({ fmt, min, max, names: [] }, v).join("");
   ok(fv(E.F.SWING, 0, 100) === "0" && fv(E.F.SWING, 50, 100) === "50" && fv(E.F.SWING, 100, 100) === "100"
     && fv(E.F.FILT, 0, 63, -64) === "OFF" && fv(E.F.FILT, -64, 63, -64) === "LP100%" && fv(E.F.FILT, -32, 63, -64) === "LP50%" && fv(E.F.FILT, 63, 63, -64) === "HP100%"
     && fv(E.F.PCT, 127) === "100%" && fv(E.F.PCT, 64) === "50%" && fv(E.F.PCT, 60, 120) === "50%", "v5: SWING 0..100 (2.5), FILT LP / OFF / HP, PCT of the range");
-  /* a synth step keeps its levels and ratchets; an old-style write clears them (as the firmware) */
-  const w = E.parse[C.STEP_SET](await rq(E.req.stepSet(3, { n: 2, notes: [60, 67, 0, 0], time: 0, flags: 0, vel: 100, lvl: 0b11000110, rat: 0b10000011 })));
-  const g = E.parse[C.STEP_GET](await rq(E.req.stepGet(3)));
-  const w2 = E.parse[C.STEP_SET](await rq(E.req.stepSet(3, { n: 1, notes: [62, 0, 0, 0], time: 0, flags: 0, vel: 90 })));
-  ok(w.lvl === 0b11000110 && g.lvl === 0b11000110 && g.rat === 0b10000011 && w2.lvl === 0 && w2.rat === 0 && E.req.stepSet(1, { n: 0, notes: [], time: 2, flags: 0, vel: 0 })[1].length === 9,
-    "v5: STEP_SET / STEP_GET level and ratchet bytes (8 bits each), none for an old step");
   /* the drum track: 16 lanes with their level and ratchet; lane 15 uses the top bits */
   const d = E.emptyDrum();
   d.on = (1 << 0) | (1 << 4) | (1 << 15); d.lvl[0] = 3; d.lvl[4] = 1; d.rat[4] = 3; d.lvl[15] = 2; d.rat[15] = 1;
@@ -1035,19 +690,12 @@ async function editorV5() {
   const dg = E.parse[C.DRUM_STEP](await rq(E.req.drumStep(5)));
   ok(ds.index === 5 && dg.on === d.on && dg.lvl.join() === d.lvl.join() && dg.rat.join() === d.rat.join()
     && E.req.drumStep(5, d)[1].every((b) => b >= 0 && b < 128) && E.req.drumStep(5, d)[1].length === 14, "v5: DRUM_STEP round trip (16 lanes, levels, ratchets)");
-  /* old commands see the lanes as GM notes (the first four, ACC when one is hard); an old write lands on lanes */
-  const old = E.parse[C.TRACK_STEP](await rq(E.req.trackStep(3, 5)));
-  await rq(E.req.trackStep(3, 6, { n: 2, notes: [38, 46, 0, 0], time: 0, flags: 1, vel: 100 }));
-  const d6 = E.parse[C.DRUM_STEP](await rq(E.req.drumStep(6)));
-  ok(old.n === 3 && old.notes.slice(0, 3).join() === "36,42,56" && old.flags === 1 && d6.on === ((1 << 2) | (1 << 5)) && d6.lvl[2] === 3 && d6.lvl[5] === 3,
-    "v5: the drum track through TRACK_STEP: lanes <-> GM notes");
   ok(E.DRUM_LANES.length === 16 && E.DRUM_LANES[0][0] === 36 && E.DRUM_LANES[15][0] === 56 && E.LV_NAMES.join() === "NORM,GHOST,SOFT,HARD",
     "v5: the 16 lanes (kick .. cowbell), 4 levels");
-  const dc = readFileSync(join(HERE, "../firmware/src/drums.c"), "utf8");
+  const dc = fw("drums.c");
   const lanes = ((/LANE_NOTE\[DRUM_LANES\] = \{([^}]*)\}/.exec(dc) || [])[1] || "").split(",").map((x) => +x);
   ok(lanes.join() === E.DRUM_LANES.map((x) => x[0]).join(), "v5: lane notes == drums.c LANE_NOTE");
-  /* the kit: the drum track's P_E0 */
-  await rq(E.req.track(3));
+  /* the kit: the drum track's P_E0 (no track to select: the one track) */
   const kit = E.parse[C.DESC](await rq(E.req.desc(0, info.pe0)));
   const dk = (/DRUM_KIT_NAMES\[\] = \{([^}]*)\}/.exec(dc) || [])[1] || "";
   const gen = join(HERE, "../build/gen/felucca_drumkits.h");
@@ -1055,19 +703,16 @@ async function editorV5() {
   const fwKits = dsList == null ? null : dk.replace("DS_KIT_NAME_LIST", dsList).split(",").map((x) => x.trim().replace(/"/g, ""));
   ok(kit.label === "KIT" && kit.names[5] === "808" && kit.names.length === kit.max + 1 && (!fwKits || fwKits.join() === kit.names.join()),
     `v5: the drum track's KIT (${kit.names.length} kits${fwKits ? ", == drums.c" : ""})`);
-  /* TRACK ends with the solo mask */
-  m.state.solo = 0b0101;
-  const tr = E.parse[C.TRACK](await rq(E.req.track()));
-  ok(tr.solo === 5 && tr.sel === 3 && tr.tracks.length === 4, "v5: TRACK reports the soloed tracks");
-  ok(!ev.unknown.length, "v5: no unmatched replies");
+  /* the kit list without USR1 (its flash holds the songs; drums.c drum_kit_step passes over it): the numbers kept */
+  const opts = E.kitOptions(kit, 5), usr1 = kit.names.indexOf("USR1");
+  const withU = E.kitOptions(kit, usr1);
+  ok(E.KIT_SONGS === "USR1" && usr1 > 0 && opts.length === kit.names.length - 1 && !opts.some(([, n]) => n === "USR1")
+    && opts.every(([v, n]) => kit.names[v - kit.min] === n) && withU.length === kit.names.length && withU.some(([v]) => v === usr1)
+    && /if \(k == \(int32_t\)DRUM_USR\)/.test(dc) && /"USR1", "USR2", "USR3", "USR4", "USR3\+4"/.test(dc)
+    && /kitOptions\(kd, cur\)/.test(html) && /\[KIT_PAIR, 1, 2, 3\]\.filter\(\(d\) => d !== SMP\.SONGS\)/.test(html),
+    "v5: the kits offered without USR1 (== drums.c drum_kit_step), values kept, USR1 shown while it is the kit; the kit page's slots too");
+  ok(await noReply(rq, E.req.lockGet(1)) && !ev.unknown.length, "v5: one track: track 1 is not there (no reply); no unmatched replies");
   done();
-  /* firmware 0.8 (v3): no DRUM_STEP, no protocol byte, steps without the extra bytes */
-  const o = attachMock({ v3: true });
-  const oi = E.parse[C.INFO](await o.rq(E.req.info()));
-  const os = E.parse[C.STEP_GET](await o.rq(E.req.stepGet(0)));
-  const nd = await o.rq(E.req.drumStep(0), { timeout: 60, retries: 0, quiet: true }).then(() => "reply", () => "none");
-  ok(oi.proto === 0 && os.lvl === undefined && nd === "none", "v5: older firmware -> proto 0, no DRUM_STEP (the editor keeps GM notes)");
-  o.done();
 }
 
 /* ----------------------------- editor protocol v7: nudges and parameter locks (SLOOP 2.4) --- */
@@ -1075,20 +720,19 @@ async function editorV7() {
   const C = E.CMD;
   const { m, rq, ev, done } = attachMock({ watchMs: 1000 });
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.proto === 10, "v7: INFO ends with 10 (v10 includes v7)");
+  ok(info.proto === 11, "v7: INFO ends with 11 (v11 includes v7)");
   /* the lockable set == seq.c p_lockable (the ids as core.h names them) */
-  const sc = readFileSync(join(HERE, "../firmware/src/seq.c"), "utf8"), ch = readFileSync(join(HERE, "../firmware/src/core.h"), "utf8");
+  const sc = fw("seq.c"), ch = fw("core.h");
   const ids = {}; let n = 0;
   for (const nm of (/enum \{\s*\/\* per-track parameters \*\/([^}]*)\}/.exec(ch) || [])[1].replace(/\/\*[\s\S]*?\*\//g, "").split(",").map((x) => x.trim()).filter(Boolean)) ids[nm] = n++;
   const lockableC = (id) => id <= ids.P_LD_AMP || id === ids.P_SGATE || (id >= ids.P_DIST && id <= ids.P_REV) || id === ids.P_GLIDE || id === ids.P_PAN
     || id === ids.P_DETUNE || (id >= ids.P_SLCR && id <= ids.P_SLDEPTH) || (id >= ids.P_E0 && id <= ids.P_E7) || id === ids.P_TFLT
     || (id >= ids.P_IA && id <= ids.P_IMIX);   /* 2.6: the INSERT's values */
   let same = ids.P_COUNT === 71 && ids.P_E0 === 63;
-  for (let id = 0; id < 71; id++) same = same && !!E.lockable(id, 63) === !!lockableC(id);
-  for (let id = 0; id < 61; id++) same = same && !!E.lockable(id, 53) === (id >= 53 || !!lockableC(id));   /* (older firmware: E 53..60) */
+  for (let id = 0; id < 71; id++) same = same && !!E.lockable(id) === !!lockableC(id);
   ok(same && /id <= P_LD_AMP \|\| id == P_SGATE \|\| \(id >= P_DIST && id <= P_REV\) \|\| id == P_GLIDE \|\| id == P_PAN/.test(sc)
-    && !E.lockable(ids.P_SLEN) && !E.lockable(ids.P_AMODE) && !E.lockable(ids.P_VOICE) && !E.lockable(ids.P_CHORD) && E.lockable(ids.P_E7),
-    "v7: the lockable parameters (editor == seq.c p_lockable; LEN, ARP, VOICE, CHORD are not)");
+    && !E.lockable(ids.P_SLEN) && !E.lockable(ids.P_MUTE) && E.lockable(ids.P_TFLT) && E.lockable(ids.P_E0) && E.lockable(ids.P_IMIX),
+    "v7: the lockable parameters (editor == seq.c p_lockable; LEN, MUTE are not; FILTER, the kit, the INSERT are)");
   /* MICRO: 64 bytes offset by 64; a set clamps to -32..31 */
   const mg = E.parse[C.MICRO_GET](await rq(E.req.microGet(0)));
   ok(mg.track === 0 && mg.micro.length === 64 && mg.micro.every((x) => x === 0), "v7: MICRO_GET: 64 nudges, all 0");
@@ -1101,38 +745,31 @@ async function editorV7() {
     "v7: MICRO_SET (sent + 64: -8 -> 56, 31 -> 95, -32 -> 32), clamped to -32..31");
   /* LOCK: set, move, list, delete; refused on a non-lockable parameter, bounded */
   const l1 = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 2, ids.P_E0, 1)));
-  const l2 = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 2, ids.P_DIST, 500)));
+  const l2 = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 2, ids.P_TFLT, 500)));
   const l3 = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 2, ids.P_SLEN, 8)));
   const l4 = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 70, ids.P_E0, 1)));
   const lg = E.parse[C.LOCK_GET](await rq(E.req.lockGet(0)));
-  ok(l1.rc === 0 && l1.has === 1 && l1.value === 1 && l2.rc === 0 && l2.value === 127 && l3.rc === 2 && !l3.has && l3.value === null && l4.rc === 1
-    && lg.track === 0 && lg.locks.length === 2 && lg.locks[0].step === 2 && lg.locks[0].param === ids.P_E0 && lg.locks[1].value === 127
+  ok(l1.rc === 0 && l1.has === 1 && l1.value === 1 && l2.rc === 0 && l2.value === 63 && l3.rc === 2 && !l3.has && l3.value === null && l4.rc === 1
+    && lg.track === 0 && lg.locks.length === 2 && lg.locks[0].step === 2 && lg.locks[0].param === ids.P_E0 && lg.locks[1].value === 63
     && E.req.lockSet(0, 2, 5, -30)[1].length === 5 && E.req.lockSet(0, 2, 5)[1].length === 3,
-    "v7: LOCK_SET makes and clamps a lock (DIST 500 -> 127), refuses LEN (rc 2) and step 70 (rc 1); LOCK_GET lists them");
+    "v7: LOCK_SET makes and clamps a lock (FILT 500 -> 63), refuses LEN (rc 2) and step 70 (rc 1); LOCK_GET lists them");
   const l5 = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 2, ids.P_E0, 3)));
   const l6 = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 2, ids.P_E0)));
   const lg2 = E.parse[C.LOCK_GET](await rq(E.req.lockGet(0)));
-  ok(l5.value === 3 && l6.rc === 0 && l6.has === 0 && lg2.locks.length === 1 && lg2.locks[0].param === ids.P_DIST,
+  ok(l5.value === 3 && l6.rc === 0 && l6.has === 0 && lg2.locks.length === 1 && lg2.locks[0].param === ids.P_TFLT,
     "v7: LOCK_SET again moves the lock; without a value it deletes it");
-  for (let i = 0; i < 23; i++) await rq(E.req.lockSet(0, i, ids.P_LEVEL, 100));   /* 24 in all */
-  const full = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 40, ids.P_LEVEL, 100)));
+  for (let i = 0; i < 23; i++) await rq(E.req.lockSet(0, i, ids.P_PAN, 10));   /* 24 in all */
+  const full = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 40, ids.P_PAN, 10)));
   ok(full.rc === 3 && E.parse[C.LOCK_GET](await rq(E.req.lockGet(0))).locks.length === 24, "v7: the 25th lock is refused (rc 3, 24 a track)");
-  /* another track is untouched; a device-side nudge pushes STEP_CHANGED */
-  const lg3 = E.parse[C.LOCK_GET](await rq(E.req.lockGet(1)));
+  /* a device-side nudge pushes STEP_CHANGED; the page's new lock starts on FX > FILTER */
   await rq(E.req.watch(1));
   m.sim.nudge(7, 12);
   await sleep(30);
   const sc7 = ev.pushes.find((f) => f.cmd === C.STEP_CHANGED && f.a[0] === 7);
-  ok(lg3.locks.length === 0 && !!sc7 && E.parse[C.MICRO_GET](await rq(E.req.microGet(0))).micro[7] === 12,
-    "v7: other tracks untouched; a nudge on the device -> STEP_CHANGED of its step");
+  ok(!!sc7 && E.parse[C.MICRO_GET](await rq(E.req.microGet(0))).micro[7] === 12 && /const id = \[P\.TFLT, \.\.\.lockableIds\(\)\]/.test(html),
+    "v7: a nudge on the device -> STEP_CHANGED of its step; a new lock starts on FILTER");
   ok(!ev.unknown.length, "v7: no unmatched replies");
   done();
-  /* a v6 device (SLOOP 2.3): INFO 6, no reply to the v7 commands */
-  const o = attachMock({ noBackup: true });
-  const oi = E.parse[C.INFO](await o.rq(E.req.info()));
-  const nl = await o.rq(E.req.lockGet(0), { timeout: 60, retries: 0, quiet: true }).then(() => "reply", () => "none");
-  ok(oi.proto === 5 && nl === "none", "v7: a device without the commands: no reply (the editor hides the step detail)");
-  o.done();
 }
 
 /* ----------------------------- editor protocol v8: fill conditions (SLOOP 2.4) --- */
@@ -1140,9 +777,9 @@ async function editorV8() {
   const C = E.CMD;
   const { m, rq, ev, done } = attachMock({ watchMs: 1000 });
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.proto === 10, "v8: INFO ends with 10 (v10 includes v8)");
+  ok(info.proto === 11, "v8: INFO ends with 11 (v11 includes v8)");
   /* the condition codes == core.h FC_*; the bit layout of a 2-bit step field */
-  const ch = readFileSync(join(HERE, "../firmware/src/core.h"), "utf8"), sc = readFileSync(join(HERE, "../firmware/src/seq.c"), "utf8");
+  const ch = fw("core.h"), sc = fw("seq.c");
   ok(/enum \{ FC_NORM, FC_FILL, FC_NOFILL \}/.test(ch) && /uint8_t fill\[NSTEP \/ 4\];/.test(ch)
     && /t->fill\[idx \/ 4u\] >> \(2u \* \(idx % 4u\)\)\) & 3u/.test(sc) && E.FC.FILL === 1 && E.FC.NOFILL === 2,
     "v8: FC codes and the 2-bit layout == core.h / seq.c step_fill");
@@ -1162,23 +799,16 @@ async function editorV8() {
     ok(E.fillGet(b, 0) === 1 && E.fillGet(b, 7) === 0 && b[1] === 0 && rt.length === 16 && rt[0] === 0x80 && rt[1] === 0xFF && rt[7] === 0xAA && rt[15] === 0x40,
       "v8: fillSet / fillGet on the client; pack7 keeps the top bits of 16 bytes (3 groups)");
   }
-  /* another track untouched; a device-side change (SEQ + step + OCT+) pushes STEP_CHANGED */
-  const g2 = E.parse[C.FILL_GET](await rq(E.req.fillGet(1)));
+  /* one track: no other; a device-side change (SEQ + step + OCT+) pushes STEP_CHANGED */
+  const none = await noReply(rq, E.req.fillGet(1));
   await rq(E.req.watch(1));
   m.sim.fill(9, 2);
   await sleep(30);
   const sc9 = ev.pushes.find((f) => f.cmd === C.STEP_CHANGED && f.a[0] === 9);
-  ok(g2.fill.every((x) => x === 0) && !!sc9 && E.fillGet(E.parse[C.FILL_GET](await rq(E.req.fillGet(0))).fill, 9) === 2,
-    "v8: other tracks untouched; a condition set on the device -> STEP_CHANGED of its step");
+  ok(none && !!sc9 && E.fillGet(E.parse[C.FILL_GET](await rq(E.req.fillGet(0))).fill, 9) === 2,
+    "v8: one track (FILL_GET 1: no reply); a condition set on the device -> STEP_CHANGED of its step");
   ok(!ev.unknown.length, "v8: no unmatched replies");
   done();
-  /* a v7 device: INFO 7, no reply to the v8 commands */
-  const o = attachMock({ v7: true });
-  const oi = E.parse[C.INFO](await o.rq(E.req.info()));
-  const nf = await o.rq(E.req.fillGet(0), { timeout: 60, retries: 0, quiet: true }).then(() => "reply", () => "none");
-  const ml = await o.rq(E.req.microGet(0), { timeout: 200, retries: 0, quiet: true }).then(() => "reply", () => "none");
-  ok(oi.proto === 7 && nf === "none" && ml === "reply", "v8: a v7 device: INFO 7, locks yes, no reply to FILL_GET (the editor hides the condition)");
-  o.done();
 }
 
 /* ------------------------------------------------- 2.4: the drum kit page --- */
@@ -1236,81 +866,10 @@ await (async () => {
   ok(dfl.data.length === 500 && dfl.data[499] === 65, "drum kit: ... deflated ZIP entries too");
 })();
 
-/* ------------------------------ SLOOP 2.5: length, piano roll, MIDI files, song --- */
-async function editor25() {
-  const { ROLL, SMF, ARR } = E, R = ROLL.rest, len = 16;
-  const apply = (st, m) => { const o = st.map((x) => ({ ...x })); for (const [i, v] of m) o[i] = v; return o; };
-  const shape = (st) => st.slice(0, len).map((x) => (x.time === 0 && x.n ? "N" + x.notes.slice(0, x.n).join("+") : x.time === 1 ? "-" : ".")).join(" ");
-  /* the piano roll */
-  let st = Array.from({ length: 64 }, R);
-  ok(ROLL.steps(1 / 4, 2) === 4 && ROLL.steps(1, 2) === 16 && ROLL.steps(1 / 16, 7) === 1 && ROLL.steps(1 / 2, 4) === 6 && ROLL.steps(1 / 8, 8) === 1,
-    "roll: a note length in steps (1/4 at 1/16 = 4, 1BAR = 1, at least 1, triplets)");
-  st = apply(st, ROLL.place(st, len, 0, 60, 4));
-  st = apply(st, ROLL.place(st, len, 0, 64, 1));            /* same step: into the chord, its length kept */
-  st = apply(st, ROLL.place(st, len, 8, 67, 2));
-  ok(shape(st) === "N60+64 - - - . . . . N67 - . . . . . ." && ROLL.chords(st, len).map((c) => `${c.at}:${c.dur}`).join() === "0:4,8:2",
-    "roll: place a note, a chord on its first step, a second note");
-  const full = apply(st, new Map([[0, { ...st[0], n: 4, notes: [60, 64, 67, 71] }]]));
-  ok(ROLL.place(full, len, 0, 72, 1).size === 0 && ROLL.place(st, len, 0, 60, 1).size === 0, "roll: a fifth note, or the same note twice: nothing changes");
-  let s2 = apply(st, ROLL.place(st, len, 2, 50, 4));         /* inside the held chord: it ends there */
-  ok(shape(s2) === "N60+64 - N50 - - - . . N67 - . . . . . ." && ROLL.owner(s2, 5) === 2 && ROLL.owner(s2, 7) === -1, "roll: a note inside a held chord ends it; owner()");
-  s2 = apply(st, ROLL.place(st, len, 6, 48, 6));             /* stops before the next chord */
-  ok(shape(s2) === "N60+64 - - - . . N48 - N67 - . . . . . .", "roll: a long note stops before the next chord");
-  s2 = apply(st, ROLL.resize(st, len, 0, 7));
-  ok(shape(s2) === "N60+64 - - - - - - . N67 - . . . . . ." && shape(apply(st, ROLL.resize(st, len, 0, 12))) === "N60+64 - - - - - - - N67 - . . . . . ."
-    && shape(apply(st, ROLL.resize(st, len, 0, 1))) === "N60+64 . . . . . . . N67 - . . . . . ." && shape(apply(st, ROLL.resize(st, len, 8, 99))) === "N60+64 - - - . . . . N67 - - - - - - -",
-    "roll: drag a length: longer (ties, up to the next chord or the end), shorter (rests)");
-  s2 = apply(st, ROLL.remove(st, len, 0, 64));
-  const s3 = apply(s2, ROLL.remove(s2, len, 0, 60));
-  ok(shape(s2) === "N60 - - - . . . . N67 - . . . . . ." && shape(s3) === ". . . . . . . . N67 - . . . . . ." && ROLL.remove(st, len, 0, 99).size === 0,
-    "roll: remove a chord's note; the last one leaves rests (ties too)");
-  /* MIDI files */
-  const steps = apply(st, new Map([[8, { ...st[8], flags: 1 }], [0, { ...st[0], vel: 80, lvl: 1 << 2 }]]));
-  const notes = SMF.fromSteps(steps, len, 2);
-  ok(notes.length === 3 && notes[0].t === 0 && notes[0].dur === 4 * 24 - 1 && notes[0].vel === 80 && notes[1].vel === 42 && notes[2].t === 8 * 24 && notes[2].vel === 127,
-    "midi: a track's steps -> notes (ties as lengths; velocity, level, accent as the device plays them)");
-  const file = SMF.write(notes, { bpm: 97, ch: 2, name: "SLOOP track 3" });
-  const back = SMF.read(file);
-  ok(back.format === 0 && back.ppq === 96 && back.bpm === 97 && back.tracks.length === 1 && back.tracks[0].name === "SLOOP track 3"
-    && js(back.tracks[0].notes.map((n) => [n.t, n.dur, n.key, n.vel, n.ch])) === js(notes.slice().sort((a, b) => a.t - b.t || a.key - b.key).map((n) => [n.t, n.dur, n.key, n.vel, 2])),
-    "midi: write -> read: the same notes, tempo, name, channel");
-  const plan = SMF.toSteps(back.tracks[0].notes, back.ppq, 2, 64);
-  ok(shape(plan.steps) === shape(steps) && plan.len === 10 && plan.steps[0].vel === 80 && plan.steps[8].vel === 127 && js(Object.values(plan.report)) === js([3, 10, 0, 0, 0, 0, 0]),
-    "midi: read back onto the grid: the same chords and lengths, a clean report");
-  const py2 = py(`import struct,sys
-def vlq(n):
-    b=[n&127]; n>>=7
-    while n: b.insert(0,128|(n&127)); n>>=7
-    return bytes(b)
-ev=[(0,b'\\xff\\x51\\x03\\x07\\xa1\\x20')]
-def note(t,d,k,v,ch=0): ev.extend([(t,bytes([0x90|ch,k,v])),(t+d,bytes([0x80|ch,k,0]))])
-for k in (60,62,64,65,67): note(0,240,k,30+k)          # 5 notes at once: one is cut
-note(480,96,72,100); note(520,96,72,90)                 # 520: off the grid (a quarter step = 30) -> the same step, merged
-note(960,960,74,100); note(1200,96,76,100)              # cut short by the next chord
-note(480*33,96,40,100)                                  # past 64 steps at 1/16
-ev.sort(key=lambda e:e[0]); t=0; tr=b''
-for at,b in ev: tr+=vlq(at-t)+b; t=at
-tr+=b'\\x00\\xff\\x2f\\x00'
-hd=b'MThd'+struct.pack('>IHHH',6,1,2,480)
-t1=b'MTrk'+struct.pack('>I',4)+b'\\x00\\xff\\x2f\\x00'
-sys.stdout.buffer.write(hd+t1+b'MTrk'+struct.pack('>I',len(tr))+tr)`);
-  const f2 = SMF.read(new Uint8Array(py2)), p2 = SMF.toSteps(f2.tracks[1].notes, f2.ppq, 2, 64);
-  ok(f2.format === 1 && f2.bpm === 120 && f2.tracks.length === 2 && !f2.tracks[0].notes.length && f2.tracks[1].notes.length === 10
-    && js(p2.report) === js({ notes: 10, steps: 11, moved: 1, chordCut: 1, overlap: 1, dropped: 1, merged: 1 })
-    && p2.steps[0].n === 4 && js(p2.steps[0].notes) === js([62, 64, 65, 67]) && p2.steps[0].vel === 97 && shape(p2.steps).startsWith("N62+64+65+67 - . . N72 . . . N74 - N76 . ."),
-    "midi: a format 1 file from Python (480 ppq): 4 notes a step (loudest), merged, moved, cut short, past the end");
-  let caught = "";
-  try { SMF.read(Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])); } catch (e) { caught = e.message; }
-  ok(caught === "not a MIDI file" && (() => { try { SMF.read(file.slice(0, 20)); return true; } catch (e) { return false; } })(), "midi: a non-MIDI file is refused; a cut one reads what is there");
-  const ds = Array.from({ length: 64 }, E.emptyDrum);
-  ds[0].on = 1 | (1 << 4); ds[0].lvl[4] = 1; ds[4].on = 1 << 2; ds[4].lvl[2] = 3; ds[6].on = 1 << 15; ds[6].lvl[15] = 2;
-  const dn = SMF.fromDrums(ds, 16, 2), dp = SMF.toSteps(SMF.read(SMF.write(dn, { ch: 9 })).tracks[0].notes, 96, 2, 64, true);
-  ok(dn.map((n) => n.key).join() === "36,42,38,56" && dp.len === 7 && [0, 4, 6].every((i) => dp.dsteps[i].on === ds[i].on && js(dp.dsteps[i].lvl) === js(ds[i].lvl))
-    && SMF.laneOf(36) === 0 && SMF.laneOf(35) === 1 && SMF.laneOf(57) === 11 && SMF.laneOf(20) === 0 && SMF.laneOf(90) === 13,
-    "midi: the drum track: lanes as GM notes and back, levels ghost..hard kept (drums.c LANE_OF_GM)");
-  const dc = readFileSync(join(HERE, "../firmware/src/drums.c"), "utf8");
-  const tbl = (/LANE_OF_GM\[81 - 35 \+ 1\] = \{([^}]*)\}/.exec(dc) || [, ""])[1].replace(/\/\*[^*]*\*\//g, "").split(",").map((x) => +x.trim());
-  ok(js(tbl) === js(SMF.LANE_OF_GM), "midi: LANE_OF_GM == drums.c");
+
+/* ------------------------------ SLOOP 2.5: length, song order --- */
+async function editorSong() {
+  const { ARR } = E;
   /* the song order */
   const sb = E.mockSettings(), song = ARR.decode(sb);
   ok(ARR.ok(sb) && sb.length === 88 && !song.loop && js(song.entries) === js([0, 1, 2, 3].map((scene) => ({ scene, bars: 4 }))), "song: the settings' song order (PER3, arr_defaults)");
@@ -1349,8 +908,8 @@ sys.stdout.buffer.write(hd+t1+b'MTrk'+struct.pack('>I',len(tr))+tr)`);
     && js(ARR.decode(await get1())) === js(ARR.decode(now)), "song: mock: read, send (rc 0), a bad one (rc 2), a new one while playing (rc 3)");
   done();
   /* the page */
-  ok(/id="lenval" type="number" min="1" max="64"/.test(html) && /if \(!s && id === pSlen\(\)\) lenChanged\(\);/.test(html) && /if \(!\$\("roll"\)\.hidden\) renderRoll\(\);/.test(html),
-    "editor: the LEN control (1..64), the grid and roll redrawn when LEN changes");
+  ok(/id="lenval" type="number" min="1" max="64"/.test(html) && /if \(!s && id === pSlen\(\)\) lenChanged\(\);/.test(html) && /function lenChanged\(\) \{ renderSteps\(\); \}/.test(html),
+    "editor: the LEN control (1..64), the drum lanes redrawn when LEN changes");
 }
 
 /* ------------------------------------- SLOOP 2.5: the DRUM SYNTH page (v10) --- */
@@ -1447,119 +1006,33 @@ async function editorDsyn() {
       && m.state.ml[34] === 3 && m.state.ml[35] === 10 && m.state.ml[36] === 2,
       "backup: a 2.6 one without object 10 resets MIDI LEARN and GLO > MIDI to the defaults (they were then)");
   }
-  {   /* 2.6: a backup with projects newer than the device reads: refused before anything is written */
-    const f6 = Uint8Array.of(0x36, 0x4E, 0x55, 0x46, 1), f5 = Uint8Array.of(0x35, 0x4E, 0x55, 0x46);
-    ok(E.bkProjFormat(f6) === 6 && E.bkProjFormat(f5) === 5 && E.bkProjFormat(Uint8Array.of(1, 2, 3, 4)) === 0
-      && E.bkDevFormat({ pcount: 71 }) === 6 && E.bkDevFormat({ pcount: 61 }) === 5 && E.bkDevFormat({ pcount: 53 }) === 4
-      && E.bkFwAtLeast("SLOOP 2.6", [2, 5, 1]) && E.bkFwAtLeast("SLOOP 2.6", [2, 5, 1]) && !E.bkFwAtLeast("SLOOP 2.5", [2, 5, 1])
-      && !E.bkFwAtLeast("FELUCCA SLOOP 2.0 (MOCK)", [2, 5, 1]),
-      "backup: the project format of an object, what a device reads (INFO), the firmware compared");
-    let err = null, writes = 0;
-    const rq25 = async (r, o) => {                    /* a 2.5 FM-1 (INFO: 61 parameters); anything else counts as a write */
-      if (r[0] === C.INFO) return { info25: { ...E.parse[C.INFO](await rq(r, o)), pcount: 61, pe0: 53 } };
-      writes++;
-      return rq(r, o);
-    };
-    const B6 = JSON.parse(JSON.stringify(M));
-    const p2 = B6.objects.find((x) => x.id === 2);
-    if (p2) {
-      const d = E.b64dec(p2.data);
-      d.set([0x36, 0x4E, 0x55, 0x46], 0);
-      p2.data = E.b64enc(d);
-      p2.crc = E.crc32(d) >>> 0;
-    }
-    const parse0 = E.parse[C.INFO];
-    E.parse[C.INFO] = (a) => (a && a.info25 ? a.info25 : parse0(a));
-    try { await E.backupRestore(rq25, B6); } catch (e) { err = e; }
-    E.parse[C.INFO] = parse0;
-    ok(!!p2 && err && err.code === "bkNewer" && writes === 0, "backup: 2.6 projects into a 2.5 FM-1: refused (bkNewer), nothing written");
-  }
   done();
-  const old = attachMock({ v9: true });
-  const oi = E.parse[C.INFO](await old.rq(E.req.info()));
-  const B = await E.backupCapture(old.rq, oi);
-  ok(oi.proto === 9 && !B.objects.some((x) => x.id === 9), "dsyn: a v9 device says 9 (the page says it needs 2.5), no object 9");
-  await E.backupRestore(old.rq, JSON.parse(JSON.stringify(A)));    /* a 2.5 backup into a v9 device: object 9 skipped */
-  ok(true, "dsyn: a 2.5 backup restores into a v9 device (object 9 skipped)");
-  await E.backupRestore(old.rq, JSON.parse(JSON.stringify(M)));    /* a 2.6 backup with CCs learned into an older device */
-  ok(true, "midi learn: a 2.6 backup with learned CCs restores into an older device (object 10 skipped)");
-  old.done();
 }
 
-/* ------------------------------------------- 2.5: a DX7 cartridge into the bank --- */
-async function editorCart() {
-  const C = E.CMD, F = E.FM6;
-  const fc = readFileSync(join(HERE, "../firmware/src/fm6_bank.c"), "utf8");
-  const voices = Array.from({ length: 32 }, (_, k) => { const v = F.factory(k % F.FACTORY_PK.length); F.setName(v, `CART ${k + 1}`); return v; });
-  const pb = F.parseSysex(F.bankSysex(voices));
-  const slots = new Array(27).fill(null); slots[0] = F.pack(voices[0]); slots[26] = F.pack(voices[5]);
-  const o = F.bankObj(slots), u = F.bankUnobj(o);
-  const bad = Uint8Array.from(o); bad[16 + 3] = 200;
-  const wrong = Uint8Array.from(o); wrong[6] = 32;
-  ok(/sizeof\(fm6_bank_t\) == 3472u/.test(fc) && /FM6_BANK_MAGIC 0x42364D46u/.test(fc) && o.length === 3472
-    && js(Array.from(o.subarray(0, 12))) === js([0x46, 0x4D, 0x36, 0x42, 1, 0, 27, 0, 1, 0, 0, 4])
-    && u[0] && u[26] && !u[1] && js(Array.from(u[26])) === js(Array.from(slots[26])) && F.bankUnobj(new Uint8Array(0)).every((x) => x === null)
-    && F.bankUnobj(bad) === null && F.bankUnobj(wrong) === null && F.bankUnobj(o.subarray(1)) === null,
-  "cart: the bank object == fm6_bank_t (3472 bytes, FM6B, 27 slots); a bad one is refused");
-  const { m, rq, sent, done } = attachMock({});
-  const mine = F.factory(3); F.setName(mine, "MY BELL");
-  await rq(E.req.fm6Put(F.TARGET.BANK, 4, F.pack(mine)), { timeout: 3000 });     /* B5 */
-  await rq(E.req.fm6Put(F.TARGET.BANK, 1, F.pack(mine)), { timeout: 3000 });     /* B2 */
-  const packs = [0, 1, 2].map((k) => F.pack(pb.voices[k].v));
-  m.sim.play(true);
-  const r3 = await E.fm6CartWrite(rq, packs);
-  let L = E.parse[C.FM6_LIST](await rq(E.req.fm6List()));
-  ok(r3 === 3 && L.slots[8 + 1].name.trim() === "MY BELL" && L.slots[8].name.trim() === "MY TINES", "cart: while the song plays: rc 3, the bank unchanged");
-  m.sim.play(false);
-  const p0 = sent[C.BK_PUT] || 0, r0 = await E.fm6CartWrite(rq, packs), puts = sent[C.BK_PUT] - p0;
-  L = E.parse[C.FM6_LIST](await rq(E.req.fm6List()));
-  const g = E.parse[C.FM6_GET](await rq(E.req.fm6Get(F.TARGET.BANK, 2)));
-  ok(r0 === 0 && L.slots.slice(8, 11).map((x) => x.name.trim()).join() === "CART 1,CART 2,CART 3" && L.slots[8 + 4].name.trim() === "MY BELL"
-    && !L.slots[8 + 3].used && js(Array.from(F.unpack(g.packed))) === js(Array.from(pb.voices[2].v)) && puts === 2 + Math.ceil(3472 / 256),
-  "cart: 3 voices -> B1-B3 in one write (B2 replaced, B5 kept, B4 still empty)");
-  const all = pb.voices.slice(0, 27).map((x) => F.pack(x.v));
-  const rAll = await E.fm6CartWrite(rq, all);
-  L = E.parse[C.FM6_LIST](await rq(E.req.fm6List()));
-  let tooMany = "";
-  try { await E.fm6CartWrite(rq, pb.voices.map((x) => F.pack(x.v))); } catch (e) { tooMany = e.message; }
-  ok(rAll === 0 && L.slots.slice(8).every((x, k) => x.used && x.name.trim() === `CART ${k + 1}`) && /32 voices/.test(tooMany),
-    "cart: the first 27 of a 32-voice cartridge fill B1-B27; 32 at once refused");
-  const info = E.parse[C.INFO](await rq(E.req.info()));
-  const A = await E.backupCapture(rq, info);
-  ok(A.objects.some((x) => x.id === 8 && x.len === 3472), "cart: a backup holds the filled bank (object 8)");
-  /* 2.5: also as user presets, named after the voices, each on its bank slot */
-  const fake = { total: 32, slots: Array.from({ length: 32 }, (_, s) => ({ slot: s, used: s === 0 || s === 2 ? 1 : 0, name: s ? "X" : "MINE" })) };
-  ok(js(E.fm6CartSlots(fake, 3, "free")) === js([1, 3, 4]) && js(E.fm6CartSlots(fake, 3, 29)) === js([29, 30, 31])
-    && E.fm6CartSlots(fake, 3, 30) === null && E.fm6CartSlots(fake, 31, "free") === null && E.fm6CartSlots(fake, 30, "free").length === 30,
-  "cart: preset slots: the first free ones, or from a slot; null when they do not fit");
-  const base = Array.from({ length: info.pcount }, (_, i) => i % 3);
-  const pr = E.fm6CartPreset(info, base, 8, 4, "  BRASS 1   "), pr0 = E.fm6CartPreset(info, base, 8, 0, "");
-  ok(pr.engine === 9 && pr.name === "BRASS 1" && pr.p.length === 71 && pr.p[info.pe0 + 7] === 12 && pr.p[info.pe0 + 6] === base[info.pe0 + 6]
-    && pr.p[0] === base[0] && pr0.name === "FM6 B1" && pr0.p[info.pe0 + 7] === 8, "cart: a preset = FM6, the voice's name, PTCH = its B slot, the rest as given");
-  const ul = await E.bank.list(rq);
-  const free = E.fm6CartSlots(ul, 3, "free");
-  const ups = free.map((s, i) => ({ slot: s, pt: E.fm6CartPreset(info, base, 8, i, pb.voices[i].name) }));
-  m.sim.play(true);
-  const u3 = await E.fm6CartPresets(rq, ups);
-  m.sim.play(false);
-  const u0 = await E.fm6CartPresets(rq, ups);
-  const ul2 = await E.bank.list(rq), g2 = await E.bank.get(rq, info, free[2]);
-  ok(u3 === 3 && u0 === 0 && free.every((s, i) => ul2.slots[s].used && ul2.slots[s].name === `CART ${i + 1}` && ul2.slots[s].engine === 9)
-    && g2.engine === 9 && g2.p[info.pe0 + 7] === 10 && ul.slots.filter((x) => x.used).every((x) => ul2.slots[x.slot].name === x.name),
-  "cart: user presets CART 1-3 in the free slots (FM6, PTCH B1-B3), the others kept; refused while the song plays");
-  done();
-  const old = attachMock({ v8: true });
-  ok(await old.rq(E.req.info()) && (await E.fm6CartWrite(old.rq, packs)) === "old", "cart: a device before v9: 'old' (the page says it needs 2.4)");
-  old.done();
-}
 
 /* ------------------------------------------------- editor tabs and strings --- */
 function editorTabs() {
   const tabs = [...html.matchAll(/<button role="tab" data-tab="(\w+)"/g)].map((x) => x[1]);
   const panels = [...html.matchAll(/<section class="panel" id="p-(\w+)" data-tab="(\w+)"/g)].map((x) => [x[1], x[2]]);
   const TABS = JSON.parse((/const TABS = (\[[^\]]*\]);/.exec(html) || [])[1] || "[]");
-  ok(tabs.length === 11 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b),
+  ok(tabs.length === 8 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b)
+    && js([...TABS].sort()) === js(["drumsynth", "kits", "projects", "samples", "sequencer", "settings", "song", "songs"]),
     `editor: ${tabs.length} tabs, one panel each (${tabs.join(" ")})`);
+  /* drums only: SLOOP's Sound, Tracks and Library tabs, the synth step grid, piano roll, MIDI files, CHOP and FM6 are gone; a tab
+     remembered from SLOOP's editor opens the first one; the side bar's headings */
+  ok(!/id="p-(sound|tracks|library)"|id="(stepgrid|rollcv|midifile|chop|fm6panel|trackbar|engine|preset)"/.test(html)
+    && !/\b(ROLL|SMF|FM6|CHOP|UP|LIB)\s*=|function (renderMixer|chopUI|renderLib|fm6Send|capturePatch)\b/.test(html)
+    && /return TABS\[0\];/.test(html) && TABS[0] === "sequencer"
+    && js([...html.matchAll(/<div class="navh" data-t="(\w+)">/g)].map((x) => x[1])) === js(["navDrums", "navSounds", "navDevice"]),
+    "editor: drums only (no Sound / Tracks / Library, synth grid, roll, MIDI files, CHOP, FM6); first tab the sequencer");
+  /* the cards: the drum track's PATTERN and FX (FILTER, INSERT, INSERT 2), the globals (params.c's pages) */
+  const lay = (/const LAYOUT = \[([\s\S]*?)\n\];/.exec(html) || [])[1] || "";
+  const pages = [...lay.matchAll(/\["([A-Z0-9 ]+)", (\d), \[([\d, ]+)\]\]/g)].map((x) => `${x[1]}:${x[2]}:${x[3]}`);
+  ok(js(pages) === js(["PATTERN:0:29, 30, 31, 32", "FILTER:0:50", "INSERT:0:53, 54, 55, 56", "INSERT 2:0:57", "GLOBAL:1:0, 1, 2, 3", "MASTER:1:27, 28, 29, 30",
+    "DRUMS:1:24, 25, 26, 32", "DLY:1:4, 5, 6, 7", "REV:1:8, 9", "MIDI:1:24, 14, 36, 12", "TEXTURE:1:37, 38, 39, 40", "TEXTURE 2:1:41, 42, 43"])
+    && /\{"FILTER", FAM_FX, SC_TRACK, GR_NONE, \{P_TFLT, 0xFF, 0xFF, 0xFF\}\}/.test(fw("params.c")) && /\{"REV", FAM_FX, SC_GLOBAL, GR_NONE, \{G_RSIZE, G_RDAMP, 0xFF, 0xFF\}\}/.test(fw("params.c"))
+    && /\{"MIDI", FAM_GLO, SC_GLOBAL, GR_NONE, \{G_DRCH, G_ROUTE, G_CHOTH, G_MIDI\}\}/.test(fw("params.c")) && !/"MIDI 2"/.test(lay) && /"IN", "CPU"/.test(html),
+    "editor: the cards == the device's pages (PATTERN, FX; GLOBAL MASTER DRUMS DLY REV, MIDI one page, TEXTURE)");
   ok(/localStorage\.setItem\(TAB_KEY/.test(html) && /try \{ localStorage/.test(html) && /history\.replaceState\([^)]*"#" \+ name\)/.test(html)
     && /addEventListener\("hashchange"/.test(html), "editor: last tab in localStorage (try/catch) and in the URL hash");
   /* every string key in both languages */
@@ -1567,7 +1040,7 @@ function editorTabs() {
   const TEXT = vm.runInNewContext(tb.replace("const TEXT =", "(") + ")");
   const ja = new Set(Object.keys(TEXT.ja)), en = new Set(Object.keys(TEXT.en));
   const used = new Set([...html.matchAll(/data-t="(\w+)"|\bt\("(\w+)"\)|sayK\("(\w+)"|hint = "(\w+)"/g)].map((x) => x[1] || x[2] || x[3] || x[4]));
-  for (const k of ["needDevice", "smpNone", "bankConnect", "bankNone", "selectedTrack", "selectTrack", "drumHelp", "notesHelp", "live", "polling"]) used.add(k);
+  for (const k of ["needDevice", "smpNone", "live", "polling", "bkSkipUp", "bkSkipFm6", "bkSkipUsr1", "fcNorm", "fcFill", "fcNoFill"]) used.add(k);
   const miss = [...used].filter((k) => !ja.has(k) || !en.has(k));
   const odd = [...ja].filter((k) => !en.has(k)).concat([...en].filter((k) => !ja.has(k)));
   ok(!miss.length && !odd.length, `editor: every string in ja and en (${used.size} used${miss.length ? ", missing " + miss : ""}${odd.length ? ", one language only " + odd : ""})`);
@@ -1654,79 +1127,6 @@ function samplesMatch() {
   ok(eq(js.hdr, pyHdr) && eq(js.data, pyData), `samples: editor == sampleio.py (${files.length} WAV formats, ${js.data.length} B)`);
 }
 
-/* ------------------------------------------------------- CHOP (pure helpers) --- */
-function chopTests() {
-  const R = E.SMP.RATE, N = R * 4;
-  /* a break: 8 hits (kick-like and snare-like, loud and ghost) on a quiet noise floor */
-  let seed = 7;
-  const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32) * 2 - 1;
-  const x = new Float64Array(N);
-  for (let i = 0; i < N; i++) x[i] = rnd() * 0.002;
-  const HITS = [0.10, 0.52, 0.93, 1.31, 1.80, 2.26, 2.70, 3.33].map((t) => Math.round(t * R));
-  const AMP = [1, 0.8, 0.25, 0.9, 1, 0.3, 0.85, 0.7];
-  HITS.forEach((h, k) => {
-    for (let i = 0; i < R * 0.3 && h + i < N; i++) {
-      const env = Math.exp(-i / (k % 2 ? 1500 : 3000)) * AMP[k];
-      x[h + i] += env * (k % 2 ? rnd() * 0.8 : Math.sin(2 * Math.PI * 60 * i / R) * 0.9 + rnd() * 0.1);
-    }
-  });
-  const nov = E.chopNovelty(x), hits = E.chopHits(x, nov, 5);
-  const near = (a, b, ms) => Math.abs(a - b) <= ms * R / 1000;
-  ok(hits.length === HITS.length && hits.every((h, i) => near(h, HITS[i] - E.CHOP.PRE, 3)),
-    `chop: hits found (${hits.length} of ${HITS.length}, each within 3 ms of its attack)`);
-  ok(E.chopHits(x, nov, 1).length < HITS.length && E.chopHits(x, nov, 1).length >= 4, "chop: low sensitivity keeps the hard hits only");
-  const late = E.chopSnap(x, nov, HITS[3] + 0.035 * R), early = E.chopSnap(x, nov, HITS[4] - 0.03 * R), none = E.chopSnap(x, nov, 1.1 * R);
-  ok(near(late, HITS[3] - E.CHOP.PRE, 3) && near(early, HITS[4] - E.CHOP.PRE, 3) && none === Math.round(1.1 * R),
-    "chop: a TAP 35 ms late / 30 ms early lands on its hit; away from hits it stays");
-  const grid = E.chopGrid(0, Math.round(R * 60 / 90 * 16), 90, 1);
-  ok(grid.length === 16 && grid[1] === Math.round(R * 60 / 90) && E.chopEqual(100, 900, 4).join() === "100,300,500,700",
-    "chop: grid (16 beats at 90 BPM) and equal parts");
-  const list = E.chopList([10, 50, 400], 1000, 100);
-  ok(list.map((c) => `${c.start}-${c.end}`).join() === "10-50,50-150,400-500", "chop: chops end at the next marker or the max length");
-  const chops = E.chopList(hits, N), zones = E.chopZones(x, chops, 60, 0);
-  const peak = (s) => s.reduce((a, v) => Math.max(a, Math.abs(v)), 0);
-  ok(zones.length === 8 && zones.every((z, i) => z.root === 60 + i && z.lo === z.root && z.hi === z.root && z.s[0] === 0)
-    && Math.abs(peak(zones[2].s) / peak(zones[0].s) - 0.25) < 0.05 && zones[0].fname === "CHOP01_C4.wav" && zones[1].fname === "CHOP02_C#4.wav",
-    "chop: one key each from C4, levels kept (a ghost stays quiet), faded in");
-  const one = E.chopZones(x, chops, 60, 1, 3);
-  ok(one.length === 1 && one[0].root === 60 && one[0].lo === 0 && one[0].hi === 127 && one[0].fname === "CHOP04_C4.wav",
-    "chop: one chop over the whole keyboard");
-  const slot = E.buildSlot("BREAK", zones), v = new DataView(slot.hdr.buffer);
-  ok(slot.hdr[6] === 8 && slot.hdr[32 + 25] === 60 && slot.hdr[32 + 26] === 60 && slot.hdr[32 + 7 * 28 + 25] === 67 && v.getInt16(32 + 20, true) === 60 * 16
-    && slot.data.length <= E.SMP.MAX_DATA, "chop: slot header (8 zones, one key each)");
-  const w = E.parseWav(E.wavFile(zones[1].s));
-  ok(w.sr === R && w.x.length === zones[1].s.length && Math.abs(w.x[100] * 32768 - zones[1].s[100]) < 2, "chop: WAV writer round trip");
-  const dir = mkdtempSync(join(tmpdir(), "sloop-chop-")), zp = join(dir, "c.zip");
-  writeFileSync(zp, E.zipStore(zones.slice(0, 3).map((z) => ({ name: "BREAK/" + z.fname, data: E.wavFile(z.s) }))));
-  const r = py(`import sys, zipfile
-z = zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None
-print(",".join(i.filename + ":" + str(i.file_size) for i in z.infolist()))`, zp).toString().trim();
-  ok(r === zones.slice(0, 3).map((z) => `BREAK/${z.fname}:${44 + z.s.length * 2}`).join(), "chop: ZIP of the WAVs (Python reads it)");
-
-  /* keep / leave out, own lengths, fit: a recording longer than a slot */
-  const opt = [null, { off: true }, { len: 30 }];
-  const kl = E.chopList([10, 50, 400], 1000, 100, opt);
-  ok(kl.map((c) => `${c.start}-${c.end}${c.off ? "x" : ""}/${c.full}`).join() === "10-50/50,50-150x/400,400-430/1000"
-    && E.chopList([10, 400], 1000, 0, [{ len: 9999 }])[0].end === 400,
-    "chop: options (left out, own length over the max, never past the next marker)");
-  const kz = E.chopZones(x, E.chopList(hits, N, 0, [{}, { off: true }, {}, { off: true }]), 60, 0);
-  ok(kz.length === 6 && kz.map((z) => z.root).join() === "60,61,62,63,64,65" && kz[1].fname === "CHOP03_C#4.wav" && kz[2].fname === "CHOP05_D4.wav",
-    "chop: left-out chops: the kept ones on consecutive keys, files keep their numbers");
-  const L = R * 20, long = new Float64Array(L);
-  for (let i = 0; i < L; i++) long[i] = Math.sin(i * 0.05) * 0.5;
-  const marks = E.chopEqual(0, L, 40), room = E.SMP.MAX_DATA * 2;
-  const all = E.chopList(marks, L), pick = E.chopPick(all);
-  ok(pick.length === 16 && pick[15].i === 15 && E.chopPick(all, 1, 7)[0].i === 7, "chop: 40 chops: the first 16 kept go to the slot; mode 1 the selected");
-  const lo = E.chopList(marks, L, 0, marks.map((_, i) => ({ off: i % 4 !== 0 })));   /* keep 10 of 40 (each 0.5 s) */
-  ok(E.chopPick(lo).length === 10 && E.chopFit(E.chopPick(lo), room) === Infinity, "chop: 20 s recording, 10 chops kept: they fit");
-  const many = E.chopPick(E.chopList(marks, L, 0, marks.map((_, i) => ({ off: i >= 16 })))), Lf = E.chopFit(many, room - many.length);
-  const fitted = many.map((c) => ({ ...c, end: Math.min(c.end, c.start + Lf) }));
-  let built = null;
-  try { built = E.buildSlot("LONG", E.chopZones(long, fitted, 60, 0)); } catch (e) { built = null; }
-  ok(Lf < R * 0.5 && Lf > R * 0.4 && built && built.data.length <= E.SMP.MAX_DATA && built.hdr[6] === 16,
-    `chop: Fit to slot: 16 x 0.5 s cut to ${(Lf / R).toFixed(3)} s each, the slot builds`);
-  ok(E.chopFit([{ start: 0, end: 100 }, { start: 0, end: 300 }], 250) === 150, "chop: fit keeps short chops whole, cuts the long ones");
-}
 
 /* ------------------------------------------------------- packages: JS == Python --- */
 async function packages() {
@@ -1864,30 +1264,24 @@ async function updater() {
   ok(e6 && /official FM-1 V15/.test(e6.message), "fm1pkg.js: only the exact official V15 is accepted (SHA-256)");
 }
 
+
 await editorMock();
-await editorLibrarian();
 await editorLive();
-await editorTracks();
 await editorSetGate();
-await editorMixer();
-await editorTrackParam();
 await editorV5();
 await editorV7();
 await editorV8();
-await editorV9();
 await editorBackup();
-  await editorSongs();
-  editorPlay();
-  editorSed();
-  editorMeter();
-  await editorPedalIn();
-await editor25();
+await editorSongs();
+editorPlay();
+editorSed();
+editorMeter();
+await editorPedalIn();
+await editorSong();
 await editorDsyn();
-await editorCart();
 editorTabs();
 editorIcons();
 samplesMatch();
-chopTests();
 await packages();
 await updater();
 console.log(failed ? `WEB TESTS FAILED (${failed})` : "web tests passed");

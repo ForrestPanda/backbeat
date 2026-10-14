@@ -1,9 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* GM drum part (track 4): the SAMPLE engine's KIT set (General MIDI percussion map,
- * tools/gen_samples.py GM_KIT), played by its step pattern, the keys when track 4
- * is selected, and its own MIDI channel (GLO -> DRUMS, default 10). Its own voices
- * (outside the parts' voice budget). One-shots: note-offs are ignored; a closed or
+/* The drum track: its kits (the sampled GM kit and its treatments, tools/gen_samples.py; the synthesised kits,
+ * drum_synth.c; the user slots), played by its step pattern, the keys and MIDI (GLO > MIDI > CH, default 10). NDRUM
+ * voices of its own. One-shots: note-offs are ignored; a closed or
  * pedal hi-hat chokes the open one. LEVEL / REV / DLY: GLO > DRUMS (G_DRLVL, G_DRREV, G_DRDLY);
  * PAN and MUTE: the drum track's P_PAN / P_MUTE. Rendered from the audio ISR. */
 #define NDRUM 6
@@ -25,6 +24,15 @@ static const char *const DRUM_KIT_STYLES[] = {"STUDIO", "SOFT", "PUNCHY", "BRIGH
                                               "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH"};
 _Static_assert(sizeof(DRUM_KIT_NAMES) / sizeof(DRUM_KIT_NAMES[0]) == DRUM_KITS, "a name per kit");
 static uint32_t drum_kit(void) { return (uint32_t)clamp(TDRUM->p[P_E0], 0, DRUM_KITS - 1); }
+/* the kit s detents of a knob on from kit cur: USR1 is passed over (fm1-drummer: its flash holds the songs, sng.c, so
+ * as a kit it plays nothing); the kits keep their numbers (songs and projects store them) */
+static int16_t drum_kit_step(int32_t cur, int32_t s)
+{
+    int32_t k = clamp(cur + s, 0, DRUM_KITS - 1);
+    if (k == (int32_t)DRUM_USR)
+        k = s > 0 ? k + 1 : k - 1;
+    return (int16_t)clamp(k, 0, DRUM_KITS - 1);
+}
 #define DRUM_DEFAULT_KIT DRUM_SAMPLED   /* power-on: 808 */
 
 static struct {
@@ -78,6 +86,14 @@ static const uint8_t LANE_OF_GM[81 - 35 + 1] = {
 static uint32_t lane_of_note(uint32_t note)
 {
     return note < 35u ? 0u : note > 81u ? 13u : LANE_OF_GM[note - 35u];
+}
+/* a key (0..26, from F3) -> its white key index 0..15, -1 = a black key (the song screen, the grid page, the
+ * layers' steps; it was punch.c's, which is gone: docs/drums-only.md) */
+static int32_t key_white(uint32_t k)
+{
+    static const int8_t W[12] = {0, -1, 1, -1, 2, -1, 3, 4, -1, 5, -1, 6};   /* from F */
+    int32_t i = W[k % 12u];
+    return i < 0 ? -1 : (int32_t)(k / 12u) * 7 + i;
 }
 /* the lane of key k (0 = F3 .. 26 = G5): white keys in order, a black key the white key left of it */
 static uint32_t lane_of_key(uint32_t k)
@@ -146,7 +162,7 @@ static uint32_t vel_lvl(uint32_t vel)
 
 /* the metronome (GLO > GLOBAL > CLICK, and the REC count-in), 2.4.1: a voice of its own, mixed after the drum
  * track (fx.c mix_block), so it is heard with every kit (a user kit has no wood block: it was silent), whatever
- * the drum track's mute, a solo, its filter or slicer. A short sine tick: 1568 Hz on a bar's first beat, 1047 Hz
+ * the drum track's mute, a solo or its filter. A short sine tick: 1568 Hz on a bar's first beat, 1047 Hz
  * on the others, about 12 ms to fade by 1/e; its level follows GLO > DRUMS > LVL (100: as loud as the old
  * wood block). It costs a few hundred cycles a block while it sounds, nothing after */
 static struct { uint32_t ph, inc; int32_t env, gain; } click;   /* env: Q30, 0 = silent */
@@ -312,8 +328,8 @@ static void drum_on(uint32_t note, uint32_t vel)
 }
 
 /* adds the drums into the dry mix and the reverb and delay sends; mono != 0: into mono instead, before
- * the pan and the sends (the SLICER, slicer.c slicer_drums, does those after it) */
-static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dly, int32_t *mono, uint32_t n)
+ * the pan and the sends. Not inlined: its loops are the drum budget (tests/target_budget.py drums_mix) */
+static __attribute__((noinline)) void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dly, int32_t *mono, uint32_t n)
 {
     uint32_t k, i;
     int32_t lvl = song.g[G_DRLVL] * 200, send = send_thr(song.g[G_DRREV] * 258, thr_rev),
@@ -412,4 +428,3 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
     drums.peak = pk;
 }
 static void drums_render(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dly, uint32_t n) { drums_mix(ml, mr, rev, dly, 0, n); }
-static void drums_render_mono(int32_t *mono, uint32_t n) { drums_mix(0, 0, 0, 0, mono, n); }

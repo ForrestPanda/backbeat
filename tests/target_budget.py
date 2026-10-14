@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
 """Target-side cost estimate of the hot DSP code, from the pi32v2 objdump listing tools/build.py writes
-(build/felucca.dis). For each engine's render function and the audio ISR: the instructions
+(build/felucca.dis). For the drums' render function and the audio ISR: the instructions
 inside loops (every address range closed by a backward branch: the per-sample loops and what they
 contain), and the hardware divides and calls in them. cost = the loop instructions, each weighted 4 per
 level of nesting (an inner loop runs several times per sample) and 1 + 8 for a divide (many cycles). A static count, not a cycle count: it changes only when the compiled code changes,
@@ -14,11 +14,7 @@ import os
 import re
 import sys
 
-FUNCS = ["analog_render", "digital_render", "phase_render", "lofi_render", "sample_render", "formant_render",
-         "trio_render", "trio_pass", "drawbar_render", "drawbar_block",
-         "grain_render", "grain_block", "slicer_track", "drums_mix",
-         "fm6_op_run", "fm6_op_fb", "fm6_render",     # FM6 (SLOOP 2.4): the operator loops (noinline), the voice
-         "fm1_alnk0_irq"]
+FUNCS = ["drums_mix", "mix_block", "fm1_alnk0_irq"]   # (drums only: the synth engines' render loops went with them)
 TOL = 0.10                      # exact (no noise): small edits pass, a grown render loop does not
 DIV_W = 8                       # a divide weighs 1 + 8 instructions
 NEST = 4                        # an instruction in a loop inside a loop weighs 4, two deep 16, ...

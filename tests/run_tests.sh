@@ -5,19 +5,13 @@
 #   tests/run_tests.sh
 #
 # Regression suite (tests/regress.c, tests/target_budget.py; details at the top of regress.c):
-#   golden renders  every engine x preset, the drum kit, voice modes, FX sends, a 4-track mix: one hash
-#                   each in tests/golden.txt. A change of the sound fails with the list of renders.
-#   health          clipping, DC, peak level, voices free after the release, silence at the end.
-#   CPU             cost / sample per preset and mix, relative to the idle + drums mix (tests/cpu_baseline.txt,
+#   golden renders  every drum kit, the drum track's FX (sends, INSERT, FILTER), the master: one hash each in
+#                   tests/golden.txt. A change of the sound fails with the list of renders.
+#   health          clipping, DC, peak level, silence at the end.
+#   CPU             cost / sample per render, relative to the idle + drums mix (tests/cpu_baseline.txt,
 #                   +25 %; counted by the kernel or under callgrind, else timed at +35 %), ns printed;
 #                   target: loop instructions of the render functions in build/felucca.dis
 #                   (tests/target_budget.txt, +10 %; exact, static).
-#   voices          the budget of 8, steal fades, MONO / LEGATO / UNISON keep their note, the VOICE cap,
-#                   no hanging notes on any MIDI / key routing.
-# FM6 (tests/fm6_test.c): the 6-operator FM engine (firmware/src/eng_fm6.c, fm6_core.c, fm6_bank.c): the 32
-#                   algorithms' carriers, the operator envelopes ending the voice, retrigger, DC / clipping, the
-#                   eight macros, the patch formats (packed, SysEx), the 6-voice cap, the patch bank on a
-#                   simulated NOR; demos in build/fm6_demo/.
 # After an intended change of the sound: GOLDEN_UPDATE=1 sh tests/run_tests.sh, review the diff
 # of tests/golden.txt, commit it with the change. After an intended change of the cost (or a new
 # compiler): BUDGET_UPDATE=1 (rewrites cpu_baseline.txt and target_budget.txt). VERBOSE=1: every render.
@@ -31,10 +25,9 @@ fail=0
 run() { echo "== $1"; name=$1; shift; "$@" || { echo "FAILED: $name"; fail=1; failed="$failed, $name"; }; }
 
 [ -f build/felucca.fwsc ] || { echo "run ./build.sh first"; exit 1; }
-# the generated headers the FM6 engine needs (tools/build.py generate() makes them too; no Pillow needed)
+# the generated tables (tools/build.py generate() makes them too; no Pillow needed)
 mkdir -p build/gen
 [ build/gen/felucca_tables.h -nt tools/gen_tables.py ] || python3 tools/gen_tables.py build/gen/felucca_tables.h
-[ build/gen/felucca_fm6.h -nt tools/gen_fm6_patches.py ] || python3 tools/gen_fm6_patches.py build/gen/felucca_fm6.h
 
 $CC -o "$OUT/storage_test" tests/storage_test.c
 run "flash storage (A/B, torn writes)" "$OUT/storage_test"
@@ -45,7 +38,7 @@ run "application USB recovery and boot-loop guard" "$OUT/recovery_test"
 $CC -o "$OUT/arranger_test" tests/arranger_test.c
 run "song order, timing, repeats and missing scenes" "$OUT/arranger_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/song_audio_test" tests/song_audio_test.c -lm
-run "song: four simultaneous tracks, scene transition and stop" "$OUT/song_audio_test" "$OUT/song-demo.wav"
+run "song: two drum sections, scene transition and stop" "$OUT/song_audio_test" "$OUT/song-demo.wav"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/song_ui_test" tests/song_ui_test.c -lm
 run "song screen: commands, load (OCT+ twice), display bounds" "$OUT/song_ui_test" "$OUT/song-screen.ppm"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/pedal_test" tests/pedal_test.c -lm
@@ -83,13 +76,11 @@ $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/dsyn_test" tests/dsyn_test.c -lm
 run "SYN1..SYN4 drum kits and the editor's DRUM SYNTH commands (v10)" "$OUT/dsyn_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/font_test" tests/font_test.c
 run "the screen font at 1 bit a pixel: every glyph, the same pixels as 2.5" "$OUT/font_test"
-$CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/punch_test" tests/punch_test.c -lm
-run "punch-in FX: 27 effects (11 on the black keys), bounded, dry after release, FX-held keys" "$OUT/punch_test" "$OUT/punch-fx.wav"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/fx251_test" tests/fx251_test.c -lm
-run "after Felucca 1.4 / 1.5: INSERT, filter TYPE, ENV SYNC, LFO 2, drum mutes, MIDI LEARN" "$OUT/fx251_test"
+run "after Felucca 1.4 / 1.5: the drums INSERT, mutes, MIDI LEARN, TEXTURE, limiter, THROW" "$OUT/fx251_test"
 
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/ui_pages_test" tests/ui_pages_test.c -lm
-run "live UI: pages, layers (punch, steps, erase, roll, key, mix), holds, drums, REC, fuzz" "$OUT/ui_pages_test" "$OUT"
+run "live UI: pages, layers (fx, steps, erase, roll, key, mix), holds, drums, REC, fuzz" "$OUT/ui_pages_test" "$OUT"
 # no divide by 0 (the FM-1 runs with the div0 trap off, hal/fm1_irq.h: a real one would give a wrong value
 # silently): the UI fuzz, the sequencer, the projects and a minute of random live use, with UBSan
 UBSAN="${CC_UB:-cc} -O1 -w -fsanitize=integer-divide-by-zero -fno-sanitize-recover=integer-divide-by-zero -Ibuild/gen -Ifirmware/src -Ifirmware/hal"
@@ -102,7 +93,7 @@ run "no divide by zero (UBSan): UI fuzz, sequencer, projects, a minute of live u
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/soak_test" tests/soak_test.c -lm
 run "soak: ${SOAK_MIN:-10} minutes of random live use (bounded, no hanging voices, idle after stop)" "$OUT/soak_test" "${SOAK_MIN:-10}"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/stress_test" tests/stress_test.c -lm
-run "stress (2.4): FONT_L = FONT_S at 2x, hard random use of every 2.4 addition, clean stop" "$OUT/stress_test" "${STRESS_FRAMES:-40000}"
+run "stress: FONT_L = FONT_S at 2x, hard random use of the drums and the UI, clean stop" "$OUT/stress_test" "${STRESS_FRAMES:-40000}"
 # the same under AddressSanitizer + UBSan: any read or write out of bounds stops it (left shifts of negative values
 # and the FM6 phase's wrap-around are left out: the DSP's two's complement idioms, as every compiler builds them)
 ASAN="${CC_UB:-cc} -O1 -g -w -fsanitize=address,undefined -fno-sanitize=shift-base,signed-integer-overflow -fno-sanitize-recover=all -Ibuild/gen -Ifirmware/src -Ifirmware/hal"
@@ -111,9 +102,6 @@ if $ASAN -o "$OUT/stress_asan" tests/stress_test.c -lm 2>/dev/null; then
 else
     echo "(stress under ASan: this compiler has no AddressSanitizer, skipped)"
 fi
-
-$CC -o "$OUT/upreset_test" tests/upreset_test.c
-run "user presets (UP_PUT parser, bank round trip, versions)" "$OUT/upreset_test"
 
 $CC -o "$OUT/midi_uart_test" tests/midi_uart_test.c
 run "TRS MIDI parser" "$OUT/midi_uart_test"
@@ -140,25 +128,16 @@ $CC -o "$OUT/ldr_test" tests/ldr_test.c
 run "update loader: other app -> this build" "$OUT/ldr_test" "$OUT/old.fwsc" build/felucca.fwsc
 
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/hostsim" tests/hostsim.c -lm
-$CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/scale_test" tests/scale_test.c -lm
-run "scales: white-key mapping and note lifecycle" "$OUT/scale_test"
-run "DSP render (ANALOG preset 0)" "$OUT/hostsim" 0 0 1 "$OUT/render.wav"
+run "DSP render (the groove on the power-on kit)" "$OUT/hostsim" 5 "$OUT/render.wav"
 mkdir -p build/tracks_demo
-run "TRACKS: 4-track pattern, live recording (lengths, swing), voice budget, engine switch, cost" env TRACKS=build/tracks_demo "$OUT/hostsim" 0 0 1 "$OUT/tracks.wav"
+run "TRACKS: the groove, TRS MIDI IN, the cost of the drums" env TRACKS=build/tracks_demo "$OUT/hostsim"
 $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/project_test" tests/project_test.c -lm
-run "project formats (FUN4 / FUN3 / FUN2 / FUN1 -> FUN5), capture / apply, autosave" "$OUT/project_test"
-$CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/slicer_test" tests/slicer_test.c -lm
-mkdir -p build/slicer_demo
-run "SLICER: no clicks, timing, sync with the sequencer, STUT, cost, demos" "$OUT/slicer_test" build/slicer_demo
-$CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/fm6_test" tests/fm6_test.c -lm
-mkdir -p build/fm6_demo
-run "FM6: algorithms, envelopes, retrigger, DC, clipping, macros, patch formats, voices, the bank, demos" "$OUT/fm6_test" build/fm6_demo
+run "project formats (DRM1; FUN6 / FUN5 / FUN4 -> their drum track), capture / apply" "$OUT/project_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/regress" tests/regress.c -lm
 # the CPU budget: counted by the kernel on macOS; elsewhere under callgrind when valgrind is there (exact, ~45 s;
 # SKIP_CPU_VALGRIND=1 to time instead, which is only a rough check)
 if [ -z "$SKIP_CPU_VALGRIND" ] && command -v valgrind >/dev/null 2>&1; then export CPU_VALGRIND=1; fi
 run "regression: golden renders, health, voices, CPU budget" "$OUT/regress" tests/golden.txt tests/cpu_baseline.txt
-# SLICE (tests/slice_test.c) needs a FELUCCA_SLICE=1 build; the engine is not built by default
 
 run "regression: target cost of the render loops" python3 tests/target_budget.py \
     build/felucca.dis tests/target_budget.txt

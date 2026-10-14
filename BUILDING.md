@@ -56,7 +56,7 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 
 | Flag | Default | |
 | --- | --- | --- |
-| `FELUCCA_FLASH` | 1 | settings, presets and projects in flash |
+| `FELUCCA_FLASH` | 1 | settings, projects and songs in flash |
 | `FELUCCA_OTA` | 1 | update entry (needs `FELUCCA_FLASH`) |
 | `FELUCCA_CDC` | 1 | USB serial console |
 | `FELUCCA_UAC` | 1 | USB audio input: the master output, 44.1 kHz stereo (after Felucca 1.0) |
@@ -64,10 +64,10 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 
 ## Samples
 
-The CC0 instrument samples that the SAMPLE engine uses are in `assets/samples-cc0/`
-(Versilian Studios, see `ATTRIBUTION.txt` there). `tools/fetch_cc0.py` downloads them
-again from the source repositories. Without that folder the build still works and the
-SAMPLE engine has only the generated drum kit.
+The CC0 samples are in `assets/samples-cc0/` (Versilian Studios, see `ATTRIBUTION.txt` there);
+fm1-drummer builds only the drum kit (`KIT`, the GM kit) into the firmware (`tools/gen_samples.py`).
+`tools/fetch_cc0.py` downloads them again from the source repositories. Without that folder the build
+still works and the GM kit has only the generated drum sounds.
 
 ## Tests
 
@@ -75,13 +75,13 @@ SAMPLE engine has only the generated drum kit.
 tests/run_tests.sh
 ```
 
-Runs the host tests (flash storage, user presets, MIDI parser, update entry, update
-loader, a DSP render, the 4-track mix, project formats, the SLICER, the regression suite,
-the command-line installer) and, with Node.js, the web page tests. Run it after `./build.sh`
-(it uses `build/` and needs `AC79_SDK` set as for the build).
+Runs the host tests (flash storage, MIDI parser, update entry, update loader, the drums'
+render, project formats, the sequencer, the songs and the pedal, the UI pages, a soak and a stress
+run, the regression suite, the command-line installer) and, with Node.js, the web page tests. Run it
+after `./build.sh` (it uses `build/` and needs `AC79_SDK` set as for the build).
 
-The regression suite (`tests/regress.c`) renders every engine and preset and compares a
-hash of each render with `tests/golden.txt`; it also checks levels, voices and the CPU
+The regression suite (`tests/regress.c`) renders every drum kit, the drum track's effects and the
+master, and compares a hash of each render with `tests/golden.txt`; it also checks levels and the CPU
 cost (`tests/cpu_baseline.txt`, `tests/target_budget.txt`). The host CPU cost is relative
 to the idle + drums mix, counted by the kernel on macOS and under callgrind on Linux when
 valgrind is installed (exact, about 45 s more); without either it is timed, a rough check.

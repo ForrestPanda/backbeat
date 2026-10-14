@@ -3,10 +3,11 @@
  * any page closes it; SELECT steps through the twelve styles (the name shows a second); a layer held shows
  * its screen as ever, then the visualiser comes back. The keys, PLAY and REC work as always.
  *   1 OSCILLOSCOPE  2 SPECTRUM  3 SPECTROGRAM  4 LISSAJOUS  5 VU METERS  6 CIRCLE
- *   7 TAPE  8 LCD  9 BOUNCE  10 ORBIT  11 WIRES  12 SLOOP (the logo: the sail's bands are the tracks)
+ *   7 TAPE  8 LCD  9 BOUNCE  10 ORBIT  11 WIRES  12 SLOOP (the logo: the sail's bands are the kit's groups)
  * It reads what the audio already leaves for the UI: the scope buffers (audio.c, the mix at 22 kHz, left and
- * right, as if MASTER were all the way up: the picture does not follow the volume knob, even at 0), the tracks' peaks (fx.c / drums.c, as the TRACKS meters read them), the notes that started
- * (voice.c vis_hit) and the transport clock. Everything is drawn in the main loop, every other frame, in two
+ * right, as if MASTER were all the way up: the picture does not follow the volume knob, even at 0), the drums' peak
+ * (drums.c, as the TRACKS meter reads it), the hits that started in each of the kit's four groups (voice.c vis_hit:
+ * kicks, snares, hats and cymbals, toms and percussion: the four voices of the styles) and the transport clock. Everything is drawn in the main loop, every other frame, in two
  * bands of 120 rows (the canvas holds 124): no cost to the audio. */
 #define VIS_N 12u
 static const char *const VIS_NAME[VIS_N] = {"OSCILLOSCOPE", "SPECTRUM", "SPECTROGRAM", "LISSAJOUS", "VU METERS",
@@ -206,7 +207,7 @@ static void vis_bands(int16_t *out)
 static void vis_update(void)
 {
     uint32_t i, w, hit, now = fm1_ms;
-    int32_t pk[4], mpk = 0;
+    int32_t dpk, mpk = 0;
     /* the scope: the last 512 frames (left, right) */
     w = scope_w;
     for (i = 0; i < VIS_FFT; i++) {
@@ -215,13 +216,9 @@ static void vis_update(void)
         if (vis_l[i] > mpk) mpk = vis_l[i];
         if (-vis_l[i] > mpk) mpk = -vis_l[i];
     }
-    /* the tracks' peaks since the last look (as the TRACKS meters take them) and the notes that started */
+    /* the drums' peak since the last look (as the TRACKS meter takes it) and the groups hit */
     fm1_irq_off();
-    for (i = 0; i < NPART; i++) {
-        pk[i] = trk[i].peak;
-        trk[i].peak = 0;
-    }
-    pk[3] = drums.peak;
+    dpk = drums.peak;
     drums.peak = 0;
     hit = vis_hit;
     vis_hit = 0;
@@ -231,8 +228,7 @@ static void vis_update(void)
     }
     fm1_irq_on();
     for (i = 0; i < 4u; i++) {
-        int32_t v = trk_level(i) && !trk[i].p[P_MUTE] ? vis_lvl(pk[i]) : 0;   /* (as the TRACKS meters) */
-        vs.lvl[i] = (int16_t)v;
+        int32_t v;
         if ((hit >> i) & 1u) {
             vs.flash[i] = 8;
             vs.wn[i] = (uint8_t)(2u + vis_note[i] % 12u / 2u);
@@ -242,6 +238,8 @@ static void vis_update(void)
         } else if (vs.flash[i]) {
             vs.flash[i]--;
         }
+        v = song.g[G_DRLVL] && !TDRUM->p[P_MUTE] ? vis_lvl(dpk) * vs.flash[i] / 8 : 0;   /* (a group: while its hit lasts) */
+        vs.lvl[i] = (int16_t)v;
         vs.wamp[i] = (int16_t)(vs.wamp[i] > v ? vs.wamp[i] - (vs.wamp[i] - v) / 6 - 4 : v);
         if (vs.wamp[i] < 0) vs.wamp[i] = 0;
         /* BOUNCE physics: gravity, a bounce off the floor */

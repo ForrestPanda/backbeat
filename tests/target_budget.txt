@@ -10,21 +10,13 @@
 # fm1-drummer (2026-10-12): fm1_alnk0_irq re-based to what SLOOP 2.6 itself measures with this toolchain
 # (268: the same cost on the untouched upstream build; the ISR grew after 2.0 and the line was not updated);
 # the FM6 lines added from the same build. Everything else as reviewed.
-analog_render 638
-digital_render 333
-phase_render 79
-lofi_render 128
-sample_render 126
-formant_render 314
-trio_render 341
-trio_pass 175
-drawbar_render 267
-drawbar_block 102
-grain_render 1734
-grain_block 138
-slicer_track 825
-drums_mix 6153
-fm6_op_run 72
-fm6_op_fb 26
-fm6_render 363
-fm1_alnk0_irq 268
+# drums only, stage 2 (2026-10-14): without the punch-ins the compiler inlines mix_block into fm1_alnk0_irq: the
+# mix's loops are counted there now (the same work, measured in another function): 9600.
+# drums only, stage 7 (2026-10-14): the engines' lines out with the engines (analog .. grain, FM6). Without them
+# the compiler no longer inlines mix_block into fm1_alnk0_irq, and inlines more of the mix (the buses, the master)
+# into mix_block: mix_block gets its own line (18296), the ISR is back to its own loops (79); drums_mix +6 % (6533:
+# the same source, other inlining around it). The host CPU check (regress.c, callgrind) is the primary one.
+# drums only, stage 8: one track: mix_block's loops over the tracks are one pass now (-20 %).
+drums_mix 6533
+mix_block 14599
+fm1_alnk0_irq 79

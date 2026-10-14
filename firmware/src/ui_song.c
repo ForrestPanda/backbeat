@@ -93,8 +93,6 @@ static void song_screen_input(uint32_t pressed, uint32_t home)
     for (k = 0; k < NB; k++) {
         if (!((pressed >> panel.btn[k]) & 1u)) continue;
         b = k;
-        if ((b == B_PLAY || b == B_REC) && ft_owns_press())
-            continue;                            /* (they close a free take: seq.c) */
         if (b == B_PLAY) {
             if (!song.playing && arrangement_enabled && !arr_valid(&arrangement, arrangement_ready())) {
                 ui_message("EMPTY SECTION: REC");

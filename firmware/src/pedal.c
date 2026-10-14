@@ -118,8 +118,8 @@ static void pedal_section(uint32_t s, uint32_t fillbar)
         arrangement_enabled = 0;                  /* a pedal plays sections, not the chain */
         pedal_name(s, b);
         str_cpy(sng_ui_next, b, sizeof sng_ui_next);   /* (the screen: cued, in amber, until it starts) */
-        if (pedal.count && !ci_on && !ft_on && !mclk_on()) {   /* the count-in: the clicks, the start after them
-                                                   * (events_block; not with a MIDI clock master, nor a free take) */
+        if (pedal.count && !ci_on && !mclk_on()) {   /* the count-in: the clicks, the start after them
+                                                   * (events_block; not with a MIDI clock master) */
             ci_meter = (uint8_t)(sng_cur >= 0 ? sng_meter(s) : 0u);   /* (the section's meter: its bars of clicks) */
             ci_pedal = (uint8_t)(meter_num(ci_meter) * (uint32_t)pedal.count);
             ci_on = 1;

@@ -17,11 +17,11 @@
 #include "lcd.c"
 #include "gfx.c"
 #include "core.h"
-#include "engines.c"
+#include "dsp.c"
+#include "samples.c"         /* the drum samples and the user slots */
 #include "drums.c"
 #include "params.c"
 #include "voice.c"
-#include "slicer.c"          /* per-track SLICER insert, used by fx.c */
 #include "fx.c"
 #ifndef FELUCCA_OTA
 #define FELUCCA_OTA 1            /* M-UPGRADE update entry; needs FELUCCA_FLASH */
@@ -119,7 +119,6 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
 }
 #include "storage.c"
 #endif
-#include "upreset.c"          /* user presets (RAM mirror; flash with FELUCCA_FLASH) */
 #include "project.c"
 #if FELUCCA_OTA
 static uint8_t recovery_active;

@@ -17,16 +17,19 @@
 #define ST_PAYLOAD_MAX (ST_SECTOR - ST_PAYLOAD_OFF)
 
 /* flash map (FL_DATA 0x97000..0xDFFFF, FL_GLOB 0xFC000..): settings 0xFC000 / 0xFD000, projects
- * 0x97000..0x9EFFF, user sample slots 0xA0000..0xDBFFF (eng_sample.c), user preset banks 0xDC000..0xDFFFF
- * (upreset.c); the working project (autosave, project.c): copy A 0x9F000, copy B 0xFE000 (the two sectors
- * left: A/B needs no two neighbours); the FM6 patch bank (fm6_bank.c, SLOOP 2.4): 0xE5000 / 0xE6000, the first
- * two sectors of the free 0xE5000..0xFBFFF after the update staging (FL_FM6, fm1_flash.h) */
-enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_AUTOSAVE = OBJ_UPRESET0 + 2, OBJ_FM6BANK,
-       OBJ_SONG0, OBJ_ARRSET = OBJ_SONG0 + 8, OBJ_COUNT };   /* fm1-drummer: 8 songs 0xA0000..0xAFFFF (A/B) and the
+ * 0x97000..0x9EFFF, user sample slots 0xA0000..0xDBFFF (samples.c); the working project (autosave, project.c): copy A
+ * 0x9F000, copy B 0xFE000 (the two sectors left: A/B needs no two neighbours). Drums only: SLOOP's user preset banks
+ * (0xDC000..0xDFFFF, objects 5 and 6) and FM6 patch bank (0xE5000 / 0xE6000, object 8) are gone; their ids stay
+ * retired, not reused (a sector's header names its object: renumbering would orphan every song and project saved) */
+enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_AUTOSAVE = OBJ_PROJECT0 + 6, OBJ_SONG0 = OBJ_AUTOSAVE + 2,
+       OBJ_ARRSET = OBJ_SONG0 + 8, OBJ_COUNT };              /* fm1-drummer: 8 songs 0xA0000..0xAFFFF (A/B) and the
                                                               * pedal settings 0xB0000 / 0xB1000: the USR1 sample slot's
-                                                              * place (eng_sample.c SMP_USER_BASE), which the drummer
+                                                              * place (samples.c SMP_USER_BASE), which the drummer
                                                               * gives up (editor.c refuses SMP_* on it); 0xE7000.. is
                                                               * USR4's (sng.c) */
+_Static_assert(OBJ_AUTOSAVE == 7 && OBJ_SONG0 == 9 && OBJ_ARRSET == 17 && OBJ_COUNT == 18, "object ids as stored in flash");
+#define OBJ_RETIRED (1u << 5 | 1u << 6 | 1u << 8)   /* the user preset banks, the FM6 bank: no sector, never read or written */
+static int st_obj_ok(uint32_t obj) { return obj < OBJ_COUNT && !((OBJ_RETIRED >> obj) & 1u); }
 
 typedef struct {
     uint32_t magic;
@@ -60,12 +63,8 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
         return 0xFC000u + copy * ST_SECTOR;
     if (obj == OBJ_AUTOSAVE)
         return copy ? 0xFE000u : 0x9F000u;
-    if (obj == OBJ_FM6BANK)
-        return 0xE5000u + copy * ST_SECTOR;
     if (obj >= OBJ_SONG0 && obj <= OBJ_ARRSET)             /* fm1-drummer: 0xA0000.., OBJ_ARRSET at 0xB0000 (USR1's place) */
         return 0xA0000u + (obj - OBJ_SONG0) * 2u * ST_SECTOR + copy * ST_SECTOR;
-    if (obj >= OBJ_UPRESET0 && obj < OBJ_AUTOSAVE)
-        return 0xDC000u + (obj - OBJ_UPRESET0) * 2u * ST_SECTOR + copy * ST_SECTOR;
     return 0x97000u + (obj - OBJ_PROJECT0) * 2u * ST_SECTOR + copy * ST_SECTOR;
 }
 
@@ -73,7 +72,7 @@ static uint8_t st_buf[ST_PAYLOAD_MAX] __attribute__((aligned(4)));
 
 static int st_head(uint32_t obj, uint32_t copy, st_hdr_t *h)   /* commit record valid: 0 */
 {
-    if (obj >= OBJ_COUNT || copy > 1u)
+    if (!st_obj_ok(obj) || copy > 1u)
         return -1;
     if (st_read(st_sector(obj, copy), h, sizeof *h))
         return -1;
@@ -138,7 +137,7 @@ static int st_save3(uint32_t obj, const void *src, uint32_t len, const void *src
     uint32_t seq, base, off;
     int cur, rc;
     st_hdr_t h;
-    if (obj >= OBJ_COUNT || len + len2 + len3 > ST_PAYLOAD_MAX)
+    if (!st_obj_ok(obj) || len + len2 + len3 > ST_PAYLOAD_MAX)
         return -1;
     cur = st_current(obj, &h);
     seq = cur < 0 ? 0u : h.seq;

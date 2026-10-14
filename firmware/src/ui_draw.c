@@ -1,24 +1,15 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Felucca UI drawing: status bar (top), columns + gauges, graphs, focus readout,
- * footer (steps + engine / preset / page). */
+ * footer (steps + the drum kit / page). */
 static void draw_menu(void);
 static uint32_t str_hash(uint32_t h, const char *s);
 
 /* --------------------------------------------------------- drawing --- */
-static int is_eng_name(const char *s)                 /* one of the ENGINES[]->name strings */
-{
-    uint32_t e;
-    for (e = 0; e < NENGINES; e++)
-        if (s == ENGINES[e]->name)
-            return 1;
-    return 0;
-}
-
 /* at most 5 characters, and no wider than maxw */
 static void fit(char *d, const char *src, const felucca_font_t *f, int32_t maxw)
 {
-    str_cpy(d, src, is_eng_name(src) ? 8 : 6);           /* engine names are kept whole */
+    str_cpy(d, src, 6);
     while (d[0] && text_w(f, d) > maxw)
         d[str_len(d) - 1u] = 0;
 }
@@ -42,8 +33,7 @@ static void draw_head(void)
     char b[16];
     uint32_t i;
     int32_t x;
-    uint32_t rec = (song.rec >> song.sel) & 1u ? 2u : song.rec != 0u;   /* 2 the selected track armed, 1 another */
-    uint32_t sig = (uint32_t)song.playing * 3u + rec * 5u + (uint32_t)(song.octave + 8) * 11u + song.sel * 13131u +
+    uint32_t sig = (uint32_t)song.playing * 3u + (uint32_t)(song.octave + 8) * 11u +
                    (ui.msg_t ? str_hash(7u, ui.msg) : 0u) + (uint32_t)song.g[G_BPM] * 101u + (ui.bpm_t != 0) * 31u +
                    (uint32_t)batt_shown() * 7777u + (usb.config && !usb.suspended) * 99991u + mlu.on * 7919u
 #if FELUCCA_DRUMMER
@@ -65,8 +55,6 @@ static void draw_head(void)
     } else {
         cv_rect(4, 5, 8, 8, C_HI);
     }
-    if (rec)                                          /* recording armed: white = this track, gray = another */
-        te_disc(21, 9, 4, rec == 2u ? TE_RED : C_GRAY);
     fmt_int(b, song.g[G_BPM]);
     x = 32;
     if (FELUCCA_ICONS) {                              /* metronome, then the BPM */
@@ -99,15 +87,15 @@ static void draw_head(void)
         cv_text(x + 12, 1, &FONT_S, "OCT", C_GRAY);
         cv_text(x + 40, 1, &FONT_S, b, C_HI);
     }
-    if (FELUCCA_ICONS) {                              /* the selected track: tape + number */
+    if (FELUCCA_ICONS) {                              /* the track: tape + D (the drums, the only one) */
         cv_icon(156, 2, ICON_TAPE, C_GRAY);
-        b[0] = (char)('1' + song.sel);
+        b[0] = 'D';
         b[1] = 0;
-        cv_rect(168, 2, 12, 16, TE_COL[song.sel & 3u]);
+        cv_rect(168, 2, 12, 16, TE_COL[0]);
         cv_text(170, 1, &FONT_S, b, C_BLACK);
     } else {
         b[0] = 'T';
-        b[1] = (char)('1' + song.sel);
+        b[1] = 'D';
         b[2] = 0;
         cv_text(158, 1, &FONT_S, b, C_HI);
     }
@@ -153,7 +141,7 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
     if (icon == ICON_AUTO)
         icon = icon_for_label(label);
     fit(l, label, &FONT_S, 54 - LABEL_X);
-    fit(v, val, &FONT_S, is_eng_name(val) ? 56 : 40);   /* engine names whole */
+    fit(v, val, &FONT_S, 40);
     fit(u, unit, &FONT_S, 54 - text_w(&FONT_S, v) - 3);
     str_cpy(key, l, 8);                                 /* cache key: texts + colour + gauge */
     str_cpy(key + str_len(key), "|", 2);
@@ -200,175 +188,27 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
 /* Matches voice.c: attack is linear, decay and release are exponential
  * (env += (target - env) * k each tick, ~99 % after the set time). Time
  * axis is the parameter value (the times themselves are exponential). */
-static void graph_adsr(const track_t *t, uint16_t c)
-{
-    int32_t a = 4 + t->p[P_ATK] * 50 / 127, d = 6 + t->p[P_DEC] * 50 / 127, r = 6 + t->p[P_REL] * 60 / 127;
-    int32_t top = 8, bot = 90, sus = t->p[P_SUS] * 1000 / 127;          /* 0..1000 */
-    int32_t x0 = 6, x1 = x0 + a, x3 = 232 - r, i, px, py;
-    int32_t e = 32768;                                                  /* exp(-4.6 u), Q15 */
-#define EGY(lvl) (bot - (lvl) * (bot - top) / 1000)
-    cv_line(x0, bot, x1, top, c);                                       /* attack: linear */
-    px = x1;
-    py = top;
-    for (i = 1; i <= d; i++) {                                          /* decay: exponential to SUS */
-        int32_t lvl;
-        e = (e * (32768 - 150733 / d)) >> 15;           /* k^d = exp(-4.6) */
-        lvl = sus + ((1000 - sus) * e >> 15);
-        cv_line(px, py, x1 + i, EGY(lvl), c);
-        px = x1 + i;
-        py = EGY(lvl);
-    }
-    cv_line(px, py, x3, EGY(sus), c);                                    /* sustain */
-    px = x3;
-    py = EGY(sus);
-    e = 32768;
-    for (i = 1; i <= r; i++) {                                          /* release: exponential to 0 */
-        e = (e * (32768 - 150733 / r)) >> 15;
-        cv_line(px, py, x3 + i, EGY(sus * e >> 15), c);
-        px = x3 + i;
-        py = EGY(sus * e >> 15);
-    }
-    cv_line(0, bot + 1, 239, bot + 1, C_LINE);
-#undef EGY
-}
-
-static void graph_lfo(const track_t *t, uint16_t c)
-{
-    int32_t x, py = 50;
-    uint32_t ph = (uint32_t)t->p[P_LPHASE] << 25;
-    for (x = 0; x < 240; x++) {                      /* (lfo_wave only reads the track) */
-        int32_t y = 50 - lfo_wave((track_t *)t, ph + (uint32_t)x * (0xFFFFFFFFu / 120u)) * 38 / 32768;
-        if (t->p[P_LWAVE] == 4)
-            y = 50 - ((int32_t)((x / 20 * 2654435761u) >> 16) - 32768) * 38 / 32768;
-        if (x)
-            cv_line(x - 1, py, x, y, c);
-        py = y;
-    }
-    cv_line(0, 50, 239, 50, C_LINE);
-}
-
 static void graph_steps(const track_t *t, uint16_t c)
 {
     uint32_t i, len = (uint32_t)t->p[P_SLEN];
     for (i = 0; i < NSTEP; i++) {                    /* 4 rows of 16 thin bars */
         int32_t x = 6 + (int32_t)(i % 16u) * 14 + (int32_t)(i % 16u) / 4 * 4, y = 6 + (int32_t)(i / 16u) * 24;
-        const step_t *st = &t->step[i];
         if (i >= len)
             continue;
-        if (step_on(st))
+        if (trk_step_on(t, i))
             cv_rect(x, y, 1, 14, c);
-        else if (st->time == ST_TIE)
-            cv_rect(x, y + 6, 1, 8, C_DIM);
         else
             cv_rect(x, y + 13, 1, 1, C_DIM);
-        if (st->flags & SF_ACCENT)
-            cv_rect(x - 1, y - 2, 3, 1, c);
         if ((song.playing && i == t->seq_idx) || i == ui.cursor)
             cv_rect(x - 1, y + 16, 3, 3, C_WHITE);
     }
 }
-/* STEP page: the cursor's 16-step bank as a little piano roll */
-static void graph_roll(const track_t *t, uint16_t c)
-{
-    uint32_t i, j, len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u;
-    int32_t lo = 127, hi = 0, prev_y = -1;
-    for (i = 0; i < len; i++)
-        for (j = 0; j < t->step[i].n; j++) {
-            if (t->step[i].note[j] < lo)
-                lo = t->step[i].note[j];
-            if (t->step[i].note[j] > hi)
-                hi = t->step[i].note[j];
-        }
-    if (lo > hi) {
-        lo = 48;
-        hi = 72;
-    }
-    if (hi - lo < 12)
-        hi = lo + 12;
-    for (i = 0; i < 16u; i++) {
-        uint32_t si = base + i;
-        const step_t *st = &t->step[si];
-        int32_t x = (int32_t)i * 15, yb = 86;
-        if (si >= len)
-            break;
-        if (si == ui.cursor)
-            cv_rect(x + 5, 92, 3, 3, C_WHITE);
-        if (song.playing && si == t->seq_idx)
-            cv_rect(x + 1, 97, 12, 1, C_WHITE);
-        if (st->time == ST_TIE && prev_y >= 0) {
-            cv_rect(x, prev_y, 14, 1, C_GRAY);
-            continue;
-        }
-        if (!step_on(st)) {
-            cv_rect(x + 6, yb, 2, 1, C_DIM);
-            prev_y = -1;
-            continue;
-        }
-        for (j = 0; j < st->n; j++) {
-            int32_t y = 80 - (st->note[j] - lo) * 74 / (hi - lo);
-            cv_rect(x + 2, y, 10, 1, (st->flags & SF_ACCENT) ? C_WHITE : c);
-            if (j == 0)
-                prev_y = y;
-        }
-        if (st->flags & SF_SLIDE)
-            cv_line(x + 11, prev_y, x + 17, prev_y + 2, c);
-    }
-}
-static void graph_scale(const track_t *t, uint16_t c)
-{
-    static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
-    uint32_t i, mask = scale_mask(t);
-    for (i = 0; i < 12u; i++) {
-        uint32_t deg = (i + 12u - (uint32_t)t->p[P_ROOT]) % 12u;
-        int32_t x = 6 + (int32_t)i * 19;
-        uint16_t col = (mask >> deg) & 1u ? (deg == 0u ? C_WHITE : c) : C_DIM;
-        cv_rect(x, BLACK[i] ? 10 : 40, 16, 1, col);
-        cv_rect(x + 7, BLACK[i] ? 10 : 40, 1, 40, col);
-    }
-}
-
-static void graph_fx(const track_t *t, uint16_t c)
-{
-    uint32_t i;
-    for (i = 0; i < 4u; i++) {
-        int32_t h = t->p[P_DIST + i] * 80 / 127, x = (int32_t)i * 60 + 28;
-        cv_rect(x, 10, 1, 80, C_LINE);
-        cv_rect(x, 90 - h, 1, h, c);
-        cv_rect(x - 3, 90 - h, 7, 1, c);
-    }
-}
-/* SLICER page: the pattern's 16 steps, a 'x' step a full bar; a '.' step: GATE a bar as high as
- * it stays open (DEPTH), STUT hatched (it repeats the last 'x'); the step playing underlined.
- * Grey when the SLICER is OFF. */
-static void graph_slicer(const track_t *t, uint16_t c)
-{
-    uint32_t i, pat = sl_pattern(t), mode = (uint32_t)t->p[P_SLCR], cur = sl[t - trk].idx;
-    int32_t open = 70 - t->p[P_SLDEPTH] * 70 / 127;      /* px a closed GATE step keeps */
-    uint16_t col = mode == SL_OFF ? C_DIM : c;
-    for (i = 0; i < 16u; i++) {
-        int32_t x = 4 + (int32_t)i * 14 + (int32_t)(i / 4u) * 2, y;
-        if ((pat >> i) & 1u) {
-            cv_rect(x, 10, 11, 70, col);
-        } else if (mode == SL_STUT) {
-            for (y = 10; y < 80; y += 4)
-                cv_rect(x, y, 11, 1, col);
-        } else {
-            cv_rect(x, 79, 11, 1, C_LINE);
-            if (open)
-                cv_rect(x, 80 - open, 11, open, C_DIM);
-        }
-        if (mode != SL_OFF && i == cur)
-            cv_rect(x, 85, 11, 3, C_WHITE);
-    }
-}
-static uint32_t steps_hash(const track_t *t)
+static uint32_t steps_hash(const track_t *t)          /* the pattern's lanes, levels and ratchets */
 {
     uint32_t h = 2166136261u, i;
-    for (i = 0; i < NSTEP; i++) {
-        const step_t *st = &t->step[i];
-        h = (h ^ (st->note[0] + st->n * 128u + st->time * 1024u + st->flags * 4096u + st->note[1] * 65536u)) *
-            16777619u;
-    }
+    const uint8_t *b = (const uint8_t *)t->dstep;
+    for (i = 0; i < sizeof t->dstep; i++)
+        h = (h ^ b[i]) * 16777619u;
     return h;
 }
 
@@ -387,7 +227,7 @@ static int big_page(const page_t *pg)            /* (2.6: the INSERT pages too: 
 static uint32_t graph_signature(void)
 {
     const page_t *pg = cur_page();
-    const track_t *t = TSEL;
+    const track_t *t = TDRUM;
     uint32_t h = 2166136261u, i;
     if (ui.hot_t && settings.zoom)
         h = str_hash(str_hash(str_hash(h ^ 0x5555u, ui.focus_v), ui.focus_l), ui.focus_u);
@@ -396,72 +236,19 @@ static uint32_t graph_signature(void)
             h = str_hash(str_hash(str_hash(h ^ ui.big_c[i] * 31u, ui.big_v[i]), ui.big_l[i]), ui.big_u[i]);
     if (ui.home)
         return h ^ (ui.frame / 2u);                  /* scope: redraw every other frame */
-    h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u;
+    h ^= (uint32_t)pg->graph * 131u;
     for (i = 0; i < P_COUNT; i++)
         h = (h ^ (uint32_t)t->p[i]) * 16777619u;
-    h ^= (uint32_t)TSEL->preset * 7u + (uint32_t)song.g[G_SLOT] * 13u + TSEL->user * 257u + up_gen * 7919u + ui.uslot * 104729u;
-    if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
-        h ^= (sl[song.sel].idx + 1u) * 2654435761u;
+    h ^= (uint32_t)song.g[G_SLOT] * 13u;
     if (pg->graph == GR_SLOTS)                       /* (a checksum over each slot) */
         for (i = 0; i < 4u; i++)
             h ^= (uint32_t)project_used(i) << (20u + i);
-    if (pg->graph == GR_STEPS || pg->graph == GR_ROLL) {
+    if (pg->graph == GR_STEPS) {
         uint32_t ph = song.playing ? t->seq_idx : 0xFFFFu;
-        if (pg->graph == GR_ROLL && ph / 16u != ui.bank)
-            ph = 0xFFFFu;                            /* the roll shows the cursor's bank only */
         h ^= steps_hash(t) + ph * 31u + ui.cursor * 7919u;
     }
     return h;
 }
-/* preset browser: the list by kind (ui.c BANK), the current one in white */
-static void graph_browse(void)
-{
-    uint32_t total, cur = preset_pos(&total), e, k;
-    int32_t row;
-    if (!total)
-        return;
-    for (row = -3; row <= 3; row++) {
-        int32_t y = 4 + (row + 3) * 17;
-        char tag[5], nm[13];
-        int sel = row == 0;
-        uint32_t n = (cur + total * 4u + (uint32_t)row) % total;
-        e = preset_at(n, &k);
-        if (e == NENGINES) {                             /* user preset: "U07" and its name */
-            up_slot_label(tag, k);
-            up_name(k, nm);
-        } else {                                         /* its kind: BASS, KEYS, PAD... */
-            str_cpy(tag, preset_kind(n), sizeof tag);
-            str_cpy(nm, ENGINES[e]->presets[k].name, sizeof nm);
-        }
-        if (sel)
-            cv_rect(4, y + 6, 3, 3, C_WHITE);
-        cv_text(14, y, &FONT_S, tag, sel ? C_GRAY : C_DIM);
-        cv_text(54, y, &FONT_S, nm, sel ? C_WHITE : C_GRAY);
-    }
-}
-
-/* user preset slots around the selected one: "U07  NAME" / EMPTY, the selected one in white */
-static void graph_user(void)
-{
-    int32_t row, first = clamp((int32_t)ui.uslot - 3, 0, UP_SLOTS - 7);
-    for (row = 0; row < 7; row++) {
-        uint32_t k = (uint32_t)(first + row);
-        int32_t y = 4 + row * 17;
-        char tag[4], nm[13];
-        int sel = k == ui.uslot, used = up_used(k);
-        up_slot_label(tag, k);
-        if (used)
-            up_name(k, nm);
-        else
-            str_cpy(nm, "EMPTY", sizeof nm);
-        if (sel)
-            cv_rect(4, y + 6, 3, 3, C_WHITE);
-        cv_text(14, y, &FONT_S, tag, sel ? C_WHITE : C_GRAY);
-        cv_text(54, y, &FONT_S, nm, used ? (sel ? C_WHITE : C_HI) : C_DIM);
-    }
-}
-
-/* project slots: used / empty, the selected one in white */
 static void graph_slots(void)
 {
     uint32_t i;
@@ -478,10 +265,9 @@ static void graph_slots(void)
     }
 }
 
-/* TRACKS page: four channel strips (mixer style), one under each column: number +
- * REC / ARM / MUTE, the sound's short name, then a level fader with the output meter
- * (note activity), the pattern over its LEN (time running down; bar width = notes in
- * the step) and the play head. The selected track is drawn bright. Every part is
+/* TRACKS page: a channel strip per track (mixer style; drums only: one, the drums): number + MUTE, the sound's
+ * short name, then a level fader with the output meter, the pattern over its LEN (time running down; bar width = the
+ * sounds of the step) and the play head. Every part is
  * its own small canvas with its own signature: while the transport runs only the
  * head markers and the meters move. (No ZOOM focus here.) */
 #define TS_HEAD_Y (Y_GRAPH + 2)
@@ -509,18 +295,9 @@ static uint32_t trk_level(uint32_t c)                /* LEVEL 0..127 (the drum t
     return (uint32_t)(c == TRK_DRUM ? song.g[G_DRLVL] : trk[c].p[P_LEVEL]) & 127u;
 }
 
-static void trk_short_name(uint32_t c, char *b)      /* the track's sound, b holds 13 */
+static void trk_short_name(uint32_t c, char *b)      /* the track's sound, b holds 13 (drums only: the others none) */
 {
-    const track_t *t = &trk[c];
-    const engine_t *e = ENGINES[t->eng_req % NENGINES];
-    if (c == TRK_DRUM)
-        str_cpy(b, "DRUM", 13);
-    else if (user_of(t) < UP_SLOTS)
-        up_name(user_of(t), b);
-    else if (e->npresets)
-        str_cpy(b, e->presets[t->preset % e->npresets].name, 13);
-    else
-        str_cpy(b, e->name, 13);
+    str_cpy(b, c == TRK_DRUM ? "DRUM" : "-", 13);
 }
 
 static void draw_tracks(void)
@@ -533,18 +310,13 @@ static void draw_tracks(void)
     }
     for (c = 0; c < NTRK; c++) {
         track_t *t = &trk[c];
-        uint32_t x0 = c * 60u + 4u, sel = c == song.sel, lvl = trk_level(c), mute = !lvl || t->p[P_MUTE];
-        uint32_t arm = (song.rec >> c) & 1u, st = arm ? (song.playing ? 1u : 2u) : mute ? 3u : 0u, sig;
+        uint32_t x0 = c * 60u + 4u, sel = 1, lvl = trk_level(c), mute = !lvl || t->p[P_MUTE];
+        uint32_t st = mute ? 3u : 0u, sig;
         uint32_t len = t->p[P_SLEN] > 0 ? (uint32_t)t->p[P_SLEN] : 1u, row = 0xFFFFu;
         int32_t pk, m;
         char b[16];
-        if (c == TRK_DRUM) {
-            pk = drums.peak;
-            drums.peak = 0;
-        } else {
-            pk = t->peak;
-            t->peak = 0;
-        }
+        pk = drums.peak;
+        drums.peak = 0;
         /* head: number (white = selected), REC / ARM / MUTE */
         sig = 1u + sel + st * 2u;
         if (ui.force || sig != ts.head[c]) {
@@ -596,7 +368,7 @@ static void draw_tracks(void)
                 cv_rect(9, TS_H - ts.meter[c], 3, ts.meter[c], C_AMB);
             cv_blit(x0, TS_Y);
         }
-        /* the pattern: one band per step over LEN, a note step as wide as its notes */
+        /* the pattern: one band per step over LEN, a step as wide as its sounds */
         sig = steps_hash(t) * 31u + len * 7u + sel;
         if (ui.force || sig != ts.ov[c]) {
             uint32_t i;
@@ -604,17 +376,15 @@ static void draw_tracks(void)
             cv_begin(34, TS_H, C_BLACK);
             cv_rect(17, 0, 1, TS_H, C_LINE);
             for (i = 0; i < len; i++) {
-                const step_t *s = &t->step[i];
+                uint32_t n = (uint32_t)__builtin_popcount(dstep_mask(&t->dstep[i]));
                 int32_t r0 = (int32_t)(i * TS_H / len), r1 = (int32_t)((i + 1u) * TS_H / len), h = r1 - r0;
                 if (h > 2)
                     h--;                             /* a gap between steps when there is room */
                 if (h < 1)
                     h = 1;
-                if (step_on(s)) {
-                    int32_t w = 2 + 6 * (int32_t)s->n;
-                    cv_rect(17 - w / 2, r0, w, h, (s->flags & SF_ACCENT) && sel ? C_WHITE : sel ? C_HI : C_GRAY);
-                } else if (s->time == ST_TIE) {
-                    cv_rect(16, r0, 3, r1 - r0, C_DIM);
+                if (n) {
+                    int32_t w = 2 + 6 * (int32_t)(n > 4u ? 4u : n);
+                    cv_rect(17 - w / 2, r0, w, h, sel ? C_HI : C_GRAY);
                 }
             }
             cv_blit(x0 + 14u, TS_Y);
@@ -694,9 +464,9 @@ static void graph_big(void)
 static void draw_graph(void)
 {
     const page_t *pg = cur_page();
-    const track_t *t = TSEL;
-    uint16_t c = TE_COL[song.sel & 3u];               /* LIVE: the curves in the track's colour */
-    uint32_t sig, top, drum_note = !ui.home && is_drum(t) && !page_for_drum(pg);
+    const track_t *t = TDRUM;
+    uint16_t c = TE_COL[0];                           /* LIVE: the curves in the track's colour */
+    uint32_t sig, top;
     if (!ui.home && pg->graph == GR_TRK) {
         draw_tracks();
         ui.graph_top = 1;                            /* the next graph draws its top rows again */
@@ -710,44 +480,14 @@ static void draw_graph(void)
     cv_oy = G_OY;
     if (ui.home) {
         graph_scope(c);
-    } else if (drum_note) {                          /* a page the drum track has no use for */
-        static const char *const L[2] = {"DRUM TRACK", "SEQ  TRACKS  GLO DRUMS"};
-        cv_text((240 - text_w(&FONT_S, L[0])) / 2, 26, &FONT_S, L[0], C_HI);
-        cv_text((240 - text_w(&FONT_S, L[1])) / 2, 52, &FONT_S, L[1], C_DIM);
     } else {
         switch (pg->graph) {
-        case GR_ADSR:
-            graph_adsr(t, c);
-            break;
-        case GR_LFO:
-            graph_lfo(t, c);
-            break;
         case GR_STEPS:
             graph_steps(t, c);
-            break;
-        case GR_ROLL:
-            graph_roll(t, c);
-            break;
-        case GR_SCALE:
-            graph_scale(t, c);
-            break;
-        case GR_FX:
-            graph_fx(t, c);
-            break;
-        case GR_SLCR:
-            graph_slicer(t, c);
-            break;
-        case GR_BROWSE:
-            cv_oy = 0;
-            graph_browse();
             break;
         case GR_SLOTS:
             cv_oy = 0;
             graph_slots();
-            break;
-        case GR_USER:
-            cv_oy = 0;
-            graph_user();
             break;
         default:
             if (big_page(pg)) {
@@ -757,10 +497,9 @@ static void draw_graph(void)
             break;
         }
     }
-    top = !ui.home && !drum_note && (pg->graph == GR_BROWSE || pg->graph == GR_SLOTS || pg->graph == GR_USER ||
-                                     big_page(pg));   /* these draw from the top */
+    top = !ui.home && (pg->graph == GR_SLOTS || big_page(pg));   /* these draw from the top */
     cv_oy = 0;
-    if (ui.hot_t && settings.zoom && !(top && big_page(pg) && !drum_note)) {   /* (the big values show it already) */                 /* focus (menu ZOOM): the touched value, large and white */
+    if (ui.hot_t && settings.zoom && !(top && big_page(pg))) {   /* (the big values show it already) */                 /* focus (menu ZOOM): the touched value, large and white */
         int32_t x;
         top = 1;
         cv_rect(0, 0, 150, 50, C_BLACK);
@@ -776,31 +515,23 @@ static void draw_graph(void)
 static void draw_foot(void)
 {
     char s[48], pn[16], en[10], ti[20];
-    const track_t *t = TSEL;
+    const track_t *t = TDRUM;
     uint32_t sig;
     const page_t *pg = cur_page();
-    const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
-    const char *ename = is_drum(t) ? "DRUM" : e->name;
+    const char *ename = "DRUM";
     int32_t x;
-    pn[0] = 0;
-    if (is_drum(t))
-        str_cpy(pn, DRUM_KIT_NAMES[drum_kit()], sizeof pn);
-    else if (user_of(t) < UP_SLOTS)
-        up_name(user_of(t), pn);                       /* a user preset */
-    else if (e->npresets)
-        str_cpy(pn, e->presets[TSEL->preset % e->npresets].name, sizeof pn);
+    str_cpy(pn, DRUM_KIT_NAMES[drum_kit()], sizeof pn);
     if (ui.home) {
         str_cpy(ti, "HOME", sizeof ti);
     } else {                                           /* page title + number in its family: "ENV DEST 2/2" */
         uint32_t i, n = 0, k = 0;
-        const char *pt = pg->scope == SC_ENGINE ? e->page_title[pg->id[0] != P_E0] : 0;   /* EDIT: the engine's */
         for (i = 0; i < NPAGES; i++)
-            if (PAGES[i].fam == pg->fam && (page_shown(&PAGES[i]) || i == ui.page)) {   /* (the pages it has) */
+            if (PAGES[i].fam == pg->fam) {
                 n++;
                 if (i == ui.page)
                     k = n;
             }
-        str_cpy(ti, pt ? pt : pg->title, 10);
+        str_cpy(ti, pg->title, 10);
         if (n > 1) {
             str_cpy(ti + str_len(ti), " ", 4);
             fmt_int(ti + str_len(ti), (int32_t)k);
@@ -810,7 +541,7 @@ static void draw_foot(void)
     }
     str_cpy(s, ename, sizeof s);
     s[str_len(s) + 1u] = 0;
-    s[str_len(s)] = (char)('1' + song.sel);
+    s[str_len(s)] = 'D';
     str_cpy(s + str_len(s), pn, 16);
     str_cpy(s + str_len(s), ti, sizeof ti);
     {   /* step markers: the playhead only when it is in the shown bank, the cursor only in SEQ */
@@ -827,11 +558,10 @@ static void draw_foot(void)
         for (i = 0; i < 16u; i++) {                   /* row 1: the cursor's bank as 16 thin bars */
             uint32_t si = ui.bank * 16u + i;
             int32_t sx = 6 + (int32_t)i * 14 + (int32_t)(i / 4u) * 4;
-            const step_t *st = &t->step[si];
             if (si >= (uint32_t)t->p[P_SLEN])
                 continue;
-            if (step_on(st))
-                cv_rect(sx, 2, 2, 9, TE_COL[song.sel & 3u]);
+            if (trk_step_on(t, si))
+                cv_rect(sx, 2, 2, 9, TE_COL[0]);
             else
                 cv_rect(sx, 10, 1, 1, C_DIM);
             if ((song.playing && si == t->seq_idx) || (song.seq_mode && si == ui.cursor))
@@ -839,7 +569,7 @@ static void draw_foot(void)
         }
     }
     x = 4;
-    if (FELUCCA_ICONS) {                              /* row 2: engine icon + name, preset, page */
+    if (FELUCCA_ICONS) {                              /* row 2: the drum icon, DRUM, the kit, the page */
         cv_icon(x, 21, engine_icon(ename), C_GRAY);
         x += 14;
     }
@@ -870,86 +600,23 @@ static void draw_columns(void)
         }
         return;
     }
-    if (is_drum(TSEL) && !page_for_drum(cur_page())) {   /* "DRUM TRACK" (the graph says so) */
-        for (c = 0; c < 4u; c++)
-            draw_column(c, "", "", "", C_HI, -1, ICON_AUTO);
-        return;
-    }
-    if (cur_page()->scope == SC_TRK) {                 /* TRACK LEVEL LEN PAN of the selected track */
-        const track_t *t = TSEL;
-        uint32_t lvl = trk_level(song.sel);
-        fmt_int(val, (int32_t)song.sel + 1);
-        draw_column(0, "TRACK", val, "/4", VAL(0u), (int32_t)song.sel * 1000 / (NTRK - 1), ICON_AUTO);
+    if (cur_page()->scope == SC_TRK) {                 /* SWING LEVEL LEN PAN (ui_input.c tracks_edit) */
+        const track_t *t = TDRUM;
+        uint32_t lvl = trk_level(TRK_DRUM);
+        param_format(&GP[G_SWING], song.g[G_SWING], val, &unit);
+        draw_column(0, "SWING", val, unit, VAL(0u), RATIO(&GP[G_SWING], song.g[G_SWING]), ICON_AUTO);
         if (!lvl || t->p[P_MUTE]) {                    /* (MUTE: a turn of KNOB 2 unmutes, tracks_edit) */
             str_cpy(val, "MUTE", 12);
             unit = "";
-        } else if (is_drum(t)) {
+        } else {
             fmt_int(val, (int32_t)lvl);
             unit = "";
-        } else {
-            param_format(&TP[P_LEVEL], (int32_t)lvl, val, &unit);
         }
         draw_column(1, "LEVEL", val, unit, lvl && !t->p[P_MUTE] ? VAL(1u) : C_DIM, (int32_t)lvl * 1000 / 127, ICON_AUTO);
         param_format(&TP[P_SLEN], t->p[P_SLEN], val, &unit);
         draw_column(2, "LEN", val, unit, VAL(2u), RATIO(&TP[P_SLEN], t->p[P_SLEN]), ICON_AUTO);
         param_format(&TP[P_PAN], t->p[P_PAN], val, &unit);
         draw_column(3, "PAN", val, unit, VAL(3u), RATIO(&TP[P_PAN], t->p[P_PAN]), param_icon(&TP[P_PAN], t->p[P_PAN]));
-        return;
-    }
-    if (cur_page()->graph == GR_BROWSE) {
-        uint32_t total, cur = preset_pos(&total);
-        char u[8];
-        fmt_int(val, (int32_t)cur + 1);
-        str_cpy(u, "/", 8);
-        fmt_int(u + 1, (int32_t)total);
-        draw_column(0, "No.", val, u, VAL(0u), -1, ICON_NONE);
-        draw_column(1, "ENG", ENGINES[TSEL->eng_req]->name, "", VAL(1u), -1, engine_icon(ENGINES[TSEL->eng_req]->name));
-        draw_column(2, "", "", "", C_HI, -1, ICON_AUTO);
-        draw_column(3, "", "", "", C_HI, -1, ICON_AUTO);
-        return;
-    }
-    if (cur_page()->graph == GR_USER) {                  /* SLOT, then three GO buttons */
-        int used = up_used(ui.uslot);
-        up_slot_label(val, ui.uslot);
-        draw_column(0, "SLOT", val, "", VAL(0u), (int32_t)ui.uslot * 1000 / (int32_t)(UP_SLOTS - 1u), ICON_AUTO);
-        draw_column(1, "LOAD", "--", "", used ? C_HI : C_DIM, -1, ICON_AUTO);
-        draw_column(2, "ERASE", "--", "", used ? C_HI : C_DIM, -1, ICON_AUTO);
-        draw_column(3, "SAVE", "--", "", C_HI, -1, ICON_AUTO);
-        return;
-    }
-    if (cur_page()->scope == SC_STEP) {
-        static const char *const TIME_N[3] = {"NOTE", "TIE", "REST"};
-        const step_t *st = &TSEL->step[ui.cursor];
-        char u[8];
-        if (st->n) {
-            note_name(val, st->note[0]);
-            u[0] = 0;
-            if (st->n > 1) {
-                str_cpy(u, "+", 8);
-                fmt_int(u + 1, st->n - 1);
-            }
-        } else {
-            str_cpy(val, "--", 12);
-            u[0] = 0;
-        }
-        {
-            static const char *const FLAG_N[4] = {"-", "ACC", "SLD", "A+S"};
-            char sn[8], sl[8];
-            fmt_int(sn, (int32_t)ui.cursor + 1);
-            str_cpy(sl, "/", 8);
-            fmt_int(sl + 1, TSEL->p[P_SLEN]);
-            draw_column(0, "STEP", sn, sl, VAL(0u), -1, ICON_AUTO);
-            draw_column(1, "NOTE", val, u, step_on(st) ? VAL(1u) : C_DIM, -1, ICON_AUTO);
-            if (step_on(st)) {                          /* a note: its LEN (2.6), steps with the TIEs after it */
-                char ln[8];
-                fmt_int(ln, (int32_t)note_len(TSEL, ui.cursor));
-                draw_column(2, "LEN", ln, "STEP", VAL(2u), -1, ICON_AUTO);
-            } else {
-                draw_column(2, "TIME", TIME_N[st->time % 3u], "", VAL(2u), -1, ICON_AUTO);
-            }
-            draw_column(3, "FLAG", FLAG_N[(st->flags & SF_ACCENT ? 1u : 0u) | (st->flags & SF_SLIDE ? 2u : 0u)], "",
-                        VAL(3u), -1, ICON_AUTO);
-        }
         return;
     }
     for (c = 0; c < 4u; c++) {
@@ -1025,23 +692,6 @@ static void ui_draw(void)
         ui.msg_t = 90;                                  /* (longer than a knob's message: read from the floor) */
     }
 #endif
-    if (rec_go) {                                       /* the take started: say so */
-        rec_go = 0;
-        ui_message("RECORDING");
-    }
-    if (ft_bars) {                                      /* a free take closed: the loop it made */
-        char m[24];
-        uint32_t n = ft_bars;
-        ft_bars = 0;
-        if (n == 0xFFu) {
-            ui_message("TAKE DROPPED");
-        } else {
-            str_cpy(m, n == 1u ? "LOOP 1 BAR " : n == 2u ? "LOOP 2 BARS " : "LOOP 4 BARS ", sizeof m);
-            fmt_int(m + str_len(m), song.g[G_BPM]);
-            str_cpy(m + str_len(m), " BPM", sizeof m - str_len(m));
-            ui_message(m);
-        }
-    }
     if (er_flash) {                                     /* EDIT + key took something out */
         er_flash = 0;
         if (!ui.msg_t)
@@ -1058,17 +708,6 @@ static void ui_draw(void)
     }
     if (layer_shown) {                                  /* back to the page */
         layer_shown = 0;
-        lcd_fill(0, 0, 240, 240, C_BLACK);
-        ui.force = 1;
-    }
-    if ((rec_wait || ft_on) && !ui.menu && !on_song_page()) {   /* armed / free take */
-        rec_screen_draw();
-        ui_timers();
-        ui.force = 0;
-        return;
-    }
-    if (rec_shown) {                                    /* back to the page */
-        rec_shown = 0;
         lcd_fill(0, 0, 240, 240, C_BLACK);
         ui.force = 1;
     }

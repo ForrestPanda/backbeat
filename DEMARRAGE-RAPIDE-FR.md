@@ -1,5 +1,11 @@
 <p align="center"><img src="assets/logo/sloop-logo.png" alt="SLOOP" width="360"></p>
 
+> **Note fm1-drummer (2026-10-14).** Ceci est le guide de SLOOP 2.6, gardé tel quel. fm1-drummer ne garde que la
+> batterie : la piste de batterie, ses pas et ses couches, les sections A..D et la chaîne, le master, TEXTURE et le MIDI ;
+> les synthés et leurs moteurs, les sons, les instruments échantillonnés, les effets punch-in, le SLICER,
+> l'enregistrement live, l'arpégiateur, les gammes et les accords ont disparu. Voir [README.md](README.md) et
+> [docs/drums-only.md](docs/drums-only.md).
+
 # SLOOP 2.6 — démarrage rapide
 
 **SLOOP** transforme le M-VAVE FM-1 en groovebox à jouer en live, pour tous les styles : trois synthés et une batterie de 16 sons sur les touches blanches, 12 moteurs de synthèse (dont la FM à six opérateurs avec les patchs DX7, les modèles physiques et le bruit), 153 sons rangés par famille (basses, claviers, orgues, nappes, leads, plucks, stabs), 37 kits de batterie (808, 909, trap, phonk, house, techno, UK garage, jungle, amapiano, synthwave, chiptune, ambient…) et tes propres kits, tes propres samples, ghost notes et ratchets, verrous de paramètre, décalage des pas et fills, note repeat, accords sur une touche, 27 effets punch-in, et un écran à la teenage engineering qui montre toujours ce que tes mains peuvent faire. Aucun motif d'usine : tout ce que tu entends, tu le joues.

@@ -4,7 +4,8 @@
 firmware run with a script of keys, knobs and pedal MIDI into the TRS jack, the screen saved at the times asked
 for, and the sound.
 
-    tools/fm1_emu.py "songs/back-in-blac(wip).json"                 # the demo script, the song in slot 1
+    tools/fm1_emu.py                                                # the demo script on the build's factory songs
+    tools/fm1_emu.py "songs/back-in-blac(wip).json"                 # the demo script, that song in slot 1
     tools/fm1_emu.py songs/black.json songs/time.json --wav out.wav   # slots 1 and 2, and what it played
     tools/fm1_emu.py song.json --keys "3000:SAVE,3800:n0,4600:PLAY,5600:midi:bf1401" --snap 3600,6000 --ms 7000
 
@@ -67,7 +68,7 @@ def unpack_fwsc(pkg):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("songs", nargs="+", help="song JSON files for slots 1.. (PC 0..)")
+    ap.add_argument("songs", nargs="*", help="song JSON files for slots 1.. (PC 0..); none: the build's factory songs")
     ap.add_argument("--keys", default=DEMO_KEYS, help="the fm1-emu key script (default: the demo)")
     ap.add_argument("--snap", default=DEMO_SNAP, help="screens at these ms")
     ap.add_argument("--ms", type=int, help="run this long (default: 500 ms after the last screen)")
