@@ -1,4 +1,4 @@
-# Building SLOOP
+# Building BackBeat
 
 The build makes three files in `build/`:
 
@@ -10,7 +10,7 @@ The build makes three files in `build/`:
 
 ## Windows (WSL)
 
-`INSTALL-SLOOP.bat` builds in a WSL distribution and opens the installer on
+`INSTALL-BACKBEAT.bat` builds in a WSL distribution and opens the installer on
 `http://localhost:8766/webapp/installer/`. It needs Python 3 with Pillow on Windows, a WSL
 distribution with the JieLi toolchain, and the three SDK files (below) in `build/deps/ac79`.
 Set `SLOOP_WSL_DISTRO` (default `Ubuntu`) and `SLOOP_TOOLCHAIN` (a Linux path, default
@@ -90,7 +90,7 @@ the hashes; `BUDGET_UPDATE=1` does the same for the cost files.
 
 ## Install
 
-On Windows, `INSTALL-SLOOP.bat` builds and opens the web installer (Chrome or Edge). The
+On Windows, `INSTALL-BACKBEAT.bat` builds and opens the web installer (Chrome or Edge). The
 `.fwsc` of each release is on the GitHub releases page.
 
 From the command line (needs `pip3 install mido python-rtmidi`):

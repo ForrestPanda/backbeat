@@ -7,10 +7,10 @@
   firmware/felucca-VER.fwsc   the package
   webapp/installer/index.html index_pkg.html with fm1pkg.js, fm1ota.js and the metadata inlined
   webapp/editor/index.html    editor.html (+ fukiai.ttf, FUKIAI-LICENSE.txt)
-  webapp/editor/sloop-editor.html  the editor in one file, for offline use (SLOOP 2.6): its icon font inlined,
+  webapp/editor/backbeat-editor.html  the editor in one file, for offline use (SLOOP 2.6): its icon font inlined,
                               its links to the installer and the font licence online; opened from the disk in
                               Chrome / Edge (file:// is a secure context: Web MIDI asks for permission)
-  webapp/sw.js, webapp/sloop.webmanifest, webapp/icon-*.png  the site without internet (SLOOP 2.6): an app to
+  webapp/sw.js, webapp/backbeat.webmanifest, webapp/icon-*.png  the site without internet (SLOOP 2.6): an app to
                               install; opened once online, the installer, the editor and the firmware are kept
                               by the browser and work offline, still on https (on Android a downloaded file opens
                               as content://, where Chrome refuses Web MIDI)
@@ -63,16 +63,16 @@ def app_files(out, version, fw_name):
     for f in ICONS:
         shutil.copy(HERE / f, app / f)
     manifest = {
-        "name": "SLOOP", "short_name": "SLOOP", "id": "editor/", "start_url": "editor/", "scope": "./",
+        "name": "BackBeat", "short_name": "BackBeat", "id": "editor/", "start_url": "editor/", "scope": "./",
         "display": "standalone", "background_color": "#000000", "theme_color": "#000000",
-        "description": "SLOOP for the M-VAVE FM-1: the editor and the installer, also without internet",
+        "description": "BackBeat, the drummer for the M-VAVE FM-1: the editor and the installer, also without internet",
         "icons": [{"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
                   {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
                   {"src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}],
     }
-    (app / "sloop.webmanifest").write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
+    (app / "backbeat.webmanifest").write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
     keep = {"installer/": app / "installer" / "index.html", "editor/": app / "editor" / "index.html",
-            "../firmware/" + fw_name: out / "firmware" / fw_name, "sloop.webmanifest": app / "sloop.webmanifest"}
+            "../firmware/" + fw_name: out / "firmware" / fw_name, "backbeat.webmanifest": app / "backbeat.webmanifest"}
     for f in ("fukiai.ttf", "FUKIAI-LICENSE.txt"):
         if (app / "editor" / f).exists():
             keep["editor/" + f] = app / "editor" / f
@@ -115,15 +115,15 @@ def main(pkg, version, out):
     html = (HERE / "index_pkg.html").read_text(encoding="utf-8")
     lib = strip_module((HERE / "fm1pkg.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1ota.js").read_text(encoding="utf-8"))
-    name = f"sloop-{re.sub(r'[^A-Za-z0-9.-]', '-', version)}.fwsc"
+    name = f"backbeat-{re.sub(r'[^A-Za-z0-9.-]', '-', version)}.fwsc"
     meta = json.dumps({"version": version, "product": product, "pkg": "../../firmware/" + name,
                        "sha256": hashlib.sha256(raw).hexdigest()})   # the page checks the download against it
     for mark in ("/*LIB*/", "/*META*/"):
         if html.count(mark) != 1:
             raise SystemExit(f"index_pkg.html must contain {mark} once; update make_site.py")
     html = html.replace("/*LIB*/", lib).replace("/*META*/", meta)
-    logo = HERE.parent / "assets" / "logo" / "sloop-logo.svg"     # the SLOOP logo, inline
-    html = html.replace("<!--LOGO-->", logo.read_text(encoding="utf-8") if logo.exists() else "<b>SLOOP</b>")
+    logo = HERE.parent / "assets" / "logo" / "backbeat-logo.svg"  # the BackBeat logo (tools/gen_logo.py), inline
+    html = html.replace("<!--LOGO-->", logo.read_text(encoding="utf-8") if logo.exists() else "<b>BackBeat</b>")
     inst, ed, fw = out / "webapp" / "installer", out / "webapp" / "editor", out / "firmware"
     for d in (inst, ed, fw):
         d.mkdir(parents=True, exist_ok=True)
@@ -138,27 +138,27 @@ def main(pkg, version, out):
         notes = HERE / "beta_banner.html"
         banner = notes.read_text(encoding="utf-8") if notes.exists() else "<p><b>BETA</b></p>"
     html = html.replace("<!--BANNER-->", banner)
-    for old in list(fw.glob("felucca-*.fwsc")) + list(fw.glob("sloop-*.fwsc")):   # one package: the current one
+    for old in list(fw.glob("felucca-*.fwsc")) + list(fw.glob("sloop-*.fwsc")) + list(fw.glob("backbeat-*.fwsc")):   # one package: the current one
         old.unlink()
     shutil.copy(pkg, fw / name)
     ed_html = (HERE / "editor.html").read_text(encoding="utf-8")
-    dl = f'download="sloop-editor-{re.sub(r"[^A-Za-z0-9.-]", "-", version)}.html"'
-    if ed_html.count('download="sloop-editor.html"') != 1 or html.count('download="sloop-editor.html"') != 1:
-        raise SystemExit('editor.html and index_pkg.html must link download="sloop-editor.html" once; update make_site.py')
-    (ed / "index.html").write_text(ed_html.replace('download="sloop-editor.html"', dl), encoding="utf-8")
-    (ed / "sloop-editor.html").write_text(offline_editor(ed_html), encoding="utf-8")
+    dl = f'download="backbeat-editor-{re.sub(r"[^A-Za-z0-9.-]", "-", version)}.html"'
+    if ed_html.count('download="backbeat-editor.html"') != 1 or html.count('download="backbeat-editor.html"') != 1:
+        raise SystemExit('editor.html and index_pkg.html must link download="backbeat-editor.html" once; update make_site.py')
+    (ed / "index.html").write_text(ed_html.replace('download="backbeat-editor.html"', dl), encoding="utf-8")
+    (ed / "backbeat-editor.html").write_text(offline_editor(ed_html), encoding="utf-8")
     (ed / "gp2song.py").write_text((HERE.parent / "tools" / "gp2song.py").read_text(encoding="utf-8"), encoding="utf-8")   # (fm1-drummer:
                                                                                                                             # the editor's From Guitar Pro)
     shutil.copytree(HERE / "kit", ed / "kit", dirs_exist_ok=True)                                                           # (its player's kit)
-    (inst / "index.html").write_text(html.replace('download="sloop-editor.html"', dl), encoding="utf-8")
+    (inst / "index.html").write_text(html.replace('download="backbeat-editor.html"', dl), encoding="utf-8")
     for f in ("fukiai.ttf", "FUKIAI-LICENSE.txt"):
         if (HERE / f).exists():
             shutil.copy(HERE / f, ed / f)
     app_files(out, version, name)
     (out / "index.html").write_text(
-        '<!doctype html><meta charset="utf-8"><title>SLOOP</title>'
+        '<!doctype html><meta charset="utf-8"><title>BackBeat</title>'
         '<meta http-equiv="refresh" content="0; url=webapp/installer/">'
-        '<a href="webapp/installer/">SLOOP installer</a>\n', encoding="utf-8")
+        '<a href="webapp/installer/">BackBeat installer</a>\n', encoding="utf-8")
     print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, firmware/{name} ({len(raw)} B, {product})")
 
 

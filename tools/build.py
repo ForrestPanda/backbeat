@@ -98,7 +98,7 @@ def generate():
             [tools / "gen_samples.py", GEN / "felucca_samples.h"],
             [tools / "gen_drumkits.py", GEN / "felucca_drumkits.h"],
             [tools / "gen_songs.py", GEN / "felucca_songs.h"],
-            [tools / "gen_logo.py", GEN / "sloop_logo.h"]]
+            [tools / "gen_logo.py", GEN / "backbeat_logo.h"]]
     procs = [subprocess.Popen([sys.executable, *map(str, c)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               text=True) for c in cmds]
     failed = []
@@ -310,7 +310,7 @@ def main():
         if not m:
             raise SystemExit(f"--release {a.release}: use X.Y or X.Y-suffix, one digit each")
         PRODUCT = "FM-1_9" + m[1] + m[2]
-        VERSION = a.release.upper() if "BETA" in a.release.upper() else a.release.upper() + " BETA"
+        VERSION = "BACKBEAT " + (a.release.upper() if "BETA" in a.release.upper() else a.release.upper() + " BETA")
         name = f"felucca-{a.release}.fwsc"
     fm1pkg_make.SDK = a.sdk
     for rel, sha in SDK_SHA256.items():          # fail early without the SDK

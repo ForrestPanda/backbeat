@@ -69,7 +69,7 @@ by those owners.
 
 Felucca never enables the Bluetooth / Wi-Fi radio of the hardware.
 
-## fm1-drummer
+## BackBeat (fm1-drummer)
 
 `web/kit/`: the MuldjordKit by Lars Muldjord and the DrumGizmo team (drumgizmo.org; the SFZ port by kinwie),
 CC BY 4.0, one sound a lane as `tools/mkkit.py` makes them; the three hi-hat lanes from AVL Drumkits "Black Pearl"

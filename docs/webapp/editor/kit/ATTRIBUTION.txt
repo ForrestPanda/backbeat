@@ -1,0 +1,19 @@
+The drum kit served next to the editor (the Drum kit page's preloaded pads, the Songs tab's player):
+
+MuldjordKit by Lars Muldjord and the DrumGizmo team (https://www.drumgizmo.org), a Tama Superstar kit, from the
+SFZ port https://github.com/sfzinstruments/DrumGizmo.MuldjordKit (mapped by kinwie), licensed CC BY 4.0
+(https://creativecommons.org/licenses/by/4.0/). Two sounds a lane where it matters: the hardest velocity layer
+(LANE_note.wav, the device's USR3) and a softer one (LANE_note-soft.wav, USR4: ghost and soft hits), the first round
+robin, its microphones mixed down, trimmed, cut and levelled by tools/mkkit.py (mono 16-bit WAV at 22050 Hz; the
+closed and pedal hats and the rim at 44100 Hz).
+Lanes: KICK, KICK2, SNARE, RIM, SNARE2, LOWTOM, HITOM, CRASH, SHAKER (a splash).
+
+RIDE: AVL Drumkits "Red Zeppelin" (a Zildjian A 24" ride) and HAT, OPENHAT and PEDAL: AVL Drumkits "Black Pearl", both by Glen MacArthur (Bandshed / AV Linux,
+http://www.bandshed.net/avldrumkits/), licensed CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/),
+the same way (the hardest layer, trimmed, cut, levelled). These four files carry that licence.
+
+CLAP, CONGA and COWBELL: SLOOP's CC0 studio recordings (assets/samples-cc0/KIT: Versilian Studios VSCO-2 CE
+and VCSL, Sonic Pi), the same way.
+
+Credit when sharing: "MuldjordKit by Lars Muldjord / DrumGizmo, CC BY 4.0; hi-hats from AVL Drumkits Black Pearl and the ride
+from Red Zeppelin, by Glen MacArthur, CC BY-SA 3.0; clap, conga and cowbell from Versilian Studios / Sonic Pi, CC0".

@@ -54,11 +54,11 @@ try {
   ok(await page.evaluate(() => !!navigator.serviceWorker.controller), "the installer page is controlled by it");
   const cached = await page.evaluate(async () => {
     const ks = await caches.keys();
-    const c = await caches.open(ks.find((k) => k.startsWith("sloop-site-")));
+    const c = await caches.open(ks.find((k) => k.startsWith("backbeat-site-")));
     return (await c.keys()).map((r) => new URL(r.url).pathname);
   });
   ok(cached.includes("/webapp/editor/") && cached.includes("/webapp/installer/") &&
-     cached.some((p) => /^\/firmware\/sloop-.*\.fwsc$/.test(p)) && cached.includes("/webapp/editor/fukiai.ttf"),
+     cached.some((p) => /^\/firmware\/backbeat-.*\.fwsc$/.test(p)) && cached.includes("/webapp/editor/fukiai.ttf"),
      "kept: the installer, the editor, its font, the firmware");
 
   const cdp = await ctx.newCDPSession(page);
@@ -67,31 +67,31 @@ try {
 
   await stop();                                          // ---- no network at all
   await page.goto(base + "installer/");
-  await page.waitForFunction(() => /SLOOP \d/.test(document.getElementById("status").textContent), null, { timeout: 8000 })
+  await page.waitForFunction(() => /BackBeat \d/.test(document.getElementById("status").textContent), null, { timeout: 8000 })
     .catch(() => {});
   const st = await page.textContent("#status");
-  ok(/^SLOOP \d/.test(st), `offline: the installer loads its firmware from the copy (${st.trim().slice(0, 40)})`);
+  ok(/^BackBeat \d/.test(st), `offline: the installer loads its firmware from the copy (${st.trim().slice(0, 40)})`);
   await page.goto(base + "editor/");
   const ed = await page.evaluate(async () => {
     await document.fonts.ready;
     return { title: document.title, connect: !!document.getElementById("connect"), font: document.fonts.check('16px "Fukiai"', "") };
   });
-  ok(ed.title === "SLOOP Editor" && ed.connect, "offline: the editor loads");
+  ok(ed.title === "BackBeat Editor" && ed.connect, "offline: the editor loads");
   ok(ed.font, "offline: with its icon font");
   await page.goto(base + "editor/index.html?x=1");
-  ok((await page.title()) === "SLOOP Editor", "offline: index.html and a query find the same copy");
+  ok((await page.title()) === "BackBeat Editor", "offline: index.html and a query find the same copy");
   const miss = await page.goto(base + "nothing.html").then(() => "page").catch(() => "error");
   ok(miss === "error", "offline: what is not kept is not invented");
 
   await serve();                                         // ---- online again, the site changed
   const f = join(site, "webapp", "editor", "index.html");
   const orig = readFileSync(f, "utf8");
-  writeFileSync(f, orig.replace("<title>SLOOP Editor</title>", "<title>SLOOP Editor NEW</title>"));
+  writeFileSync(f, orig.replace("<title>BackBeat Editor</title>", "<title>BackBeat Editor NEW</title>"));
   await page.goto(base + "editor/");
-  ok((await page.title()) === "SLOOP Editor NEW", "online: the page as published now, not the old copy");
+  ok((await page.title()) === "BackBeat Editor NEW", "online: the page as published now, not the old copy");
   await stop();
   await page.goto(base + "editor/");
-  ok((await page.title()) === "SLOOP Editor NEW", "offline after that: the copy is the newest one seen");
+  ok((await page.title()) === "BackBeat Editor NEW", "offline after that: the copy is the newest one seen");
   writeFileSync(f, orig);
 
   await serve();                                         // ---- a new site: a new sw.js takes over, the old copy goes

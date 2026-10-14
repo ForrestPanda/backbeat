@@ -17,9 +17,10 @@ engines, presets, user presets, FM6) is gone from the firmware. The frames, the 
 parameter and global ids are unchanged (projects, locks and learned CCs name them by number; the ids of the
 synth side are unused, their `DESC` still answers). `web/editor.html` speaks v11 only: a device whose `INFO`
 ends with less than 11 (SLOOP) is refused right after `INFO` (the status line says this editor is for the
-fm1-drummer firmware).
+BackBeat firmware).
 
-- **INFO** keeps its layout: version string, NENGINES = **0** (no engine names follow), P_COUNT 71, G_COUNT 45,
+- **INFO** keeps its layout: version string (`FELUCCA BACKBEAT 1.0`: the `FELUCCA ` prefix kept; the editor
+  shows what follows it), NENGINES = **0** (no engine names follow), P_COUNT 71, G_COUNT 45,
   NSTEP 64, P_E0 63, NTRK **1**, protocol **11**.
 - **The engine byte** of `DUMP`, `RELOAD`, `TRACK` and `TRACK_DUMP` is 0, which equals NENGINES: v10's "no engine =
   the drum track" holds for the one track. The preset bytes are 0, `TRACK`'s selected track 0 and its solo mask 0.

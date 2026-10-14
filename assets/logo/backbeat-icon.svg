@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="BackBeat">
+<rect width="240" height="240" fill="#000"/>
+<rect x="27.00" y="106.00" width="36.00" height="80.00" rx="8" fill="#287CFF"/>
+<rect x="77.00" y="36.00" width="36.00" height="150.00" rx="8" fill="#1ECC70"/>
+<rect x="127.00" y="106.00" width="36.00" height="80.00" rx="8" fill="#FFC618"/>
+<rect x="177.00" y="36.00" width="36.00" height="150.00" rx="8" fill="#FF621A"/>
+<rect x="22.00" y="204.00" width="196" height="12" rx="6.0" fill="#F2F2F2"/>
+</svg>

@@ -110,10 +110,11 @@ static const char *mi_value(uint32_t i, uint16_t *c)
 
 static void draw_about(void)
 {
-    cv_text(4, 4, &FONT_L, "DRUMMER", C_WHITE);
-    cv_rect(124, 10, 8, 4, TE_COL[0]), cv_rect(124, 16, 12, 4, TE_COL[1]);   /* the sail */
-    cv_rect(124, 22, 16, 4, TE_COL[2]), cv_rect(124, 28, 20, 4, TE_COL[3]);
-    cv_text(4, 36, &FONT_S, "FM1-DRUMMER: SLOOP, FELUCCA", C_AMB);
+    uint32_t i;
+    cv_text(4, 4, &FONT_L, "BACKBEAT", C_WHITE);
+    for (i = 0; i < 4u; i++)                          /* the logo's beat bars: the 2 and the 4 tall */
+        cv_rect(196 + i * 10u, (i & 1u) ? 6u : 16u, 7, (i & 1u) ? 24u : 14u, TE_COL[i]);
+    cv_text(4, 36, &FONT_S, "BASED ON SLOOP, FELUCCA", C_AMB);
     cv_text(4, 54, &FONT_S, FELUCCA_VERSION, C_HI);
     cv_text(236 - text_w(&FONT_S, __DATE__), 54, &FONT_S, __DATE__, C_GRAY);   /* build date */
     cv_text(cv_text(4, 72, &FONT_S, "LEO KUROSHITA", C_HI) + 8, 72, &FONT_S, "@KUROGEDELIC", C_AMB);

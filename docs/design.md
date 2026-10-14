@@ -1,8 +1,8 @@
-# fm1-drummer: design
+# BackBeat (fm1-drummer): design
 
 A guitarist's accompaniment device on the M-VAVE FM-1: a drummer who knows the song's parts and takes
-cues from a footswitch (named **fm1-drummer** 2026-10-13; it was fm1-arranger until then, and the folder
-keeps that name until it is renamed). The idea comes from an arranger keyboard,
+cues from a footswitch (named **BackBeat** 2026-10-14; it was fm1-arranger, then fm1-drummer, the name the repository
+keeps). The idea comes from an arranger keyboard,
 reduced to what a guitarist with a pedalboard needs: songs made of sections (intro, verse, chorus,
 bridge, solo, outro), each a drum loop, switched live from the pedalboard, with fills where the
 player asks for them (a footswitch can send the fill with the change). No backing tracks: the structure and the length of every section, the solo above all,
@@ -444,8 +444,9 @@ hazard; what it found and what was done:
   drummer, driven by the pedal, when no FM-1 is at hand, with higher-fidelity samples than the device
   can hold (longer samples, more velocity layers, round robins). Two routes: (a) the web editor's player,
   which already plays the real song format with the kit through Web Audio and runs as the installed app
-  on Android: a "no device" mode for the Songs tab (done 2026-10-14: the tab, renamed Song drummer, works without
-  an FM-1; only its slots, the pedal settings and Send need one), the real
+  on Android: a "no device" mode for the Songs tab (done 2026-10-14: the tab, renamed Song, works without
+  an FM-1; only the pedal settings and Send need one; the device's slots moved to a Setlist tab, and SLOOP's
+  Song tab became Jam), the real
   pedal in (the item at the top of this list), a hi-fi kit folder served next to the editor or chosen
   from disk (untrimmed WAVs; the device's trims, two layers and ADPCM do not apply in the browser),
   latency checked on each platform; (b) the firmware's own engine as a desktop program (see "Related
@@ -460,6 +461,34 @@ hazard; what it found and what was done:
   pattern then going on (from where it would have been, or from its top: to decide), a section change able to
   follow it. Two new commands (e.g. CC 28 / 29, or LIVE's black keys split between them); CC 21 kept. Left as is
   for now: reflect on whether it belongs in the future work once the device is played with the pedal.
+- (asked 2026-10-14; not started) **Per-drum fill marks on the device.** EDIT sets a whole step's fill
+  condition (step keys held + OCT+: normal, fill only, no fill; OCT- clears it), but a lane's own marks (the
+  song's `"fills"`: `F` only during a fill, `N` never during one; seq.c `drum_fonly` / `drum_fno`) come only
+  from the web editor, the importer or a JSON. The device plays them, keeps them through rotate / x2 and the
+  section save (SNG2 has the room), and a cleared hit takes its mark with it, but it can neither set nor show
+  them. Wanted: a gesture for one lane at a step (e.g. a step key held + the lane's sound chosen + OCT+, cycling
+  that hit's mark as OCT+ does a step's) and a mark on the grid where the selected lane's hit has one (the
+  step tile's F / x corner, ui_layers.c, is the step's). To check: which lane the gesture means on a step with
+  several hits (the selected sound, as SEQ's SOUND knob), the undo, and that the editor's live sync sees it.
+- (asked 2026-10-14; not started) **MIDI clock out over USB.** The device follows a clock (SETUP > SYNC = USB /
+  TRS, seq.c `mclk_event`) but sends none: MIDI OUT (SETUP > MIDI > OUT: KEYS / SEQ) has no F8 / FA / FB / FC, so
+  BackBeat cannot be the master of a DAW, a looper or the Ampero (whose USB port takes a clock in: MIDI IN SOURCE).
+  Wanted: with SYNC = INT, 24 pulses a beat from the transport clock (seq.c, sample-accurate: a pulse every
+  BEAT_U / 24 units, in the block that crosses it), START when the pedal or PLAY starts (after the count-in, on the
+  downbeat), STOP on stop and at an ending's end, on the USB port (usb.c's MIDI IN endpoint: the packets as the
+  notes go, CIN 0xF single bytes); a SETUP row (CLOCK OUT: OFF / USB) so it is asked for, off by default. To check:
+  the jitter of the USB frames (1 ms) against the pulses, a tempo change by tap or by section (the pulses follow at
+  once), never out while SYNC follows an external clock (no loop), and the editor's link sharing the port (SysEx
+  between the pulses).
+- (done 2026-10-14) **The editor's player follows a MIDI clock**, as the device does with SYNC = USB / TRS: on the
+  Play card's MIDI input (the pedal's), the box "Follow its MIDI clock". `PCLK` (next to `PEDALIN`, pure, tested)
+  reads the realtime bytes as seq.c `mclk_event`: the tempo every 24 pulses (40..240 BPM), START / CONTINUE from
+  the top (the player keeps no place) on the next pulse, the downbeat, STOP; no count-in (the master counts); a
+  section pressed while stopped starts on the clock's next beat; the LIVE view says `ext`. The phase: each beat of
+  the clock (its Web MIDI time stamp on the audio clock) is matched to the player's own time of that beat
+  (`PCLK.timeOf` over the steps scheduled) and the steps not yet scheduled move half the difference, 20 ms at most
+  a beat. To check by hand with a real master (the mock has no clock): the lock at 60..200 BPM, a tempo ramp, and the
+  output latency (the master's sound against the browser's; an offset setting if it shows).
 
 ## Open questions
 

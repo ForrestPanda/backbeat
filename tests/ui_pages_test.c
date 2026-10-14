@@ -143,7 +143,7 @@ int main(int argc, char **argv)
     palette_set(4);
     host_tracks_init();
     TDRUM->p[P_E0] = DRUM_DEFAULT_KIT;
-    sloop_splash(); ppm("page-splash");
+    logo_splash(); ppm("page-splash");
     ui.menu = 2; ui.force = 1; frame(); ppm("page-about"); ui.menu = 0;
     go_home(); ui.force = 1; frame(); ppm("live-boot");
     check(drummer_on() && sng_view == DV_LIVE && kb_grid == 2u, "boot (HOME): the LIVE screen");

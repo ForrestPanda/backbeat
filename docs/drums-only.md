@@ -113,8 +113,8 @@ says why if they do. The CPU and target budgets are re-based where the code they
 9. **The editor.** Protocol v11; the dead tabs and modules out of web/editor.html (Sound, Library, synth
    Sequencer, piano roll and SMF, Tracks, the chopper), the mock device and test_web.mjs to match. The
    kit list without USR1.
-10. **Docs.** README (what the device is now), design.md (the flash budget again, the open points), SLOOP.md
-    kept as SLOOP's manual with a note on top that the synth side is gone from this fork.
+10. **Docs.** README (what the device is now), design.md (the flash budget again, the open points). (SLOOP.md, SLOOP's manual, was
+    removed with the BackBeat name, 2026-10-14.)
 
 Then the device features, on the room: the pedal channel and the count-in on the song screen, bar counts per
 section, the slot list with names, and whatever else the hardware shows is needed. (Done 2026-10-14 in the UI

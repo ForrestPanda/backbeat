@@ -1,20 +1,23 @@
-# fm1-drummer
+<p align="center"><img src="assets/logo/backbeat-logo.png" alt="BackBeat" width="440"></p>
 
-A guitarist's accompaniment device on the M-VAVE FM-1: songs made of drum sections (intro, verse,
-chorus, bridge, solo, outro), switched live from a pedalboard over the TRS MIDI jack, with fills where
-you ask for them. No backing tracks: the song's structure and the length of every section are decided
+# BackBeat
+
+BackBeat (this repository: fm1-drummer) is a guitarist's accompaniment device on the M-VAVE FM-1: songs
+made of drum sections (intro, verse, chorus, bridge, solo, outro), switched live from a pedalboard over
+the TRS MIDI jack, with fills where you ask for them. No backing tracks: the song's structure and the length of every section are decided
 on stage.
 
 A fork of [SLOOP](https://github.com/isod89/sloop-fm1) 2.6 (GPL-3.0, itself from
 [Felucca](https://github.com/hugelton/Felucca)), **drums only**: SLOOP's synth side (the synth engines and
 presets, the sampled instruments, the punch FX, the SLICER, live recording, the arpeggiator, scales and chords,
 three of its four tracks) is gone, see [docs/drums-only.md](docs/drums-only.md). What is left of SLOOP is its
-drum track, sequencer and sections, and [SLOOP.md](SLOOP.md), its manual, still describes those (its synth chapters
-no longer apply). What this fork adds is in [docs/design.md](docs/design.md).
+drum track, sequencer and sections (SLOOP's own manual is upstream). What this fork adds is in
+[docs/design.md](docs/design.md). The firmware reports itself as BACKBEAT 1.0 (the editor's INFO keeps its
+`FELUCCA ` prefix, and the USB port names and the backup format stay SLOOP's, so the tools keep working).
 
 Status: **everything but the hardware (October 2026)**. The pedal control, songs in flash (compact, with a
 time signature per section), the fills, the renderer, the Guitar Pro importer, the kit tool, the web editor's
-Song drummer tab with its section editor and a player the real pedal can drive, the device's own screens (LIVE, SONGS,
+Song tab with its section editor and a player the real pedal can drive, the device's own screens (LIVE, SONGS,
 EDIT, SETUP) are done and pass the host tests; the firmware builds and packages, and runs on the fm1-emu emulator.
 Nothing here has run on an FM-1 yet: the TRS jack, the cable type and the speaker are still to be verified
 (`docs/design.md`, milestone 7). Drums only, the firmware is 245 KB of its 581 KB slot: the room is for a more
@@ -39,7 +42,7 @@ Footswitches send MIDI on channel 16 (default) to the TRS jack or over USB:
 **Count-in.** A setting kept with the pedal channel (off by default): a section pressed while stopped first
 clicks one or two bars at the song's tempo (the metronome's voice, the first beat of each bar accented), then
 the loop starts with that section. CC 23 cancels it; another section pressed meanwhile only changes what starts.
-`python3 tools/fm1_song.py --count-in 1`, the Song drummer tab's pedal row, or SETUP > PEDAL on the device; hear it with
+`python3 tools/fm1_song.py --count-in 1`, the Song tab's pedal row, or SETUP > PEDAL on the device; hear it with
 `fm1_render.py --count-in 1`.
 
 **Songs.** A song is up to 8 named drum sections (intro, verse, chorus, bridge, solo, outro...) with its
@@ -58,7 +61,7 @@ python3 tools/fm1_song.py --pedal-channel 16            # the pedal's MIDI chann
 python3 tools/fm1_song.py --count-in 1                  # one bar of clicks before a start from stopped (0, 1, 2)
 ```
 
-Or open the web editor (`web/editor.html`): its **Song drummer** tab works without an FM-1 (the import, the section
+Or open the web editor (`web/editor.html`): its **Song** tab works without an FM-1 (the import, the section
 editor and the player below); with the FM-1 connected by USB it also lists
 the sixteen slots, takes a song JSON by drop or file picker, saves one back as JSON, erases a slot, and sets
 the pedal's MIDI channel. Its **From Guitar Pro or JSON** card runs `tools/gp2song.py` itself in the browser (Python
@@ -71,7 +74,8 @@ swing and the count-in as the device has them; keys (shown under the tiles): 1..
 bar, f a fill, comma and period previous / next, e the ending, space stop; **MIDI in from** and **Listen to the pedal** let the real pedal (the
 Ampero, or a USB MIDI interface between it and the computer) drive that player with the same CCs and PCs as the
 FM-1, on the Pedal card's channel (PC n opens song n of the FM-1 connected, or of the simulated one), so the
-live workflow can be rehearsed before the hardware. Its **Section editor** card edits a song by hand: names, order,
+live workflow can be rehearsed before the hardware; **Follow its MIDI clock** makes the player take that input's
+tempo and START / STOP, as the FM-1 does with SETUP > SYNC. Its **Section editor** card edits a song by hand: names, order,
 length, the time signature, the outro, split and merge, the hits on a grid with levels, ratchets and fill marks, the fill
 conditions, columns copied and pasted, undo and redo (Ctrl+Z / Ctrl+Y), keys for the pen (n h o g x, r for the
 ratchet, m for the mark, [ ] between sections), a lane's sound on a click of its name, "Play this section" to
@@ -194,8 +198,8 @@ from SLOOP's screens: TRACKS, the visualiser, the GLO pages and layer, the HOME-
 sh tests/run_tests.sh        # the host tests (SOAK_MIN=1 for a short soak)
 ```
 
-The TRS MIDI input is SLOOP's (`FELUCCA_UART=1`, in use since SLOOP 2.3). Install as SLOOP
-([BUILDING.md](BUILDING.md)): at your own risk.
+The TRS MIDI input is SLOOP's (`FELUCCA_UART=1`, in use since SLOOP 2.3). Install it as any Felucca
+firmware ([BUILDING.md](BUILDING.md)): at your own risk.
 
 ## Layout
 
@@ -212,7 +216,7 @@ The TRS MIDI input is SLOOP's (`FELUCCA_UART=1`, in use since SLOOP 2.3). Instal
 | `firmware/src/ui_studio.c`, `ui_input.c` | EDIT (SLOOP's drum grid and kit pages); the buttons, the layers and SAVE's hold on the grid |
 | `tools/fm1_emu.py` | the firmware on the fm1-emu emulator, songs imported into its flash: a script of keys, knobs and pedal MIDI, screens and sound saved |
 | `tools/fm1_song.py`, `songs/` | songs from JSON: check, pack, send, read back; `songs/` holds your songs (the build carries them as factory songs, `tools/gen_songs.py`) |
-| `web/editor.html` | the web editor (SLOOP's, drums only, protocol v11) with a Song drummer tab (no FM-1 needed but to send and set the pedal): the slots, the pedal channel, Guitar Pro import (Pyodide), the section editor, a player; `web/test_web.mjs` tests it against the simulated FM-1 |
+| `web/editor.html` | the web editor (SLOOP's, drums only, protocol v11) with a Song tab (no FM-1 needed but to send and set the pedal): the pedal channel, Guitar Pro import (Pyodide), the section editor, a player; a Setlist tab: the device's sixteen slots; `web/test_web.mjs` tests it against the simulated FM-1 |
 | `web/kit/` | the kit the editor serves (the Muldjord Kit with two velocity layers), the files `tools/mkkit.py` makes the device image from |
 | `tools/fm1_render.py`, `tests/song_render.c` | a song played by the pedal, rendered to a WAV on the host |
 | `tools/gp2song.py`, `tests/gp2song_test.py` | the drum track of a Guitar Pro file into a song (markers, patterns, fills, levels, ratchets) |

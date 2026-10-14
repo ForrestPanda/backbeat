@@ -35,7 +35,7 @@ const E = vm.runInNewContext(proto + `
    wavFile, zipStore, crc32, startWatch, fmtValue, F, DRUM_LANES, LV_NAMES, emptyDrum, lockable, MICRO, FC, fillGet, fillSet, pack7, unpack7,
    parseNote, backupCapture, backupRestore, backupObjects, b64enc, b64dec, BK, KIT, KIT_SONGS, kitOptions, kitPad, kitZones, kitLen, kitBytes,
    kitFit, kitSplit, kitLaneOf, kitPlace, zipRead, ARR, mockSettings, DSYN, DSYN_MOCK_NAMES, DSYN_MOCK_KITS, SetGate, bkProjFormat, bkProjOk,
-   bkFwAtLeast, SNG, PLAY, SED, PEDALIN })`,
+   bkFwAtLeast, SNG, PLAY, SED, PEDALIN, PCLK })`,
 { setTimeout, clearTimeout, setInterval, clearInterval, console, TextEncoder, TextDecoder, Blob, Response, DecompressionStream });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const js = (x) => JSON.stringify(x);
@@ -117,7 +117,7 @@ async function editorMock() {
   const page = html.slice(html.indexOf("async function load(d)"), html.indexOf("async function getDescOrNull"));
   ok(oi.proto === 10 && oi.nengines === 12 && oi.ntrk === 4 && od && /if \(!\(d\.info\.proto >= PROTO\)\)/.test(page)
     && page.indexOf("proto >= PROTO") < page.indexOf("getDescOrNull(0, i)") && /sayK\("fwRefused", e\.refused\)/.test(html)
-    && /fwRefused: "[^"]*fm1-drummer[^"]*11/.test(html) && (html.match(/fwRefused: "/g) || []).length === 2,
+    && /fwRefused: "[^"]*BackBeat[^"]*11/.test(html) && (html.match(/fwRefused: "/g) || []).length === 2,
     "editor: a device below protocol 11: refused right after INFO, said in both languages");
   o.done();
 }
@@ -211,7 +211,7 @@ async function editorSetGate() {
   done();
 }
 
-/* ------------------------------------- fm1-drummer: songs (the Songs tab) --- */
+/* ------------------------- fm1-drummer: songs (the Song and Setlist tabs) --- */
 async function editorSongs() {
   const C = E.CMD;
   /* the packer: byte for byte what tools/fm1_song.py writes */
@@ -236,12 +236,14 @@ async function editorSongs() {
   const { rq, done } = attachMock({});
   let rows = await E.SNG.summaries(rq);
   ok(rows.length === 16 && rows.every((r) => r === null), "songs: a new device has 16 empty slots");
-  {   /* the Song drummer tab works without an FM-1: only its slots, the pedal settings and Send are the device's */
+  {   /* the Song tab works without an FM-1: only the pedal settings and Send are the device's; the slots are the Setlist tab's */
     const panel = (/<section class="panel" id="p-songs"[^>]*>/.exec(html) || [""])[0];
-    ok(!/data-dev\b/.test(panel) && (html.match(/data-devonly/g) || []).length >= 4 && /\$\("songs-offline"\)\.hidden = ready/.test(html)
+    const songs = html.slice(html.indexOf('id="p-songs"'), html.indexOf('id="p-setlist"'));
+    ok(!/data-dev\b/.test(panel) && (songs.match(/ data-devonly>/g) || []).length === 3 && /\$\("songs-offline"\)\.hidden = ready/.test(html)
       && /<span data-devonly><label><span data-t="gpiSlot"><\/span> <select id="gpi-slot">/.test(html) && /<span data-devonly><label><span data-t="gpiSlot"><\/span> <select id="sed-slot">/.test(html)
-      && /tabSongs: "Song drummer"/.test(html) && /songsOffline: "No FM-1 connected/.test(html),
-      "songs: the Song drummer tab without an FM-1 (import, editor, player); the slots, the pedal and Send with one");
+      && /<section class="panel" id="p-setlist" data-tab="setlist" data-dev hidden>/.test(html) && !songs.includes('id="songslots"')
+      && /tabSong: "Jam"/.test(html) && /tabSongs: "Song"/.test(html) && /tabSetlist: "Setlist"/.test(html) && /songsOffline: "No FM-1 connected/.test(html),
+      "songs: the Song tab without an FM-1 (import, editor, player), the pedal and Send with one; the slots in Setlist; Jam, Song, Setlist");
     ok(/`\$\{k \+ 1\}: \$\{x\.name\}/.test(html) && /`\$\{SONGED\.sel \+ 1\}: \$\{sedSec\(\)\.name\}/.test(html) && /sp\.swing \?\? 0;/.test(html),
       "sed: the sections numbered 1..8 as on the device; a song without swing shows 0");
   }
@@ -642,9 +644,40 @@ async function editorPedalIn() {
   ok(R.tap(taps, 0) === null && R.tap(taps, 500) === 120 && R.tap(taps, 1000) === 120 && R.tap(taps, 1600) === 113 && R.tap(taps, 5000) === null && R.tap(taps, 5250) === 240,
     "pedal in: tap tempo: 500 ms -> 120; the last three intervals averaged; a pause starts over; 240 at most");
   /* the page: the router feeds the player as the Play card's buttons do */
-  const page = html.slice(html.indexOf("function pinMsg(data)"), html.indexOf('$("pin-listen").addEventListener'));
+  const page = html.slice(html.indexOf("function pinMsg("), html.indexOf('$("pin-listen").addEventListener'));
   ok(/PLAY\.request\(st, a\.k, a\.now\)/.test(page) && /PLAY\.fillNext\(st\)/.test(page) && /PLAY\.ending\(st, a\.k\)/.test(page) && /playStop\(\)/.test(page)
     && /PLAY\.step\(st, a\.dir\)/.test(page) && /PLAY\.load\(SPLAY\.st, spec\)/.test(html), "pedal in: the page applies each action to the player (request, fill, ending, stop, step, load)");
+
+  /* MIDI clock in (PCLK, the device's seq.c mclk_event): the tempo every 24 pulses, START / CONTINUE / STOP, the downbeat */
+  const C = E.PCLK, c = C.create();
+  ok(C.msg(c, 0xFA, 0).kind === "start" && C.msg(c, 0xFB, 0).kind === "continue" && C.msg(c, 0xFC, 0).kind === "stop" && C.msg(c, 0xFE, 0) === null,
+    "clock in: FA start, FB continue, FC stop; active sensing ignored");
+  C.msg(c, 0xFA, 0);
+  let p0 = C.msg(c, 0xF8, 0), last = p0, bpms = [];
+  for (let i = 1; i <= 48; i++) { last = C.msg(c, 0xF8, i * 20.833); if (last.bpm) bpms.push(last.bpm); }   /* 120 BPM: a pulse every 20.8 ms */
+  ok(p0.first && p0.pulses === 0 && p0.beat && last.pulses === 48 && last.beat && js(bpms) === js([120, 120]) && C.on(c, 48 * 20.833 + 400) && !C.on(c, 48 * 20.833 + 600),
+    "clock in: the first pulse after START is the downbeat; 120 BPM read every beat; on while pulses come (0.5 s)");
+  const s2 = C.create(); let b2 = [];
+  for (let i = 0; i <= 48; i++) { const a = C.msg(s2, 0xF8, i * 5); if (a.bpm) b2.push(a.bpm); }
+  const s3 = C.create(); let b3 = [];
+  for (let i = 0; i <= 24; i++) { const a = C.msg(s3, 0xF8, 1000 + i * 100); if (a.bpm) b3.push(a.bpm); }
+  const s4 = C.create(); let e4 = 0;
+  for (let i = 0; i <= 8; i++) { const a = C.msg(s4, 0xF8, i * 20.833); if (a.est) e4 = a.est; }
+  ok(e4 === 120, "clock in: the tempo from the pulses' interval before a whole beat has come");
+  ok(b2.length === 0 && b3.length === 0, "clock in: a beat under 250 ms or over 1500 ms gives no tempo (40..240 BPM, as the device)");
+  /* the player's time of a beat: between its steps (swung: the beat still on its step), or after them at the tempo */
+  const P = E.PLAY, g = P.create({ name: "S", bpm: 120, swing: 50, sections: [{ name: "A", steps: 16, div: "1/16", lanes: { KICK: "x..............." } }] });
+  P.request(g, 0);
+  const marks = []; let at = 0, u = 0;
+  for (let i = 0; i < 8; i++) { const ev = P.tick(g); marks.push({ at, u }); at += ev.secs; u += ev.u; }
+  ok(u === 96 && Math.abs(C.timeOf(marks, 48, u, at, 120) - 0.5) < 1e-9 && Math.abs(C.timeOf(marks, 96, u, at, 120) - 1) < 1e-9
+    && Math.abs(C.timeOf(marks, 144, u, at, 120) - 1.5) < 1e-9 && C.timeOf(marks.slice(4), 0, u, at, 120) === null,
+    "clock in: the player's steps in units (swing kept inside the beat): beat 1 at 0.5 s, 2 at 1 s, 3 after them at the tempo");
+  ok(C.nudge(0.01) === 0.005 && C.nudge(0.04) === 0.02 && C.nudge(-0.04) === -0.02 && C.nudge(0.3) === 0.3, "clock in: the steps to come move half the error, 20 ms at most a beat; over 50 ms all of it");
+  const clk = html.slice(html.indexOf("function pinClock("), html.indexOf("function pinMsg("));
+  ok(/if \(PIN\.clock\) pinClock\(data\[0\], stamp\)/.test(html) && /pinMsg\(e\.data, e\.timeStamp/.test(html) && /st\.counting = 0; PLAY\.bar\(st\)/.test(clk)
+    && /playStart\(at\)/.test(clk) && /pinClock: "Follow its MIDI clock"/.test(html) && /id="pin-clock"/.test(html),
+    "clock in: the page: realtime bytes to pinClock when the box is ticked, the start on the downbeat, no count-in");
 }
 
 
@@ -690,7 +723,7 @@ async function editorBackup() {
   ok(/PROJ_MAGIC 0x44524D31u/.test(pc) && /PROJ_MAGIC_V6 0x46554E36u/.test(pc) && /PROJ_MAGIC_V4 0x46554E34u/.test(pc) && !/PROJ_MAGIC_V3/.test(pc)
     && E.bkProjFormat(Uint8Array.of(0x31, 0x4D, 0x52, 0x44)) === "DRM1" && E.bkProjOk(Uint8Array.of(0x36, 0x4E, 0x55, 0x46, 1)) && E.bkProjOk(Uint8Array.of(0x34, 0x4E, 0x55, 0x46))
     && !E.bkProjOk(Uint8Array.of(0x33, 0x4E, 0x55, 0x46)) && !E.bkProjOk(Uint8Array.of(1, 2, 3, 4)) && E.bkProjOk(new Uint8Array(0))
-    && E.bkFwAtLeast("SLOOP 2.6", [2, 5, 1]) && !E.bkFwAtLeast("SLOOP 2.5", [2, 5, 1]) && !E.bkFwAtLeast("FELUCCA SLOOP 2.0 (MOCK)", [2, 5, 1]),
+    && E.bkFwAtLeast("SLOOP 2.6", [2, 5, 1]) && !E.bkFwAtLeast("SLOOP 2.5", [2, 5, 1]) && !E.bkFwAtLeast("FELUCCA SLOOP 2.0 (MOCK)", [2, 5, 1]) && E.bkFwAtLeast("FELUCCA BACKBEAT 1.0", [2, 5, 1]),
     "backup: project formats read (DRM1, FUN4..6 == project.c), the firmware compared");
   {
     const F3 = JSON.parse(JSON.stringify(A)), p2 = F3.objects.find((x) => x.id === 2);
@@ -716,7 +749,7 @@ async function editorV5() {
   const C = E.CMD;
   const { rq, ev, done } = attachMock({ watchMs: 1000 });
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.proto === 11 && /SLOOP/.test(info.version) && info.pcount === 71 && info.gcount === 45 && info.pe0 === 63, "v5..v11: INFO ends with the protocol version (11: drums only); 45 globals");
+  ok(info.proto === 11 && /^FELUCCA BACKBEAT \d/.test(info.version) && info.pcount === 71 && info.gcount === 45 && info.pe0 === 63, "v5..v11: INFO ends with the protocol version (11: drums only); 45 globals");
   /* the firmware says the same: the command numbers, INFO's layout, protocol 11 */
   const ec = fw("editor.c"), pc = fw("params.c");
   const en = (/enum \{ ED_INFO = 1,([^}]*)\}/.exec(ec) || [])[1] || "";
@@ -1010,7 +1043,7 @@ async function editorDsyn() {
   let bad = "";
   try { DSYN.fromFile({ format: "sloop-drumsynth", sounds: [[1, 2]] }); } catch (e) { bad = e.message; }
   const bank = DSYN.bankEncode([kit, kit, kit, kit]), dec = DSYN.bankDecode(bank);
-  ok(back.name === "MY 808" && back.crush === 0x21 && js(back.sounds.map((x) => Array.from(x))) === js(kit.sounds.map((x) => Array.from(x))) && /not a SLOOP/.test(bad)
+  ok(back.name === "MY 808" && back.crush === 0x21 && js(back.sounds.map((x) => Array.from(x))) === js(kit.sounds.map((x) => Array.from(x))) && /not a drum synth kit/i.test(bad)
     && bank.length === 1464 && dec && dec[3].name === "MY 808" && dec[2].crush === 0x21 && js(Array.from(dec[1].sounds[15])) === js(Array.from(kit.sounds[15]))
     && DSYN.bankDecode(bank.slice(1)) === null, "dsyn: a kit file and the backup object, there and back; a wrong file refused");
   /* the device (mock): LIST / GET / PUT / STORE / PLAY */
@@ -1074,8 +1107,8 @@ function editorTabs() {
   const tabs = [...html.matchAll(/<button role="tab" data-tab="(\w+)"/g)].map((x) => x[1]);
   const panels = [...html.matchAll(/<section class="panel" id="p-(\w+)" data-tab="(\w+)"/g)].map((x) => [x[1], x[2]]);
   const TABS = JSON.parse((/const TABS = (\[[^\]]*\]);/.exec(html) || [])[1] || "[]");
-  ok(tabs.length === 8 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b)
-    && js([...TABS].sort()) === js(["drumsynth", "kits", "projects", "samples", "sequencer", "settings", "song", "songs"]),
+  ok(tabs.length === 9 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b)
+    && js([...TABS].sort()) === js(["drumsynth", "kits", "projects", "samples", "sequencer", "setlist", "settings", "song", "songs"]),
     `editor: ${tabs.length} tabs, one panel each (${tabs.join(" ")})`);
   /* drums only: SLOOP's Sound, Tracks and Library tabs, the synth step grid, piano roll, MIDI files, CHOP and FM6 are gone; a tab
      remembered from SLOOP's editor opens the first one; the side bar's headings */
