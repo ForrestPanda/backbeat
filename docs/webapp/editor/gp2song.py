@@ -14,7 +14,7 @@ at most 2 bars, when many hits sit between 16ths). The bar that deviates from th
 the section, or most often at the end of a phrase, is the fill: its own hits are marked "only during
 a fill", the pattern's hits it leaves out "not during a fill", lane by lane ("fills" in the JSON), so nothing
 is dropped. Every percussion track of the file goes into the pattern (drums and percussion). Sections whose
-pattern repeats an earlier one (Chorus 2, Chorus 3) are skipped; at most 8 are kept, the outro always
+pattern repeats an earlier one (Chorus 2, Chorus 3) are skipped; at most 16 are kept, the outro always
 (--sections picks and orders them by their marker titles). A section called OUTRO, ENDING, END or CODA is
 the outro. GM drum notes go to the 16 lanes (kick 35 36, snare 38 40, side stick 37, clap 39, hats 42 44
 46, toms 41..50, crash 49 52 55 57, ride 51 53 59, cowbell 56, shaker and tambourine 54 69 70 82, congas
@@ -48,6 +48,7 @@ OUTRO_NAMES = ("OUTRO", "ENDING", "END", "CODA")
 MATCH = 0.75                                  # a pattern: this share of the bars agree with it
 NEAR = 0.1                                    # a shorter pattern scoring this close to the best is taken
 SNG_MAX = 3800                                # the packed song (firmware/src/sng.c SNG_MAX)
+SNG_SECTIONS = 16                             # sections a song holds (seq.c SNG_SECTIONS; 8 until 2026-10-14)
 METER_DENS = (2, 4, 8, 16)                    # the meters a section can have (sng.c): n 1..16 over these
 OFFGRID_32 = 0.125                            # 1/32 when this share of the hits sit between 16ths
 
@@ -340,10 +341,10 @@ def convert(source, sections=None, track=None, kit=0, keep_duplicates=False, aut
         src.append((bars, outro))
     for sk in skipped:
         log(f"  skipped {sk}")
-    if len(out) > 8:                               # unnamed parts go first, then from the end; the outro stays
+    if len(out) > SNG_SECTIONS:                    # unnamed parts go first, then from the end; the outro stays
         order = sorted(range(len(out)), key=lambda i: (bool(out[i].get("outro")), not out[i]["name"].startswith("PART "), -i))
-        drop = set(order[:len(out) - 8])
-        log("  more than 8 sections: dropped " + ", ".join(out[i]["name"] for i in sorted(drop)) + " (--sections picks)")
+        drop = set(order[:len(out) - SNG_SECTIONS])
+        log(f"  more than {SNG_SECTIONS} sections: dropped " + ", ".join(out[i]["name"] for i in sorted(drop)) + " (--sections picks)")
         out = [s for i, s in enumerate(out) if i not in drop]
         src = [s for i, s in enumerate(src) if i not in drop]
     # the packed song must fit its flash sector: the longest patterns give way (4 bars -> 2 -> 1). Sections are

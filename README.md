@@ -45,11 +45,11 @@ the loop starts with that section. CC 23 cancels it; another section pressed mea
 `python3 tools/fm1_song.py --count-in 1`, the Song tab's pedal row, or SETUP > PEDAL on the device; hear it with
 `fm1_render.py --count-in 1`.
 
-**Songs.** A song is up to 8 named drum sections (intro, verse, chorus, bridge, solo, outro...) with its
+**Songs.** A song is up to 16 named drum sections (intro, verse, chorus, bridge, solo, outro...) with its
 tempo, kit and swing (`"swing"`: 0 straight, the default, up to 100, MPC's 50 to 75 %; every second step of a 1/4,
 1/8, 1/16 or 1/32 grid comes late); 16 songs live in flash. The screens (the device and the editor) number
 them 1..16; the pedal's PC and `fm1_song.py --put` count from 0 (song 1 is PC 0, `--put 0`). Sections the same:
-the screens show 1..8, the value of CC 20 / 27 / 22 counts from 0 (section 1 is CC 20 value 0). Each section has a time signature (`"time"`, 4/4 if left out) and is
+the screens show 1..16, the value of CC 20 / 27 / 22 counts from 0 (section 1 is CC 20 value 0). Each section has a time signature (`"time"`, 4/4 if left out) and is
 a whole number of its bars: the FM-1 counts bars, so a change waits for the bar line. A pickup or a short intro is a
 short bar (4 steps of 1/16 is `"time": "1/4"`); `fm1_song.py` and the editor's section editor flag a section that
 is not whole bars and offer the signature that fits. Write one as JSON (`tests/example-song.json` is the model; `songs/` is yours) and send it over USB:
@@ -70,7 +70,7 @@ editor, or from `songs/`); a file dropped on that card or on the editor opens to
 with the kit's pads as the pedal would, on a view of the device's LIVE screen (the beat lights in the section's
 time signature, the section with its bar and a progress ticked per bar, the count-in, what comes next, the sections
 as tiles, all in time with what you hear): the tiles are the footswitches, with fills, the ending, stop, the song's
-swing and the count-in as the device has them; keys (shown under the tiles): 1..8 a section, shift + 1..8 on the next
+swing and the count-in as the device has them; keys (shown under the tiles): 1..8 a section (0 switches them to 9..16 and back), shift + the key on the next
 bar, f a fill, comma and period previous / next, e the ending, space stop; **MIDI in from** and **Listen to the pedal** let the real pedal (the
 Ampero, or a USB MIDI interface between it and the computer) drive that player with the same CCs and PCs as the
 FM-1, on the Pedal card's channel (PC n opens song n of the FM-1 connected, or of the simulated one), so the
@@ -157,11 +157,11 @@ on an FM-1.
 **LIVE.** What plays, readable from the floor: the song and its slot, the tempo, the beat lights in the bar's
 meter; the section in large letters with "BAR 3 / 8" and a progress ticked per bar ("COUNT 2 / 8" during the
 count-in); what comes next, in colour (NEXT: CHORUS, FILL, FILL TO THE END, FILL > CHORUS for a fill into a change,
-ENDING); the 8 sections as tiles laid
-out as the white keys 1..8 (the one playing lit, the one cued framed and blinking, the outro and any meter but 4/4
-marked); and a footer with the kit, the pedal channel and a dot that lights when the pedal sends. The pedal's
-messages ("SONG: BLACK", "NEXT: SOLO") show in the footer. The white keys 1..8 change section when the one
-playing ends, 9..16 on the next bar, with no fill of their own; any black key asks for a fill to the end of the
+ENDING); the song's sections as tiles, four to a row as the white keys 1..16, as many rows as the song needs (up
+to 4 sections the whole names, up to 8 a name each, 9..16 a line each: the number and the name cut; the one
+playing lit, the one cued framed and blinking, the outro and any meter but 4/4 marked); and a footer with the kit, the pedal channel and a dot that lights when the pedal sends. The pedal's
+messages ("SONG: BLACK", "NEXT: SOLO") show in the footer. The white keys 1..16 change section when the one
+playing ends, with OCT+ held on the next bar (the state line says KEY: ON THE NEXT BAR), with no fill of their own; any black key asks for a fill to the end of the
 pattern (as CC 21). So a plain change is one press, and a fill into the change is a black key then a white one,
 as the pedal's CC 21 sent with its CC 20. SEL is a fill too, ENV and LFO the previous and next section
 (without a fill). KNOB 1 (and SELECT) the tempo, KNOB 2 (and PRESETS) the kit, KNOB 3 the drums' level, KNOB 4 the

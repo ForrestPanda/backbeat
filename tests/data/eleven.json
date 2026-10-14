@@ -1,0 +1,119 @@
+{
+ "name": "ELEVEN",
+ "bpm": 120,
+ "kit": 0,
+ "swing": 0,
+ "sections": [
+  {
+   "name": "INTRO",
+   "steps": 16,
+   "div": "1/16",
+   "lanes": {
+    "KICK": "x...x...x...x...",
+    "SNARE": "....x.......x...",
+    "HAT": "x.x.x.x.x.x.x.x."
+   }
+  },
+  {
+   "name": "VERSE",
+   "steps": 16,
+   "div": "1/16",
+   "lanes": {
+    "KICK": "x.......x.......",
+    "SNARE": "....x.......x...",
+    "HAT": "xxxxxxxxxxxxxxxx"
+   }
+  },
+  {
+   "name": "CHORUS",
+   "steps": 16,
+   "div": "1/16",
+   "lanes": {
+    "KICK": "x..x..x.x.......",
+    "SNARE": "....x.......x...",
+    "HAT": "x.x.x.x.x.x.x.x."
+   }
+  },
+  {
+   "name": "VERSE 2",
+   "steps": 16,
+   "div": "1/16",
+   "lanes": {
+    "KICK": "x...x...x..x....",
+    "SNARE": "....x.......x...",
+    "HAT": "xxxxxxxxxxxxxxxx"
+   }
+  },
+  {
+   "name": "PRE CHORUS",
+   "steps": 16,
+   "div": "1/16",
+   "lanes": {
+    "KICK": "x.x...x...x.x...",
+    "SNARE": "....x.......x...",
+    "HAT": "x.x.x.x.x.x.x.x."
+   }
+  },
+  {
+   "name": "CHORUS 2",
+   "steps": 16,
+   "div": "1/16",
+   "lanes": {
+    "KICK": "x...x...x...x...",
+    "SNARE": "....x.......x...",
+    "HAT": "xxxxxxxxxxxxxxxx"
+   }
+  },
+  {
+   "name": "GUITAR SOLO",
+   "steps": 14,
+   "div": "1/16",
+   "time": "7/8",
+   "lanes": {
+    "KICK": "x.....x.......",
+    "SNARE": "....x.....x...",
+    "HAT": "x.x.x.x.x.x.x."
+   }
+  },
+  {
+   "name": "BRIDGE",
+   "steps": 16,
+   "div": "1/16",
+   "lanes": {
+    "KICK": "x..x..x.x.......",
+    "SNARE": "....x.......x...",
+    "HAT": "xxxxxxxxxxxxxxxx"
+   }
+  },
+  {
+   "name": "BREAKDOWN",
+   "steps": 16,
+   "div": "1/16",
+   "lanes": {
+    "KICK": "x...x...x..x....",
+    "SNARE": "....x.......x...",
+    "HAT": "x.x.x.x.x.x.x.x."
+   }
+  },
+  {
+   "name": "CHORUS 3",
+   "steps": 16,
+   "div": "1/16",
+   "lanes": {
+    "KICK": "x.x...x...x.x...",
+    "SNARE": "....x.......x...",
+    "HAT": "xxxxxxxxxxxxxxxx"
+   }
+  },
+  {
+   "name": "OUTRO",
+   "steps": 16,
+   "div": "1/16",
+   "lanes": {
+    "KICK": "x...............",
+    "CRASH": "x..............."
+   },
+   "outro": true
+  }
+ ]
+}

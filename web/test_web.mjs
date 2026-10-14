@@ -245,7 +245,7 @@ async function editorSongs() {
       && /tabSong: "Jam"/.test(html) && /tabSongs: "Song"/.test(html) && /tabSetlist: "Setlist"/.test(html) && /songsOffline: "No FM-1 connected/.test(html),
       "songs: the Song tab without an FM-1 (import, editor, player), the pedal and Send with one; the slots in Setlist; Jam, Song, Setlist");
     ok(/`\$\{k \+ 1\}: \$\{x\.name\}/.test(html) && /`\$\{SONGED\.sel \+ 1\}: \$\{sedSec\(\)\.name\}/.test(html) && /sp\.swing \?\? 0;/.test(html),
-      "sed: the sections numbered 1..8 as on the device; a song without swing shows 0");
+      "sed: the sections numbered 1..16 as on the device; a song without swing shows 0");
   }
   ok(/el\("b", \{ text: String\(i \+ 1\) \}\)/.test(html) && (html.match(/text: String\(i \+ 1\) \}\)\);/g) || []).length === 2
     && /replace\("\{n\}", slot \+ 1\)/.test(html) && /NO SONG \$\{slot \+ 1\}/.test(html) && /fmt_int\(b, \(int32_t\)slot \+ 1\)/.test(fw("sng.c")),
@@ -309,7 +309,9 @@ function editorPlay() {
   ok(/id="play-live"/.test(html) && /id="pl-beats"/.test(html) && /id="pl-prog"/.test(html) && /function playLive\(\)/.test(html)
     && /q\[0\]\.at <= ctx\.currentTime/.test(html), "play: the LIVE view (beats, bar, progress, what comes, tiles) follows the audio clock");
   ok(/\/\^\(\?:Digit\|Numpad\)\(\[1-8\]\)\$\/\.exec\(e\.code\)/.test(html) && /e\.key === "f"\) PLAY\.fillNext/.test(html) && /data-t="playKeys"/.test(html)
-    && /playKeys: "keys: 1–8 a section/.test(html), "play: keys 1..8 by the key (shift and the keypad too), f the fill, the keys shown under the tiles");
+    && /playKeys: "keys: 1–8 a section \(0: switches to 9–16/.test(html) && /SPLAY\.bank = SPLAY\.bank \? 0 : 1/.test(html)
+    && /\+ 8 \* \(SPLAY\.bank \|\| 0\)/.test(html) && /plive-tiles rows-\$\{Math\.max\(1, Math\.ceil\(n \/ 4\)\)\}/.test(html),
+    "play: keys 1..8 by the key (shift and the keypad too; 0: sections 9..16), f the fill, the tiles in rows of four as the device");
   P.fillNext(st); P.request(st, 1);                       /* CC 21 with CC 20 (a section brings no fill of its own): the
                                                               rest of the bar is the fill */
   const fillHits = [];
@@ -562,6 +564,15 @@ function editorMeter() {
   const dense = { name: "SECTION", steps: 64, div: "1/16", lanes: { KICK: "x...".repeat(16), HAT: "x".repeat(64), SNARE: "..x.".repeat(16) } };
   const full = S.pack({ name: "FULL", bpm: 120, sections: Array.from({ length: 8 }, (_, k) => ({ ...dense, name: "S" + k })) });
   ok(full.length === 32 + 8 * (18 + 16 + 128 + 96) && S.check(full).nsec === 8, `sng2: 8 sections of 64 steps (3 hits a step) fit: ${full.length} bytes`);
+  /* 16 sections (8 until 2026-10-14): sixteen of 16 steps fit; 17 refused; sixteen dense 64-step ones overflow the sector */
+  const short = { name: "S", steps: 16, div: "1/16", lanes: { KICK: "x...x...x...x...", SNARE: "....x.......x...", HAT: "x.x.x.x.x.x.x.x." } };
+  const sixteen = S.pack({ name: "SIXTEEN", bpm: 120, sections: Array.from({ length: 16 }, (_, k) => ({ ...short, name: "S" + k })) });
+  let over = 0;
+  try { S.pack({ name: "X", bpm: 120, sections: Array.from({ length: 17 }, (_, k) => ({ ...short, name: "S" + k })) }); } catch (e) { over++; }
+  try { S.pack({ name: "X", bpm: 120, sections: Array.from({ length: 16 }, (_, k) => ({ ...dense, name: "S" + k })) }); } catch (e) { over++; }
+  const seqc = readFileSync(join(HERE, "../firmware/src/seq.c"), "utf8");
+  ok(S.SECTIONS === 16 && +(/#define SNG_SECTIONS (\d+)u/.exec(seqc) || [])[1] === S.SECTIONS && S.check(sixteen).nsec === 16 && sixteen.length <= S.MAX && over === 2,
+    `sng2: 16 sections (== seq.c SNG_SECTIONS): sixteen of 16 steps fit (${sixteen.length} bytes); 17, or sixteen dense 64-step ones, refused`);
   /* the meter: "7/8" -> the byte 7 | 1 << 5, back; 4/4 is no byte; bad ones refused */
   ok(S.meterByte("7/8") === (7 | 32) && S.meterByte("4/4") === 0 && S.meterByte(null) === 0 && S.meterByte("3/4") === 3 && S.meterByte("12/16") === (12 | 96)
     && S.meterOf(7 | 32) === "7/8" && S.meterOf(0) === null, "meter: n/d <-> the section header's byte");

@@ -183,7 +183,7 @@ int main(int argc, char **argv)
         uint8_t bad[3800];
         memcpy(bad, blob[0], blob_n[0]);
         bad[22] = 0;  assert(sng_check(bad, blob_n[0], &tmp) == 3);
-        bad[22] = 9;  assert(sng_check(bad, blob_n[0], &tmp) == 3);
+        bad[22] = 17; assert(sng_check(bad, blob_n[0], &tmp) == 3);   /* (16 sections at most) */
         bad[22] = 3;  bad[SNG_HDR + 12] = 0;  assert(sng_check(bad, blob_n[0], &tmp) == 5);
         bad[SNG_HDR + 12] = 16; bad[SNG_HDR + 13] = 9;  assert(sng_check(bad, blob_n[0], &tmp) == 5);
         bad[SNG_HDR + 13] = 2; bad[18] = (uint8_t)DRUM_KITS;  assert(sng_check(bad, blob_n[0], &tmp) == 3);
@@ -434,5 +434,41 @@ int main(int argc, char **argv)
         assert(n && !sng_check(out, n, &tmp) && tmp.nsec == sng.nsec);
     }
     printf("song: a section packed again from the drum track (EDIT, SAVE held): same bytes, an edit kept, no room refused PASS\n");
+
+    {   /* 16 sections a song (8 until 2026-10-14): sixteen 16-step sections fit; CC 20 / 27 reach 9..16; 17 refused */
+        static const char *const NM[16] = {"INTRO", "VERSE", "CHORUS", "VERSE 2", "PRE CHORUS", "CHORUS 2", "SOLO",
+                                           "BRIDGE", "BREAKDOWN", "CHORUS 3", "OUTRO JAM", "TAG", "HALF TIME",
+                                           "BUILD UP", "LAST CHORUS", "OUTRO"};
+        static uint8_t out[SNG_MAX];
+        uint32_t p = song_hdr(blob[5], "SIXTEEN", 120, 0, 16), k, n;
+        char nm[13];
+        for (k = 0; k < 16u; k++)
+            p = song_sec(blob[5], p, NM[k], 16, 2, k == 15u ? SNG_F_OUTRO : 0, "x...x...x...x...", "....x.......x...",
+                         "x.x.x.x.x.x.x.x.", 0);
+        blob_n[5] = p;
+        assert(p <= SNG_MAX && sng_check(blob[5], p, &tmp) == 0 && tmp.nsec == 16u);
+        blob[5][22] = 17; assert(sng_check(blob[5], p, &tmp) == 3); blob[5][22] = 16;
+        cc(16, 23, 0); advance(bar_len() * 2u);
+        pedal.count = 0;
+        pc(16, 5); advance(CTL); sng_poll();
+        assert(sng_cur == 5 && sng_ready() == 0xFFFFu && sng_outro() == 15u);
+        sng_name(14, nm); assert(!strcmp(nm, "LAST CHORUS"));
+        cc(16, 20, 9); advance(CTL * 3u);                          /* stopped: section 10 starts */
+        assert(song.playing && live_sec == 9);
+        cc(16, 20, 15); advance(CTL * 2u);                         /* section 16 at the section's end */
+        assert(live_req == 15 && pedal_at_end);
+        advance(bar_len() + CTL * 4u);
+        assert(live_sec == 15);
+        cc(16, 27, 12); advance(CTL * 2u);                         /* section 13 on the next bar */
+        assert(live_req == 12 && !pedal_at_end);
+        advance(bar_len() + CTL * 4u);
+        assert(live_sec == 12);
+        cc(16, 24, 0); advance(bar_len() + CTL * 4u);              /* NEXT: 14 */
+        assert(live_sec == 13);
+        n = sng_pack_section(13, out, sizeof out);                 /* section 14 packs back into the 16 (EDIT, SAVE held) */
+        assert(n && !sng_check(out, n, &tmp) && tmp.nsec == 16u);
+        cc(16, 23, 0); advance(bar_len() * 2u);
+    }
+    printf("song: 16 sections: packed, checked (17 refused), CC 20 15 / CC 27 12 / NEXT reach them, a section saved back PASS\n");
     return 0;
 }

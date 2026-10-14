@@ -44,7 +44,7 @@ previous section (wrapping; stopped: the first / the last), no fill either; CC 2
 
 ## Five switches
 
-With five switches free for the drummer, a song of up to eight sections still fits:
+With five switches free for the drummer, a song of any length (up to 16 sections) still fits:
 
 | Switch | Channel | Command | Data | What the FM-1 does |
 | --- | --- | --- | --- | --- |

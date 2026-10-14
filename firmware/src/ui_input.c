@@ -101,7 +101,7 @@ static uint32_t keys_lit(void)
         break;
     }
     if (kb_grid == 2u) {                           /* the song screen: the section playing lit, the one cued blinking */
-        for (i = 0; i < 8u; i++)
+        for (i = 0; i < SNG_SECTIONS; i++)
             if ((song.playing && (int32_t)i == live_sec) || ((int32_t)i == live_req && blink))
                 m |= 1u << key_of_white(i);
         return m;
@@ -446,7 +446,7 @@ static int layers_input(uint32_t note_edges, uint32_t *pressed, uint32_t home)
                 if (((e >> 7) & 1u) && grid_keys_on())
                     grid_key(e & 31u);
                 else if (((e >> 7) & 1u) && drummer_keys_on())
-                    drummer_key(e & 31u);
+                    drummer_key(e & 31u, (e & KB_OCTUP) != 0u);
             } else if (!((e >> 7) & 1u)) {
                 layer_key(e >> 8, e & 31u, 0);
             }

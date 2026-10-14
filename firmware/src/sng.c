@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* fm1-drummer: songs. A song is up to 8 named drum sections (intro, verse, chorus, bridge, solo,
+/* fm1-drummer: songs. A song is up to 16 named drum sections (8 until 2026-10-14) (intro, verse, chorus, bridge, solo,
  * outro...), each a drum pattern (16 lanes, 1..64 steps, a level and a ratchet per hit, the fill
  * conditions), with the song's tempo, kit, swing, drum level and reverb. Up to 8 songs live in flash
  * (storage.c OBJ_SONG0.., A/B sectors 0xA0000..: the USR1 sample slot's place, given up: the drummer keeps
@@ -11,7 +11,8 @@
  * main loop: flash); stopped, the song's tempo and kit are set and its first section cued at once;
  * playing, they come with the next section.
  *
- * The packed song (little endian), "SNG2": a byte a hit, so that 8 sections of 64 steps fit in a sector
+ * The packed song (little endian), "SNG2": a byte a hit, so that 8 sections of 64 steps fit in a sector (16 of the
+ * usual 16..48 steps fit too; SNG_MAX is the limit, in bytes, not the sections)
  *   header (32)   "SNG2", name[12], bpm u16, kit, swing, drum level, drum reverb, nsec, rsv[9]
  *   per section   name[12], len (1..64), div (N_SDIV index), flags (bit 0: the outro), meter (0: 4/4; else the
  *                 numerator 1..16 in bits 0..4, the denominator in bits 5..6: SNG_DEN), size u16 (the section's

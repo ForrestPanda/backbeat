@@ -243,6 +243,49 @@ def main():
     blob = fm1_song.pack(spec)
     assert fm1_song.sections(blob)[0][4] == 7 | 1 << 5 and fm1_song.sections(blob)[1][4] == 0
     print("gp2song: a 7/8 section: 14 sixteenths, \"time\": \"7/8\", the meter byte packed; 4/4 left out PASS")
+    with tempfile.TemporaryDirectory() as d:
+        gpf = os.path.join(d, "many.gp4")
+        gp.write(make_many_song(), gpf)
+        out = os.path.join(d, "many.json")
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "gp2song.py"), gpf, "--out", out],
+                           capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        with open(out) as f:
+            spec = json.load(f)
+    names = [s["name"] for s in spec["sections"]]
+    assert len(names) == 16 and names[-1] == "OUTRO" and spec["sections"][-1].get("outro") and names[0] == "SECTION 1", names
+    assert "more than 16 sections: dropped" in r.stdout, r.stdout
+    assert len(fm1_song.pack(spec)) <= 3800
+    print("gp2song: eighteen parts: sixteen kept (dropped from the end, the outro stays), packed PASS")
+
+
+def make_many_song():
+    """eighteen sections of a bar each, every one its own pattern (the kick on a 16th of its own, the snare on 4 or
+    12), the last called Outro: more than a song holds (16), so the importer drops from the end, the outro kept"""
+    song = gp.Song()
+    song.title = "Many"
+    song.tempo = 120
+    t = gp.Track(song, number=1)
+    t.name = "Drums"
+    t.isPercussionTrack = True
+    t.channel.channel = 9
+    t.strings = [gp.GuitarString(i + 1, 0) for i in range(6)]
+    t.measures = []
+    song.tracks = [t]
+    song.measureHeaders = []
+    for i in range(18):
+        h = gp.MeasureHeader(number=i + 1, start=Q + i * 4 * Q)
+        h.marker = gp.Marker(title="Outro" if i == 17 else f"Section {i + 1}")
+        song.measureHeaders.append(h)
+        m = gp.Measure(t, h)
+        m.voices = [gp.Voice(m)]
+        t.measures.append(m)
+    for i in range(18):
+        e = {0: [(36, 95, False)]}
+        e.setdefault((1 + i % 15) * 2, []).append((36, 95, False))
+        e.setdefault((4 if i < 9 else 12) * 2, []).append((38, 95, False))
+        emit_bar(t, i, e)
+    return song
 
 
 def make_odd_song():

@@ -28,9 +28,10 @@ COWBELL (spaces and case do not matter). div: 1/4 1/8 1/16 1/32 8T 16T 1/2 1BAR 
 n/d with n 1..16 and d 2, 4, 8 or 16 (none: 4/4); the pedal's bars, the click and the count-in follow it. A section is
 whole bars of its time (a change waits for the bar line): a pickup is a short bar, a 4-step intro of 1/16 "1/4";
 a section that is not gets a warning with the signature that fits. kit: the
-index in the device's KIT list (0 ACOUSTIC .. as the web editor shows them). Up to 8 sections; the packed song
+index in the device's KIT list (0 ACOUSTIC .. as the web editor shows them). Up to 16 sections; the packed song
 ("SNG2": a section header of 18 bytes, the fill conditions, then a step: 2 bytes of lanes and a byte a hit) must
-stay under 3800 bytes: 64 steps of three hits take about 340 bytes, so 8 full sections fit.
+stay under 3800 bytes: 64 steps of three hits take about 340 bytes, so 8 full sections fit, and 16 of the usual
+16..48 steps (about 60..150 bytes each).
 
 Sending needs mido (pip install mido python-rtmidi); the transfer is the editor protocol's backup PUT
 (EDITOR_PROTOCOL.md: object 16 + slot; the pedal settings: object 24)."""
@@ -54,6 +55,7 @@ def song_obj(slot):
 SNG_MAGIC = b"SNG2"
 HDR, SEC_HDR = 32, 18
 SNG_MAX = 3800
+SNG_SECTIONS = 16                                    # seq.c SNG_SECTIONS (8 until 2026-10-14)
 NSTEP = 64
 LANES = ["KICK", "KICK2", "SNARE", "CLAP", "HAT", "OPENHAT", "PEDAL", "RIM",
          "SNARE2", "LOWTOM", "HITOM", "CRASH", "RIDE", "SHAKER", "CONGA", "COWBELL"]
@@ -186,8 +188,8 @@ def pack_section(sec, index):
 
 def pack(spec):
     secs = spec.get("sections", [])
-    if not 1 <= len(secs) <= 8:
-        sys.exit("a song has 1 to 8 sections")
+    if not 1 <= len(secs) <= SNG_SECTIONS:
+        sys.exit(f"a song has 1 to {SNG_SECTIONS} sections")
     bpm = int(spec.get("bpm", 120))
     if not 40 <= bpm <= 240:
         sys.exit("bpm must be 40..240")

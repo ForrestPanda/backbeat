@@ -100,7 +100,7 @@ static void pedal_fill_req(void)                  /* CC 21: the fill until the p
 }
 
 /* how a section comes in, with no fill of its own: when the section playing ends (CC 20, 24, 25, 22; LIVE's white
- * keys 1..8, ENV, LFO) or on the next bar (CC 27; white keys 9..16) */
+ * keys 1..16, ENV, LFO) or on the next bar (CC 27; LIVE's white keys with OCT+ held) */
 enum { PS_END, PS_BAR };
 /* section s: how (PS_*); stopped: the loop starts with it on its bar 0 (seq_start resets the bar count,
  * live_block then applies the request at once). An empty section, or a section while the song chain plays

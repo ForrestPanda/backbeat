@@ -2,13 +2,14 @@
 /* fm1-drummer: the song screens, on the SONG page (ui_studio.c's look: black, big numbers, the knobs' colours).
  *   LIVE   the boot screen (HOME): what plays, read from the floor. The song and its tempo, the beat lights of the
  *          bar's meter, the section in big letters with its bar and a bar-ticked progress (the count-in's beats
- *          instead while it clicks), what comes (NEXT, FILL, FILL > NEXT, ENDING), the 8 sections as tiles laid out as the
- *          white keys 1..8, and a footer: the kit, the pedal channel and its MIDI dot, the last message.
+ *          instead while it clicks), what comes (NEXT, FILL, FILL > NEXT, ENDING), the song's sections (up to 16) as
+ *          tiles, four to a row as the white keys 1..16, and a footer: the kit, the pedal channel and its MIDI dot,
+ *          the last message.
  *   SONGS  SAVE tapped: the 16 song slots (name, tempo, sections; the factory songs marked) and JAM, SLOOP's
  *          sections A..D with their chain (ui_song.c: the page's own screen then, sng_view DV_JAM).
  * The keys go through pedal.c's own calls (the host tests cover both). A change of section brings no fill of
  * its own (as the pedal's CC 20 / 27): a fill is asked for by itself, so one press changes, two fill into it:
- *   white keys 1..8   the song's sections, when the one playing ends; 9..16 the same on the next bar
+ *   white keys 1..16  the song's sections, when the one playing ends; with OCT+ held, on the next bar
  *   black keys        any of them: a fill to the pattern's end (CC 21)
  *   SEL ENV LFO       fill (CC 21); previous, next (as CC 25, 24, without their fill)
  *   PLAY              stopped: the section cued (the count-in first); playing: stop
@@ -34,7 +35,8 @@ static void drummer_load(uint32_t slot)             /* a slot, or SNG_SLOTS: no 
     ui.force = 1;
 }
 
-static void drummer_key(uint32_t k)                 /* a key down (ui_input.c: seq.c's KB_GRID events) */
+static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.c: seq.c's KB_GRID events; nextbar:
+                                                     * OCT+ was held) */
 {
     int32_t w = key_white(k);
     if (sng_cur < 0 || sng_view == DV_LIB) {
@@ -43,10 +45,11 @@ static void drummer_key(uint32_t k)                 /* a key down (ui_input.c: s
         return;
     }
     fm1_irq_off();                                  /* (pedal.c runs in the audio ISR) */
-    if (w >= 0)                                     /* a section, no fill of its own: 1..8 when the one playing ends,
-                                                     * 9..16 on the next bar */
-        pedal_section((uint32_t)w & 7u, w < 8 ? PS_END : PS_BAR);
-    else
+    if (w >= 0) {                                   /* a section, no fill of its own: when the one playing ends;
+                                                     * OCT+ held: on the next bar */
+        if (w < (int32_t)SNG_SECTIONS)
+            pedal_section((uint32_t)w, nextbar ? PS_BAR : PS_END);
+    } else
         pedal_cc(PEDAL_CC_FILL, 127);               /* any black key: a fill to the pattern's end (CC 21) */
     fm1_irq_on();
 }
@@ -226,12 +229,15 @@ static void live_state(uint32_t playing, const char *next)
     char b[24];
     uint16_t c = C_AMB;
     uint32_t fill = fill_now || pedal_fill, hold = pedal_fill_hold, end = pedal_end_req || pedal_end_bars;
-    uint32_t sig = studio_hash(playing + fill * 3u + hold * 7u + end * 11u + fill_arm * 13u, next);
+    uint32_t oct = (fm1_in.buttons & dyn_bit[1]) != 0u;   /* OCT+ held: a white key now changes on the next bar */
+    uint32_t sig = studio_hash(playing + fill * 3u + hold * 7u + end * 11u + fill_arm * 13u + oct * 17u, next);
     if (!ui.force && sig == cache)
         return;
     cache = sig;
     b[0] = 0;
-    if (end) {
+    if (oct && sng_cur >= 0) {                      /* (held a moment, just before a key: over the rest) */
+        str_cpy(b, "KEY: ON THE NEXT BAR", sizeof b);
+    } else if (end) {
         str_cpy(b, pedal_end_bars ? "ENDING: LAST BARS" : "ENDING NEXT", sizeof b);
         c = TE_RED;
     } else if (next[0] && (hold || fill)) {       /* a fill into the change */
@@ -256,13 +262,49 @@ static void live_state(uint32_t playing, const char *next)
     cv_blit(0, 124);
 }
 
-/* the 8 sections as the white keys 1..8 (two rows of four): the one playing lit, the one cued framed amber, the
- * outro marked, a meter other than 4/4; no song: the 8 song slots */
+/* a tile of one line (a short tile): the number, then the name cut to what is left */
+static void tile_line(int32_t x, int32_t y, int32_t h, const char *num, const char *name, uint16_t bg, uint16_t fg,
+                      uint16_t numc)
+{
+    char cut[13];
+    int32_t ty = y + (h - 16) / 2;
+    cv_rect(x, y, 56, h, bg);
+    cv_text(x + 2, ty, &FONT_S, num, numc);
+    if (name[0]) {
+        cut_name(cut, name, &FONT_S, 52 - 2 - text_w(&FONT_S, num) - 4);
+        cv_text(x + 4 + text_w(&FONT_S, num), ty, &FONT_S, cut, fg);
+    }
+}
+/* a name of up to 12 on two lines of 6: broken at the last space of its first 7 characters, else at 6 */
+static void name_split(const char *s, char *a, char *b)
+{
+    uint32_t n = str_len(s), k = n <= 6u ? n : 6u, i, skip = 0;
+    if (n > 6u)
+        for (i = 6u; i > 0u; i--)
+            if (s[i] == ' ') {
+                k = i;
+                skip = 1;
+                break;
+            }
+    for (i = 0; i < k; i++)
+        a[i] = s[i];
+    a[k] = 0;
+    for (i = 0; i < 6u && s[k + skip + i]; i++)
+        b[i] = s[k + skip + i];
+    b[i] = 0;
+}
+
+/* the song's sections as the white keys 1..16, four to a row as many rows as the song needs (a section keeps its
+ * place from song to song): 1 row (1..4 sections) tall tiles with the whole name on two lines, 2 rows (5..8) the
+ * name on one, 3 and 4 rows (9..16) a line each, the number then the name cut (the section playing and the one
+ * cued show whole above). The one playing lit, the one cued framed amber, the outro marked (END, or its number
+ * red), a meter other than 4/4 in the tall ones; no song: the 16 song slots, as the white keys 1..16 load them */
 static void live_tiles(uint32_t playing, int32_t req)
 {
     static uint32_t cache;
     char nm[13], b[8];
-    uint32_t i, ready = sng_ready(), outro = sng_outro(), blink = (ui.frame >> 4) & 1u;
+    uint32_t i, n, rows, ready = sng_ready(), outro = sng_outro(), blink = (ui.frame >> 4) & 1u;
+    int32_t pitch, h;
     uint32_t sig = (uint32_t)(sng_cur + 1) * 7u + ready * 13u + (uint32_t)(live_sec + 1) * 17u +
                    (uint32_t)(req + 1) * 19u * (1u + blink) + playing * 23u + sng_lib_dirty;
     if (sng_cur < 0)
@@ -274,51 +316,56 @@ static void live_tiles(uint32_t playing, int32_t req)
     cv_begin(240, 72, C_BLACK);
     if (sng_cur < 0) {                              /* no song: the 16 song slots, as the white keys 1..16 load them */
         for (i = 0; i < SNG_SLOTS; i++) {
-            int32_t x = 2 + 60 * (int32_t)(i & 3u), y = 1 + 18 * (int32_t)(i >> 2);
-            char cut[13];
             uint32_t there = sng_lib[i].name[0] != 0;
-            cv_rect(x, y, 56, 16, there ? TE_G1 : C_BLACK);
             fmt_int(b, (int32_t)i + 1);
-            cv_text(x + 2, y, &FONT_S, b, TE_G3);
-            if (there) {
-                cut_name(cut, sng_lib[i].name, &FONT_S, 52 - 2 - text_w(&FONT_S, b) - 4);
-                cv_text(x + 4 + text_w(&FONT_S, b), y, &FONT_S, cut, C_WHITE);
-            }
+            tile_line(2 + 60 * (int32_t)(i & 3u), 1 + 18 * (int32_t)(i >> 2), 16, b, sng_lib[i].name,
+                      there ? TE_G1 : C_BLACK, C_WHITE, TE_G3);
         }
         cv_blit(0, 144);
         return;
     }
-    for (i = 0; i < 8u; i++) {
-        int32_t x = 2 + 60 * (int32_t)(i & 3u), y = 2 + 36 * (int32_t)(i >> 2);
-        int on = sng_cur >= 0 && playing && (int32_t)i == live_sec, cued = sng_cur >= 0 && (int32_t)i == req;
-        uint32_t there = sng_cur >= 0 ? (ready >> i) & 1u : sng_lib[i].name[0] != 0;
+    for (n = 0; n < SNG_SECTIONS && ((ready >> n) & 1u); n++)
+        ;
+    rows = n ? (n + 3u) / 4u : 1u;
+    pitch = 72 / (int32_t)rows;                     /* 72, 36, 24, 18 */
+    h = pitch - (rows <= 2u ? 4 : 2);               /* 68, 32 (as before 16 sections), 22, 16 */
+    for (i = 0; i < rows * 4u; i++) {
+        int32_t x = 2 + 60 * (int32_t)(i & 3u), y = (rows <= 2u ? 2 : 1) + pitch * (int32_t)(i >> 2), f = h >= 32 ? 2 : 1;
+        int on = playing && (int32_t)i == live_sec, cued = (int32_t)i == req;
+        uint32_t there = (ready >> i) & 1u;
         uint16_t bg = on ? C_WHITE : there ? TE_G1 : C_BLACK, fg = on ? C_BLACK : there ? C_WHITE : TE_G2;
-        cv_rect(x, y, 56, 32, bg);
-        if (cued && (blink || !playing)) {          /* the cued one framed (blinking while it waits) */
-            cv_rect(x, y, 56, 2, C_AMB); cv_rect(x, y + 30, 56, 2, C_AMB);
-            cv_rect(x, y, 2, 32, C_AMB); cv_rect(x + 54, y, 2, 32, C_AMB);
-        }
-        b[0] = (char)('1' + i);
-        b[1] = 0;
-        cv_text(x + 4, y, &FONT_S, b, on ? C_BLACK : TE_G3);
-        if (!there)
-            continue;
-        if (sng_cur >= 0) {
-            uint32_t m = sng_meter(i);
+        nm[0] = 0;
+        if (there)
             sng_name(i, nm);
-            if (i == outro)
-                cv_text(x + 52 - text_w(&FONT_S, "end"), y, &FONT_S, "end", on ? C_BLACK : TE_RED);
-            else if (m) {
-                meter_str(b, m);
-                cv_text(x + 52 - text_w(&FONT_S, b), y, &FONT_S, b, on ? C_BLACK : TE_G3);
-            }
+        fmt_int(b, (int32_t)i + 1);
+        if (h < 32) {                               /* a line: the outro's number red */
+            tile_line(x, y, h, b, nm, bg, fg, on ? C_BLACK : there && i == outro ? TE_RED : TE_G3);
         } else {
-            str_cpy(nm, sng_lib[i].name, sizeof nm);
+            cv_rect(x, y, 56, h, bg);
+            cv_text(x + 4, y, &FONT_S, b, on ? C_BLACK : TE_G3);
+            if (there) {
+                uint32_t m = sng_meter(i);
+                char cut[13];
+                if (i == outro)
+                    cv_text(x + 52 - text_w(&FONT_S, "end"), y, &FONT_S, "end", on ? C_BLACK : TE_RED);
+                else if (m) {
+                    meter_str(cut, m);
+                    cv_text(x + 52 - text_w(&FONT_S, cut), y, &FONT_S, cut, on ? C_BLACK : TE_G3);
+                }
+                if (h >= 48) {                      /* tall: the whole name on two lines */
+                    char l2[8];
+                    name_split(nm, cut, l2);
+                    cv_text(x + 4, y + 22, &FONT_S, cut, fg);
+                    cv_text(x + 4, y + 40, &FONT_S, l2, fg);
+                } else {
+                    cut_name(cut, nm, &FONT_S, 50);
+                    cv_text(x + 4, y + 15, &FONT_S, cut, fg);
+                }
+            }
         }
-        {
-            char cut[13];
-            cut_name(cut, nm, &FONT_S, 50);
-            cv_text(x + 4, y + 15, &FONT_S, cut, fg);
+        if (cued && (blink || !playing)) {          /* the cued one framed (blinking while it waits) */
+            cv_rect(x, y, 56, f, C_AMB); cv_rect(x, y + h - f, 56, f, C_AMB);
+            cv_rect(x, y, f, h, C_AMB); cv_rect(x + 56 - f, y, f, h, C_AMB);
         }
     }
     cv_blit(0, 144);
@@ -429,9 +476,8 @@ static void lib_draw(void)
                     cv_text(36, 3, &FONT_S, e->name, fg);
                     fmt_int(b, e->bpm);
                     cv_text(236 - text_w(&FONT_S, b), 3, &FONT_S, b, pick ? C_BLACK : TE_G4);
-                    b[0] = (char)('0' + e->nsec);
-                    b[1] = 's';
-                    b[2] = 0;
+                    fmt_int(b, e->nsec);
+                    str_cpy(b + str_len(b), "s", 2);
                     cv_text(180, 3, &FONT_S, b, pick ? C_BLACK : TE_G3);
                     if (e->factory)
                         cv_text(164, 3, &FONT_S, "f", pick ? C_BLACK : TE_G3);

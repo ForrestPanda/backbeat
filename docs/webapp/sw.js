@@ -4,7 +4,7 @@
 // https, so Web MIDI asks as usual (a downloaded file on Android opens as content://, where Chrome refuses MIDI).
 // Online the network always wins (the page as published, never an old one); the copy is only the fallback.
 // A new site (any file changed) is a new sw.js: the new copy replaces the old one.
-const STAMP = "1.0-11fbd2eb153a";                          // version + a hash of the files
+const STAMP = "1.0-7ccf537e74cc";                          // version + a hash of the files
 const CACHE = "backbeat-site-" + STAMP;
 const FILES = ["../firmware/backbeat-1.0.fwsc", "backbeat.webmanifest", "editor/", "editor/FUKIAI-LICENSE.txt", "editor/fukiai.ttf", "editor/gp2song.py", "editor/kit/ATTRIBUTION.txt", "editor/kit/CLAP_D#2.wav", "editor/kit/CONGA_D#4.wav", "editor/kit/COWBELL_G#3.wav", "editor/kit/CRASH_C#3.wav", "editor/kit/HAT_F#2-soft.wav", "editor/kit/HAT_F#2.wav", "editor/kit/HITOM_C3.wav", "editor/kit/KICK2_B1-soft.wav", "editor/kit/KICK2_B1.wav", "editor/kit/KICK_C2-soft.wav", "editor/kit/KICK_C2.wav", "editor/kit/LOWTOM_G2.wav", "editor/kit/OPENHAT_A#2-soft.wav", "editor/kit/OPENHAT_A#2.wav", "editor/kit/PEDAL_G#2-soft.wav", "editor/kit/PEDAL_G#2.wav", "editor/kit/RIDE_D#3.wav", "editor/kit/RIM_C#2.wav", "editor/kit/SHAKER_A#4.wav", "editor/kit/SNARE2_E2-soft.wav", "editor/kit/SNARE2_E2.wav", "editor/kit/SNARE_D2-soft.wav", "editor/kit/SNARE_D2.wav", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "installer/"];                          // relative to this file
 const KEEP = new Set(FILES.map((f) => new URL(f, self.location).href));

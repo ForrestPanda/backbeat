@@ -237,7 +237,7 @@ next bar). No named sections, one song, no fill tied to a section change.
    it back). The song, its sections (the one playing lit, the one cued underlined, a meter other than 4/4), the
    pedal's messages. The keys reach it as the DRUMS grid page's do (seq.c `kb_grid` 2: the keyboard plays nothing,
    the UI gets the keys) and call `pedal_cc` with the IRQ off, the function the MIDI queue calls: white keys
-   1..8 CC 20, 9..16 CC 27, the black keys F#3 CC 25, G#3 CC 24, A#3 CC 21, C#4 CC 22, D#4 CC 23, F#4 CC 26;
+   1..8 CC 20, 9..16 CC 27 (since 6d: 1..16 CC 20, OCT+ held CC 27), the black keys F#3 CC 25, G#3 CC 24, A#3 CC 21, C#4 CC 22, D#4 CC 23, F#4 CC 26;
    PLAY is CC 20 of the section cued (the count-in too) or stop. With no song the white keys 1..8 load songs.
    The section playing's key is lit, the cued one blinks. Small for the flash: no graphics, no bar counts; the
    pedal channel and count-in settings are still the tool's and the editor's. Tests: ui_pages_test.c (a stand-in
@@ -280,6 +280,19 @@ next bar). No named sections, one song, no fill tied to a section change.
    nothing in SETUP: SLOOP's menu read SELECT, then dropped every knob at the end of the pass (`enc_drop`), and a
    step arriving in between (the input IRQ runs as a knob read turns interrupts back on) was lost; it now drops
    only ALGORITHM, the knob SETUP does not use (on the device it would have lost turns now and then).
+6d. **16 sections a song (done 2026-10-14).** Asked 2026-10-14. `SNG_SECTIONS` 8 -> 16 (seq.c); the format does not
+   change (SNG2's `nsec` is a byte), the limit is the packed song's 3800 B: sections of 16..48 steps take 56..150 B,
+   so 16 fit (the test song, `tests/data/sixteen.json`, 1156 B); sixteen dense 64-step ones do not, and the packer
+   says so. LIVE: white keys 1..16 are sections 1..16 (PS_END), **OCT+ held** + a key on the next bar (PS_BAR: the
+   ISR samples OCT+ as the key goes down, `KB_OCTUP` in the lk_q entry; the state line says KEY: ON THE NEXT BAR
+   while it is held). The tiles four to a row, a section always in the same place, as many rows as the song
+   needs: 1 row (≤ 4) the whole name on two lines, 2 rows (5..8) as before, 3 and 4 rows a line each (number, name
+   cut). The pedal's CC 20 / 27 / 22 carry 0..15; `fm1_song.py`, `gp2song.py` (keeps 16, the outro last) and the
+   editor follow; its player's keys 1..8 reach 9..16 after `0` (Alt + a digit switches browser tabs on Linux).
+   Checked: ui_pages_test (renders `live-rows1..4`, `live-nextbar`; keys 10 and OCT+ + 16), song_test (a
+   16-section song through PC, CC 20 15, CC 27 12, NEXT, a section saved back; 17 refused), the web tests, and
+   on fm1-emu (`tests/emu_sixteen.sh`). To verify on hardware: OCT+ held with a key while playing, the 4-row tiles
+   read from the floor.
 7. **Hardware.** Everything above on a real FM-1: the TRS jack, the cable type, the UART driver, the
    speaker. Before the first install: `sh tests/run_tests.sh` green (but for the known `fm1_alnk0_irq`
    budget failure, identical on untouched SLOOP 2.6), then SLOOP's installer page with `build/felucca.fwsc`.

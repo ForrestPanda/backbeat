@@ -73,13 +73,20 @@ static void up_name(uint32_t k, char *b) { str_cpy(b, k ? "MY PAD" : "MY LEAD", 
 static void up_slot_label(char *b, uint32_t k) { fmt_int(b, (int32_t)k + 1); }
 static void up_ui(uint32_t op, uint32_t k) { (void)op; (void)k; }
 static void settings_save(void) {}
-/* fm1-drummer: a song for the song screen (sng.c is not in this test): INTRO, VERSE (2 bars of 7/8), CHORUS;
- * slots 1 and 3 hold songs */
-static void sng_name(uint32_t k, char *out) { static const char *const N[3] = {"INTRO", "VERSE", "CHORUS"}; str_cpy(out, k < 3u ? N[k] : "", 13); }
-static uint32_t sng_ready(void) { return sng_cur >= 0 ? 7u : 0u; }
+/* fm1-drummer: a song for the song screen (sng.c is not in this test): INTRO, VERSE (2 bars of 7/8), CHORUS, and up
+ * to 16 sections when t_nsec says so (names of 3..12 characters: the tiles' cuts); slots 1 and 3 hold songs */
+static uint32_t t_nsec = 3, t_outro = 0xFFu;
+static void sng_name(uint32_t k, char *out)
+{
+    static const char *const N[16] = {"INTRO", "VERSE", "CHORUS", "VERSE 2", "PRE CHORUS", "CHORUS 2", "GUITAR SOLO",
+                                      "BRIDGE", "BREAKDOWN", "CHORUS 3", "OUTRO JAM", "TAG", "HALF TIME", "BUILD UP",
+                                      "LAST CHORUS", "OUTRO"};
+    str_cpy(out, k < t_nsec ? N[k] : "", 13);
+}
+static uint32_t sng_ready(void) { return sng_cur >= 0 ? (1u << t_nsec) - 1u : 0u; }
 static uint32_t sng_bars(uint32_t k) { return k == 1u ? 2u : 1u; }
 static uint32_t sng_meter(uint32_t k) { return k == 1u ? 7u | 1u << 5 : 0u; }
-static uint32_t sng_outro(void) { return 0xFFu; }
+static uint32_t sng_outro(void) { return t_outro; }
 static int sng_pending(void) { return 0; }
 static void sng_apply(uint32_t k) { sng_name(k, sng_ui_name); }
 static uint32_t sec_saves;
@@ -481,8 +488,34 @@ int main(int argc, char **argv)
         ui.force = 1; frame(); ppm("live-playing");
         check((keys_lit() >> key_of_white(1)) & 1u, "LIVE: the section playing's key lit");
         key(key_of_white(9)); frames(2);
-        check(live_req == 1 && !pedal_at_end && !pedal_fill, "LIVE: white key 10: VERSE on the next bar, no fill");
+        check(live_req == 2 && pedal_at_end, "LIVE: white key 10, a song of 3 sections: nothing (CHORUS still cued)");
+        live_req = -1; pedal_at_end = 0;
+        press(B_OCTUP); frames(2);
+        ui.force = 1; frame(); ppm("live-nextbar");          /* "KEY: ON THE NEXT BAR" while OCT+ is held */
+        key(key_of_white(0)); frames(2);
+        release(B_OCTUP); frames(2);
+        check(live_req == 0 && !pedal_at_end && !pedal_fill, "LIVE: OCT+ held + white key 1: INTRO on the next bar, no fill");
         live_req = -1;
+        t_nsec = 16; t_outro = 15;                            /* 16 sections: keys 1..16 are sections 1..16 */
+        key(key_of_white(9)); frames(2);
+        check(live_req == 9 && pedal_at_end, "LIVE, 16 sections: white key 10: section 10 at the section's end");
+        press(B_OCTUP); key(key_of_white(15)); release(B_OCTUP); frames(2);
+        check(live_req == 15 && !pedal_at_end, "LIVE, 16 sections: OCT+ held + white key 16: section 16 on the next bar");
+        check((keys_lit() >> key_of_white(1)) & 1u, "LIVE, 16 sections: the section playing's key lit");
+        ui.force = 1; frame(); ppm("live-rows4");
+        t_nsec = 11; t_outro = 10; live_req = 9; ui.force = 1; frame(); ppm("live-rows3");
+        t_nsec = 6; t_outro = 0xFFu; ui.force = 1; frame(); ppm("live-rows2");
+        t_nsec = 4; t_outro = 3; ui.force = 1; frame(); ppm("live-rows1");   /* "VERSE 2" on two lines, at its space */
+        {
+            char l1[13], l2[8];
+            name_split("VERSE 2", l1, l2);
+            check(!strcmp(l1, "VERSE") && !strcmp(l2, "2"), "LIVE tiles: a long name on two lines, at the space");
+            name_split("BREAKDOWNXYZ", l1, l2);
+            check(!strcmp(l1, "BREAKD") && !strcmp(l2, "OWNXYZ"), "LIVE tiles: no space: 6 + 6");
+            name_split("PRE CHORUS", l1, l2);
+            check(!strcmp(l1, "PRE") && !strcmp(l2, "CHORUS"), "LIVE tiles: PRE / CHORUS");
+        }
+        t_nsec = 3; t_outro = 0xFFu; live_req = -1; pedal_at_end = 0;
         key(key_of_white(1)); frames(2);
         check(live_req < 0 && !pedal_fill && !pedal_fill_hold, "LIVE: the section playing's key again: nothing (no fill)");
         sng_ui_next[0] = 0;

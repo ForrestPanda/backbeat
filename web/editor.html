@@ -213,6 +213,12 @@
   .plive-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
   .plive-tiles button { text-align: left; text-transform: uppercase; background: var(--s2); color: var(--fg); padding: 4px 6px; min-height: 40px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .plive-tiles button small { display: block; color: var(--dim); }
+  /* as many rows of four as the song needs (the device's live_tiles): 1 row the whole name, 2 as before 16
+     sections, 3 and 4 a line each; the keys 1..8 reach the row pair marked (0 switches: 1..8 / 9..16) */
+  .plive-tiles.rows-1 button { min-height: 76px; white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
+  .plive-tiles.rows-3 button, .plive-tiles.rows-4 button { min-height: 0; padding: 2px 6px; }
+  .plive-tiles.rows-3 button small, .plive-tiles.rows-4 button small { display: inline; margin-right: 6px; }
+  .plive-tiles button.keyed small { color: var(--t3); }
   .plive-keys { color: var(--dim); margin: 8px 0 0; font-size: 13px; }
   .plive-tiles button.on { background: var(--fg); color: #000; }
   .plive-tiles button.on small { color: #000; }
@@ -2062,11 +2068,11 @@ class SetGate {
 }
 
 /* ------------------------------------------------------ fm1-drummer: songs (sng.c) --- */
-/* A song: up to 8 named drum sections with the song's tempo, kit, swing, drum level and reverb, packed as
+/* A song: up to 16 named drum sections with the song's tempo, kit, swing, drum level and reverb, packed as
    firmware/src/sng.c reads it (tools/fm1_song.py writes the same bytes: "SNG2", a byte a hit). Sent and read as the
    backup objects 16 + slot (slots 0..7) and 24 (the pedal settings) through BK_PUT / BK_GET (EDITOR_PROTOCOL.md). */
 const SNG = {
-  MAGIC: [0x53, 0x4E, 0x47, 0x32], MAX: 3800, SLOTS: 16, SECTIONS: 8, HDR: 32, SEC_HDR: 18, NSTEP: 64, OBJ0: 16, OBJ_ARRSET: 24, OBJ8: 40,
+  MAGIC: [0x53, 0x4E, 0x47, 0x32], MAX: 3800, SLOTS: 16, SECTIONS: 16, HDR: 32, SEC_HDR: 18, NSTEP: 64, OBJ0: 16, OBJ_ARRSET: 24, OBJ8: 40,
   /* a song slot's backup object (editor.c): 16..23 songs 1..8, 40..47 songs 9..16 (since 2026-10-14) */
   obj(slot) { return slot < 8 ? SNG.OBJ0 + slot : SNG.OBJ8 + slot - 8; },
   slotOf(id) { return id >= SNG.OBJ0 && id < SNG.OBJ0 + 8 ? id - SNG.OBJ0 : id >= SNG.OBJ8 && id < SNG.OBJ8 + 8 ? id - SNG.OBJ8 + 8 : -1; },
@@ -2094,7 +2100,7 @@ const SNG = {
   /* the JSON (tools/fm1_song.py's form) -> the packed song; throws on a bad song */
   pack(spec) {
     const secs = spec.sections || [];
-    if (!(secs.length >= 1 && secs.length <= SNG.SECTIONS)) throw new Error("a song has 1 to 8 sections");
+    if (!(secs.length >= 1 && secs.length <= SNG.SECTIONS)) throw new Error(`a song has 1 to ${SNG.SECTIONS} sections`);
     const bpm = Math.round(+spec.bpm || 120), kit = Math.round(+spec.kit || 0), swing = Math.round(spec.swing == null ? 0 : +spec.swing);   /* 0 straight .. 100 the most */
     if (!(bpm >= 40 && bpm <= 240)) throw new Error("bpm must be 40..240");
     if (!(swing >= 0 && swing <= 100)) throw new Error("swing must be 0..100");
@@ -2866,10 +2872,10 @@ const TEXT = {
     sedSteps: "ステップ", sedTime: "拍子", sedOutro: "アウトロ", sedDup: "複製", sedNew: "新規セクション", sedDel: "削除", sedSplit: "分割（小節）", sedSplitBtn: "分割", sedMerge: "次と結合",
     sedBarWarn: "拍子の小節に揃っていません：切り替えは小節線まで待ちます。", sedBarFix: "拍子を {sig} に",
     sedPen: "ペン:", sedRat: "ラチェット", sedMark: "フィル:", sedMarkAlways: "常に", sedMarkF: "フィル時のみ", sedMarkN: "フィル時は休み", sedGridHelp: "クリックでペンのレベル・ラチェット・フィル印の打点、同じ打点をもう一度で消す。フィル印が「フィル時のみ」「フィル時は休み」のとき、既にある打点をクリックするとその印を変えます（黄の枠: フィル時のみ、赤の枠: フィル時は休み）。上の行はステップ全体の印。", sedBarsHelp: "ファイルの小節（このセクションの範囲に印）：1〜4 小節を選んでパターンに、1 小節をフィルに。",
-    sedHear: "クリックで音を聞く", sedKey: "キー: ", sedUndo: "元に戻す", sedRedo: "やり直す", sedPlaySec: "このセクションを試聴", sedKeys: "キー: n 通常、h 強、o 弱、g ゴースト、x 消去、r ラチェット、m フィル印、[ ] 前後のセクション、Delete 選択ステップを消去、Ctrl+C / Ctrl+V ステップのコピーと貼り付け、Ctrl+Z / Ctrl+Y 元に戻す / やり直す、p このセクションを試聴。レーン名をクリックすると音が鳴ります。", sedCols: "ステップ（番号をクリック、Shift+クリックで範囲）:", sedCopy: "コピー", sedPaste: "貼り付け（選択位置に）", sedClear: "消去", sedCopied: "コピーしました: ", sedUseBars: "選んだ小節をパターンに", sedUseFill: "選んだ小節をフィルに", sedEdit: "編集", sedDropped: "パターンと重なるフィルの打点は捨てました: ", sedTooMany: "8 セクションまで", sedNoMerge: "結合できません（分割数が違うか 64 ステップ超）",
+    sedHear: "クリックで音を聞く", sedKey: "キー: ", sedUndo: "元に戻す", sedRedo: "やり直す", sedPlaySec: "このセクションを試聴", sedKeys: "キー: n 通常、h 強、o 弱、g ゴースト、x 消去、r ラチェット、m フィル印、[ ] 前後のセクション、Delete 選択ステップを消去、Ctrl+C / Ctrl+V ステップのコピーと貼り付け、Ctrl+Z / Ctrl+Y 元に戻す / やり直す、p このセクションを試聴。レーン名をクリックすると音が鳴ります。", sedCols: "ステップ（番号をクリック、Shift+クリックで範囲）:", sedCopy: "コピー", sedPaste: "貼り付け（選択位置に）", sedClear: "消去", sedCopied: "コピーしました: ", sedUseBars: "選んだ小節をパターンに", sedUseFill: "選んだ小節をフィルに", sedEdit: "編集", sedDropped: "パターンと重なるフィルの打点は捨てました: ", sedTooMany: "16 セクションまで", sedNoMerge: "結合できません（分割数が違うか 64 ステップ超）",
     playTitle: "試聴（ペダルを模して）", playHelp: "ブラウザでソングを鳴らします：セクションのボタンがペダルです（再生中のセクションがパターンを弾き終えてから切り替え、フィルは付きません。Shift+クリックは待たずに次の小節で。フィルはパターンの終わりまで（最後の小節で押すと次の周回まで）。切り替えの前にフィルを押せば、フィルから次のセクションへ（ペダルでは CC 21 と CC 20 を同じスイッチに）。「前 / 次のセクション」は CC 25 / 24、キーはタイルの下）。上の表示は本体の LIVE 画面で、音と同時に動きます。スウィングは本体と同じに鳴ります。カウントイン（本体の設定と同じ）：停止中にセクションを押すと先にクリックが鳴ります。音はドラムキットページのパッド、または tools/mkkit.py --wavs の WAV（KICK_C2.wav…）。本体のエンジン（tools/fm1_render.py）が基準です。",
     playKitDefault: "キット: エディタの隣のもの ", kitPreloaded: "ドラムキット: Muldjord (DrumGizmo, CC BY) をパッドに: ", playPrev: "前のセクション", playNext: "次のセクション", playFill: "フィル", playEnd: "エンディング", playStop: "停止", playKitFiles: "キットの WAV を選ぶ", playNoSong: "ソングを開くか、スロットの「試聴」を押してください", playNoKit: "キット: なし（ドラムキットページのパッド、または WAV）", playKitPads: "キット: ドラムキットページのパッド", playKitWavs: "キット: WAV ", playBtn: "試聴", playBar: "小節 ", playCued: "待機中",
-    playKeys: "キー: 1〜8 セクション（Shift: 次の小節で）・ f フィル ・ , . 前 / 次 ・ e エンディング ・ スペース 停止",
+    playKeys: "キー: 1〜8 セクション（0: 9〜16 と切り替え、Shift: 次の小節で）・ f フィル ・ , . 前 / 次 ・ e エンディング ・ スペース 停止",
     pinFrom: "MIDI 入力", pinClock: "MIDI クロックに合わせる", pinListen: "ペダルを聴く", pinStop: "聴くのをやめる", pinNone: "（FM-1 以外の MIDI 入力なし）", pinOn: "チャンネル {ch} を聴いています", pinNoMidi: "このブラウザには Web MIDI がありません", pinNoSong: "ソングがありません（スロットの「試聴」か、ソングを開いてください）", pinHelp: "本物のペダル（Ampero、または間の USB MIDI インターフェース）でブラウザのプレーヤーを動かします。FM-1 と同じ CC 20..27 と PC を、ペダルカードのチャンネルで受けます。PC n は接続中の FM-1（または模擬 FM-1）のスロット n のソングを開きます。音を出すため、最初に「ペダルを聴く」を押してください。「MIDI クロックに合わせる」で、その入力のテンポと START / STOP に従います（FM-1 の SETUP > SYNC と同じ。カウントインはなし）。", pedalTitle: "ペダル", pedalHelp: "ペダルボードの MIDI チャンネル（CC 20..27 と PC）と、停止中にセクションを押したときのカウントイン（クリック 1〜2 小節）。電源を切っても保持されます。", pedalCh: "チャンネル", pedalSet: "設定", pedalNow: "今: ", pedalOff: "オフ", pedalAny: "すべて", pedalCount: "カウントイン", pedalBar: "1 小節", pedalBars: "2 小節",
     songBad: "このソングは送れません（16 項目、1〜64 小節まで）", songRefused: "ソングを止めてから送ってください",
     songSent: "ソングを FM-1 に送りました",
@@ -3001,10 +3007,10 @@ const TEXT = {
     sedSteps: "steps", sedTime: "time", sedOutro: "outro", sedDup: "Duplicate", sedNew: "New section", sedDel: "Delete", sedSplit: "split at bar", sedSplitBtn: "Split", sedMerge: "Merge with next",
     sedBarWarn: "Not whole bars of its time: a change waits for the bar line.", sedBarFix: "Set time to {sig}",
     sedPen: "pen:", sedRat: "ratchet", sedMark: "fill:", sedMarkAlways: "always", sedMarkF: "only in a fill", sedMarkN: "not in a fill", sedGridHelp: "Click a cell to set a hit with the pen's level, ratchet and fill mark; click the same hit again to clear it. With the fill mark on 'only in a fill' or 'not in a fill', clicking a hit that is there changes its mark instead (amber ring: only in a fill, red ring: not in a fill). The top row marks a whole step at once.", sedBarsHelp: "The file's bars (this section's own range marked): pick 1 to 4 as the pattern, or one as the fill.",
-    sedHear: "click: hear this lane", sedKey: "key: ", sedUndo: "Undo", sedRedo: "Redo", sedPlaySec: "Play this section", sedKeys: "Keys: n normal, h hard, o soft, g ghost, x erase, r ratchet, m fill mark, [ ] previous / next section, Delete clears the selected steps, Ctrl+C / Ctrl+V copy and paste them, Ctrl+Z / Ctrl+Y undo / redo, p plays this section. Click a lane's name to hear its sound.", sedCols: "steps (click a number, shift-click another for a range):", sedCopy: "Copy", sedPaste: "Paste at the selection", sedClear: "Clear", sedCopied: "copied: ", sedUseBars: "Pattern = selected bars", sedUseFill: "Fill = selected bar", sedEdit: "Edit", sedDropped: "fill hits dropped where the pattern hits too: ", sedTooMany: "at most 8 sections", sedNoMerge: "cannot merge (different division, or over 64 steps)",
+    sedHear: "click: hear this lane", sedKey: "key: ", sedUndo: "Undo", sedRedo: "Redo", sedPlaySec: "Play this section", sedKeys: "Keys: n normal, h hard, o soft, g ghost, x erase, r ratchet, m fill mark, [ ] previous / next section, Delete clears the selected steps, Ctrl+C / Ctrl+V copy and paste them, Ctrl+Z / Ctrl+Y undo / redo, p plays this section. Click a lane's name to hear its sound.", sedCols: "steps (click a number, shift-click another for a range):", sedCopy: "Copy", sedPaste: "Paste at the selection", sedClear: "Clear", sedCopied: "copied: ", sedUseBars: "Pattern = selected bars", sedUseFill: "Fill = selected bar", sedEdit: "Edit", sedDropped: "fill hits dropped where the pattern hits too: ", sedTooMany: "at most 16 sections", sedNoMerge: "cannot merge (different division, or over 64 steps)",
     playTitle: "Play (as the pedal would)", playHelp: "The song in the browser: the section buttons are the pedal (a section starts when the one playing has played its pattern out, with no fill of its own; shift-click: on the next bar; Fill: the fill from now to the end of the pattern, pressed in its last bar through the next cycle too, so Fill then a section is a fill into it, as the pedal's CC 21 and CC 20 on one switch; Previous / Next step through the sections, as CC 25 / 24; the keys under the tiles). The view above is the device's LIVE screen, in time with the sound; the song's swing plays as on the device. Count-in as the device's setting: a section pressed while stopped first clicks one or two bars. Sounds: the Drum kit page's pads (the Muldjord Kit is put there when they are empty), or WAVs of tools/mkkit.py --wavs. A preview: the device's own engine (tools/fm1_render.py) is the reference.",
     playKitDefault: "kit: the device's kit served next to the editor ", kitPreloaded: "Drum kit: Muldjord (DrumGizmo, CC BY) on the pads: ", playPrev: "Previous section", playNext: "Next section", playFill: "Fill", playEnd: "Ending", playStop: "Stop", playKitFiles: "Choose the kit's WAVs", playNoSong: "Open a Guitar Pro file, or press Play on a slot", playNoKit: "kit: none (the Drum kit page's pads, or WAVs)", playKitPads: "kit: the Drum kit page's pads", playKitWavs: "kit: WAVs ", playBtn: "Play", playBar: "bar ", playCued: "cued",
-    playKeys: "keys: 1–8 a section (shift: on the next bar) · f fill · , . previous / next · e ending · space stop",
+    playKeys: "keys: 1–8 a section (0: switches to 9–16 and back; shift: on the next bar) · f fill · , . previous / next · e ending · space stop",
     pinFrom: "MIDI in from", pinClock: "Follow its MIDI clock", pinListen: "Listen to the pedal", pinStop: "Stop listening", pinNone: "(no MIDI input but the FM-1)", pinOn: "listening on channel {ch}", pinNoMidi: "this browser has no Web MIDI", pinNoSong: "no song (press Play on a slot, or open one)", pinHelp: "The real pedal (the Ampero, or a USB MIDI interface between them) drives the player in the browser: the same CC 20..27 and PC as the FM-1, on the Pedal card's channel. PC n opens the song in slot n of the FM-1 connected (or the simulated one). Press Listen first: the browser plays sound only after a click. With Follow its MIDI clock the player takes that input's tempo and START / STOP, as the FM-1 with SETUP > SYNC (no count-in: the master counts).", pedalTitle: "Pedal", pedalHelp: "The pedalboard's MIDI channel (its CC 20..27 and PC), and the count-in: a section pressed while stopped first clicks one or two bars at the tempo. Kept through power-off.", pedalCh: "channel", pedalSet: "Set", pedalNow: "now: ", pedalOff: "off", pedalAny: "any", pedalCount: "count-in", pedalBar: "1 bar", pedalBars: "2 bars",
     songBad: "This song cannot be sent (16 entries, 1–64 bars each)", songRefused: "Stop the song first, then send",
     songSent: "Song sent to the FM-1",
@@ -3738,7 +3744,7 @@ function sedRender() {
   $("sed-bpm").value = sp.bpm; $("sed-kit").value = sp.kit || 0; $("sed-swing").value = sp.swing ?? 0;
   const chips = $("sed-chips");
   chips.replaceChildren(...sp.sections.map((x, k) => el("button", { "aria-pressed": k === SONGED.sel ? "true" : "false", title: t("sedKey") + "[ ]", onclick: () => { SONGED.sel = k; SONGED.barA = SONGED.barB = -1; SONGED.colA = SONGED.colB = -1; sedRender(); } },
-    `${k + 1}: ${x.name}${x.outro ? "*" : ""}`)));   /* (1..8, as the device's tiles and keys; CC 20 counts from 0) */
+    `${k + 1}: ${x.name}${x.outro ? "*" : ""}`)));   /* (1..16, as the device's tiles and keys; CC 20 counts from 0) */
   const sec = sedSec();
   if (!sec) { $("sed-grid").replaceChildren(); return; }
   if (document.activeElement !== $("sed-secname")) $("sed-secname").value = sec.name;
@@ -4084,10 +4090,14 @@ function playRender(light = false) {
   if (!light) {
     $("play-song").textContent = sp ? sp.name : t("playNoSong");
     $("pl-bpm").textContent = sp ? `${st ? st.bpm : sp.bpm} ${PIN.clock && PCLK.on(PIN.clk, performance.now()) ? "ext" : "BPM"}` : "";
-    const box = $("play-secs");                              /* the sections as the device's tiles: keys 1..8 */
+    const box = $("play-secs"), n = sp ? sp.sections.length : 0;   /* the sections as the device's tiles, rows of four */
+    if (n <= 8) SPLAY.bank = 0;
+    box.className = `plive-tiles rows-${Math.max(1, Math.ceil(n / 4))}`;
     box.replaceChildren();
-    if (sp) sp.sections.forEach((s, k) => box.append(el("button", { title: `CC 20 ${k}  ${t("sedKey")}${k + 1}  (when the section playing ends, no fill: F first for one; shift: CC 27, on the next bar)`, onclick: (e) => { PLAY.request(st, k, e.shiftKey); playStart(); playRender(); } },
-      el("small", { text: `${k + 1}${s.outro ? "  end" : s.time && s.time !== "4/4" ? "  " + s.time : ""}` }), s.name)));
+    if (sp) sp.sections.forEach((s, k) => box.append(el("button", { class: n > 8 && k >> 3 === SPLAY.bank ? "keyed" : null,
+      title: `CC 20 ${k}  ${t("sedKey")}${k < 8 ? k + 1 : `0, ${k - 7}`}  (when the section playing ends, no fill: F first for one; shift: CC 27, on the next bar; the FM-1: OCT+ held)`,
+      onclick: (e) => { PLAY.request(st, k, e.shiftKey); playStart(); playRender(); } },
+      el("small", { text: `${k + 1}${n <= 8 ? (s.outro ? "  end" : s.time && s.time !== "4/4" ? "  " + s.time : "") : ""}` }), s.name)));
     $("play-prev").title = "CC 25  " + t("sedKey") + ",";
     $("play-next").title = "CC 24  " + t("sedKey") + ".";
     $("play-fill").title = "CC 21  " + t("sedKey") + "f";
@@ -4114,12 +4124,17 @@ $("play-stop").addEventListener("click", () => { playStop(); playRender(true); }
 $("play-count").addEventListener("change", () => playCountSet(+$("play-count").value));
 $("play-kitfiles").addEventListener("click", () => $("play-kitfile").click());
 $("play-kitfile").addEventListener("change", () => { const fs = [...$("play-kitfile").files]; $("play-kitfile").value = ""; if (fs.length) playPadsFromFiles(fs); });
-document.addEventListener("keydown", (e) => {                /* keys 1..8: the sections, while the Song tab shows; the editor's keys */
+document.addEventListener("keydown", (e) => {                /* keys 1..8: the sections (0: 1..8 / 9..16), while the Song tab shows;
+                                                               the editor's keys */
   if (tab !== "songs" || ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
   if (sedKey(e)) { e.preventDefault(); return; }
   if (!SPLAY.st) return;
-  const d = /^(?:Digit|Numpad)([1-8])$/.exec(e.code), k = d ? +d[1] - 1 : -1;   /* (the key, not the character: shift + 1
-                                                            gives "!" on most layouts) */
+  if (/^(?:Digit|Numpad)0$/.test(e.code) && SPLAY.spec && SPLAY.spec.sections.length > 8) {   /* the keys' other eight (Alt + a
+                                                            digit is the browser's on Linux: a tab) */
+    e.preventDefault(); SPLAY.bank = SPLAY.bank ? 0 : 1; playRender(); return;
+  }
+  const d = /^(?:Digit|Numpad)([1-8])$/.exec(e.code), k = d ? +d[1] - 1 + 8 * (SPLAY.bank || 0) : -1;   /* (the key, not the
+                                                            character: shift + 1 gives "!" on most layouts) */
   if (k >= 0 && SPLAY.spec && k < SPLAY.spec.sections.length) { e.preventDefault(); PLAY.request(SPLAY.st, k, e.shiftKey); playStart(); playRender(); }
   else if (e.key === "." || e.key === ",") { PLAY.step(SPLAY.st, e.key === "." ? 1 : -1); playStart(); playRender(); }
   else if (e.key === "f") PLAY.fillNext(SPLAY.st);
