@@ -1,0 +1,43 @@
+{
+ "name": "HALF SHUFFLE",
+ "bpm": 86,
+ "kit": 46,
+ "swing": 0,
+ "drum_level": 100,
+ "drum_reverb": 20,
+ "sections": [
+  {
+   "name": "VERSE",
+   "steps": 48,
+   "div": "8T",
+   "lanes": {
+    "HAT": "x.xx.xx.xx.xx.xx.xx.xx.xx.xx.xx.xx.xx.xx.xx.xx.x",
+    "KICK": "x........x.xx........x.xx........x.xx........x.x",
+    "SNARE": ".g..g.X..g...g..g.X..g...g..g.X..g..gggggoXoXgXX"
+   },
+   "fills": {
+    "HAT": "....................................N.NN.NN.NN.N",
+    "KICK": ".............................................N.N",
+    "SNARE": "....................................F.FF.F.FF.FF"
+   }
+  },
+  {
+   "name": "CHORUS",
+   "steps": 48,
+   "div": "8T",
+   "lanes": {
+    "CRASH": "X...............................................",
+    "KICK": "x..x.....x.xx..x.....x.xx..x.....x.xx..x.....x.x",
+    "PEDAL": "...x.....x.....x.....x.....x.....x.....x.....x..",
+    "RIDE": "X.oX.oX.oX.oX.oX.oX.oX.oX.oX.oX.oX.oX.oX.oX.oX.o",
+    "SNARE": ".g..g.X..g.g.g..g.X..g.g.g..g.X..g.ggggggoXoXgXg"
+   },
+   "fills": {
+    "KICK": ".......................................N.....N.N",
+    "PEDAL": ".......................................N.....N..",
+    "RIDE": "....................................N.NN.NN.NN.N",
+    "SNARE": "....................................F.FF.F.FF.F."
+   }
+  }
+ ]
+}

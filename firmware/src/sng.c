@@ -181,9 +181,8 @@ static void sng_apply(uint32_t k)
     ui.force = 1;
 }
 
-/* the song's packed form from flash: the current copy, read in place (0: none). A slot never written (no copy at
- * all: the device fresh from the installer, the emulator) plays its factory song (tools/gen_songs.py, from songs/);
- * one erased (a copy of no bytes) stays empty */
+/* song k's packed form, read in place (0: none): a user slot (0..15) its current copy in flash, a slot never written
+ * or erased empty; a groove (16..31) from the firmware image (tools/gen_songs.py, grooves/factory.txt's order) */
 #if FELUCCA_FLASH
 #include "felucca_songs.h"
 static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len)
@@ -191,13 +190,15 @@ static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len)
     st_hdr_t h;
     int c;
     *len = 0;
-    if (!flash_ok || slot >= SNG_SLOTS)
+    if (slot >= SNG_FAC0) {
+        if (slot >= SNG_FAC0 + SNG_NFACTORY || slot >= SNG_ALL)
+            return 0;
+        *len = SNG_FACTORY[slot - SNG_FAC0].n;
+        return SNG_FACTORY[slot - SNG_FAC0].b;
+    }
+    if (!flash_ok)
         return 0;
     c = st_current(sng_obj(slot), &h);
-    if (c < 0 && slot < SNG_NFACTORY) {
-        *len = SNG_FACTORY[slot].n;
-        return SNG_FACTORY[slot].b;
-    }
     if (c < 0 || !h.len)
         return 0;
     *len = h.len;
@@ -206,14 +207,14 @@ static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len)
 #elif !defined(SNG_HOST_FETCH)
 static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len) { (void)slot; *len = 0; return 0; }
 #endif
-static void sng_lib_refresh(void)                /* seq.c sng_lib: every slot read again (the UI's loop) */
+static void sng_lib_refresh(void)                /* seq.c sng_lib: every song read again (the UI's loop) */
 {
     uint32_t k, n, i;
     sng_t tmp;
     if (!sng_lib_dirty)
         return;
     sng_lib_dirty = 0;
-    for (k = 0; k < SNG_SLOTS; k++) {
+    for (k = 0; k < SNG_ALL; k++) {
         sng_lib_t *e = &sng_lib[k];
         const uint8_t *p = sng_fetch(k, &n);
         memset(e, 0, sizeof *e);
@@ -226,9 +227,6 @@ static void sng_lib_refresh(void)                /* seq.c sng_lib: every slot re
         e->name[i] = 0;
         e->nsec = tmp.nsec;
         e->bpm = tmp.bpm;
-#if FELUCCA_FLASH
-        e->factory = k < SNG_NFACTORY && p == SNG_FACTORY[k].b;
-#endif
     }
 }
 
@@ -294,13 +292,14 @@ static int sng_lossy(void)                       /* the drum track holds what a 
     return 0;
 }
 
-/* a song (slot) loaded, or none (0xFF): the main loop, for sng_req; also the host tests */
+/* a song (0..15 a user slot, 16..31 a groove) loaded, or none (SNG_ALL and on): the main loop, for sng_req; also
+ * the host tests */
 static int sng_load(uint32_t slot)
 {
     sng_t tmp;
     const uint8_t *p;
     uint32_t n;
-    if (slot >= SNG_SLOTS) {
+    if (slot >= SNG_ALL) {
         fm1_irq_off();
         sng_unload();                            /* SLOOP's sections A..D again; the drum track keeps its pattern */
         sng.pend = 0;
@@ -311,8 +310,9 @@ static int sng_load(uint32_t slot)
     p = sng_fetch(slot, &n);
     if (!p || sng_check(p, n, &tmp)) {
         char b[4];
-        fmt_int(b, (int32_t)slot + 1);           /* "NO SONG 12": the slot as the screens count it, 1..16 (it said
-                                                  * '0' + slot: 0-based, and ':' and on past 9) */
+        b[0] = 'F';                              /* "NO SONG 12": the slot as the screens count it, 1..16 (it said
+                                                  * '0' + slot: 0-based, and ':' and on past 9); a groove "F12" */
+        fmt_int(b + (slot >= SNG_FAC0), (int32_t)(slot % SNG_SLOTS) + 1);
         pedal_say(PU_NOSONG, b);
         return 1;
     }
@@ -354,7 +354,7 @@ static void sng_poll(void)                       /* main loop */
     r = sng_req;
     sng_req = 0;
     fm1_irq_on();
-    (void)sng_load(r == 0xFFu ? SNG_SLOTS : r - 1u);
+    (void)sng_load(r == 0xFFu ? SNG_ALL : r - 1u);
 }
 
 /* ---- the pedal settings: a small object of their own (OBJ_ARRSET), set by the tool (backup object 24) */
@@ -364,7 +364,7 @@ typedef struct {
     uint8_t pedal_ch;                            /* 0 off, 1..16, 17 omni */
     uint8_t count_in;                            /* bars of count-in before a start from stopped: 0, 1, 2 */
     uint8_t autoload;                            /* SETUP: the last song loaded at start (0 in the tool's and the editor's) */
-    uint8_t last;                                /* that song's slot + 1, 0 none */
+    uint8_t last;                                /* that song + 1 (a groove 17..32), 0 none */
     uint8_t rsv[8];
 } arrset_t;
 static int arrset_valid(const arrset_t *a)
@@ -385,7 +385,7 @@ static void arrset_take(const arrset_t *a)
     pedal.ch = a->pedal_ch;
     pedal.count = a->count_in;
     sng_autoload = (uint8_t)(a->autoload == 1u);
-    sng_last = (uint8_t)(a->last <= SNG_SLOTS ? a->last : 0u);
+    sng_last = (uint8_t)(a->last <= SNG_ALL ? a->last : 0u);
 }
 #if FELUCCA_FLASH
 static void arrset_boot(void)                    /* the pedal settings; the last song asked for (sng_poll loads it) */

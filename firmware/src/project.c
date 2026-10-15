@@ -331,7 +331,8 @@ static union {
 #if FELUCCA_DRUMMER
 /* EDIT, SAVE held (ui_input.c): the section playing written into its song, packed again in the staging RAM
  * (sng.c sng_pack_section); stopped only (a flash write stops the audio). The song's copy moves: indexed again
- * at once, the drum track keeps what it holds. 0 saved, 1 playing, 2 no room (SNG_MAX), 3 flash, 4 no song */
+ * at once, the drum track keeps what it holds. 0 saved, 1 playing, 2 no room (SNG_MAX), 3 flash, 4 no song, 5 a
+ * factory groove (read-only: the web editor copies one into a user slot) */
 static int sng_save_section(void)
 {
     uint32_t slot = (uint32_t)sng_cur, n;
@@ -341,12 +342,14 @@ static int sng_save_section(void)
         return 1;
     if (sng_cur < 0 || live_sec < 0)
         return 4;
+    if (slot >= SNG_FAC0)
+        return 5;
     n = sng_pack_section((uint32_t)live_sec, (uint8_t *)&proj_tmp, sizeof proj_tmp);
     if (!n)
         return 2;
     if (sng_check((const uint8_t *)&proj_tmp, n, &tmp) || !flash_ok || st_save(sng_obj(slot), &proj_tmp, n))
         return 3;
-    sng_lib_dirty = 1;                                  /* (the SONGS list: no longer the factory song) */
+    sng_lib_dirty = 1;                                  /* (the SONGS list: its tempo, sections) */
     p = sng_fetch(slot, &n);
     if (!p || sng_check(p, n, &tmp))
         return 3;

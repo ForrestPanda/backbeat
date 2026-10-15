@@ -184,8 +184,7 @@ static void te_header(const char *title, uint16_t tc, uint32_t *cache)
             fmt_int(b + 4, (int32_t)(live_bar == 0xFFFFFFFFu ? 1u : live_bar + 1u));
             cv_text(236 - text_w(&FONT_S, b), 22, &FONT_S, b, TE_G3);
         } else if (sng_cur >= 0) {                     /* stopped: whose section (EDIT: SAVE held writes it there) */
-            str_cpy(b, "song ", 6);
-            fmt_int(b + 5, sng_cur + 1);
+            sng_label(b, (uint32_t)sng_cur);
             cv_text(236 - text_w(&FONT_S, b), 22, &FONT_S, b, TE_G3);
         } else {
             cv_text(236 - text_w(&FONT_S, "cued"), 22, &FONT_S, "cued", TE_G3);

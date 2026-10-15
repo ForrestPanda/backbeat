@@ -4,7 +4,7 @@
 firmware run with a script of keys, knobs and pedal MIDI into the TRS jack, the screen saved at the times asked
 for, and the sound.
 
-    tools/fm1_emu.py                                                # the demo script on the build's factory songs
+    tools/fm1_emu.py                                                # the demo script on the factory grooves
     tools/fm1_emu.py "songs/back-in-blac(wip).json"                 # the demo script, that song in slot 1
     tools/fm1_emu.py songs/black.json songs/time.json --wav out.wav   # slots 1 and 2, and what it played
     tools/fm1_emu.py song.json --keys "3000:SAVE,3800:n0,4600:PLAY,5600:midi:bf1401" --snap 3600,6000 --ms 7000
@@ -18,10 +18,12 @@ The copy is build/emu/felucca-emu.fwsc: for the emulator only.
 The emulator shows the loaded image through XIP as it was loaded: what the firmware writes over SPI into the image's
 range reads back stale there (the chip itself is right; the device reads it). So songs given here, or pedal
 settings, put the song sectors into the image, and a song saved on the device (EDIT, SAVE held) does not read back
-in that run. With no songs given the image stops at the firmware and the factory songs play: the saves read back.
+in that run. With no songs given the image stops at the firmware: the user's slots are empty, SONGS opens on the
+FACTORY page and its grooves play (they are in the firmware; a groove is read-only on the device).
 
-The demo script: SAVE tapped (SONGS), white key 1 (song 1 loaded, LIVE again), PLAY (its first section), the
-pedal's CC 20 1 (the second section when the first ends), A#3 (a fill), the pedal's CC 22 (the ending).
+The demo script: SAVE tapped (SONGS), white key 1 (the page's song 1 loaded: slot 1, or groove 1 with no songs
+given; LIVE again), PLAY (its first section), the pedal's CC 20 1 (the second section when the first ends), A#3 (a
+fill), the pedal's CC 22 (the ending).
 Keys (fm1-emu --keys): t:NAME presses a button (PLAY, REC, SAVE, HOME...) for 150 ms; t:nK the key K (0..26 from
 F3: the white keys 0 2 4 6 7 9 11 12.., the black ones 1 3 5 8 10..); t:K1:+3 turns KNOB 1; t:midi:bf1401 sends
 bytes into the TRS jack (bf = a CC on channel 16, the pedal's by default). Times are the emulator's ms; it runs
@@ -74,7 +76,7 @@ def unpack_fwsc(pkg):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("songs", nargs="*", help="song JSON files for slots 1.. (PC 0..); none: the build's factory songs")
+    ap.add_argument("songs", nargs="*", help="song JSON files for slots 1.. (PC 0..); none: the factory grooves (PC 16..)")
     ap.add_argument("--keys", default=DEMO_KEYS, help="the fm1-emu key script (default: the demo)")
     ap.add_argument("--snap", default=DEMO_SNAP, help="screens at these ms")
     ap.add_argument("--ms", type=int, help="run this long (default: 500 ms after the last screen)")

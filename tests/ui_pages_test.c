@@ -92,11 +92,16 @@ static void sng_apply(uint32_t k) { sng_name(k, sng_ui_name); }
 static uint32_t sec_saves;
 static int sng_save_section(void) { if (song.playing) return 1; sec_saves++; return 0; }   /* (project.c's packs and writes) */
 static int sng_lossy(void) { return 0; }
-static void sng_lib_refresh(void)                  /* (sng.c's reads the flash: here slot 1 TIME, factory, slot 3 BLACK) */
+static uint32_t t_user = 1;                        /* 0: the user's slots empty (SONGS opens on FACTORY) */
+static void sng_lib_refresh(void)                  /* (sng.c's reads the flash: here slot 1 TIME, slot 3 BLACK; the
+                                                    * grooves 1, 2) */
 {
     if (!sng_lib_dirty) return;
     sng_lib_dirty = 0; memset(sng_lib, 0, sizeof sng_lib);
-    str_cpy(sng_lib[0].name, "TIME", 13); sng_lib[0].bpm = 123; sng_lib[0].nsec = 3; sng_lib[0].factory = 1;
+    str_cpy(sng_lib[SNG_FAC0].name, "CLASSIC ROCK", 13); sng_lib[SNG_FAC0].bpm = 120; sng_lib[SNG_FAC0].nsec = 2;
+    str_cpy(sng_lib[SNG_FAC0 + 1].name, "BLUES", 13); sng_lib[SNG_FAC0 + 1].bpm = 108; sng_lib[SNG_FAC0 + 1].nsec = 2;
+    if (!t_user) return;
+    str_cpy(sng_lib[0].name, "TIME", 13); sng_lib[0].bpm = 123; sng_lib[0].nsec = 3;
     str_cpy(sng_lib[2].name, "BLACK", 13); sng_lib[2].bpm = 86; sng_lib[2].nsec = 5;
     str_cpy(sng_lib[12].name, "THIRTEEN", 13); sng_lib[12].bpm = 140; sng_lib[12].nsec = 4;   /* (16 slots since 2026-10-14) */
 }
@@ -452,7 +457,8 @@ int main(int argc, char **argv)
          * (JAM) is SLOOP's chain on the page; HOME: LIVE again; there, with a song, the keys are the pedal's */
         sng_lib_dirty = 1;
         ui.force = 1; frames(16); ppm("page-songs");       /* (after SAVE: the knobs quiet, #39) */
-        check(sng_lib[0].factory && !strcmp(sng_lib[2].name, "BLACK") && !sng_lib_dirty, "SONGS: the slots read once (TIME factory, BLACK)");
+        check(!strcmp(sng_lib[0].name, "TIME") && !strcmp(sng_lib[2].name, "BLACK") && !sng_lib_dirty, "SONGS: the slots read once (TIME, BLACK)");
+        check(lib_page() == 0u, "SONGS: the user's songs there: the USER page");
         check(kb_grid == 2u, "SONGS: the keys are the screen's");
         encs[panel.enc[EN_K1]] = 2; frame(); tap(B_REC); frame();
         check(sng_req == 3u && drummer_on() && sng_view == DV_LIVE, "SONGS: KNOB 1 to slot 3, REC: song 3 asked for, LIVE");
@@ -475,6 +481,30 @@ int main(int argc, char **argv)
         sng_req = 0;
         tap(B_SAVE); key(key_of_white(0)); check(sng_req == 1u && sng_view == DV_LIVE, "SONGS: white key 1 loads song 1, LIVE");
         sng_req = 0;
+        /* the FACTORY page: the grooves, songs 16..31 (as the pedal's PC 16..31) */
+        tap(B_SAVE); tap(B_LFO); frame();
+        check(lib_page() == 1u && sng_view == DV_LIB, "SONGS: LFO: the FACTORY page");
+        ui.force = 1; frame(); ppm("page-songs-factory");
+        key(key_of_white(1)); check(sng_req == 18u && sng_view == DV_LIVE, "FACTORY: white key 2 loads groove 2 (PC 17)");
+        sng_req = 0;
+        tap(B_SAVE); encs[panel.enc[EN_K1]] = -20; frame(); tap(B_REC); frame();
+        check(lib_page() == 1u && sng_req == 17u, "FACTORY: the page kept, REC on row 1: groove 1");
+        sng_req = 0;
+        ui.force = 1; frame(); ppm("live-nosong-factory");
+        key(key_of_white(2)); check(sng_req == 19u, "LIVE, no song, FACTORY: white key 3 loads groove 3");
+        sng_req = 0;
+        tap(B_ENV); frame();
+        check(lib_page() == 0u && sng_view == DV_LIVE && !sng_req, "LIVE, no song: ENV: the USER page (no section step)");
+        key(key_of_white(2)); check(sng_req == 3u, "LIVE, no song, USER: white key 3 loads song 3");
+        sng_req = 0;
+        sng_page = -1; t_user = 0; sng_lib_dirty = 1; frame();
+        check(lib_page() == 1u, "no user songs: the FACTORY page first");
+        sng_page = -1; t_user = 1; sng_lib_dirty = 1; frame();
+        check(lib_page() == 0u, "user songs: USER first");
+        sng_cur = (int8_t)(SNG_FAC0 + 4u); tap(B_SAVE); frame();
+        check(lib_page() == 1u && sng_pick == 4u, "SONGS with groove 5 loaded: its page, its row");
+        tap(B_HOME); frame(); ui.force = 1; frame(); ppm("live-factory-head");   /* "factory 5" */
+        sng_cur = -1; sng_page = 0;
         /* a song loaded (as sng_load would): the keys are the pedal's */
         sng_cur = 0; str_cpy(sng_ui_song, "TIME", sizeof sng_ui_song); live_sec = 0; live_req = -1; pedal.count = 0;
         sng_name(0, sng_ui_name);

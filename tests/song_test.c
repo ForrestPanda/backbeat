@@ -15,12 +15,12 @@
 static struct { uint8_t force; } ui;
 static uint8_t sync_reload;
 
-static uint8_t blob[SNG_SLOTS][3800];            /* the flash slots */
-static uint32_t blob_n[SNG_SLOTS];
+static uint8_t blob[SNG_ALL][3800];              /* the flash slots, then the grooves (the image's) */
+static uint32_t blob_n[SNG_ALL];
 #define SNG_HOST_FETCH 1
 static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len)
 {
-    *len = slot < SNG_SLOTS ? blob_n[slot] : 0u;
+    *len = slot < SNG_ALL ? blob_n[slot] : 0u;
     return *len ? blob[slot] : 0;
 }
 #include "../firmware/src/arranger_scene.c"
@@ -328,23 +328,23 @@ int main(int argc, char **argv)
     assert(sng_check(blob[3], blob_n[3], &tmp) == 0 && tmp.off[0] == SNG_HDR);
     assert(sng_check(blob[3], blob_n[3] - 1u, &tmp) == 5);                  /* the marks counted in the size */
     assert(lane_on(&TDRUM->dstep[12], 10) && !lane_on(&TDRUM->dstep[13], 10));
-    {   /* CC 21 in this one-bar section (its tom only during a fill, on step 12): asked before the tom, the fill this bar;
-         * asked after it, through the next bar too (2026-10-14: before, any request in a pattern's last bar carried) */
-        uint32_t bar = bar_len();
+    {   /* CC 21 in this one-bar section (its tom only during a fill, on step 12), so in its last bar: the next bar is
+         * the fill, whether the tom is still ahead (2026-10-15, the user's rule) or not */
+        uint32_t bar = bar_len(), pass;
         cc(16, 20, 0); advance(CTL * 2u);
-        advance(bar + bar / 8u);                                            /* the second cycle, step 2 */
-        cc(16, 21, 127); advance(CTL * 2u);
-        assert(pedal_fill && pedal_fill_hold == 1u);
-        advance(bar);
-        assert(!pedal_fill && !pedal_fill_hold);                            /* over at the bar line */
-        while (TDRUM->seq_idx != 13u)                                       /* past the tom (step 12) */
-            advance(CTL);
-        cc(16, 21, 127); advance(CTL * 2u);
-        assert(pedal_fill && pedal_fill_hold == 2u);
-        advance(bar / 8u + bar / 2u);
-        assert(pedal_fill && pedal_fill_hold == 1u);                        /* the next bar: the fill */
-        advance(bar);
-        assert(!pedal_fill);
+        advance(bar + bar / 8u);                                            /* the second cycle, step 2: the tom ahead */
+        for (pass = 0; pass < 2u; pass++) {
+            if (pass)
+                while (TDRUM->seq_idx != 13u)                               /* past the tom (step 12) */
+                    advance(CTL);
+            cc(16, 21, 127); advance(CTL * 2u);
+            assert(!pedal_fill && pedal_fill_wait && pedal_fill_hold == 2u);   /* not this bar */
+            while (TDRUM->seq_idx != 1u)
+                advance(CTL);
+            assert(pedal_fill && pedal_fill_hold == 1u);                    /* the next bar: the fill */
+            advance(bar);
+            assert(!pedal_fill && !pedal_fill_hold);                        /* over at the bar line */
+        }
         cc(16, 23, 0); advance(bar * 2u);
     }
     pc(16, 0); advance(CTL); sng_poll();                                    /* a song without marks: cleared */
@@ -406,11 +406,25 @@ int main(int argc, char **argv)
         assert(a.autoload == 1u && a.last == 1u && arrset_valid(&a));
         sng_autoload = 0; sng_last = 0; arrset_take(&a);
         assert(sng_autoload == 1u && sng_last == 1u);
-        a.last = SNG_SLOTS + 1u; a.autoload = 7; arrset_take(&a);   /* (16 songs: last 1..16) */
+        a.last = SNG_ALL; arrset_take(&a);                         /* (a groove: last 17..32) */
+        assert(sng_last == SNG_ALL);
+        a.last = SNG_ALL + 1u; a.autoload = 7; arrset_take(&a);    /* (32 songs: last 1..32) */
         assert(!sng_autoload && !sng_last);
         sng_autoload = 0; arrset_dirty = 0;
     }
     printf("song: the pedal settings object PASS\n");
+
+    /* ---- the factory grooves: songs 16..31, PC 16..31 (groove 2 here: the test song); PC 32 and on: no song */
+    memcpy(blob[SNG_FAC0 + 1u], blob[0], blob_n[0]); blob_n[SNG_FAC0 + 1u] = blob_n[0];
+    sng_autoload = 1; sng_last = 0;
+    pc(16, 17); advance(CTL); sng_poll();
+    assert(sng_cur == (int8_t)(SNG_FAC0 + 1u) && sng_ready() == 7u && sng_last == 18u);
+    pc(16, 16); advance(CTL); sng_poll();
+    assert(sng_cur == (int8_t)(SNG_FAC0 + 1u));                    /* (groove 1: none here, the song stays) */
+    pc(16, 32); advance(CTL); sng_poll();
+    assert(sng_cur == -1 && !sng_ready());
+    blob_n[SNG_FAC0 + 1u] = 0; sng_autoload = 0; sng_last = 0; arrset_dirty = 0;
+    printf("song: PC 16..31 the grooves, PC 32 no song PASS\n");
 
     /* ---- EDIT, SAVE held: a section packed again from the drum track (sng_pack_section, the reverse of sng_apply) */
     {

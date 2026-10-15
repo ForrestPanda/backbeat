@@ -6,8 +6,9 @@
  *   song_render SONG.bin OUT.wav "0:4 1:8 2:8 3:4 4"
  *
  * SONG.bin is a packed song (tools/fm1_song.py --out). The play list: "section:bars" entries, each played for
- * that many bars; the next entry is asked for on beat 3 of the last bar, as a foot would, so the fill plays
- * (FILL ONLY steps) into the transition. A last entry without bars is the ending: that section once as the
+ * that many bars; the next entry is asked for on beat 3 of the last bar, as a foot would (no fill of its own: a
+ * change brings none); with FILLS=1 the fill (CC 21) is asked for on beat 3 of the bar before, so the pattern's
+ * fill hits play into the change (a fill asked in a pattern's last bar is the next cycle: pedal.c). A last entry without bars is the ending: that section once as the
  * outro, then the stop on the bar (CC 22); otherwise the stop (CC 23). Section numbers as in the song (0 the
  * first). Environment: KIT=n overrides the song's kit, BPM=n its tempo, TAIL=seconds of silence after the
  * stop (default 1.5), USRKIT=image a user kit (tools/mkkit.py --image: USR3 and USR4 as the device holds
@@ -157,6 +158,11 @@ int main(int argc, char **argv)
         if (!bars[i])
             bars[i] = sng_bars(sec[i]);
         target = start + bars[i] * bar;
+        if (getenv("FILLS") && i + 1u < ntok && target > bar + bar / 2u && target - bar - bar / 2u > now) {
+            advance(target - bar - bar / 2u - now); /* beat 3 of the bar before: the fill */
+            cc(21, 127);
+            printf("%8.3f s  fill\n", now / (double)FS);
+        }
         if (target > bar / 2u && target - bar / 2u > now)
             advance(target - bar / 2u - now);       /* beat 3 of the last bar: the foot */
         if (i + 1u < ntok) {
@@ -165,14 +171,12 @@ int main(int argc, char **argv)
                 printf("%8.3f s  ending: fill, then %s once\n", now / (double)FS, sec_name(sec[i + 1u]));
             } else {
                 cc(20, sec[i + 1u]);
-                printf("%8.3f s  %s\n", now / (double)FS, sec[i + 1u] == sec[i] ? "the section again: the next bar a fill" : "fill, then");
-                if (sec[i + 1u] != sec[i])
-                    printf("%8.3f s  fill, then %s\n", now / (double)FS, sec_name(sec[i + 1u]));
+                printf("%8.3f s  then %s\n", now / (double)FS, sec_name(sec[i + 1u]));
             }
             n = 0;
-            if (sec[i + 1u] == sec[i] && (int)(i + 1u) != ending) {   /* the same section again: the pedal makes it a
-                                                   * fill (the next bar), the section goes on: its next entry starts
-                                                   * on the bar, as the foot counted it */
+            if (sec[i + 1u] == sec[i] && (int)(i + 1u) != ending) {   /* the same section again: nothing to land (it
+                                                   * plays already), its next entry starts on the bar, as the foot
+                                                   * counted it */
                 advance(target - now);
                 jumped = now;
             }

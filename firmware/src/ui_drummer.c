@@ -5,8 +5,10 @@
  *          instead while it clicks), what comes (NEXT, FILL, FILL > NEXT, ENDING), the song's sections (up to 16) as
  *          tiles, four to a row as the white keys 1..16, and a footer: the kit, the pedal channel and its MIDI dot,
  *          the last message.
- *   SONGS  SAVE tapped: the 16 song slots (name, tempo, sections; the factory songs marked) and JAM, SLOOP's
- *          sections A..D with their chain (ui_song.c: the page's own screen then, sng_view DV_JAM).
+ *   SONGS  SAVE tapped: two pages of 16 (name, tempo, sections) and JAM, SLOOP's sections A..D with their chain
+ *          (ui_song.c: the page's own screen then, sng_view DV_JAM): USER, the slots the editor and the tools
+ *          write; FACTORY, the grooves in the firmware (read-only; the pedal's PC 16..31). ENV / LFO: the page.
+ *          It opens on the loaded song's page; with none, on USER, or FACTORY while USER is empty.
  * The keys go through pedal.c's own calls (the host tests cover both). A change of section brings no fill of
  * its own (as the pedal's CC 20 / 27): a fill is asked for by itself, so one press changes, two fill into it:
  *   white keys 1..16  the song's sections, when the one playing ends; with OCT+ held, on the next bar
@@ -14,25 +16,49 @@
  *   SEL ENV LFO       fill (CC 21); previous, next (as CC 25, 24, without their fill)
  *   PLAY              stopped: the section cued (the count-in first); playing: stop
  *   KNOB 1..4         tempo, kit, drums level, swing (SELECT: tempo; PRESETS: kit)
- * With no song loaded the white keys 1..16 load songs 1..16 (LIVE shows the 16 slots). On SONGS (9 rows at a time,
- * following the row picked): KNOB 1 / SELECT a row, REC or OCT+ loads it (and LIVE again), a white key 1..16 loads that
- * song. */
+ * With no song loaded the white keys 1..16 load the page's songs 1..16 (LIVE shows them; ENV / LFO the page). On
+ * SONGS (9 rows at a time, following the row picked): KNOB 1 / SELECT a row, REC or OCT+ loads it (and LIVE again),
+ * a white key 1..16 loads that song of the page. */
 static uint8_t sng_view = DV_LIVE;                  /* DV_* (ui.c) */
-static uint8_t sng_pick;                            /* SONGS: the row (SNG_SLOTS: JAM) */
+static uint8_t sng_pick;                            /* SONGS: the row of the page (SNG_SLOTS: JAM) */
+static int8_t sng_page = -1;                        /* 0 USER, 1 FACTORY; -1 not chosen yet: lib_page */
+#define SNG_JAM 0xFFu                               /* drummer_load: no song, JAM */
+static uint32_t lib_page(void)                      /* the page shown: the one chosen, or FACTORY while USER is empty */
+{
+    uint32_t i;
+    if (sng_page >= 0)
+        return (uint32_t)sng_page;
+    for (i = 0; i < SNG_SLOTS; i++)
+        if (sng_lib[i].name[0])
+            return 0;
+    return 1;
+}
+static void lib_turn(uint32_t page)                 /* ENV / LFO: USER / FACTORY */
+{
+    if (page != lib_page())
+        ui.force = 1;
+    sng_page = (int8_t)page;
+}
 static uint32_t str_hash(uint32_t h, const char *s);
 static int drummer_on(void) { return on_song_page() && sng_view != DV_JAM; }
 static int drummer_keys_on(void) { return drummer_on() && !ui.menu; }
 static void drummer_open(uint32_t view)             /* (ui.c go_home, studio_open: the page is the SONG page) */
 {
     sng_view = (uint8_t)view;
-    sng_pick = (uint8_t)(sng_cur >= 0 ? sng_cur : 0);
+    sng_pick = (uint8_t)(sng_cur >= 0 ? (uint32_t)sng_cur % SNG_SLOTS : 0u);
+    if (sng_cur >= 0)                               /* (the loaded song's page) */
+        sng_page = (int8_t)((uint32_t)sng_cur / SNG_SLOTS);
     ui.force = 1;
 }
-static void drummer_load(uint32_t slot)             /* a slot, or SNG_SLOTS: no song (JAM); then LIVE / JAM */
+static void drummer_load(uint32_t k)                /* a song (0..31), or SNG_JAM: no song; then LIVE / JAM */
 {
-    sng_req = (uint8_t)(slot < SNG_SLOTS ? slot + 1u : 0xFFu);   /* (sng_poll loads it, as a PC) */
-    sng_view = slot < SNG_SLOTS ? DV_LIVE : DV_JAM;
+    sng_req = (uint8_t)(k < SNG_ALL ? k + 1u : 0xFFu);   /* (sng_poll loads it, as a PC) */
+    sng_view = k < SNG_ALL ? DV_LIVE : DV_JAM;
     ui.force = 1;
+}
+static void lib_load(uint32_t row)                  /* a row of the page shown: its song, or JAM */
+{
+    drummer_load(row < SNG_SLOTS ? lib_page() * SNG_SLOTS + row : SNG_JAM);
 }
 
 static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.c: seq.c's KB_GRID events; nextbar:
@@ -41,7 +67,7 @@ static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.
     int32_t w = key_white(k);
     if (sng_cur < 0 || sng_view == DV_LIB) {
         if (w >= 0 && w < (int32_t)SNG_SLOTS)
-            drummer_load((uint32_t)w);
+            lib_load((uint32_t)w);
         return;
     }
     fm1_irq_off();                                  /* (pedal.c runs in the audio ISR) */
@@ -81,9 +107,11 @@ static void drummer_input(uint32_t pressed, uint32_t home)
             else
                 pedal_cc(PEDAL_CC_SECTION, live_sec >= 0 ? (uint32_t)live_sec : 0u);
             fm1_irq_on();
-        } else if (sng_view == DV_LIB) {
+        } else if (sng_view == DV_LIB || (sng_cur < 0 && (b == B_ENV || b == B_LFO))) {
             if (b == B_REC || b == B_OCTUP)
-                drummer_load(sng_pick);
+                lib_load(sng_pick);
+            else if (b == B_ENV || b == B_LFO)      /* the page: USER, FACTORY (LIVE with no song: its keys' too) */
+                lib_turn(b == B_LFO);
         } else if (b == B_SCL || b == B_ENV || b == B_LFO) {   /* FILL, PREV, NEXT (no fill of their own, as the
                                                                  * white keys) */
             fm1_irq_off();
@@ -163,8 +191,7 @@ static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, const cha
     cut_name(b, songname[0] ? songname : "NO SONG", &FONT_S, 140);
     cv_text(4, 4, &FONT_S, b, songname[0] ? C_WHITE : TE_G3);
     if (sng_cur >= 0) {
-        str_cpy(b, "song ", 6);
-        fmt_int(b + 5, sng_cur + 1);
+        sng_label(b, (uint32_t)sng_cur);
     } else {
         str_cpy(b, "jam a-d", 8);
     }
@@ -186,14 +213,16 @@ static void live_main(uint32_t playing, const char *sec, uint32_t bar, uint32_t 
 {
     static uint32_t cache;
     char b[24];
-    uint32_t k, sig = studio_hash(playing * 3u + bar * 17u + bars * 131u + ci * 7919u + ci_n * 31u, sec);
+    uint32_t k, sig = studio_hash(playing * 3u + bar * 17u + bars * 131u + ci * 7919u + ci_n * 31u +
+                                  (sng_cur < 0) * lib_page() * 104729u, sec);
     if (!ui.force && sig == cache)
         return;
     cache = sig;
     cv_begin(240, 72, C_BLACK);
-    if (sng_cur < 0 && !sec[0]) {                   /* no song, no section: how to get one */
+    if (sng_cur < 0 && !sec[0]) {                   /* no song, no section: how to get one (the keys: the page's) */
         cv_text(4, 4, &FONT_L, "PICK A SONG", TE_G3);
-        cv_text(4, 44, &FONT_S, "SAVE: songs, keys 1-16: load", TE_G4);
+        cv_text(4, 44, &FONT_S, lib_page() ? "FACTORY: keys 1-16, ENV: user" : "USER: keys 1-16, LFO: factory",
+                TE_G4);
         cv_blit(0, 52);
         return;
     }
@@ -230,7 +259,7 @@ static void live_state(uint32_t playing, const char *next)
     uint16_t c = C_AMB;
     uint32_t fill = fill_now || pedal_fill, hold = pedal_fill_hold, end = pedal_end_req || pedal_end_bars;
     uint32_t oct = (fm1_in.buttons & dyn_bit[1]) != 0u;   /* OCT+ held: a white key now changes on the next bar */
-    uint32_t sig = studio_hash(playing + fill * 3u + hold * 7u + end * 11u + fill_arm * 13u + oct * 17u, next);
+    uint32_t sig = studio_hash(playing + fill * 3u + hold * 7u + end * 11u + fill_arm * 13u + oct * 17u + pedal_fill_wait * 19u, next);
     if (!ui.force && sig == cache)
         return;
     cache = sig;
@@ -240,13 +269,16 @@ static void live_state(uint32_t playing, const char *next)
     } else if (end) {
         str_cpy(b, pedal_end_bars ? "ENDING: LAST BARS" : "ENDING NEXT", sizeof b);
         c = TE_RED;
-    } else if (next[0] && (hold || fill)) {       /* a fill into the change */
+    } else if (next[0] && (hold || fill)) {       /* a fill into the change (one waiting: then the change) */
         str_cpy(b, "FILL > ", 8);
         str_cpy(b + 7, next, 13);
         c = TE_DRUM;
     } else if (next[0]) {
         str_cpy(b, "NEXT: ", 7);
         str_cpy(b + 6, next, 13);
+    } else if (pedal_fill_wait) {                 /* asked in the last bar: the next time round */
+        str_cpy(b, "FILL NEXT TIME ROUND", sizeof b);
+        c = TE_DRUM;
     } else if (hold) {
         str_cpy(b, "FILL TO THE END", sizeof b);
         c = TE_DRUM;
@@ -298,7 +330,7 @@ static void name_split(const char *s, char *a, char *b)
  * place from song to song): 1 row (1..4 sections) tall tiles with the whole name on two lines, 2 rows (5..8) the
  * name on one, 3 and 4 rows (9..16) a line each, the number then the name cut (the section playing and the one
  * cued show whole above). The one playing lit, the one cued framed amber, the outro marked (END, or its number
- * red), a meter other than 4/4 in the tall ones; no song: the 16 song slots, as the white keys 1..16 load them */
+ * red), a meter other than 4/4 in the tall ones; no song: the page's 16 songs, as the white keys 1..16 load them */
 static void live_tiles(uint32_t playing, int32_t req)
 {
     static uint32_t cache;
@@ -307,18 +339,19 @@ static void live_tiles(uint32_t playing, int32_t req)
     int32_t pitch, h;
     uint32_t sig = (uint32_t)(sng_cur + 1) * 7u + ready * 13u + (uint32_t)(live_sec + 1) * 17u +
                    (uint32_t)(req + 1) * 19u * (1u + blink) + playing * 23u + sng_lib_dirty;
+    const sng_lib_t *lib = &sng_lib[lib_page() * SNG_SLOTS];
     if (sng_cur < 0)
         for (i = 0; i < SNG_SLOTS; i++)
-            sig = studio_hash(sig, sng_lib[i].name);
+            sig = studio_hash(sig, lib[i].name);
     if (!ui.force && sig == cache)
         return;
     cache = sig;
     cv_begin(240, 72, C_BLACK);
-    if (sng_cur < 0) {                              /* no song: the 16 song slots, as the white keys 1..16 load them */
+    if (sng_cur < 0) {                              /* no song: the page's 16 songs, as the white keys 1..16 load them */
         for (i = 0; i < SNG_SLOTS; i++) {
-            uint32_t there = sng_lib[i].name[0] != 0;
+            uint32_t there = lib[i].name[0] != 0;
             fmt_int(b, (int32_t)i + 1);
-            tile_line(2 + 60 * (int32_t)(i & 3u), 1 + 18 * (int32_t)(i >> 2), 16, b, sng_lib[i].name,
+            tile_line(2 + 60 * (int32_t)(i & 3u), 1 + 18 * (int32_t)(i >> 2), 16, b, lib[i].name,
                       there ? TE_G1 : C_BLACK, C_WHITE, TE_G3);
         }
         cv_blit(0, 144);
@@ -436,20 +469,23 @@ static void live_draw(void)
     live_foot();
 }
 
-/* SONGS: the 8 slots and JAM, the row picked white */
+/* SONGS: a page's 16 songs and JAM, the row picked white; the pages as tabs in the header (the one shown white) */
 static void lib_draw(void)
 {
     static uint32_t cache;
     char b[16];
-    uint32_t i, sig = sng_pick * 7u + (uint32_t)(sng_cur + 1) * 13u + (ui.msg_t != 0) * 5u;
+    uint32_t page = lib_page(), i, sig = sng_pick * 7u + (uint32_t)(sng_cur + 1) * 13u + (ui.msg_t != 0) * 5u + page * 17u;
+    const sng_lib_t *lib = &sng_lib[page * SNG_SLOTS];
     for (i = 0; i < SNG_SLOTS; i++)
-        sig = studio_hash(sig + sng_lib[i].bpm + sng_lib[i].nsec * 3u, sng_lib[i].name);
+        sig = studio_hash(sig + lib[i].bpm + lib[i].nsec * 3u, lib[i].name);
     if (!ui.force && sig == cache)
         return;
     cache = sig;
     cv_begin(240, 24, C_BLACK);
-    cv_text(4, 4, &FONT_S, "SONGS", C_WHITE);
-    cv_text(236 - text_w(&FONT_S, "rec: load"), 4, &FONT_S, "rec: load", TE_G3);
+    cv_text(4, 4, &FONT_S, "USER", page ? TE_G3 : C_WHITE);
+    cv_text(52, 4, &FONT_S, "FACTORY", page ? C_WHITE : TE_G3);
+    cv_rect(page ? 52 : 4, 20, page ? 56 : 32, 2, C_WHITE);   /* (the page shown, underlined) */
+    cv_text(236 - text_w(&FONT_S, "env/lfo: page"), 4, &FONT_S, "env/lfo: page", TE_G3);   /* (the keys that turn it) */
     cv_rect(0, 23, 240, 1, TE_G1);
     cv_blit(0, 0);
     {   /* 9 rows of 22 px over the 16 slots and JAM (the last row): the window follows the row picked */
@@ -459,9 +495,9 @@ static void lib_draw(void)
             int pick, cur;
             uint16_t fg;
             i = top + r;
-            e = &sng_lib[i < SNG_SLOTS ? i : 0];
+            e = &lib[i < SNG_SLOTS ? i : 0];
             pick = i == sng_pick;
-            cur = (int32_t)i == sng_cur || (i == SNG_SLOTS && sng_cur < 0);
+            cur = (i < SNG_SLOTS && (int32_t)(page * SNG_SLOTS + i) == sng_cur) || (i == SNG_SLOTS && sng_cur < 0);
             fg = pick ? C_BLACK : C_WHITE;
             cv_begin(240, 22, pick ? C_WHITE : C_BLACK);
             if (i == SNG_SLOTS) {
@@ -479,8 +515,6 @@ static void lib_draw(void)
                     fmt_int(b, e->nsec);
                     str_cpy(b + str_len(b), "s", 2);
                     cv_text(180, 3, &FONT_S, b, pick ? C_BLACK : TE_G3);
-                    if (e->factory)
-                        cv_text(164, 3, &FONT_S, "f", pick ? C_BLACK : TE_G3);
                 }
             }
             if (cur)
@@ -495,6 +529,8 @@ static void lib_draw(void)
     cv_begin(240, 18, C_BLACK);
     if (ui.msg_t)
         cv_text(4, 1, &FONT_S, ui.msg, C_HI);
+    else                                            /* (the header has the page's keys: the load's here) */
+        cv_text(236 - text_w(&FONT_S, "rec: load"), 1, &FONT_S, "rec: load", TE_G3);
     cv_blit(0, 222);
 }
 

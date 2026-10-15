@@ -44,7 +44,7 @@ BackBeat firmware).
   commit). A project object is "DRM1" (the globals and the drum track); a restore also takes SLOOP 2.x's "FUN4".."FUN6"
   (their drum track), not SLOOP 1.x's. The editor restores a SLOOP backup without its objects 6..8 and its USR1
   sample, says which it left out, and refuses (before writing anything) a backup whose projects the firmware cannot
-  read. The songs and the pedal settings (16..24, below) are still outside `BK_LIST`.
+  read. The songs, the pedal settings and the factory grooves (16..24, 40..63, below) are still outside `BK_LIST`.
 - **Pages** the editor shows (params.c's page table): the Sequencer has the drum track's PATTERN (LEN DIV SWG GATE)
   and FX (FILTER `P_TFLT`, INSERT `P_ITYPE P_IA P_IB P_IC`, INSERT 2 `P_IMIX`); the Settings GLOBAL, MASTER, DRUMS,
   DLY, REV (SIZE DAMP: the chorus bus is gone, G_CRATE / G_CDEPTH unused), MIDI (CH = G_DRCH, the drums' channel, and
@@ -339,10 +339,14 @@ empty). Numbers are 5 × 7 bit (u35, LSB first); data is pack7.
 | 35 BK_GET | id, offset u35, count (2 × 7 bit, 1..256) | id, rc (0 ok, 1 arguments, 5 the snapshot is gone: LIST again), offset u35, count, pack7 data |
 | 36 BK_PUT | op 0 begin: id 0..9 (8: v9, 9: v10), length u35, CRC-32 u35 · op 1 data: id, offset u35, pack7 (≤ 256 bytes, in order) · op 2 commit: id · op 3 abort: id | op, id, rc: 0 ok, 1 arguments, 2 not a valid object (CRC, magic, sizes, ranges), 3 stop the song first (projects and preset banks; since 2.5 the settings too when their song order differs), 4 flash, 5 no begin for this object (or more than 15 s ago) |
 
-**fm1-drummer (objects 16..24, 40..47):** `BK_GET` and `BK_PUT` also reach the songs (object 16 + slot for slots 0..7,
+**fm1-drummer (objects 16..24, 40..63):** `BK_GET` and `BK_PUT` also reach the songs (object 16 + slot for slots 0..7,
 object 40 + slot - 8 for slots 8..15 since 2026-10-14,
-the packed form of `firmware/src/sng.c`; a PUT of length 0 erases the slot) and the pedal settings (object 24,
-16 bytes: "ARS1", the pedal channel 0..17, the count-in's bars 0..2, SETUP's "load the last song at start" 0/1 and that song's slot + 1 (0 none, up to 16), 8 zero bytes). They are not in `BK_LIST`, so a backup made by the
+the packed form of `firmware/src/sng.c`; a PUT of length 0 erases the slot; a slot never written reads empty) and the
+pedal settings (object 24, 16 bytes: "ARS1", the pedal channel 0..17, the count-in's bars 0..2, SETUP's "load the
+last song at start" 0/1 and that song + 1 (0 none, 1..16 a slot, 17..32 a factory groove), 8 zero bytes). `BK_GET`
+alone reaches the factory grooves (object 48 + n - 1 for groove n, 48..63 since 2026-10-15: the songs built into the
+firmware, read-only; a `BK_PUT` begin of them answers rc 1). The editor itself shows the grooves from the site's copy
+of `grooves/`, not from these objects (verify on hardware: these objects are checked by the build only). They are not in `BK_LIST`, so a backup made by the
 SLOOP editor stays one it can restore; USR1 and USR2 (objects 32, 33) are listed with length 0, since their flash holds the songs. The songs take the flash of the USR1 and USR2 sample slots: `SMP_BEGIN`,
 `SMP_ERASE` and `SMP_WRITE` on slots 0 and 1 answer rc 4. `tools/fm1_song.py` writes and sends songs, and so does the editor's Songs tab (`SNG` in editor.html:
 the same packed form, byte for byte; the simulated device holds the song objects too).

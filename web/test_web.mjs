@@ -35,7 +35,7 @@ const E = vm.runInNewContext(proto + `
    wavFile, zipStore, crc32, startWatch, fmtValue, F, DRUM_LANES, LV_NAMES, emptyDrum, lockable, MICRO, FC, fillGet, fillSet, pack7, unpack7,
    parseNote, backupCapture, backupRestore, backupObjects, b64enc, b64dec, BK, KIT, KIT_SONGS, kitOptions, kitPad, kitZones, kitLen, kitBytes,
    kitFit, kitSplit, kitLaneOf, kitPlace, zipRead, ARR, mockSettings, DSYN, DSYN_MOCK_NAMES, DSYN_MOCK_KITS, SetGate, bkProjFormat, bkProjOk,
-   bkFwAtLeast, SNG, PLAY, SED, PEDALIN, PCLK })`,
+   bkFwAtLeast, SNG, PLAY, SED, PEDALIN, PCLK, SET })`,
 { setTimeout, clearTimeout, setInterval, clearInterval, console, TextEncoder, TextDecoder, Blob, Response, DecompressionStream });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const js = (x) => JSON.stringify(x);
@@ -241,14 +241,14 @@ async function editorSongs() {
     const songs = html.slice(html.indexOf('id="p-songs"'), html.indexOf('id="p-setlist"'));
     ok(!/data-dev\b/.test(panel) && (songs.match(/ data-devonly>/g) || []).length === 3 && /\$\("songs-offline"\)\.hidden = ready/.test(html)
       && /<span data-devonly><label><span data-t="gpiSlot"><\/span> <select id="gpi-slot">/.test(html) && /<span data-devonly><label><span data-t="gpiSlot"><\/span> <select id="sed-slot">/.test(html)
-      && /<section class="panel" id="p-setlist" data-tab="setlist" data-dev hidden>/.test(html) && !songs.includes('id="songslots"')
+      && /<section class="panel" id="p-setlist" data-tab="setlist" hidden>/.test(html) && !songs.includes('id="songslots"')
       && /tabSong: "Jam"/.test(html) && /tabSongs: "Song"/.test(html) && /tabSetlist: "Setlist"/.test(html) && /songsOffline: "No FM-1 connected/.test(html),
       "songs: the Song tab without an FM-1 (import, editor, player), the pedal and Send with one; the slots in Setlist; Jam, Song, Setlist");
     ok(/`\$\{k \+ 1\}: \$\{x\.name\}/.test(html) && /`\$\{SONGED\.sel \+ 1\}: \$\{sedSec\(\)\.name\}/.test(html) && /sp\.swing \?\? 0;/.test(html),
       "sed: the sections numbered 1..16 as on the device; a song without swing shows 0");
   }
   ok(/el\("b", \{ text: String\(i \+ 1\) \}\)/.test(html) && (html.match(/text: String\(i \+ 1\) \}\)\);/g) || []).length === 2
-    && /replace\("\{n\}", slot \+ 1\)/.test(html) && /NO SONG \$\{slot \+ 1\}/.test(html) && /fmt_int\(b, \(int32_t\)slot \+ 1\)/.test(fw("sng.c")),
+    && /replace\("\{n\}", slot \+ 1\)/.test(html) && /NO SONG \$\{slot \+ 1\}/.test(html) && /fmt_int\(b \+ \(slot >= SNG_FAC0\), \(int32_t\)\(slot % SNG_SLOTS\) \+ 1\)/.test(fw("sng.c")),
     "songs: the slots numbered 1..16 as the device shows them (cards, pickers, dialogs, NO SONG n)");
   ok((await E.SNG.put(rq, 2, js)) === 0, "songs: PUT into slot 2 (begin, data, commit) ok");
   rows = await E.SNG.summaries(rq);
@@ -312,11 +312,13 @@ function editorPlay() {
     && /playKeys: "keys: 1–8 a section \(0: switches to 9–16/.test(html) && /SPLAY\.bank = SPLAY\.bank \? 0 : 1/.test(html)
     && /\+ 8 \* \(SPLAY\.bank \|\| 0\)/.test(html) && /plive-tiles rows-\$\{Math\.max\(1, Math\.ceil\(n \/ 4\)\)\}/.test(html),
     "play: keys 1..8 by the key (shift and the keypad too; 0: sections 9..16), f the fill, the tiles in rows of four as the device");
-  P.fillNext(st); P.request(st, 1);                       /* CC 21 with CC 20 (a section brings no fill of its own): the
-                                                              rest of the bar is the fill */
+  P.fillNext(st); P.request(st, 1);                       /* CC 21 with CC 20 in A's last bar (A: 1 bar): A once more as
+                                                              the fill, then B (the change waits for the fill: 2026-10-15) */
+  for (let i = 12; i < 16; i++) ev = P.tick(st);
+  ok(!ev.fill && st.fill && st.sec === 0 && st.req === 1, "play: fill and B asked in A's last bar: not this bar (the next one the fill), B waits");
   const fillHits = [];
-  for (let i = 12; i < 16; i++) { ev = P.tick(st); fillHits.push(ev.hits.some((h) => h.lane === E.SNG.laneIndex("HITOM"))); }
-  ok(ev.fill && fillHits.join() === "true,false,true,false" && ev.newBar, "play: the fill: FILL ONLY toms play on 13 and 15, the bar ends");
+  for (let i = 0; i < 16; i++) { ev = P.tick(st); if (i >= 12) fillHits.push(ev.hits.some((h) => h.lane === E.SNG.laneIndex("HITOM"))); }
+  ok(ev.fill && ev.sec === 0 && fillHits.join() === "true,false,true,false" && ev.newBar, "play: ..A again as the fill: its FILL ONLY toms on 13 and 15");
   ev = P.tick(st);
   ok(st.sec === 1 && ev.sec === 1 && ev.step === 0 && !ev.fill && ev.hits.some((h) => h.lane === E.SNG.laneIndex("CRASH")) && st.req < 0, "play: B on the bar with its crash, the fill over");
   for (let i = 1; i < 16; i++) ev = P.tick(st);
@@ -357,19 +359,13 @@ function editorPlay() {
   for (let i = 0; i < 16; i++) ev = P.tick(st);            /* the rest of bar 2 */
   ok(st.sec === 0 && !st.fill && st.req < 0, "play: ..the section on the next bar");
   for (let i = 0; i < 16; i++) ev = P.tick(st);            /* (a bar of A) */
-  P.fillNext(st);                                          /* CC 21 at A's start (1 bar, its fill toms on 13 and 15 still
-                                                              ahead): the fill this bar only (until 2026-10-14 the next bar
-                                                              too: a 1-bar section filled twice) */
-  ok(st.fill && st.fillHold === 1, "play: the fill (CC 21) from now, its toms still ahead: this bar");
-  for (let i = 0; i < 16; i++) ev = P.tick(st);
-  ok(!st.fill && !st.fillHold && st.sec === 0, "play: ..over after it");
-  for (let i = 0; i < 15; i++) ev = P.tick(st);            /* past A's fill toms (13, 15): asked too late for them */
-  P.fillNext(st);
-  ok(st.fill && st.fillHold === 2, "play: asked after the fill's hits: through the next bar too");
-  for (let i = 15; i < 24; i++) ev = P.tick(st);            /* the middle of the next bar */
-  ok(st.fill && st.fillHold === 1 && ev.fill, "play: ..the next bar the fill");
+  P.fillNext(st);                                          /* CC 21 at A's start: A is 1 bar, so this is its last bar: the
+                                                              next bar is the fill (2026-10-15, whatever fill hits are ahead) */
+  ok(!st.fill && st.fillWait && st.fillHold === 2, "play: the fill asked in a 1-bar section: not this bar");
+  for (let i = 0; i < 24; i++) ev = P.tick(st);            /* the middle of the next bar */
+  ok(st.fill && st.fillHold === 1 && ev.fill && !st.fillWait, "play: ..the next bar the fill");
   for (let i = 24; i < 32; i++) ev = P.tick(st);
-  ok(!st.fill && !st.fillHold, "play: ..over after it");
+  ok(!st.fill && !st.fillHold && st.sec === 0, "play: ..over after it");
   {   /* in B (2 bars): asked for in the first bar, the fill runs to the pattern's end; in the last bar, the next cycle too */
     const h = P.create(spec);
     P.request(h, 1); for (let i = 0; i < 4; i++) P.tick(h);
@@ -381,10 +377,11 @@ function editorPlay() {
     ok(!h.fill && h.sec === 1 && h.bar === 2, "play: ..off at the pattern's end, B goes on");
     for (let i = 0; i < 20; i++) P.tick(h);                           /* into B's last bar */
     P.fillNext(h);
-    ok(h.fill && h.fillHold === 2, "play: fill in B's last bar: through the next cycle");
+    ok(!h.fill && h.fillWait && h.fillHold === 2, "play: fill in B's last bar: the next cycle (not the rest of this bar)");
     for (let i = 20; i < 32; i++) P.tick(h);
+    ok(h.fill && !h.fillWait, "play: ..the next cycle the fill");
     for (let i = 0; i < 32; i++) P.tick(h);
-    ok(!h.fill && h.sec === 1, "play: ..off after the next cycle");
+    ok(!h.fill && h.sec === 1, "play: ..off after it");
   }
   P.ending(st, null);                                      /* the flagged outro */
   ok(st.req === 2 && st.endReq === 1 && !st.fill, "play: the ending takes the outro, no fill");
@@ -544,8 +541,9 @@ function editorSed() {
     E.PLAY.request(st, 0);
     const steps = []; for (let i = 0; i < 16; i++) steps.push(E.PLAY.tick(st));
     ok(steps[12].hits.map((x) => x.lane).sort().join() === "4" && steps[0].hits.length === 1, "play: outside a fill the tom (F) is out, the hat (N) and the kick (N) in");
-    E.PLAY.fillNext(st);                                   /* (a 1-bar section: the fill from now, and the next bar too) */
-    const f = []; for (let i = 0; i < 16; i++) f.push(E.PLAY.tick(st));
+    E.PLAY.fillNext(st);                                   /* (a 1-bar section: its last bar: the next bar the fill) */
+    let f = []; for (let i = 0; i < 32; i++) f.push(E.PLAY.tick(st));
+    f = f.slice(16);
     ok(f[12].fill && f[12].hits.map((x) => x.lane).sort().join() === String(E.SNG.laneIndex("HITOM")), "play: in a fill the tom in, the hat out");
   }
   ok(S.outro(fb, true).outro === true && !("outro" in S.outro(fb, false)) && S.rename(fb, "end part long name").name === "END PART LON", "sed: outro and names");
@@ -643,6 +641,56 @@ function editorMeter() {
   ok(q.spec === other && q.countIn === 1 && !q.playing && q.bpm === 90, "load: stopped: the song cued, the count-in setting kept");
 }
 
+async function editorSet() {
+  /* the set: the songs of a gig in the browser (up to 16, as the slots), checked as the device would, kept and restored */
+  const S = E.SET, song = (name) => ({ name, bpm: 100, sections: [{ name: "A", steps: 16, div: "1/16", lanes: { KICK: "x...x...x...x..." } }] });
+  let set = [];
+  for (let i = 0; i < 16; i++) set = S.add(set, song("S" + i));
+  let full = false;
+  try { S.add(set, song("X")); } catch (e) { full = true; }
+  ok(set.length === 16 && full, "set: 16 songs at most (the FM-1's slots)");
+  let bad = false;
+  try { S.add([], { name: "BAD", bpm: 100, sections: [] }); } catch (e) { bad = true; }
+  ok(bad, "set: a song the device would refuse is refused");
+  const m = S.move(set, 0, 1), m2 = S.move(set, 15, 1), rm = S.remove(set, 3);
+  ok(m[0].name === "S1" && m[1].name === "S0" && m2 === set && rm.length === 15 && rm[3].name === "S4" && set[0].name === "S0",
+    "set: move up / down (not past the ends), remove; the set given is not changed");
+  const store = { v: null, getItem() { return this.v; }, setItem(k, v) { this.v = v; } };
+  ok(S.save(store, set.slice(0, 3)) && js(S.load(store).map((x) => x.name)) === js(["S0", "S1", "S2"]) && js(S.load(null)) === "[]"
+    && js(S.load({ getItem() { throw new Error("blocked"); } })) === "[]", "set: kept in the browser's storage and read back; no storage: an empty set");
+  const names = [];
+  const got = S.fromFile({ backbeat_set: 1, songs: [song("A"), { name: "NOPE", sections: [] }, song("B")] }, names);
+  ok(js(got.map((x) => x.name)) === js(["A", "B"]) && js(names) === js(["NOPE"]) && S.fromFile(song("ONE")).length === 1
+    && S.fromFile([song("X"), song("Y")]).length === 2 && S.toFile(got).backbeat_set === 1,
+    "set: a set file, one song or a list of songs read; bad songs skipped and named");
+  {   /* the set into the simulated FM-1: song n in slot n, a slot past the set erased; the slots read back as the set */
+    const { rq, done } = attachMock({});
+    await E.SNG.put(rq, 9, E.SNG.pack(song("OLD")));                    /* (a song left in slot 10 from before) */
+    let rows = await E.SNG.summaries(rq);
+    const three = set.slice(0, 3), plan = S.sendPlan(three, rows);
+    ok(plan.length === 4 && plan[3].slot === 9 && plan[3].blob.length === 0 && S.sendPlan(three, null).length === 16,
+      "set: the send plan: the set's songs, and an erase only where a slot past the set holds a song");
+    for (const w of plan) await E.SNG.put(rq, w.slot, w.blob);
+    rows = await E.SNG.summaries(rq);
+    ok(js(rows.map((x) => (x ? x.name : null))) === js(["S0", "S1", "S2", ...Array(13).fill(null)]),
+      "set: sent to the FM-1: slots 1..3 the set, the rest empty (PC n the same song on both)");
+    const back = [];
+    for (let i = 0; i < rows.length; i++) if (rows[i]) back.push(S.check(E.SNG.unpack(await E.SNG.get(rq, i))));
+    ok(js(back.map((x) => x.name)) === js(["S0", "S1", "S2"]), "set: the FM-1's songs copied back into a set");
+    done();
+  }
+  ok(/id="setlist"/.test(html) && /let SETL = SET\.load\(setStore\(\)\)/.test(html) && /#p-setlist \[data-devonly\]/.test(html),
+    "set: the Setlist tab shows the set without the FM-1 (its slots only with one)");
+  const pin = html.slice(html.indexOf("async function pinSong("), html.indexOf("async function pinSong(") + 1000);
+  ok(/if \(setPlay\(slot\)\)/.test(pin) && /\$\("set-player"\) : \$\("splay-home"\)\)\.append\(\$\("splay"\)\)/.test(html)
+    && /tab === "setlist" && \["PageDown", "PageUp", "ArrowDown", "ArrowUp"\]/.test(html) && /PLAY\.load\(SPLAY\.st, sp\)/.test(html),
+    "set: played on the Setlist tab (the one player moves there), PC n = song n of the set first, page keys step through it, a song picked while playing loads as a PC");
+  ok(/body\.live \.app \{ grid-template-columns: minmax\(0, 1fr\); \}/.test(html) && /navigator\.wakeLock\.request\("screen"\)/.test(html)
+    && /requestFullscreen\(\)\.catch/.test(html) && /e\.key === "Escape" && document\.body\.classList\.contains\("live"\)/.test(html)
+    && /\.plive-tiles button \{[^}]*background: var\(--s3\)/.test(html),
+    "set: live mode (the stage view, full screen, the screen kept awake, Esc leaves); the section tiles brighter");
+}
+
 async function editorRealKit() {
   /* the layered kit in the player, as drums.c plays it: the layer whose velocity is nearest, a take never the last */
   const P = E.PLAY, four = [127, 100, 72, 42], two = [127, 72];
@@ -663,6 +711,15 @@ async function editorRealKit() {
     && /fetch\("realkit\/kit\.json"\)/.test(html) && /PLAY\.rkLayer\(R\.vel, vel\)/.test(html)
     && /"assets" \/ "realkit", ed \/ "realkit"/.test(readFileSync(join(HERE, "make_site.py"), "utf8")),
     "realkit: served next to the editor (web/realkit, the site's editor/realkit), every take's WAV there; the player loads it first");
+  {   /* the factory grooves: served next to the editor (web/grooves, the site's editor/grooves), the firmware's own */
+    const order = readFileSync(join(HERE, "grooves/factory.txt"), "utf8").split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
+    const specs = order.map((f) => E.SET.fromFile(JSON.parse(readFileSync(join(HERE, "grooves", f), "utf8"))));
+    const ms = readFileSync(join(HERE, "make_site.py"), "utf8");
+    ok(order.length === 16 && specs.every((x) => x.length === 1) && /fetch\("grooves\/factory\.txt"\)/.test(html)
+      && /HERE\.parent \/ "grooves", ed \/ "grooves"/.test(ms) && /keep\["editor\/grooves\/" \+ f\.name\]/.test(ms)
+      && E.SNG.ALL === 2 * E.SNG.SLOTS && /#define SNG_ALL \(SNG_SLOTS \* 2u\)/.test(fw("seq.c")) && /id="grvcard"(?![^>]*data-devonly)/.test(html),
+      "grooves: the 16 of grooves/factory.txt served with the editor (offline too), each a song that packs; the Setlist tab lists them without the FM-1; songs 16..31 as seq.c");
+  }
 }
 
 async function editorPedalIn() {
@@ -673,8 +730,10 @@ async function editorPedalIn() {
     && R.route(cc(21, 127), 16).kind === "fill" && R.route(cc(22, 3), 16).k === 3 && R.route(cc(23, 0), 16).kind === "stop"
     && R.route(cc(24, 0), 16).dir === 1 && R.route(cc(25, 0), 16).dir === -1 && R.route(cc(26, 0), 16).kind === "tap",
     "pedal in: CC 20..27 -> section, fill bar, fill, ending, stop, next, previous, tap");
-  ok(R.route([0xCF, 3], 16).slot === 3 && R.route([0xCF, 15], 16).slot === 15 && R.route([0xCF, 16], 16).slot === -1 && R.route([0xCF, 127], 16).slot === -1,
-    "pedal in: PC n -> song n (0..15); PC 16.. -> no song (SLOOP's A..D)");
+  ok(R.route([0xCF, 3], 16).slot === 3 && R.route([0xCF, 15], 16).slot === 15 && R.route([0xCF, 16], 16).slot === 16 && R.route([0xCF, 31], 16).slot === 31
+    && R.route([0xCF, 32], 16).slot === -1 && R.route([0xCF, 127], 16).slot === -1 && R.say(R.route([0xCF, 17], 16), null) === "FACTORY 2"
+    && /\bslot >= SNG\.SLOTS\) \{[^}]*grvPlay\(k\)/.test(html.slice(html.indexOf("async function pinSong("))),
+    "pedal in: PC n -> song n (0..15); PC 16..31 -> the factory grooves (the player plays the site's copy); PC 32.. -> no song (SLOOP's A..D)");
   ok(R.route(cc(20, 1, 1), 16) === null && R.route(cc(20, 1, 1), 17).k === 1 && R.route(cc(20, 1), 0) === null && R.route(cc(64, 127), 16) === null
     && R.route([0x9F, 36, 100], 16) === null, "pedal in: another channel ignored (any: taken; off: nothing); CC 64 and notes are not the pedal's");
   const spec = { name: "S", bpm: 120, sections: [{ name: "VERSE", steps: 16, div: "1/16", lanes: {} }, { name: "OUT", steps: 16, div: "1/16", outro: true, lanes: {} }] };
@@ -1409,6 +1468,7 @@ await editorSongs();
 editorPlay();
 editorSed();
 editorMeter();
+await editorSet();
 await editorRealKit();
 await editorPedalIn();
 await editorSong();

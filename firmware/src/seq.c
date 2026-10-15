@@ -790,14 +790,25 @@ static void srec_stop(void)
 static volatile uint8_t pedal_fill;                /* this bar is the pedal's fill */
 static volatile uint8_t pedal_at_end;              /* live_req (or the ending's stop) waits for the section's end */
 static volatile uint8_t pedal_fill_hold;           /* CC 21: the fill until the section's end (2: through the next cycle too) */
+static volatile uint8_t pedal_fill_wait;           /* CC 21 in the last bar: the fill starts with the next cycle */
 static volatile uint8_t pedal_end_req;             /* bars of the outro asked for (taken when its section starts) */
 static volatile uint32_t pedal_end_bars;           /* stop when the section playing has played this many (0: none) */
 /* fm1-drummer (sng.c, arranger_scene.c): a song loaded from flash: its sections replace A..D for live_req */
-#define SNG_SLOTS 16u                              /* songs in flash (8 until 2026-10-14) */
+#define SNG_SLOTS 16u                              /* the user's songs, in flash (8 until 2026-10-14) */
+#define SNG_FAC0 SNG_SLOTS                         /* songs 16..31: the factory grooves, read-only in the firmware image
+                                                    * (tools/gen_songs.py; their own bank since 2026-10-15: before, a
+                                                    * user slot never written played one) */
+#define SNG_ALL (SNG_SLOTS * 2u)                   /* the songs a PC, the SONGS screen and the settings reach */
 #define SNG_SMP_TAKEN(k) ((k) < 2u)                /* the user sample slots (USR1, USR2) whose flash the songs take */
 #define SNG_SECTIONS 16u                           /* sections a song holds at most (8 until 2026-10-14) */
-static int8_t sng_cur = -1;                        /* the song's slot, -1 = SLOOP's sections A..D */
-static volatile uint8_t sng_req;                   /* PC: slot + 1 to load, 0xFF to unload (sng_poll, main loop) */
+static int8_t sng_cur = -1;                        /* the song: 0..15 a user slot, 16..31 a groove, -1 = SLOOP's
+                                                    * sections A..D */
+static volatile uint8_t sng_req;                   /* PC: song + 1 to load, 0xFF to unload (sng_poll, main loop) */
+static void sng_label(char *b, uint32_t k)         /* how the screens name song k: "song 3", "factory 3" (b: 11) */
+{
+    str_cpy(b, k < SNG_FAC0 ? "song " : "factory ", 9);
+    fmt_int(b + str_len(b), (int32_t)(k % SNG_SLOTS) + 1);
+}
 static void sng_apply(uint32_t k);                 /* section k of the song into the drum track (at the bar) */
 static uint32_t sng_ready(void);                   /* bit k: section k exists */
 static uint32_t sng_bars(uint32_t k);              /* the bars section k takes */
@@ -810,17 +821,17 @@ static void sng_name(uint32_t k, char *out);       /* section k's name (12 + 1 c
  * the CRC */
 typedef struct {
     char name[13];                                 /* "": an empty slot */
-    uint8_t nsec, factory;                         /* its sections; 1: the build's factory song (never written) */
+    uint8_t nsec;                                  /* its sections */
     uint16_t bpm;
 } sng_lib_t;
-static sng_lib_t sng_lib[SNG_SLOTS];
+static sng_lib_t sng_lib[SNG_ALL];                 /* the user's 16, then the grooves */
 static uint8_t sng_lib_dirty = 1;
 static void sng_lib_refresh(void);
 static int sng_save_section(void);               /* EDIT, SAVE held: the section into its song (project.c) */
 static int sng_lossy(void);                        /* the drum track holds nudges or locks (sng.c) */
 /* SETUP > PEDAL (ui_menu.c), kept with the pedal settings (sng.c arrset): the last song loaded comes back at start */
 static uint8_t sng_autoload;                       /* 1: load the last song at start */
-static uint8_t sng_last;                           /* that song's slot + 1, 0 none */
+static uint8_t sng_last;                           /* that song + 1 (a groove: 17..32), 0 none */
 static uint8_t arrset_dirty;                       /* the pedal settings changed: saved once stopped (project.c) */
 /* what the screen shows (ui_draw.c draw_head: the section playing and its bar; the pedal's events as messages) */
 static char sng_ui_name[13];                       /* the section playing: the song's name for it, or A..D */
@@ -859,10 +870,16 @@ static void live_block(void)                       /* once a block while playing
     if (pedal_at_end || pedal_fill_hold) {          /* the pedal counts the section's bars (fm1-drummer): since the
                                                      * section started (live_bar), its pattern's bars the period */
         uint32_t n = live_sec_bars();
-        if (pedal_fill_hold && live_bar % n == 0u && --pedal_fill_hold == 0u)
-            pedal_fill = 0;                         /* the fill asked for (CC 21) ends with the pattern */
-        if (pedal_at_end && live_bar % n == 0u)    /* a request waits for the section's end (no fill of its own:
-                                                     * a fill is CC 21's, sent with it if wanted) */
+        if (pedal_fill_hold && live_bar % n == 0u) {
+            if (--pedal_fill_hold == 0u)
+                pedal_fill = 0;                     /* the fill asked for (CC 21) ends with the pattern */
+            else if (pedal_fill_wait) {
+                pedal_fill_wait = 0;                /* asked in the last bar: this cycle is the fill */
+                pedal_fill = 1;
+            }
+        }
+        if (pedal_at_end && live_bar % n == 0u && !pedal_fill_hold)   /* a request waits for the section's end, and for
+                                                     * a fill asked for (no fill of its own: a fill is CC 21's) */
             pedal_at_end = 0;                       /* the end: the request lands below, the ending's stop counts */
     }
     if (pedal_end_bars && live_req < 0 && live_bar >= pedal_end_bars) {   /* the ending: the outro has played */
@@ -909,6 +926,7 @@ static void live_block(void)                       /* once a block while playing
                 srec_add(s);                        /* (a song's sections are not SLOOP's A..D: not recorded) */
             pedal_fill = 0;                         /* the pedal's fill ends with the section it announced */
             pedal_fill_hold = 0;
+            pedal_fill_wait = 0;
             pedal_end_bars = pedal_end_req;         /* (the outro: its bars, then stop) */
             pedal_end_req = 0;
             sng_ui_next[0] = 0;                     /* (the screen: it is here) */
@@ -985,6 +1003,7 @@ static void seq_stop(void)
     pedal_fill = 0;                                 /* (fm1-drummer: the pedal's fill and ending too) */
     pedal_at_end = 0;
     pedal_fill_hold = 0;
+    pedal_fill_wait = 0;
     pedal_end_req = 0;
     pedal_end_bars = 0;
     sng_ui_next[0] = 0;

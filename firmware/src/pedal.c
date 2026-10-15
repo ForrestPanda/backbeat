@@ -28,8 +28,9 @@
  * while stopped first clicks that many bars at the tempo (the metronome's voice, the first beat of each
  * bar accented), then the loop starts with the section; CC 23 cancels it, another section command only
  * changes what starts. Playing, nothing changes: sections land on the bar as before.
- *   PC n       load song n (0..7) from flash: stopped, its tempo and kit now and its first section cued;
- *              playing, with the next section. n >= 8: no song, SLOOP's sections A..D again (sng.c)
+ *   PC n       load a song: 0..15 the user's slots 1..16, 16..31 the factory grooves 1..16; stopped, its tempo
+ *              and kit now and its first section cued; playing, with the next section. n >= 32: no song,
+ *              SLOOP's sections A..D again (sng.c)
  *
  * A fill is SLOOP's: the steps marked FILL ONLY play, the NO FILL steps rest; a pattern with no
  * conditions plays as usual through a fill. The value of CC 21, 23..26 does not matter. Section and
@@ -100,21 +101,28 @@ static int pedal_fill_hits(uint32_t from, uint32_t to)
             return 1;
     return 0;
 }
-/* CC 21: the fill until the pattern's end. It carries through the next cycle too when the pattern's fill hits are all
- * behind the request (asked too late to hear them: a one-bar verse's fill on its last beats, asked on beat 1, plays
- * now, 2026-10-14; before, any request in the last bar carried, so a one-bar pattern always filled twice); a pattern
- * with no fill hits: when asked in its last bar, as before */
+/* CC 21: the fill. Asked in the pattern's last bar it waits for the next cycle and plays all of it (the user's rule,
+ * 2026-10-15: in the last bar a fill is for the next time round, whatever fill hits are still ahead; a one-bar verse:
+ * the next bar); a section change or an ending asked for meanwhile waits for it (live_block: pedal_at_end holds while
+ * a fill is pending). Asked before the last bar: the fill from now to the pattern's end, and through the next cycle
+ * too when the pattern's fill hits are all behind the request (asked too late to hear them). A fill already playing
+ * asked again in the last bar goes on through the next cycle. */
 static void pedal_fill_req(void)
 {
-    uint32_t len = trk_len(TDRUM), next = (uint32_t)TDRUM->seq_idx + 1u, late;
+    uint32_t len = trk_len(TDRUM), next = (uint32_t)TDRUM->seq_idx + 1u, n = live_sec_bars();
     if (!song.playing)
         return;
-    pedal_fill = 1;
-    if (pedal_fill_hits(0, len))
-        late = !pedal_fill_hits(next, len);
-    else
-        late = (live_bar + 1u) % live_sec_bars() == 0u;
-    pedal_fill_hold = (uint8_t)(late ? 2u : 1u);
+    if ((live_bar + 1u) % n == 0u) {              /* the last bar: the next cycle */
+        if (!pedal_fill)
+            pedal_fill_wait = 1;
+        if (pedal_end_bars && pedal_fill_hold < 2u)
+            pedal_end_bars += n;                  /* (an ending's stop after the fill) */
+        pedal_fill_hold = 2u;
+    } else {
+        pedal_fill = 1;
+        pedal_fill_wait = 0;
+        pedal_fill_hold = (uint8_t)(pedal_fill_hits(0, len) && !pedal_fill_hits(next, len) ? 2u : 1u);
+    }
     pedal_say(PU_FILL, "");
 }
 
@@ -201,10 +209,11 @@ static void pedal_ending(uint32_t s)
         chain_n = 0;
         live_req = -1;                            /* (a section asked for before: the ending wins) */
         pedal_end_req = 0;
-        {                                         /* the section playing ends, then the stop */
+        {                                         /* the section playing ends, then the stop (a fill pending:
+                                                   * after its cycle) */
             uint32_t n = live_sec_bars();
             pedal_at_end = 1;
-            pedal_end_bars = (live_bar / n + 1u) * n;
+            pedal_end_bars = (live_bar / n + (pedal_fill_hold > 1u ? 2u : 1u)) * n;
         }
     }
 }
@@ -248,8 +257,8 @@ static void pedal_msg(uint32_t st, uint32_t ch, uint32_t d1, uint32_t d2)
     if (!pedal_listens(ch))
         return;
     pedal_seen_ms = fm1_ms;                       /* (the LIVE screen's MIDI dot) */
-    if (st == 0xC0u)                              /* PC: a song (sng.c, loaded by the main loop) */
-        sng_req = (uint8_t)(d1 < SNG_SLOTS ? d1 + 1u : 0xFFu);
+    if (st == 0xC0u)                              /* PC: a song, 16..31 a groove (sng.c, loaded by the main loop) */
+        sng_req = (uint8_t)(d1 < SNG_ALL ? d1 + 1u : 0xFFu);
     else if (st == 0xB0u)
         pedal_cc(d1, d2);
 }

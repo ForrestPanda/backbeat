@@ -83,6 +83,8 @@ def app_files(out, version, fw_name):
         keep["editor/kit/" + f.name] = f                                       # itself still needs the internet once)
     for f in sorted((app / "editor" / "realkit").iterdir()):                   # (the layered kit: the player's first)
         keep["editor/realkit/" + f.name] = f
+    for f in sorted((app / "editor" / "grooves").iterdir()):                   # (the factory grooves: the Setlist tab's)
+        keep["editor/grooves/" + f.name] = f
     h = hashlib.sha256()
     for k in sorted(keep):
         h.update(k.encode() + b"\0" + keep[k].read_bytes())
@@ -154,6 +156,8 @@ def main(pkg, version, out):
     shutil.copytree(HERE / "kit", ed / "kit", dirs_exist_ok=True)                                                           # (its player's kit)
     shutil.copytree(HERE.parent / "assets" / "realkit", ed / "realkit", dirs_exist_ok=True)                                  # (the device's
                                                                                                                             # layered kit, layers and takes)
+    shutil.copytree(HERE.parent / "grooves", ed / "grooves", dirs_exist_ok=True)                                            # (the factory
+                                                                                                                            # grooves, read-only)
     (inst / "index.html").write_text(html.replace('download="backbeat-editor.html"', dl), encoding="utf-8")
     for f in ("fukiai.ttf", "FUKIAI-LICENSE.txt"):
         if (HERE / f).exists():

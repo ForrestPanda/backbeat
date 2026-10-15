@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 """The FM-1's own font for the web editor: Terminus 8x16 (assets/fonts/ter-u16n.bdf, SIL OFL 1.1), as a
-TrueType font whose outlines are the bitmap's pixels (each row's runs of lit pixels as rectangles), so the
-editor shows the same letters as the screen, crisp at 16 px and its multiples. Written into web/editor.html
+TrueType font whose outlines are the bitmap's pixels, so the editor shows the same letters as the screen, crisp
+at 16 px and its multiples. Each glyph's pixels make one outline (its edges traced, the holes as inner contours):
+until 2026-10-15 each row's run was a rectangle of its own, and at a zoom between the multiples the browser's
+antialiasing of the edges where the rows meet showed as faint lines across the letters. Written into web/editor.html
 as a data: URI between the /*SLOOP-FONT*/ markers (no extra file: the editor also runs from file://, where
 a font file next to it may not load).
   tools/gen_webfont.py [editor.html]
@@ -54,6 +56,44 @@ def read_bdf(path):
     return (cw, ch, fx, fy), glyphs
 
 
+def outline(pixels):
+    """the closed contours around a set of lit pixels (x, y: the pixel's bottom-left corner, y up), clockwise outside,
+    counter-clockwise around holes (TrueType); the edges two pixels share cancel out, collinear points go"""
+    edges = {}
+    for x, y in pixels:                             # each pixel clockwise (y up): left up, top right, right down, bottom left
+        for a, b in (((x, y), (x, y + 1)), ((x, y + 1), (x + 1, y + 1)), ((x + 1, y + 1), (x + 1, y)), ((x + 1, y), (x, y))):
+            if (b, a) in edges:
+                del edges[(b, a)]                   # shared with a neighbour: not an edge of the shape
+            else:
+                edges[(a, b)] = True
+    out = {}
+    for a, b in edges:
+        out.setdefault(a, []).append(b)
+    contours = []
+    while out:
+        start = next(iter(out))
+        pts, cur, prev = [start], start, None
+        while True:
+            nxt = out[cur]
+            if len(nxt) > 1 and prev is not None:   # two pixels touching at a corner: turn right (keeps the two apart)
+                dx, dy = cur[0] - prev[0], cur[1] - prev[1]
+                right = (cur[0] + dy, cur[1] - dx)
+                b = right if right in nxt else nxt[0]
+            else:
+                b = nxt[0]
+            nxt.remove(b)
+            if not nxt:
+                del out[cur]
+            prev, cur = cur, b
+            if cur == start:
+                break
+            pts.append(cur)
+        simple = [q for i, q in enumerate(pts)      # (drop the points in the middle of a straight run)
+                  if (pts[i - 1][0] - q[0]) * (pts[(i + 1) % len(pts)][1] - q[1]) != (pts[i - 1][1] - q[1]) * (pts[(i + 1) % len(pts)][0] - q[0])]
+        contours.append(simple)
+    return contours
+
+
 def build(path):
     (cw, ch, fx, fy), glyphs = read_bdf(path)
     ascent, descent = (ch + fy) * PX, -fy * PX          # 12 px above the baseline, 4 below
@@ -70,19 +110,12 @@ def build(path):
     for c, (dw, (bw, bh, bx, by), rows) in sorted(glyphs.items()):
         pen = TTGlyphPen(None)
         nbits = ((bw + 7) // 8) * 8
-        for r, bits in enumerate(rows):
-            y1 = (by + bh - r) * PX                      # the row's top, from the baseline
-            x = 0
-            while x < bw:
-                if bits >> (nbits - 1 - x) & 1:
-                    x0 = x
-                    while x < bw and bits >> (nbits - 1 - x) & 1:
-                        x += 1
-                    a, b = (bx + x0) * PX, (bx + x) * PX
-                    pen.moveTo((a, y1 - PX)); pen.lineTo((a, y1)); pen.lineTo((b, y1)); pen.lineTo((b, y1 - PX))
-                    pen.closePath()
-                else:
-                    x += 1
+        pixels = {(bx + x, by + bh - r - 1) for r, bits in enumerate(rows) for x in range(bw) if bits >> (nbits - 1 - x) & 1}
+        for contour in outline(pixels):
+            pen.moveTo((contour[0][0] * PX, contour[0][1] * PX))
+            for q in contour[1:]:
+                pen.lineTo((q[0] * PX, q[1] * PX))
+            pen.closePath()
         name = f"u{c:04X}"
         outlines[name] = pen.glyph()
         metrics[name] = (dw * PX, 0)

@@ -54,7 +54,7 @@ repeats its message does no harm; next / previous / tap count presses.
 | CC 23 | stop now | done |
 | CC 24 / CC 25 | next / previous section, empty ones skipped, wrapping, as CC 20; stopped (nothing cued): the first / the last | done |
 | CC 26 | tap tempo | done |
-| PC n | load song n (0..15; 0..7 until 2026-10-14); 16..127: no song, A..D again | done |
+| PC n | load song n: 0..15 the user's slots (0..7 until 2026-10-14), 16..31 the factory grooves (since 2026-10-15); 32..127: no song, A..D again | done |
 | (setting) count-in 0, 1, 2 bars | a section from stopped: that many bars of clicks at the tempo first (the metronome's voice, accents on the bar), then the loop starts with it; CC 23 cancels, another section meanwhile only changes what starts; playing: unchanged | done 2026-10-12 |
 
 The count-in rides on SLOOP's REC count-in (`ci_on`, `events_block`): `ci_pedal` holds its beats, so a
@@ -126,7 +126,7 @@ next bar). No named sections, one song, no fill tied to a section change.
    A song may be up to 3800 bytes (a sector's payload; the importer shortens patterns to fit). Since 2026-10-13
    the packed form is "SNG2" (3b below): a byte a hit, so 8 sections of 64 steps fit.
    Songs are written as JSON and sent with `tools/fm1_song.py` over the editor protocol's backup PUT
-   (objects 16..23, 24). SLOOP's own sections A..D and song screen are untouched and come back with PC 127.
+   (objects 16..23, 24). SLOOP's own sections A..D and song screen are untouched and come back with PC 127 (any PC from 32).
 4. **Hearing it, and the kit (reshaped on 2026-10-11: the cheap way).** The flash audit (below) showed
    that stripping SLOOP buys little except by dropping its sampled instruments, and that songs and user
    kits have their own flash anyway. So:
@@ -476,15 +476,25 @@ hazard; what it found and what was done:
   latency checked on each platform; (b) the firmware's own engine as a desktop program (see "Related
   programs"), faithful but bound to the device's sample limits. Route (a) is the natural one: the pieces
   exist and the phone is already the editor's home.
-- (to reflect on, raised 2026-10-14; not decided) **Two kinds of fill: now and on the next bar.** Today a fill
-  (CC 21, LIVE's black keys and SEL) is a mode until the pattern's end: the "only in a fill" hits play where the
-  song put them, which the importer puts in the pattern's last bar, so in a 4-bar verse a fill asked for in bar 1
-  is heard only in bar 4. "Fill mode now" against "from the next bar" would therefore mostly sound the same. What
-  a drummer does on a cue is play the fill *bar* when asked: the section's fill bar (its last bar with the fill
-  hits) jumped to now (the rest of this bar from the same beat) or played whole from the next bar line, the
-  pattern then going on (from where it would have been, or from its top: to decide), a section change able to
-  follow it. Two new commands (e.g. CC 28 / 29, or LIVE's black keys split between them); CC 21 kept. Left as is
-  for now: reflect on whether it belongs in the future work once the device is played with the pedal.
+- (asked 2026-10-15; not started) **A fill bar of its own.** Today a fill is not a separate pattern: it switches on the
+  pattern's fill-only hits (and off its not-in-a-fill ones), which the importer puts in the phrase's last bar, so a
+  fill asked for in bar 1 of a 4-bar verse is heard in bar 4. Wanted: a section can carry a fill bar of its own (the
+  importer's fill bar, or one chosen in the section editor, in the song format as an extra bar a section), which a
+  fill plays instead of the pattern's bar. To decide: the format (SNG2 has no room in the section header: a flag and
+  the bar after the pattern), what CC 21 does when a section has one, and the editor's view of it.
+- (asked 2026-10-15; not started) **Play the fill now.** Builds on the fill bar: a command (e.g. CC 28, or some of
+  LIVE's black keys) that jumps to the fill bar at once (the rest of this bar from the same beat) or plays it whole
+  from the next bar line, the pattern then going on (from where it would have been, or from its top: to decide), a
+  section change able to follow it. CC 21 kept as it is (raised 2026-10-14 as "two kinds of fill: now and on the
+  next bar"; asked for 2026-10-15).
+- (done 2026-10-15) **A fill asked in the last bar is the next time round.** The user's rule: CC 21 (LIVE's black
+  keys, SEL, the editor's f) in a pattern's last bar no longer fills the rest of that bar (whatever fill hits are
+  still ahead): the next cycle is the fill, all of it (`pedal_fill_wait`, the editor's `fillWait`; a one-bar verse:
+  the next bar). A section change asked for meanwhile waits for the fill (live_block holds `pedal_at_end` while a
+  fill is pending: chosen with the user), and so does an ending's stop. Asked before the last bar: from now to the
+  pattern's end as before (through the next cycle when the fill hits are all behind). LIVE says FILL NEXT TIME
+  ROUND while it waits. Checked: pedal_test and song_test (a one-bar section, fill with a change, the 2-bar D), the
+  web tests, and both engines on Time's verse and a 4-bar section.
 - (asked 2026-10-14; not started) **Per-drum fill marks on the device.** EDIT sets a whole step's fill
   condition (step keys held + OCT+: normal, fill only, no fill; OCT- clears it), but a lane's own marks (the
   song's `"fills"`: `F` only during a fill, `N` never during one; seq.c `drum_fonly` / `drum_fno`) come only
@@ -525,6 +535,39 @@ hazard; what it found and what was done:
   pitch from `v->s[5]`, the step), from the LCG `rk_take` already uses (deterministic renders and goldens). To
   decide: on the hats only or on every lane (the snare and kick already have takes), on MULDJORD only or on the GM
   and user kits too, a SETUP switch or always on; checked by ear on a 16th run, the goldens updated on purpose.
+- (done 2026-10-15) **The grooves are the factory songs.** `grooves/` (sixteen generic grooves, `docs/grooves.md`)
+  fill the firmware's slots 1..16 in `grooves/factory.txt`'s order (`tools/gen_songs.py`; until then every
+  `songs/*.json`, the user's own set, which made the published package depend on what was in that folder). A slot
+  plays its groove until the user sends a song to it (the Setlist tab, `--put`); an erased slot stays empty; the
+  editor reads a factory song like any slot (editor.c through sng_fetch), so "copy the FM-1's songs into the set"
+  takes the grooves too. (Superseded the same day by the two banks below: a user slot never written is empty.)
+- (done 2026-10-15) **Two banks: USER and FACTORY.** Sending songs hid the grooves (a slot written no longer played
+  its groove), so the grooves became a bank of their own: songs 16..31 (`SNG_FAC0`, `SNG_ALL` 32 in seq.c), read from
+  the firmware image (sng_fetch), read-only; the user's 16 slots in flash are empty until written. The pedal: PC 0..15
+  the user's slots, PC 16..31 the grooves, PC 32 and on no song (A..D). SONGS has two pages as header tabs, USER and
+  FACTORY (ENV / LFO; also on LIVE with no song, whose 16 tiles and white keys follow the page shown); it opens on the
+  loaded song's page, else USER, or FACTORY while USER is empty. LIVE's header says "song n" or "factory n"; EDIT's
+  SAVE held on a groove answers FACTORY: READ-ONLY (sng_save_section 5). The autoload keeps a groove (last 1..32). The
+  editor protocol: objects 48..63 GET the grooves, a PUT is refused (rc 1). The web editor's Setlist tab lists the
+  grooves from the site's copy of `grooves/` (offline too, cached by the service worker): play, open in the editor,
+  add to the set; the pedal-in player plays PC 16..31 from it. RAM +224 B (`sng_lib` 32 entries), the image +544 B (561728 -> 562272 B with the header hint). Tested: song_test
+  (PC 17 a groove, PC 32 none, the autoload's 32), ui_pages_test (the pages, keys, start page, header), test_web.mjs,
+  the emulator (boots on FACTORY with no user songs, PC 17 loads BLUES as "factory 2", PC 5 on an empty slot says NO
+  SONG 6). Verify on hardware: ENV / LFO on SONGS, objects 48..63 over USB.
+- (done 2026-10-15, five stages) **A Setlist tab that works without the device: the tablet as the drummer.** The set:
+  up to 16 songs (the FM-1's slots) in the browser's localStorage (`SET`, tested: checked as the device would, kept,
+  restored, a set file `{"backbeat_set": 1, "songs": [...]}` to export and import), added from JSON files (a drop on
+  the card too) or the Song tab's editor, a row a song (16 fit a tablet), reordered, removed. Played there: the one
+  player (`#splay`) moves into the tab that shows; previous / next song (also the arrow and Page keys: a page-turner
+  pedal); a song picked while playing loads as a PC (the groove goes on); the pedal's PC n is song n of the set first,
+  else the FM-1's slot. Live mode: the stage view (the song, the LIVE view, the tiles and transport, all big; the
+  editor's chrome away), full screen, a screen wake lock (asked again when the page comes back); Esc leaves. The
+  section tiles were made brighter everywhere (the user's request: hard to read with many sections). With the FM-1:
+  "send the set" (`SET.sendPlan`: song n in slot n, the slots after it erased only where they hold a song; stopped)
+  and "copy the FM-1's songs into the set". Checked: the web tests (the set, the send on the simulated FM-1) and in
+  Chrome driven headless (the set stored and reloaded, a song played from the list, live mode at 1180 x 820 with a
+  14-section song, the send on ?mock=1). To check on a real tablet: the wake lock, full screen, latency, the pedal
+  through a USB MIDI interface.
 - (asked 2026-10-14; not started) **MIDI clock out over USB.** The device follows a clock (SETUP > SYNC = USB /
   TRS, seq.c `mclk_event`) but sends none: MIDI OUT (SETUP > MIDI > OUT: KEYS / SEQ) has no F8 / FA / FB / FC, so
   BackBeat cannot be the master of a DAW, a looper or the Ampero (whose USB port takes a clock in: MIDI IN SOURCE).

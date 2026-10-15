@@ -56,6 +56,7 @@ def main():
     ap.add_argument("--out", help="the WAV (default: build/host/<name>.wav)")
     ap.add_argument("--tail", type=float, default=1.5, help="seconds after the stop (default 1.5)")
     ap.add_argument("--listen", action="store_true", help="play it (sox)")
+    ap.add_argument("--fills", action="store_true", help="ask for a fill (CC 21) a bar before each change: the fills heard")
     a = ap.parse_args()
     import json
     with open(a.json) as f:
@@ -88,6 +89,8 @@ def main():
     with open(bin_path, "wb") as f:
         f.write(blob)
     env = dict(os.environ, TAIL=str(a.tail))
+    if a.fills:
+        env["FILLS"] = "1"
     if a.kit is not None:
         env["KIT"] = str(a.kit)
     if a.bpm is not None:

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""fm1-drummer: the factory songs, packed (tools/fm1_song.py) into a C header for firmware/src/sng.c.
+"""fm1-drummer: the factory grooves, packed (tools/fm1_song.py) into a C header for firmware/src/sng.c.
 
-A song slot that was never written plays its factory song (the device fresh from the installer, the fm1-emu
-emulator); one written by fm1_song.py --put or the editor plays that, one erased stays empty.
+They are songs 16..31, a read-only bank of their own (the SONGS screen's FACTORY page, the pedal's PC 16..31),
+apart from the 16 user slots in flash (since 2026-10-15; before, a user slot never written played its factory song).
 
-  tools/gen_songs.py OUT.h [SONG.json ...]     (default: every songs/*.json, by file name, slots 0..)"""
+  tools/gen_songs.py OUT.h [SONG.json ...]     (default: the grooves, grooves/factory.txt's order, the first 16)
+
+The factory songs are the grooves (grooves/, docs/grooves.md) since 2026-10-15; until then every songs/*.json."""
 import json
 import sys
 from pathlib import Path
@@ -18,8 +20,13 @@ SLOTS = 16                                   # seq.c SNG_SLOTS
 
 
 def main(out, files):
-    if not files:                            # the songs in songs/, by file name (the first 16)
-        files = sorted((SRC / "songs").glob("*.json"))
+    if not files:                            # the grooves, in grooves/factory.txt's order (the first 16)
+        order = SRC / "grooves" / "factory.txt"
+        names = [l.strip() for l in order.read_text().splitlines() if l.strip() and not l.lstrip().startswith("#")]
+        files = [SRC / "grooves" / n for n in names]
+        for f in files:
+            if not f.exists():
+                sys.exit(f"gen_songs: {order.name} names {f.name}: not in grooves/")
         for f in files[SLOTS:]:
             print(f"songs: {f.name} left out ({SLOTS} slots)")
         files = files[:SLOTS]

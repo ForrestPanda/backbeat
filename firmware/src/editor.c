@@ -368,10 +368,15 @@ _Static_assert(SNG_MAX <= sizeof proj_tmp && SNG_MAX <= ST_PAYLOAD_MAX, "a song 
 #define ED_BK_SONG0 16u                                 /* fm1-drummer: objects 16..23 songs 1..8, 24 the pedal settings, */
 #define ED_BK_ARRSET 24u
 #define ED_BK_SONG8 40u                                 /* 40..47 songs 9..16 (2026-10-14; 25..31 too few, 32..35 the samples) */
+#define ED_BK_FACTORY 48u                               /* 48..63 the factory grooves 1..16: GET only (2026-10-15) */
 static int32_t ed_bk_song(uint32_t id)                  /* a song's object id -> its slot 0..15, -1 none */
 {
     return id >= ED_BK_SONG0 && id < ED_BK_SONG0 + 8u ? (int32_t)(id - ED_BK_SONG0)
          : id >= ED_BK_SONG8 && id < ED_BK_SONG8 + 8u ? (int32_t)(id - ED_BK_SONG8 + 8u) : -1;
+}
+static int32_t ed_bk_groove(uint32_t id)                /* a groove's object id -> its song 16..31, -1 none */
+{
+    return id >= ED_BK_FACTORY && id < ED_BK_FACTORY + SNG_SLOTS ? (int32_t)(id - ED_BK_FACTORY + SNG_FAC0) : -1;
 }
 static uint8_t ed_bk_valid, ed_bk_put, ed_bk_id;
 static uint32_t ed_bk_len, ed_bk_crc, ed_bk_pos, ed_bk_ms;
@@ -410,9 +415,10 @@ static const uint8_t *ed_bk_obj(uint32_t id, uint32_t *len)   /* 0 = no such obj
             *len = sizeof ed_bk_ml;
         return ed_bk_ml;
     }
-    if (ed_bk_song(id) >= 0) {                            /* fm1-drummer: a song, in flash (XIP) */
+    if (ed_bk_song(id) >= 0 || ed_bk_groove(id) >= 0) {  /* fm1-drummer: a song, in flash (XIP); a groove, in the
+                                                         * image (PUT refuses it: not a song object) */
         uint32_t n = 0;
-        const uint8_t *q = sng_fetch((uint32_t)ed_bk_song(id), &n);
+        const uint8_t *q = sng_fetch((uint32_t)(ed_bk_song(id) >= 0 ? ed_bk_song(id) : ed_bk_groove(id)), &n);
         sng_t tmp;
         if (q && !sng_check(q, n, &tmp))
             *len = n;

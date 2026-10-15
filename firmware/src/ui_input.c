@@ -525,7 +525,8 @@ static int layers_input(uint32_t note_edges, uint32_t *pressed, uint32_t home)
  * the project into its slot, as SLOOP's SAVE did) */
 static void section_keep(void)
 {
-    static const char *const MSG[5] = {"SAVED INTO THE SONG", "STOP TO SAVE", "SONG FULL", "SAVE ERROR", ""};
+    static const char *const MSG[6] = {"SAVED INTO THE SONG", "STOP TO SAVE", "SONG FULL", "SAVE ERROR", "",
+                                       "FACTORY: READ-ONLY"};
     int r;
     if (sng_cur < 0 || live_sec < 0) {
         project_save((uint32_t)clamp(song.g[G_SLOT], 1, 4) - 1u);
@@ -535,7 +536,7 @@ static void section_keep(void)
     if (!r && sng_lossy())
         ui_message("SAVED, NOT THE NUDGES");               /* (a packed section has no room for nudges and locks) */
     else
-        ui_message(MSG[r % 5]);
+        ui_message(MSG[r % 6]);
 }
 static void holds_input(uint32_t pressed, uint32_t now_ms)
 {

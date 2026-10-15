@@ -769,8 +769,12 @@ static void hold_screen_draw(void)
         str_cpy(nm, sng_ui_name, sizeof nm);
         fm1_irq_on();
         te_lower(b, nm, 13);
-        str_cpy(b + str_len(b), " into song ", 12);
-        fmt_int(b + str_len(b), sng_cur + 1);
+        if (sng_cur >= (int8_t)SNG_FAC0) {
+            str_cpy(b, "factory: read-only", 19);
+        } else {
+            str_cpy(b + str_len(b), " into song ", 12);
+            fmt_int(b + str_len(b), sng_cur + 1);
+        }
     } else {
         str_cpy(b, "project in slot 1", sizeof b);
         b[16] = (char)('0' + clamp(song.g[G_SLOT], 1, 4));

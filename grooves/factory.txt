@@ -1,0 +1,18 @@
+# The firmware's factory grooves (tools/gen_songs.py): groove 1, 2, 3... in this order, read-only (the SONGS
+# screen's FACTORY page; the pedal's PC 16, 17, 18...). The web editor's Setlist tab reads this list too.
+classic-rock.json
+blues-shuffle.json
+rock-ballad.json
+slow-rock.json
+punk-rock.json
+four-floor.json
+metal-gallop.json
+ballad-6-8.json
+half-shuffle.json
+train-beat.json
+one-drop.json
+seven.json
+tom-tribe.json
+linear.json
+three-over-four.json
+ride-n-kick.json
