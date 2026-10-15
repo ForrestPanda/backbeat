@@ -15,7 +15,7 @@
     "KICK": "x.......x.......x.......x.......x.......x.......x.......x.......",
     "LOWTOM": "X..x..X...x.x...X..x..X...x.x...X..x..X...x.x...X..x..X...x.x.xx",
     "MIDTOM": ".......x......x........x......x........x......x........xxx.x..x.",
-    "SHAKER": "gogogogogogogogogogogogogogogogogogogogogogogogogogogogogogogogo"
+    "SHAKER": "gsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgsgs"
    },
    "fills": {
     "HITOM": "........................................................F.F.F...",
@@ -35,7 +35,7 @@
     "LOWTOM": "x.....x.........x.....x.........x.....x.........x..x..x.....x.xx",
     "MIDTOM": "........................................................xx.x....",
     "OPENHAT": "..x...x...x...x...x...x...x...x...x...x...x...x...x...x...x...x.",
-    "SHAKER": "o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.o.",
+    "SHAKER": "s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.",
     "SNARE": "....X.......X.......X.......X.......X.......X.......X.......X..."
    },
    "fills": {

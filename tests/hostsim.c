@@ -69,6 +69,9 @@ static uint64_t now_ns(void)
     return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
 }
 
+#ifndef HOST_HUM
+#define HOST_HUM 0                               /* -DHOST_HUM=1: humanize on (its CPU cost measured) */
+#endif
 static void host_tracks_init(void)                /* as felucca_init: defaults, empty patterns */
 {
     uint32_t i, k;
@@ -81,6 +84,7 @@ static void host_tracks_init(void)                /* as felucca_init: defaults, 
         steps_clear(&trk[k]);
     }
     song.master_q12 = 4096;
+    drum_hum = HOST_HUM;                         /* (the tests' hits on the grid, as written: humanize has its own) */
 }
 
 /* step i of the drum track: GM notes -> its lanes (accent: hard); a TIME other than NOTE: an empty step */

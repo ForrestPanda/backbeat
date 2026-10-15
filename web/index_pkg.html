@@ -112,7 +112,7 @@ const TEXT = {
     brick: "万一インストールに失敗して起動しなくなった場合は、復旧に Transporter が必要です:",
     beta: "これはベータ版で、不安定な場合があります。このカスタムファームウェアを使ったことで FM-1 が壊れたり不具合が起きたりしても、作者は一切の責任を負いません。自己責任でお使いください。",
     back: "公式ファームウェアに戻すには、M-VAVE 公式のアップデーター M-UPGRADE（Downloads → PC Software → M-UPGRADE）と公式ファームウェア（PC Firmware → FM-1 V15）が必要です。",
-    nomidi: "このブラウザでは使えません。Chrome か Edge で開いてください。", loadfail: "読み込めませんでした: ",
+    nomidi: "このブラウザでは使えません。Chrome か Edge で開いてください。", nomidiCtx: "Web MIDI は https か http://localhost のページでしか使えません。このページは ", nomidiFile: "ダウンロードしたファイルとして開かれています", loadfail: "読み込めませんでした: ",
     start: "開始します", verify: "確認中", loader: "書き込みモードに切り替え中", write: "書き込み中",
     reboot: "再起動中", done: "完了しました", stopped: "途中で止まりました。USB を挿し直してもう一度押してください。",
     error: "エラー: ",
@@ -148,7 +148,7 @@ const TEXT = {
     brick: "If an install fails and the FM-1 no longer starts, recovering it needs a Transporter:",
     beta: "This is a beta and may be unstable. The author accepts no responsibility if your FM-1 is damaged or misbehaves because of this custom firmware. Use it at your own risk.",
     back: "To go back to the official firmware you need M-VAVE's official updater, M-UPGRADE (Downloads → PC Software → M-UPGRADE), and the official firmware (PC Firmware → FM-1 V15).",
-    nomidi: "This browser cannot do it. Open the page in Chrome or Edge.", loadfail: "Could not load: ",
+    nomidi: "This browser cannot do it. Open the page in Chrome or Edge.", nomidiCtx: "Web MIDI works only on https or http://localhost pages: this page is ", nomidiFile: "opened as a downloaded file", loadfail: "Could not load: ",
     start: "Starting", verify: "Verifying", loader: "Switching to update mode", write: "Writing",
     reboot: "Restarting", done: "Done", stopped: "Stopped. Replug the USB cable and press Install again.",
     error: "Error: ",
@@ -217,7 +217,12 @@ const lockAll = (on) => {
 window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = t("leave"); } });
 
 (async () => {
-  if (!navigator.requestMIDIAccess) { sayK("nomidi"); return; }
+  if (!navigator.requestMIDIAccess) {                     /* none, or hidden: the page is not a secure context (http:// from
+                                                             another machine, a downloaded file opened as content://) */
+    if (window.isSecureContext === false) sayK("nomidiCtx", /^(?:content|file):$/.test(location.protocol) ? t("nomidiFile") : location.origin);
+    else sayK("nomidi");
+    return;
+  }
   try {
     const r = await fetch(meta.pkg);
     if (!r.ok) throw new Error(`${meta.pkg}: HTTP ${r.status}`);

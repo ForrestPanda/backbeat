@@ -43,7 +43,7 @@ GM = {35: "KICK", 36: "KICK", 38: "SNARE", 40: "SNARE", 37: "RIM", 31: "RIM", 39
       65: "HITOM", 66: "MIDTOM",
       75: "RIM", 76: "RIM", 77: "RIM", 58: "RIM", 80: "SHAKER", 81: "SHAKER"}
 QUARTER = 960                                 # Duration.quarterTime
-LEVEL_CHAR = {0: "x", 1: "g", 2: "o", 3: "X"}  # LV_NORM, LV_GHOST, LV_SOFT, LV_HARD
+LEVEL_CHAR = {0: "x", 1: "g", 2: "s", 3: "X"}  # LV_NORM, LV_GHOST, LV_SOFT, LV_HARD
 OUTRO_NAMES = ("OUTRO", "ENDING", "END", "CODA")
 MATCH = 0.75                                  # a pattern: this share of the bars agree with it
 NEAR = 0.1                                    # a shorter pattern scoring this close to the best is taken

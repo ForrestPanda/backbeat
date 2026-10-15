@@ -19,7 +19,7 @@ The JSON (see docs/design.md):
         "ratchets": {"SNARE": "............2..."},
         "fills": {"HITOM": "............FF..", "HAT": "............NNNN"}}]}
 
-A lane string has one character a step: '.' rest, 'g' ghost, 'o' soft, 'x' normal, 'X' hard. A ratchet
+A lane string has one character a step: '.' rest, 'g' ghost, 's' soft, 'x' normal, 'X' hard. A ratchet
 string: '.' or 1, or 2..4 repeats inside the step. "fills" marks a lane's hits one by one: '.' plays
 always, 'F' only during a fill (the pedal's CC 21, or the LIVE screen's black keys and SEL), 'N' never
 during one. The older "fill" string does the same for a whole step, every lane at once. Lanes:
@@ -61,7 +61,7 @@ NSTEP = 64
 LANES = ["KICK", "KICK2", "SNARE", "CLAP", "HAT", "OPENHAT", "PEDAL", "RIM",
          "SNARE2", "LOWTOM", "MIDTOM", "HITOM", "CRASH", "RIDE", "SHAKER", "COWBELL"]
 DIVS = ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1BAR", "2BAR"]
-LEVELS = {"x": 0, "g": 1, "o": 2, "X": 3}            # LV_NORM, LV_GHOST, LV_SOFT, LV_HARD
+LEVELS = {"x": 0, "g": 1, "s": 2, "X": 3}            # LV_NORM, LV_GHOST, LV_SOFT, LV_HARD
 CONDS = {".": 0, "F": 1, "N": 2}                     # FC_NORM, FC_FILL, FC_NOFILL
 DENS = [4, 8, 2, 16]                                 # the meter byte's denominator code
 STEP_U = {"1/4": 48, "1/8": 24, "1/16": 12, "1/32": 6, "8T": 16, "16T": 8, "1/2": 96, "1BAR": 192, "2BAR": 384}
@@ -151,7 +151,7 @@ def pack_section(sec, index):
             if ch == ".":
                 continue
             if ch not in LEVELS:
-                sys.exit(f"{name}: lane {lane}: '{ch}' is not one of . g o x X")
+                sys.exit(f"{name}: lane {lane}: '{ch}' is not one of . g s x X")
             hit[i][k] = LEVELS[ch]
     for lane, s in sec.get("ratchets", {}).items():
         k = lane_index(lane)

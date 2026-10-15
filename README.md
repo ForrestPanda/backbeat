@@ -195,9 +195,16 @@ saves the project slot, as SLOOP did. A tap of SAVE opens SONGS.
 
 **SETUP.** SLOOP's menu, its GLO pages and its mix layer in one place, a section at a time (SELECT), up to four
 rows each on KNOB 1..4 (PRESETS moves the cursor, OCT+ acts): PEDAL (channel, count-in, load the last song at
-start), MIDI (the drums' channel, IN, other channels, OUT), LEARN (sync, MIDI LEARN, clear), TEMPO (tempo, swing,
-click, tune), DRUMS (level, reverb, delay, pan), MASTER, TEXTURE and TEXTURE 2, SCREEN, LIGHTS, AUDIO, SYSTEM
-(calibration, the JAM project pages, ABOUT). The pedal settings are saved once the music stops.
+start, MIDI clock in: OFF, USB or TRS, the tempo and START / STOP from a clock master such as the Ampero), MIDI (the
+drums' channel, IN, other channels, OUT), LEARN (MIDI LEARN, clear), TEMPO (tempo, click,
+tune), FEEL (swing, humanize), DRUMS (level, reverb, delay, pan), MASTER, TEXTURE and TEXTURE 2, SCREEN, LIGHTS, AUDIO,
+SYSTEM (calibration, the JAM project pages, ABOUT). The pedal settings are saved once the music stops.
+
+**Humanize** (SETUP > FEEL: OFF, LIGHT, MORE; LIGHT out of the box): the sequencer plays each step a little early
+or late (LIGHT up to 3 ms, MORE 6 ms; all the drums of a step together, so no flams) and each hit a little louder or
+softer (up to about 1 and 2 dB), as a drummer does. The level moves after the hit's sample is picked, so an accent
+or a soft hit keeps its own sound. It varies from bar to bar but is the same every time the song plays, so a render
+is repeatable. The web editor's player does the same (its Humanize menu), and `tools/fm1_render.py --humanize`.
 
 What else is on it, from SLOOP: one track, the drums (the kits: the sampled GM kit and its treatments, the
 synthesised kits, SYN1..SYN4 from the editor's Drum synth, your own sampled kits on the user slots; and this fork's

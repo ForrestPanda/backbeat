@@ -65,6 +65,26 @@ With one patch per song and the patch change sending PC n, stepping through the 
 through the set; the drummer loads each song as its patch comes up (stopped: at once, with the intro
 cued; playing: with the next section). Songs live in slots 0..15 (`tools/fm1_song.py song.json --put n`): a set of 16.
 
+## The Ampero's tempo: MIDI clock (for loops in time with the drums)
+
+The Ampero can be the clock master over the same TRS cable (its manual, firmware V1.4.1, Global > MIDI):
+
+| Where | Setting | Value |
+| --- | --- | --- |
+| Ampero, Global > MIDI | CLOCK SOURCE | Internal (or the default Mixed; TRS Only / USB Only switch the clock out off) |
+| Ampero, Global > MIDI | CLOCK OUT(TRS) | On (off by default; CLOCK OUT(USB) can stay off) |
+| FM-1, SETUP > PEDAL | MIDI CLOCK IN | TRS (the web editor's Pedal card: MIDI clock in) |
+
+The FM-1 then plays at the Ampero's tempo (LIVE shows `ext`), and its START / STOP start the drums from the top
+(no count-in: the master counts) and stop them. The tempo sent is the patch's, or GLOBAL TEMPO if that is on
+(Global > Controls), so give each song's patch the song's tempo: the song's own tempo is not used while the clock
+runs. MIDI CLOCK IN OFF: the drums keep their own tempo whatever comes in.
+
+The Ampero's looper is free-length (you tap its length; it syncs only to the Ampero's own drum machine, by its
+manual), so the clock keeps the tempos together but a loop drifts against the drums by however far the tap was off.
+To try on the hardware: tight taps on short loops; or the Ampero's drum machine on at zero volume as the looper's
+reference (does the Ampero send START when its drum starts?).
+
 ## Things to check once, with the FM-1 on the desk
 
 - A toggle-type switch (an effect slot) may send its messages on both the on-press and the off-press:

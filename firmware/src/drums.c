@@ -267,13 +267,28 @@ static uint32_t rk_take(uint32_t ln, uint32_t nt)
     return t;
 }
 
+/* fm1-drummer: humanize (SETUP > FEEL > HUMANIZE; seq.c drum_step and micro_units): each step a little early or
+ * late, each hit a little louder or softer, as a drummer plays. The level is the hit's own, set by the sequencer
+ * for the one hit it plays next (drum_hum_g): taken here after the layer is picked by the written level, so an
+ * accent or a soft hit keeps its sample; MIDI in, the keys and the auditions play as they are */
+#define HUM_N 3u
+static uint8_t drum_hum = 1;                        /* 0 off, 1 light, 2 more (panel.c's lights word, bits 26..27) */
+static uint8_t drum_hum_g;                          /* the next hit's level, 128 = as written (0: none set) */
+static uint32_t hum_vel(uint32_t vel, uint32_t g)
+{
+    vel = (vel * g + 64u) >> 7;
+    return vel < 1u ? 1u : vel > 127u ? 127u : vel;
+}
+
 static void drum_on(uint32_t note, uint32_t vel)
 {
+    uint32_t hg = drum_hum_g ? drum_hum_g : 128u;
     int32_t si = drum_set();
     const smp_set_t *set;
     voice_t *v = &drums.v[0];
     uint32_t i, zi = 0xFFFFu, kit = drum_kit();
     int32_t zid = -1;
+    drum_hum_g = 0;
     if (note != 76u && note != 77u)                 /* the pads and key LEDs (not the click's wood block) */
         drums.hits |= (uint16_t)(1u << lane_of_note(note));
     if (note == 35u || note == 36u)
@@ -298,7 +313,7 @@ static void drum_on(uint32_t note, uint32_t vel)
 #endif
     } else if (kit >= DRUM_SYN) {                   /* SYN1..SYN4: your synthesised kit */
         const dsu_kit_t *u = dsu_kit(kit - DRUM_SYN);
-        drum_synth_on(note, vel, kit, u->s, u->crush);
+        drum_synth_on(note, hum_vel(vel, hg), kit, u->s, u->crush);
         return;
     }
     if (zid < 0 && kit >= DRUM_USR) {              /* a user kit: the lane's sound, as its note (the hat choke) */
@@ -318,7 +333,7 @@ static void drum_on(uint32_t note, uint32_t vel)
         if (zid < 0)
             return;                                 /* (an empty slot, or no sound on this lane) */
     } else if (zid < 0 && kit >= DRUM_SAMPLED) {    /* synthesised kit */
-        drum_synth_on(note, vel, kit, DS_KITS[kit - DRUM_SAMPLED].s, DS_KITS[kit - DRUM_SAMPLED].crush);
+        drum_synth_on(note, hum_vel(vel, hg), kit, DS_KITS[kit - DRUM_SAMPLED].s, DS_KITS[kit - DRUM_SAMPLED].crush);
         return;
     }
     if (zid < 0) {                                  /* the GM sample kit */
@@ -349,7 +364,7 @@ static void drum_on(uint32_t note, uint32_t vel)
     if (v->active)
         drums.tail += v->s[7];                      /* stolen voice: fade its last value */
     v->note = (uint8_t)note;
-    v->vel = (uint8_t)vel;
+    v->vel = (uint8_t)hum_vel(vel, hg);
     v->active = 1;
     v->s[7] = 0;
     v->age = ++drums.age;

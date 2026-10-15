@@ -9,14 +9,16 @@
  * (sng.c arrset_save, once stopped: arrset_dirty), the others as before (settings_save, the project). */
 /* ------------------------------------------------------------ menu --- */
 enum { MI_PCH, MI_PCOUNT, MI_AUTO, MI_LEARN, MI_LCLEAR, MI_COLOR, MI_ZOOM, MI_LIGHTS, MI_KEYS, MI_NOTES, MI_LOWCUT,
-       MI_USB, MI_SERIAL, MI_PANEL, MI_PROJ, MI_ABOUT, MI_N };
+       MI_USB, MI_SERIAL, MI_PANEL, MI_PROJ, MI_ABOUT, MI_HUMAN, MI_CLOCK, MI_N };
 enum { RK_MI, RK_G, RK_P };                        /* a row: a setting (MI_*), song.g[id], TDRUM->p[id] */
 typedef struct { const char *name; uint8_t kind, id; } mrow_t;
 static const mrow_t MROW[] = {
     {"PEDAL CHANNEL", RK_MI, MI_PCH}, {"COUNT-IN", RK_MI, MI_PCOUNT}, {"LOAD LAST SONG AT START", RK_MI, MI_AUTO},
+    {"MIDI CLOCK IN", RK_MI, MI_CLOCK},          /* (G_SYNC: was LEARN's SYNC, INT USB TRS) */
     {"DRUMS CHANNEL", RK_G, G_DRCH}, {"IN", RK_G, G_ROUTE}, {"OTHER CHANNELS", RK_G, G_CHOTH}, {"OUT", RK_G, G_MIDI},
-    {"SYNC", RK_G, G_SYNC}, {"MIDI LEARN", RK_MI, MI_LEARN}, {"MIDI LEARN CLEAR", RK_MI, MI_LCLEAR},
-    {"TEMPO", RK_G, G_BPM}, {"SWING", RK_G, G_SWING}, {"CLICK", RK_G, G_CLOCK}, {"TUNE", RK_G, G_TUNE},
+    {"MIDI LEARN", RK_MI, MI_LEARN}, {"MIDI LEARN CLEAR", RK_MI, MI_LCLEAR},
+    {"TEMPO", RK_G, G_BPM}, {"CLICK", RK_G, G_CLOCK}, {"TUNE", RK_G, G_TUNE},
+    {"SWING", RK_G, G_SWING}, {"HUMANIZE", RK_MI, MI_HUMAN},
     {"LEVEL", RK_G, G_DRLVL}, {"REVERB", RK_G, G_DRREV}, {"DELAY", RK_G, G_DRDLY}, {"PAN", RK_P, P_PAN},
     {"DUST", RK_G, G_DUST}, {"DUCK", RK_G, G_DUCK}, {"FILTER", RK_G, G_FILT}, {"ROLL RATE", RK_G, G_ROLL},
     {"SOURCE", RK_G, G_TXSRC}, {"LEVEL", RK_G, G_TXLVL}, {"TONE", RK_G, G_TXTONE}, {"MOVE", RK_G, G_TXMOVE},
@@ -27,12 +29,13 @@ static const mrow_t MROW[] = {
     {"HARDWARE CALIBRATION", RK_MI, MI_PANEL}, {"JAM PROJECTS", RK_MI, MI_PROJ}, {"ABOUT", RK_MI, MI_ABOUT},
 };
 #define MI_COUNT (sizeof MROW / sizeof MROW[0])
-enum { MS_PEDAL, MS_MIDI, MS_LEARN, MS_TEMPO, MS_DRUMS, MS_MASTER, MS_TEX, MS_TEX2, MS_SCREEN, MS_LIGHTS, MS_AUDIO,
-       MS_SYSTEM, MS_COUNT };
-static const char *const MS_NAME[MS_COUNT] = {"PEDAL", "MIDI", "LEARN", "TEMPO", "DRUMS", "MASTER", "TEXTURE",
+enum { MS_PEDAL, MS_MIDI, MS_LEARN, MS_TEMPO, MS_FEEL, MS_DRUMS, MS_MASTER, MS_TEX, MS_TEX2, MS_SCREEN, MS_LIGHTS,
+       MS_AUDIO, MS_SYSTEM, MS_COUNT };
+static const char *const MS_NAME[MS_COUNT] = {"PEDAL", "MIDI", "LEARN", "TEMPO", "FEEL", "DRUMS", "MASTER", "TEXTURE",
                                               "TEXTURE 2", "SCREEN", "LIGHTS", "AUDIO", "SYSTEM"};
-static const uint8_t MS_FIRST[MS_COUNT + 1] = {0, 3, 7, 10, 14, 18, 22, 26, 29, 31, 34, 37, MI_COUNT};   /* rows of each */
-_Static_assert(MI_COUNT == 40, "MS_FIRST follows MROW");
+static const uint8_t MS_FIRST[MS_COUNT + 1] = {0, 4, 8, 10, 13, 15, 19, 23, 27, 30, 32, 35, 38, MI_COUNT};   /* rows of
+                                                                                                          * each */
+_Static_assert(MI_COUNT == 41, "MS_FIRST follows MROW");
 static const char *const LIGHTS_NAME[LIGHTS_N] = {"OFF", "LOW", "MID", "HIGH"};   /* every button lit, the labels readable */
 static const char *const KEYS_NAME[KEYS_N] = {"OFF", "C KEYS", "WHITE KEYS", "ALL KEYS"};      /* keys lit too, at the LIGHTS level */
 #define MI_Y0 24                                   /* the first row, under the section line */
@@ -81,6 +84,12 @@ static const char *mi_value(uint32_t i, uint16_t *c)
         return b;
     case MI_PCOUNT: return pedal.count == 0u ? "NONE" : pedal.count == 1u ? "1 BAR" : "2 BARS";
     case MI_AUTO: return sng_autoload ? "ON" : "OFF";
+    case MI_CLOCK:                                    /* the tempo and START / STOP from a MIDI clock: off, or from where */
+        *c = song.g[G_SYNC] ? C_HI : C_DIM;
+        return song.g[G_SYNC] == 2 ? "TRS" : song.g[G_SYNC] == 1 ? "USB" : "OFF";
+    case MI_HUMAN:
+        *c = drum_hum ? C_HI : C_DIM;
+        return drum_hum == 1u ? "LIGHT" : drum_hum == 2u ? "MORE" : "OFF";
     case MI_LEARN: return mlu.on ? "ON" : "OFF";
     case MI_COLOR: return PALETTES[settings.palette].name;
     case MI_ZOOM: return settings.zoom ? "ON" : "OFF";
@@ -261,6 +270,12 @@ static void mi_set(uint32_t i, int32_t s)
         if (sng_autoload && sng_cur >= 0)
             sng_last = (uint8_t)(sng_cur + 1);         /* (the song loaded now is the last one) */
         arrset_dirty = 1;
+        break;
+    case MI_CLOCK:                                     /* OFF, USB, TRS; OCT+ round (kept with the settings: project.c) */
+        song.g[G_SYNC] = (int16_t)(s ? clamp(song.g[G_SYNC] + s, 0, 2) : (song.g[G_SYNC] + 1) % 3);
+        break;
+    case MI_HUMAN:                                     /* OFF, LIGHT, MORE; OCT+ round (kept with the settings) */
+        drum_hum = (uint8_t)(s ? clamp((int32_t)drum_hum + s, 0, (int32_t)HUM_N - 1) : (drum_hum + 1u) % HUM_N);
         break;
     case MI_LEARN:                                     /* (2.6) on: a knob turned on a page, then a CC */
         if (!s || (s > 0) != (mlu.on != 0))

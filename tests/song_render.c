@@ -125,6 +125,9 @@ int main(int argc, char **argv)
         TDRUM->p[P_E0] = (int16_t)clamp(atoi(env), DRUM_KIT_DESC.min, DRUM_KIT_DESC.max);
     if ((env = getenv("BPM")) != 0)
         song.g[G_BPM] = (int16_t)clamp(atoi(env), 40, 240);
+    drum_hum = 1;                                   /* humanize: LIGHT, as the device (HUMANIZE: 0 off, 1, 2) */
+    if ((env = getenv("HUMANIZE")) != 0)
+        drum_hum = (uint8_t)clamp(atoi(env), 0, (int32_t)HUM_N - 1);
     tail = (uint32_t)((env = getenv("TAIL")) != 0 ? atof(env) * FS : 1.5 * FS);
     bar = bar_len();
     printf("song: %u BPM, kit %u (%s), %u sections, bar %u samples\n", (unsigned)song.g[G_BPM], (unsigned)drum_kit(),

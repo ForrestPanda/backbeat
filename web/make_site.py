@@ -28,14 +28,45 @@ import json
 import re
 import shutil
 import sys
+import urllib.parse
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ONLINE = "https://isod89.github.io/sloop-fm1/"                 # (the offline editor's links)
 
 
+EMBED_TYPES = {".wav": "audio/wav", ".json": "application/json", ".txt": "text/plain", ".py": "text/x-python"}
+
+
+def offline_assets():
+    """the files the page fetches next to it, for the offline file: the layered kit (realkit/), the pads' kit (kit/),
+    the factory grooves (grooves/) and the importer (gp2song.py): {path as fetched: (type, base64)}"""
+    out = {}
+    for folder, src in (("realkit", HERE.parent / "assets" / "realkit"), ("kit", HERE / "kit"),
+                        ("grooves", HERE.parent / "grooves")):
+        for f in sorted(src.iterdir()):
+            if f.is_file() and f.suffix in EMBED_TYPES:
+                out[f"{folder}/{f.name}"] = (EMBED_TYPES[f.suffix], base64.b64encode(f.read_bytes()).decode())
+    out["gp2song.py"] = (EMBED_TYPES[".py"], base64.b64encode((HERE.parent / "tools" / "gp2song.py").read_bytes()).decode())
+    return out
+
+
+def offline_fetch(files):
+    """a script for the offline file's head: the page's fetch of one of those paths answered from inside the file (as
+    the site would serve it), anything else as usual"""
+    return ("<script>/* the offline file (web/make_site.py): the kit, the grooves and the importer inside it */\n"
+            "(() => { const F = " + json.dumps(files, separators=(",", ":")) + ", net = window.fetch.bind(window);\n"
+            "  window.fetch = (u, o) => { let k = typeof u === \"string\" ? u.replace(/^\\.\\//, \"\") : \"\";\n"
+            "    try { k = decodeURIComponent(k); } catch (e) { /* as it is */ }\n"
+            "    const f = F[k]; if (!f) return net(u, o);\n"
+            "    const b = Uint8Array.from(atob(f[1]), (c) => c.charCodeAt(0));\n"
+            "    return Promise.resolve(new Response(b, { status: 200, headers: { \"Content-Type\": f[0] } })); }; })();\n"
+            "</script>\n")
+
+
 def offline_editor(html):
-    """editor.html as one file for the disk: the icon font inlined, the download link out, the relative links online"""
+    """editor.html as one file for the disk: the icon font inlined, the kit, the grooves and the importer inside it
+    (offline_fetch), the download link out, the relative links online"""
     font = base64.b64encode((HERE / "fukiai.ttf").read_bytes()).decode()
     for a, b in (('url("fukiai.ttf")', 'url(data:font/ttf;base64,' + font + ')'),
                  ('href="../installer/"', 'href="' + ONLINE + 'webapp/installer/" target="_blank" rel="noopener"'),
@@ -50,7 +81,9 @@ def offline_editor(html):
         html, n = re.subn(pat, "", html, flags=re.S)
         if n != 1:
             raise SystemExit(f"editor.html must contain {what} once; update make_site.py")
-    return html
+    if html.count("</head>") != 1:
+        raise SystemExit("editor.html must contain </head> once; update make_site.py")
+    return html.replace("</head>", offline_fetch(offline_assets()) + "</head>")
 
 
 ICONS = ("icon-192.png", "icon-512.png", "icon-maskable-512.png")
@@ -92,7 +125,10 @@ def app_files(out, version, fw_name):
     for mark in ("/*STAMP*/", "/*FILES*/[]"):
         if sw.count(mark) != 1:
             raise SystemExit(f"sw.js must contain {mark} once; update make_site.py")
-    sw = sw.replace("/*STAMP*/", f"{version}-{h.hexdigest()[:12]}").replace("/*FILES*/[]", json.dumps(sorted(keep)))
+    # the list as URLs: a "#" in a name (the kit's CLAP_D#2.wav) would start a fragment, the request going to CLAP_ (404,
+    # and addAll is all or nothing: the worker never installed, the site never offline)
+    urls = [urllib.parse.quote(k, safe="/.") for k in sorted(keep)]
+    sw = sw.replace("/*STAMP*/", f"{version}-{h.hexdigest()[:12]}").replace("/*FILES*/[]", json.dumps(urls))
     (app / "sw.js").write_text(sw, encoding="utf-8")
     return sorted(keep)
 BLOCKS, BLK, KEEP = 20, 0x30, 0x2F

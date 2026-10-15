@@ -1022,6 +1022,33 @@ static void seq_stop(void)
 #endif
 }
 
+/* humanize (drums.c drum_hum): a hash of the step's count, so a hit varies from bar to bar but a render is the same
+ * every time; the spread triangular (most hits near the grid, few at its edge) */
+static const uint8_t HUM_LVL[HUM_N] = {0, 16, 32};  /* the level's spread, of 128: about +-1 and +-2 dB */
+static const uint16_t HUM_SMP[HUM_N] = {0, FS * 3 / 1000, FS * 6 / 1000};   /* the timing's, in samples: +-3, +-6 ms */
+static uint32_t hum_hash(uint32_t x)
+{
+    x ^= x >> 16; x *= 0x7FEB352Du; x ^= x >> 15; x *= 0x846CA68Bu; x ^= x >> 16;
+    return x;
+}
+static int32_t hum_tri(uint32_t h, int32_t a)       /* -a..a, triangular (no divide: the audio block's loop) */
+{
+    return ((int32_t)(h & 255u) + (int32_t)((h >> 8) & 255u) - 255) * a >> 8;
+}
+/* (out of line, called only with humanize on: the audio block's loops stay as they were, tests/target_budget.py) */
+static __attribute__((noinline)) void hum_hit(const track_t *t, uint32_t l, uint32_t n)   /* lane l's hit n (a
+                                                                                            * ratchet's) */
+{
+    if (drum_hum < HUM_N)
+        drum_hum_g = (uint8_t)(128 + hum_tri(hum_hash(t->seq_abs * 64u + l * 4u + n), HUM_LVL[drum_hum]));
+}
+static __attribute__((noinline)) int32_t hum_shift(uint32_t abs, uint32_t slen)   /* step abs's timing, in grid units */
+{
+    int32_t a = drum_hum < HUM_N ? HUM_SMP[drum_hum] * clamp(song.g[G_BPM], 20, 300) : 0, cap = (int32_t)(slen >> 3);
+                                                    /* (a sample is BPM grid units: a beat is BEAT_U) */
+    return hum_tri(hum_hash(abs ^ 0x5BD1E995u), a < cap ? a : cap);
+}
+
 /* play one drum step: each lane a hit (not the lanes a roll plays, muted or out of a fill) */
 static void drum_step(track_t *t, const dstep_t *s, uint32_t idx)
 {
@@ -1029,7 +1056,10 @@ static void drum_step(track_t *t, const dstep_t *s, uint32_t idx)
     seq_out_track_off(t);                           /* the last step's hits end here */
     for (l = 0; m; l++, m >>= 1)
         if (m & 1u) {
+            if (drum_hum)
+                hum_hit(t, l, 0);
             trk_note_on(t, LANE_NOTE[l], lvl_vel(dstep_lvl(s, l), 100));
+            drum_hum_g = 0;                         /* (a muted track takes none) */
             seq_out_on(t, LANE_NOTE[l], lvl_vel(dstep_lvl(s, l), 100));
         }
 }
@@ -1049,18 +1079,22 @@ static void seq_ratchets(track_t *t, uint32_t into, uint32_t slen)
         done = (t->rat_lanes >> (2u * i)) & 3u;
         if (h > done && h < hits) {
             t->rat_lanes = (t->rat_lanes & ~(3u << (2u * i))) | h << (2u * i);
+            if (drum_hum)
+                hum_hit(t, i, h);
             trk_note_on(t, LANE_NOTE[i], lvl_vel(dstep_lvl(s, i), 100));
+            drum_hum_g = 0;
             seq_out_on(t, LANE_NOTE[i], lvl_vel(dstep_lvl(s, i), 100));
         }
     }
 }
 
 /* the nudge of grid step abs of track t, in units of a step slen long: where in its own step it fires
- * (micro >= 0), or how far before its step (micro < 0, as a negative number) */
+ * (micro >= 0), or how far before its step (micro < 0, as a negative number); humanize adds its own (at most an
+ * eighth of a step: the steps stay in order) */
 static int32_t micro_units(const track_t *t, uint32_t abs, uint32_t slen)
 {
     int32_t m = t->micro[abs % trk_len(t) % NSTEP];
-    return (int32_t)(slen / 64u) * m;                /* |m| <= 32: fits */
+    return (int32_t)(slen / 64u) * m + (drum_hum && is_drum(t) ? hum_shift(abs, slen) : 0);   /* |m| <= 32: fits */
 }
 
 /* The steps fire in order, one a block at most, each at its nudged time (micro: 1/64 of a step early

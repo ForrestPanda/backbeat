@@ -308,6 +308,13 @@ function editorPlay() {
     "play: each step carries what the LIVE view shows: its place (step 11 = beat 3), nothing cued, no fill, no ending");
   ok(/id="play-live"/.test(html) && /id="pl-beats"/.test(html) && /id="pl-prog"/.test(html) && /function playLive\(\)/.test(html)
     && /q\[0\]\.at <= ctx\.currentTime/.test(html), "play: the LIVE view (beats, bar, progress, what comes, tiles) follows the audio clock");
+  ok(/const pen = \{ n: "x", h: "X", s: "s", g: "g", x: "" \}/.test(html) && /\["s", "soft", "s"\]/.test(html) && /sedKeys: "Keys: n normal, h hard, s soft,/.test(html)
+    && E.SNG.LEVELS.s === 2 && !("o" in E.SNG.LEVELS) && E.SNG.LEVEL_CHAR === "xgsX" && /\.sedgrid button\.c\.hs \{/.test(html),
+    "section editor: the pen's keys are their first letters (n normal, h hard, s soft, g ghost; x erase); soft is 's' in a song (no 'o')");
+  ok(/id="pedal-clock"/.test(html) && /function syncId\(\) \{ return dev && dev\.gdesc \? dev\.gdesc\.findIndex\(\(d\) => d && d\.label === "SYNC"\)/.test(html)
+    && /userSet\(1, gi, \+\$\("pedal-clock"\)\.value, true\)/.test(html) && /\{"MIDI CLOCK IN", RK_MI, MI_CLOCK\}/.test(fw("ui_menu.c"))
+    && /N_SYNC\[\] = \{"INT", "USB", "TRS"\}/.test(fw("params.c")),
+    "pedal card: MIDI clock in (off, TRS, USB) writes the FM-1's SYNC global (0 off, 1 USB, 2 TRS), as SETUP > PEDAL > MIDI CLOCK IN");
   ok(/\/\^\(\?:Digit\|Numpad\)\(\[1-8\]\)\$\/\.exec\(e\.code\)/.test(html) && /e\.key === "f"\) PLAY\.fillNext/.test(html) && /data-t="playKeys"/.test(html)
     && /playKeys: "keys: 1–8 a section \(0: switches to 9–16/.test(html) && /SPLAY\.bank = SPLAY\.bank \? 0 : 1/.test(html)
     && /\+ 8 \* \(SPLAY\.bank \|\| 0\)/.test(html) && /plive-tiles rows-\$\{Math\.max\(1, Math\.ceil\(n \/ 4\)\)\}/.test(html),
@@ -525,7 +532,7 @@ function editorSed() {
   }
   {   /* the marks: set with a hit, changed on a hit, kept through split / merge / copy, packed as flag 2 and unpacked */
     let m = S.setHit(S.blank("M", 16), "HITOM", 12, "x", 1, "F");
-    m = S.setHit(m, "HAT", 12, "o", 1, "N");
+    m = S.setHit(m, "HAT", 12, "s", 1, "N");
     m = S.setHit(m, "KICK", 0, "x");
     ok(S.cell(m, "HITOM", 12).mark === "F" && S.cell(m, "HAT", 12).mark === "N" && S.cell(m, "KICK", 0).mark === "" && m.fills.HITOM === "............F...", "sed: a hit set with its mark");
     m = S.setMark(m, "KICK", 0, "N");
@@ -696,6 +703,17 @@ async function editorRealKit() {
   const P = E.PLAY, four = [127, 100, 72, 42], two = [127, 72];
   ok(js(P.VEL.map((v) => P.rkLayer(four, v))) === js([1, 3, 2, 0]) && js(P.VEL.map((v) => P.rkLayer(two, v))) === js([0, 1, 1, 0])
     && P.rkLayer([127], 42) === 0, "realkit: levels normal, ghost, soft, hard -> layers 2, 4, 3, 1 (two layers: hard for normal and hard)");
+  {   /* humanize: the player's spreads are the device's (seq.c HUM_LVL of 128, HUM_SMP in ms), the timing capped at an
+         eighth of the step; off: as written */
+    const sq = fw("seq.c");
+    const lv = /HUM_LVL\[HUM_N\] = \{0, (\d+), (\d+)\}/.exec(sq), ms = /HUM_SMP\[HUM_N\] = \{0, FS \* (\d+) \/ 1000, FS \* (\d+) \/ 1000\}/.exec(sq);
+    ok(lv && ms && P.HUM_LVL[1] === +lv[1] / 128 && P.HUM_LVL[2] === +lv[2] / 128 && P.HUM_SEC[1] === +ms[1] / 1000 && P.HUM_SEC[2] === +ms[2] / 1000
+      && P.humGain(0, 0.9, 0.9) === 1 && P.humShift(0, 0.1, 0.9, 0.9) === 0
+      && Math.abs(P.humGain(1, 0.999, 0.999) - (1 + 16 / 128)) < 0.001 && Math.abs(P.humGain(2, 0, 0) - (1 - 32 / 128)) < 1e-9
+      && Math.abs(P.humShift(2, 0.016, 0, 0) + 0.002) < 1e-9 && Math.abs(P.humShift(1, 0.25, 0.999, 0.999) - 0.003) < 1e-5
+      && /SPLAY\.next \+ PLAY\.humShift\(SPLAY\.hum/.test(html) && /vel \/ R\.vel\[l\] \* hum/.test(html),
+      "humanize: the player's level and timing spreads are the device's (light +-1/8, 3 ms; more +-1/4, 6 ms; an eighth of a step at most); after the layer");
+  }
   const dc = readFileSync(join(HERE, "../firmware/src/drums.c"), "utf8");
   ok(/if \(vel \* 2u >= \(uint32_t\)RK_LANE\[ln & 15u\]\.vel\[l\] \+ RK_LANE\[ln & 15u\]\.vel\[l \+ 1u\]\)/.test(dc)
     && /t = \(rk_last\[ln & 15u\] \+ 1u \+ \(rk_seed >> 24\) % \(nt - 1u\)\) % nt;/.test(dc), "realkit: the same rules as drums.c rk_layer / rk_take");

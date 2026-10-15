@@ -189,7 +189,13 @@ int main(int argc, char **argv)
         check(pedal.count == 1u, "SETUP > PEDAL: KNOB 2 the count-in (1 bar)");
         encs[panel.enc[EN_K3]] = 1; frame();
         check(sng_autoload == 1u, "SETUP > PEDAL: KNOB 3 loads the last song at start");
+        song.g[G_SYNC] = 0;
+        encs[panel.enc[EN_K4]] = 2; frame();
+        check(song.g[G_SYNC] == 2 && !strcmp(mi_value(mi_find(MI_CLOCK), &(uint16_t){0}), "TRS") && mi_sec(mi_find(MI_CLOCK)) == MS_PEDAL,
+              "SETUP > PEDAL: KNOB 4 MIDI CLOCK IN: TRS (the tempo and START / STOP from the jack)");
         ui.force = 1; frame(); ppm("setup-pedal");
+        encs[panel.enc[EN_K4]] = -5; frame();
+        check(song.g[G_SYNC] == 0 && !strcmp(mi_value(mi_find(MI_CLOCK), &(uint16_t){0}), "OFF"), "SETUP > PEDAL: MIDI CLOCK IN back to OFF");
         pedal.ch = 16; pedal.count = 0; sng_autoload = 0; arrset_dirty = 0;
         encs[panel.enc[EN_SELECT]] = 1; frame();
         check(mi_sec(ui.menu_sel) == MS_MIDI, "SETUP: SELECT right: MIDI");
@@ -953,7 +959,7 @@ int main(int argc, char **argv)
         for (w = 0; w < ML_N; w++) ml_tab[w] = 0;
         #define SETUP_AT(sec_) do { ui.menu = 1; ui.menu_sel = MS_FIRST[sec_]; ui.force = 1; frame(); } while (0)
         SETUP_AT(MS_LEARN);
-        K(EN_K2, 1);                                      /* SETUP > LEARN > MIDI LEARN: ON */
+        K(EN_K1, 1);                                      /* SETUP > LEARN > MIDI LEARN: ON (KNOB 1: SYNC went to PEDAL) */
         tap(B_GLO); frames(16);
         check(mlu.on == 1u && !mlu.pick && !ui.menu, "SETUP > LEARN: MIDI LEARN on (SETUP closed with GLO)");
         for (j = 0; j < NPAGES; j++) if (PAGES[j].fam == FAM_FX && !strcmp(PAGES[j].title, "FILTER")) break;
@@ -972,7 +978,7 @@ int main(int argc, char **argv)
         check(TDRUM->p[P_TFLT] == TP[P_TFLT].max, "CC 20: the drums' FILTER to its top");
         TDRUM->p[P_TFLT] = 0;
         ui.force = 1; frame(); ppm("setup-learn");
-        K(EN_K3, 1);
+        K(EN_K2, 1);
         tap(B_OCTUP);
         check(ui.menu_sel == mi_find(MI_LCLEAR) && ml_count() == 0u, "SETUP > LEARN > MIDI LEARN CLEAR, OCT+: nothing learned any more");
         ui.menu = 0; ui.force = 1; go_home(); frames(16);

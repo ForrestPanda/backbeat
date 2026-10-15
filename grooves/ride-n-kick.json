@@ -13,7 +13,7 @@
    "lanes": {
     "CRASH": "................................................x..x..x...x.x...",
     "KICK": "x.....x...x..x..x.....x...x..x..x.....x...x..x..x..x..x...x.xx..",
-    "RIDE": "X.o.o.ooX.o.o.ooX.o.o.ooX.o.o.ooX.o.o.ooX.o.o.ooX.o.o.ooX.o.o.oo"
+    "RIDE": "X.s.s.ssX.s.s.ssX.s.s.ssX.s.s.ssX.s.s.ssX.s.s.ssX.s.s.ssX.s.s.ss"
    },
    "fills": {
     "CRASH": "................................................F..F..F...F.F...",
@@ -28,7 +28,7 @@
    "lanes": {
     "CRASH": "X...............................................x..x..x...x.x...",
     "KICK": "x..x..x...x..x..x..x..x...x..x..x..x..x...x..x..x..x..x...x.xx..",
-    "RIDE": "X.o.X.o.X.o.X.o.X.o.X.o.X.o.X.o.X.o.X.o.X.o.X.o.X.o.X.o.X.o.X.o."
+    "RIDE": "X.s.X.s.X.s.X.s.X.s.X.s.X.s.X.s.X.s.X.s.X.s.X.s.X.s.X.s.X.s.X.s."
    },
    "fills": {
     "CRASH": "................................................F..F..F...F.F...",

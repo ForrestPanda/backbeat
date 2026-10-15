@@ -26,7 +26,7 @@ static uint8_t sync_reload;
 #include "../firmware/src/arranger_scene.c"
 
 static uint64_t blk;
-typedef struct { uint64_t blk; uint8_t note, vel; } hit_t;
+typedef struct { uint64_t blk; uint8_t note, vel; int32_t zid; } hit_t;   /* zid: the sample zone (the layer) */
 static hit_t hits[200000];
 static uint32_t nhits;
 static void run_block(void)
@@ -47,6 +47,7 @@ static void run_block(void)
                 hits[nhits].blk = blk;
                 hits[nhits].note = drums.v[k].note;
                 hits[nhits].vel = drums.v[k].vel;
+                hits[nhits].zid = drums.v[k].s[4];
                 nhits++;
             }
     blk++;
@@ -81,6 +82,50 @@ static uint32_t count_note(uint32_t note, uint64_t b0, uint64_t b1)
     for (i = 0; i < nhits; i++)
         n += hits[i].note == note && hits[i].blk >= b0 && hits[i].blk < b1;
     return n;
+}
+
+/* fm1-drummer: humanize (SETUP > FEEL): on the layered kit, a ride written x / o (hard and soft samples) and a hat
+ * on every 16th. LIGHT against OFF: the same hits in the same order, each on its layer's sample (the accent keeps
+ * its sound), the levels a little apart (+-1/8) and the timing (+-3 ms), most hits moved, none past that; the same
+ * run twice is the same (a hash of the step, not a free random) */
+static uint32_t hum_run(uint32_t amt, hit_t *out)
+{
+    uint32_t i;
+    reset(120);
+    drum_hum = (uint8_t)amt;
+    TDRUM->p[P_E0] = (int16_t)DRUM_REAL;
+    for (i = 0; i < 16u; i++) {
+        dstep_set(&TDRUM->dstep[i], 4u, LV_NORM, 0);                      /* HAT, every 16th */
+        if (!(i & 1u))
+            dstep_set(&TDRUM->dstep[i], 13u, i % 4u ? LV_SOFT : LV_NORM, 0);   /* RIDE x . o . */
+    }
+    transport_req = 1;
+    while (blk < (uint64_t)(FS * 2 * 8 / CTL))        /* 8 bars at 120 */
+        run_block();
+    memcpy(out, hits, nhits * sizeof *hits);
+    drum_hum = 0;
+    return nhits;
+}
+static void t_humanize(void)
+{
+    static hit_t a[400], b[400], c[400];
+    uint32_t na = hum_run(0, a), nb = hum_run(1, b), nc = hum_run(1, c), i, same_zone = 1, lvl_ok = 1, t_ok = 1,
+             moved_t = 0, moved_v = 0, maxb = (uint32_t)(FS * 3 / 1000 / CTL) + 1u;
+    for (i = 0; i < na && i < nb; i++) {
+        uint32_t d = a[i].blk > b[i].blk ? (uint32_t)(a[i].blk - b[i].blk) : (uint32_t)(b[i].blk - a[i].blk);
+        int32_t dv = (int32_t)b[i].vel - (int32_t)a[i].vel;
+        same_zone &= a[i].note == b[i].note && a[i].zid == b[i].zid;
+        lvl_ok &= dv <= (int32_t)a[i].vel / 8 + 1 && -dv <= (int32_t)a[i].vel / 8 + 1;
+        t_ok &= d <= maxb;
+        moved_t += d != 0u;
+        moved_v += dv != 0;
+    }
+    check(na > 150u && na == nb && same_zone, "humanize: the same hits, each on its layer's sample (x hard, s soft)");
+    check(lvl_ok && moved_v > na / 2u, "humanize LIGHT: most levels moved, none more than an eighth");
+    if (!t_ok || moved_t <= na / 8u)
+        printf("seq2:   humanize timing: %u of %u hits moved, limit %u blocks\n", moved_t, na, maxb);
+    check(t_ok && moved_t > na / 8u, "humanize LIGHT: hits moved off the grid's block, none more than 3 ms");
+    check(nc == nb && !memcmp(b, c, nb * sizeof *b), "humanize: the same run twice is the same (a hash of the step)");
 }
 
 static void t_drift(void)
@@ -1002,6 +1047,7 @@ int main(void)
     t_erase_undo();
     t_levels();
     t_mute();
+    t_humanize();
     printf("seq2: %s\n", fails ? "FAILED" : "all checks ok");
     return fails;
 }

@@ -212,13 +212,13 @@ def main():
     v, c, o = spec["sections"]
     assert v["steps"] == 32 and v["div"] == "1/16", v
     assert v["lanes"]["KICK"][:27] == "x.......x.......x.......x.x", v["lanes"]["KICK"]
-    assert v["lanes"]["HAT"].startswith("o.o.o.o.o.o.o.o.o.o.o.o."), v["lanes"]["HAT"]      # soft hats
+    assert v["lanes"]["HAT"].startswith("s.s.s.s.s.s.s.s.s.s.s.s."), v["lanes"]["HAT"]      # soft hats
     assert v["lanes"]["SNARE"][:16] == "....x.......x...", v["lanes"]["SNARE"]
     # the fill's toms (16ths 12..15) are marked F lane by lane; the pattern's hats and snare on 12 and 14, which the
     # fill leaves out, are marked N; nothing is dropped
     assert "fill" not in v and v["fills"]["HITOM"][28:32] == "FF.." and v["fills"]["MIDTOM"][28:32] == "..FF", v.get("fills")
     assert v["lanes"]["HITOM"][28:30] == "xx" and v["lanes"]["MIDTOM"][30:32] == "xx" and "LOWTOM" not in v["lanes"], (v["lanes"].get("HITOM"), v["lanes"].get("MIDTOM"))
-    assert v["lanes"]["HAT"][28:32] == "o.o." and v["fills"]["HAT"][28:32] == "N.N." and v["fills"]["SNARE"][28] == "N", (v["lanes"]["HAT"], v["fills"].get("HAT"), v["fills"].get("SNARE"))
+    assert v["lanes"]["HAT"][28:32] == "s.s." and v["fills"]["HAT"][28:32] == "N.N." and v["fills"]["SNARE"][28] == "N", (v["lanes"]["HAT"], v["fills"].get("HAT"), v["fills"].get("SNARE"))
     assert c["steps"] == 16 and c["lanes"]["CRASH"][0] == "X" and c["lanes"]["KICK"][0] == "X", c["lanes"]
     assert c["lanes"]["SNARE"][12] == "x" and c.get("ratchets", {}).get("SNARE", "")[12] == "2", c.get("ratchets")
     assert c["lanes"]["SHAKER"] == "g...g...g...g...", c["lanes"].get("SHAKER")              # the second track, ghost

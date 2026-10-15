@@ -13,7 +13,7 @@
    "lanes": {
     "HAT": "x.xx.xx.xx.xx.xx.xx.xx.xx.xx.xx.xx.xx.xx.xx.xx.x",
     "KICK": "x........x.xx........x.xx........x.xx........x.x",
-    "SNARE": ".g..g.X..g...g..g.X..g...g..g.X..g..gggggoXoXgXX"
+    "SNARE": ".g..g.X..g...g..g.X..g...g..g.X..g..gggggsXsXgXX"
    },
    "fills": {
     "HAT": "....................................N.NN.NN.NN.N",
@@ -29,8 +29,8 @@
     "CRASH": "X...............................................",
     "KICK": "x..x.....x.xx..x.....x.xx..x.....x.xx..x.....x.x",
     "PEDAL": "...x.....x.....x.....x.....x.....x.....x.....x..",
-    "RIDE": "X.oX.oX.oX.oX.oX.oX.oX.oX.oX.oX.oX.oX.oX.oX.oX.o",
-    "SNARE": ".g..g.X..g.g.g..g.X..g.g.g..g.X..g.ggggggoXoXgXg"
+    "RIDE": "X.sX.sX.sX.sX.sX.sX.sX.sX.sX.sX.sX.sX.sX.sX.sX.s",
+    "SNARE": ".g..g.X..g.g.g..g.X..g.g.g..g.X..g.ggggggsXsXgXg"
    },
    "fills": {
     "KICK": ".......................................N.....N.N",

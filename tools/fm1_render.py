@@ -57,6 +57,8 @@ def main():
     ap.add_argument("--tail", type=float, default=1.5, help="seconds after the stop (default 1.5)")
     ap.add_argument("--listen", action="store_true", help="play it (sox)")
     ap.add_argument("--fills", action="store_true", help="ask for a fill (CC 21) a bar before each change: the fills heard")
+    ap.add_argument("--humanize", choices=["off", "light", "more"], default="light",
+                    help="SETUP > FEEL > HUMANIZE (default light, as the device)")
     a = ap.parse_args()
     import json
     with open(a.json) as f:
@@ -88,7 +90,7 @@ def main():
     bin_path = os.path.join(ROOT, "build", "host", base + ".sng")
     with open(bin_path, "wb") as f:
         f.write(blob)
-    env = dict(os.environ, TAIL=str(a.tail))
+    env = dict(os.environ, TAIL=str(a.tail), HUMANIZE=str(["off", "light", "more"].index(a.humanize)))
     if a.fills:
         env["FILLS"] = "1"
     if a.kit is not None:

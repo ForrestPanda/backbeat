@@ -23,12 +23,13 @@ it and send it to a user slot.
 - To hear the fill into the chorus: ask for the fill (the pedal's CC 21, LIVE's black keys or SEL, the editor's
   `f`) during bars 1..3 of the phrase, then the chorus; or fill and chorus on one switch. Asked in the phrase's last
   bar, the fill is the next time round, and a change asked meanwhile waits for it (`docs/design.md`).
-- Levels: `x` normal, `X` hard, `o` soft, `g` ghost; a few fills use ratchets (`"ratchets"`: 2 = a double stroke).
+- Levels: `x` normal, `X` hard, `s` soft, `g` ghost (the soft one was `o` until 2026-10-15); a few fills use
+  ratchets (`"ratchets"`: 2 = a double stroke).
 - The ride is accented, as a drummer plays it (2026-10-15: written flat, 48 identical hits, it sounded robotic): `x` on
-  the beat, `o` between (SLOW ROCK `xoo`, BALLAD 6/8 `x.o.o.`, BLUES `x.o` on each triplet beat, the 8th rides
-  `x.o.`, PUNK `xo`); where the beat is the bell (`X`: HALF SHUFFLE, RIDE N KICK, SEVEN) the hits between are `o`.
-  With the layered kit `o` is the soft sample and `x` / `X` the hard one, so the accent is heard in the sound, not
-  only the level. THREE OVER 4 keeps its threes all `X`: every hit there is the start of a group.
+  the beat, `s` between (SLOW ROCK `xss`, BALLAD 6/8 `x.s.s.`, BLUES `x.s` on each triplet beat, the 8th rides
+  `x.s.`, PUNK `xs`); where the beat is accented hard (`X`: HALF SHUFFLE, RIDE N KICK, SEVEN) the hits between are
+  `s`. With the layered kit `s` is the soft sample and `x` / `X` the hard one, so the accent is heard in the sound,
+  not only the level. THREE OVER 4 keeps its threes all `X`: every hit there is the start of a group.
 
 ## The everyday grooves
 
@@ -42,7 +43,7 @@ it and send it to a user slot.
 | 6 | FOUR FLOOR (`four-floor.json`) | 120, 4/4, 1/16 | a kick on every beat, snare 2 and 4, closed hats on the beats, open on the offbeats | 16th hats, a clap doubling the snare | the kick goes on under a snare build and a quick high-mid-low tom run |
 | 7 | METAL GALLOP (`metal-gallop.json`) | 170, 4/4, 1/16 | the gallop in the kick (an 8th, two 16ths), snare 2 and 4, hats 8ths | the kick in 8ths with a gallop pickup into each bar (16ths until 2026-10-15: too busy), a crash on every beat | 16ths around the snare and the three toms, two floor-tom accents to finish |
 | 8 | BALLAD 6/8 (`ballad-6-8.json`) | 75 (a dotted quarter of 50), 6/8, 1/16 | side stick on the "4", soft 8th hats accented on 1 and 4, a kick pickup | snare and ride | 16ths from the snare down the toms in the bar's second half |
-| 9 | HALF SHUFFLE (`half-shuffle.json`) | 86, 4/4, triplets (8T) | half time: shuffled hats, the one backbeat on 3, ghosts on the middle triplets | the shuffle on the ride with its bell on the beats, the foot hat | a snare-only build, ghosts swelling to four accents |
+| 9 | HALF SHUFFLE (`half-shuffle.json`) | 86, 4/4, triplets (8T) | half time: shuffled hats, the one backbeat on 3, ghosts on the middle triplets | the shuffle on the ride, accented on the beats, the foot hat | a snare-only build, ghosts swelling to four accents |
 | 10 | TRAIN BEAT (`train-beat.json`) | 152, 4/4, 1/16 | snare 16ths accented on 2 and 4, kick on every beat, the foot hat on 2 and 4 | boom-chick: kick 1 and 3, snare 2 and 4, ride 8ths | the snare accents shift into threes against the beat |
 | 11 | ONE DROP (`one-drop.json`) | 76, 4/4, 1/16 | nothing on 1: kick and cross stick together on 3, hats on the offbeats | a snare on 3, a kick pickup, open hats, shaker 16ths | the hole: everything out but one rim click on the "and" of 4 (the band's cue) |
 
@@ -56,7 +57,7 @@ Each built around one idea to play with; its fill makes the idea heard.
 | 13 | TOM TRIBE (`tom-tribe.json`) | 112, 4/4, 1/16 | no hats, no snare: the floor tom on a 3-3-2 clave | the floor tom's clave, the mid tom answering, shaker 16ths | opens into a snare backbeat, open hats on the offbeats, the clave in the kick | the clave on the floor tom under mid and high tom runs, a double stroke |
 | 14 | LINEAR (`linear.json`) | 98, 4/4, 1/16 | linear funk: no two drums ever together | kick, snare and hats each alone on every 16th, with ghosts | half time: one snare on 3, ghost notes, an open hat to end the bar | ghost doubles, then double-stroke 32nds (ratchets) down the toms |
 | 15 | THREE OVER 4 (`three-over-four.json`) | 104, 4/4, 1/16, a 3-bar phrase | hats in groups of three 16ths across 4/4: they meet the bar again after 3 bars | the hats on the threes, the snare on 2 and 4 the anchor | the ride and the kick on the threes, the foot hat on the offbeats | snare accents in threes, ending on the toms |
-| 16 | RIDE N KICK (`ride-n-kick.json`) | 118, 4/4, 1/16 | only the ride (its bell: the hard hits) and the kick | the ride's bell accents carry the groove over a syncopated kick | the bell on every beat | kick and crash stabs together |
+| 16 | RIDE N KICK (`ride-n-kick.json`) | 118, 4/4, 1/16 | only the ride (its hard hits the accents) and the kick | the ride's accents carry the groove over a syncopated kick | an accent on every beat | kick and crash stabs together |
 
 ## Where they come from
 

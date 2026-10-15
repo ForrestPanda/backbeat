@@ -158,7 +158,13 @@ next bar). No named sections, one song, no fill tied to a section change.
    log, Send to a slot, Save JSON, Play. **Play**: the song through Web Audio with the Drum kit page's
    pads (as they would go to the device) or the processed WAVs of `tools/mkkit.py --wavs`; the
    section buttons and keys 1..8 are the pedal, with the wait for the section's end and its fill bar, CC 27 (shift), the next-bar
-   fill, the ending and stop, as a state machine (`PLAY`) tested in `web/test_web.mjs`. A preview:
+   fill, the ending and stop, as a state machine (`PLAY`) tested in `web/test_web.mjs`. The transport (since 2026-10-15,
+   for a tablet): Previous / Fill / Next in one row, Play / Stop / Ending under them, a Play button being the device's
+   PLAY key while stopped (the section cued, else the first, the count-in too; key p), Play and Stop greyed by the state.
+   The tempo in the head (KNOB 1 on the device): - / + a BPM, the number typed, Tap (as the pedal's CC 26; keys - + t),
+   40..240, from the next step; greyed while a MIDI clock drives the player.
+   No Web MIDI: the status says whether the browser has none, or the page is not a secure context (http:// from another
+   machine, a downloaded file opened as content:// on Android): Chrome hides the API there. A preview:
    no ADPCM, no limiter, no reverb; `tools/fm1_render.py` stays the reference. (Since 2026-10-14: no fill comes with
    a section; the card shows the device's LIVE screen in time with the sound, from the steps the audio clock has
    reached: beat lights, the bar and its progress, the count-in, what comes next, the sections as tiles; the keys
@@ -528,7 +534,7 @@ hazard; what it found and what was done:
   an old song's "CONGA" as MIDTOM; mkkit, the editor's kit page (KIT_WORDS: mid tom, tom 3) and its served kit
   (web/kit/MIDTOM_A2.wav) follow. Not migrated (no device has them yet): a user kit image with a zone at 63 (its lane
   14 is silent: make it again), a SYN bank's lane 10 (it plays its stored conga sound).
-- (asked 2026-10-14; not started) **A little random variation per hit (humanize).** MULDJORD's hi-hats (Black
+- (done 2026-10-15, see below) **A little random variation per hit (humanize).** MULDJORD's hi-hats (Black
   Pearl, kept by ear over the DRS, Muldjord and Salamander hats auditioned) have one recording a layer, so a run of
   16ths at one level plays the same sample every time. Wanted: each hit of a sampled kit a little different, at no
   flash cost: its level about +-1 dB and its pitch about +-1 % (drum_on: the gain from the voice's velocity, the
@@ -541,6 +547,32 @@ hazard; what it found and what was done:
   plays its groove until the user sends a song to it (the Setlist tab, `--put`); an erased slot stays empty; the
   editor reads a factory song like any slot (editor.c through sng_fetch), so "copy the FM-1's songs into the set"
   takes the grooves too. (Superseded the same day by the two banks below: a user slot never written is empty.)
+- (done 2026-10-15) **MIDI clock in: on / off, found where the pedal is.** The FM-1 already followed a clock with
+  SETUP > LEARN > SYNC (INT / USB / TRS, G_SYNC); it moved to SETUP > PEDAL as MIDI CLOCK IN (OFF / USB / TRS, KNOB
+  4, the same setting and storage: panel.c lights word), LEARN keeps MIDI LEARN and its clear. The web editor's
+  Pedal card sets it on the FM-1 (a menu, SET of the SYNC global at once). For the user's rig the Ampero II Stage is
+  the master: Global > MIDI > CLOCK OUT(TRS) on (docs/ampero-setup.md). MIDI clock out from the FM-1 (below) is not
+  needed for that rig; the FM-1 and the Ampero are both USB devices, so no USB link between them.
+- (tried 2026-10-15, turned down) **The ride's bell.** A third ride layer, the bell of the same Zildjian A 24" (Red
+  Zeppelin key 53, 0.8 s, 12.8 KB) for the `X` hits, the tip for `x` and `o`. Rendered before / after on RIDE N
+  KICK, HALF SHUFFLE, SEVEN and THREE OVER 4: the user preferred the ride as it was (two tip layers), so it was
+  reverted (the commit stays in the history: its recipe "bell", gen_realkit.py's support for it, gp2song's bell
+  mapping). The 19 KB of the app slot stay free.
+- (done 2026-10-15) **Humanize.** SETUP > FEEL (a new section: SWING moved there from TEMPO) > HUMANIZE: OFF, LIGHT
+  (the default), MORE; kept in the settings word (panel.c lights word, bits 26..27; a word saved before: off). Each
+  step a little early or late (seq.c hum_shift through micro_units, as a nudge: LIGHT +-3 ms, MORE +-6 ms, at most an
+  eighth of the step so the steps stay in order; all the lanes of a step together: no flams) and each hit a little
+  louder or softer (hum_hit: +-16 / +-32 of 128, about 1 and 2 dB, set for the one hit the sequencer plays next,
+  drums.c drum_hum_g, applied in drum_on after the layer is picked: an accent keeps its sample; a hard hit only goes
+  down, the voice's velocity is at its top). Triangular spreads from a hash of the step's count (and the lane, the
+  ratchet): it varies bar to bar but a render is the same every time. MIDI in, the keys and the auditions play as
+  written. The pitch variation of the first idea (+-1 %) was left out: the level and the time carry the feel. Cost:
+  about 0.7 KB of code, 16 B of RAM; host CPU +0.1 % at MORE (tests/target_budget.txt: the static count of mix_block
+  jumped from inlining, noted there). The host tests run with it off (hostsim host_tracks_init, -DHOST_HUM) except
+  seq2's own check (same hits on the same samples, levels within an eighth, timing within 3 ms, repeatable); the web
+  player mirrors it (PLAY.humGain / humShift, the same spreads, test_web checks them against seq.c); fm1_render.py
+  --humanize (default light). LIGHT chosen by ear on the renders (off / light / more on slow rock, classic rock,
+  linear: "light is the best", 2026-10-15), so it stays the default. Verify on hardware: by ear through the FM-1's output.
 - (done 2026-10-15) **Two banks: USER and FACTORY.** Sending songs hid the grooves (a slot written no longer played
   its groove), so the grooves became a bank of their own: songs 16..31 (`SNG_FAC0`, `SNG_ALL` 32 in seq.c), read from
   the firmware image (sng_fetch), read-only; the user's 16 slots in flash are empty until written. The pedal: PC 0..15

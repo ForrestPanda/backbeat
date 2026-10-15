@@ -34,6 +34,12 @@ check("offline: the installer and the font licence online",
       and 'href="FUKIAI-LICENSE.txt"' not in off)
 rel = [m for m in re.findall(r'(?:src|href)="([^"#]+)"', off) if not re.match(r"(https?:|data:|mailto:)", m)]
 check("offline: no other file next to it (no relative src / href)", not rel)
+kitj = __import__("json").loads((ROOT / "assets" / "realkit" / "kit.json").read_text())
+check("offline: the kit, the grooves and the importer inside it (the page's fetch answered from the file)",
+      '"realkit/kit.json":["application/json",' in off and '"grooves/factory.txt":["text/plain",' in off
+      and '"gp2song.py":["text/x-python",' in off and '"kit/ATTRIBUTION.txt"' in off
+      and all(f'"realkit/{f}":["audio/wav",' in off for L in kitj["lanes"] for t in L["files"] for f in t)
+      and all(f'"grooves/{g.name}":' in off for g in (ROOT / "grooves").glob("*.json")) and off.index("window.fetch = ") < off.index("</head>"))
 check("offline: no url() to a file", not re.search(r'url\((?!data:)["\']?[A-Za-z]', off))
 check("offline: no app, no service worker (a file has no site)",
       "serviceWorker" not in off and "webmanifest" not in off and 'id="install"' not in off)

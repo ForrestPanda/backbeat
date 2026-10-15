@@ -37,7 +37,7 @@ static uint32_t song_hdr(uint8_t *b, const char *name, uint32_t bpm, uint32_t ki
     return SNG_HDR;
 }
 /* a section, packed as the tool packs it ("SNG2"): any lanes from pattern strings ('.' rest, 'x' norm, 'X' hard,
- * 'g' ghost, 'o' soft), cond: '.' normal, 'F' fill only, 'N' no fill; marks: per step the lanes only during a fill
+ * 'g' ghost, 's' soft), cond: '.' normal, 'F' fill only, 'N' no fill; marks: per step the lanes only during a fill
  * (fonly) and not during one (fno); meter: the section header's meter byte (0: 4/4) */
 static uint32_t song_secm(uint8_t *b, uint32_t pos, const char *name, uint32_t len, uint32_t div, uint32_t flags,
                           uint32_t meter, const char *const lane[DRUM_LANES], const char *cond, const uint16_t *fonly,
@@ -60,7 +60,7 @@ static uint32_t song_secm(uint8_t *b, uint32_t pos, const char *name, uint32_t l
             if (!((on >> l) & 1u))
                 continue;
             ch = lane[l][i];
-            b[q++] = (uint8_t)((ch == 'X' ? LV_HARD : ch == 'g' ? LV_GHOST : ch == 'o' ? LV_SOFT : LV_NORM) |
+            b[q++] = (uint8_t)((ch == 'X' ? LV_HARD : ch == 'g' ? LV_GHOST : ch == 's' ? LV_SOFT : LV_NORM) |
                                (fonly && (fonly[i] >> l & 1u) ? 0x10u : 0u) | (fno && (fno[i] >> l & 1u) ? 0x20u : 0u));
         }
     }

@@ -25,5 +25,10 @@
 # many may sound; the host's cpu/drums/busy 1785 -> 3132); drums_mix 6529 -> 6492, mix_block 17985 -> 15487 (the build
 # with the REAL set; inlined differently, no audio code in mix_block changed).
 drums_mix 6492
-mix_block 15487
+# Humanize (2026-10-15): mix_block 15487 -> 22833 (+47 %), 10 more divides counted in its loops. No per-sample code
+# changed: humanize runs once a step (seq.c hum_hit, hum_shift, out of line, only when it is on); the compiler stops
+# inlining micro_units and lays seq_tick's block code out differently, inside a span closed by a backward branch.
+# Measured on the host (regress.c, callgrind) with HUMANIZE at MORE: drums/busy 2426 -> 2428 instructions a sample,
+# drums/busy_real 1631 -> 1633 (+0.1 %); drums_mix, the voices' per-sample loop, unchanged.
+mix_block 22833
 fm1_alnk0_irq 30

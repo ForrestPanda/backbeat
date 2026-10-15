@@ -196,6 +196,14 @@
   .plive { background: #000; border: 1px solid var(--line); padding: 10px 12px 12px; margin: 0 0 12px; }
   .plive-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; color: var(--fg); }
   .plive-head #pl-bpm { font-size: 28px; color: var(--fg2); }
+  /* the tempo, changed here as KNOB 1 on the device: - / + a BPM, the number typed, tap (the pedal's CC 26); greyed
+     while a MIDI clock drives the player */
+  .plive-tempo { display: flex; align-items: center; gap: 6px; }
+  .plive-tempo input { width: 3.4em; text-align: right; background: var(--bg); color: var(--fg2); border: 1px solid var(--line); padding: 2px 6px; -moz-appearance: textfield; }
+  .plive-tempo input::-webkit-inner-spin-button, .plive-tempo input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .plive-tempo input:disabled { color: var(--s3); }
+  .plive-tempo button { min-width: 44px; min-height: 36px; padding: 4px 10px; font-size: 20px; line-height: 24px; }
+  .plive-tempo #pl-tap { font-size: inherit; text-transform: lowercase; }
   .plive-beats { display: flex; gap: 4px; margin: 8px 0 10px; }
   .plive-beats i { flex: 1; height: 8px; background: var(--s3); }
   .plive-beats i.on { background: var(--fg); }
@@ -238,8 +246,11 @@
   body.live .setnav { font-size: 24px; line-height: 30px; gap: 12px; }
   body.live .setnav b { font-size: 34px; line-height: 40px; flex: 1; }
   body.live .setnav button, body.live #play-bar button { font-size: 22px; line-height: 26px; padding: 14px 20px; }
+  body.live .ptrans { gap: 12px; } body.live .ptrans button { font-size: 26px; line-height: 30px; min-height: 76px; padding: 12px 10px; }
   body.live .plive { padding: 16px 20px; }
   body.live .plive-head { font-size: 28px; line-height: 34px; } body.live .plive-head #pl-bpm { font-size: 44px; }
+  body.live .plive-tempo { gap: 10px; } body.live .plive-tempo input { width: 3.2em; }
+  body.live .plive-tempo button { min-width: 64px; min-height: 56px; font-size: 30px; line-height: 34px; } body.live .plive-tempo #pl-tap { font-size: 24px; }
   body.live .plive-beats i { height: 18px; }
   body.live .plive-sec { font-size: 76px; line-height: 84px; min-height: 84px; }
   body.live .plive-bar, body.live .plive-state { font-size: 26px; line-height: 32px; min-height: 32px; }
@@ -318,7 +329,7 @@
   #sed-pen button, #sed-mark button { border: 2px solid transparent; }
   #sed-pen button[aria-pressed="true"] { background: var(--trk); color: #000; border-color: var(--fg); font-weight: bold; }
   #sed-pen button[aria-pressed="true"][data-pen="X"] { background: var(--fg); }
-  #sed-pen button[aria-pressed="true"][data-pen="o"] { background: var(--s3); color: var(--fg); }
+  #sed-pen button[aria-pressed="true"][data-pen="s"] { background: var(--s3); color: var(--fg); }
   #sed-pen button[aria-pressed="true"][data-pen="g"] { background: var(--s2); color: var(--fg); }
   #sed-pen button[aria-pressed="true"][data-pen=""] { background: var(--bg); color: var(--fg); }
   #sed-mark button[aria-pressed="true"] { background: var(--s2); color: var(--fg); border-color: var(--fg); font-weight: bold; }
@@ -335,7 +346,7 @@
   .sedgrid .sep.bar::before { width: 2px; background: var(--fg); }
   .sedgrid button.c.hx { background: var(--trk); color: #000; }
   .sedgrid button.c.hX { background: var(--fg); color: #000; font-weight: bold; }
-  .sedgrid button.c.ho { background: var(--s3); color: var(--fg); }
+  .sedgrid button.c.hs { background: var(--s3); color: var(--fg); }
   .sedgrid button.c.hg { background: var(--s2); color: var(--dim); }
   .sedgrid button.c.cF { color: var(--t3); border-color: var(--t3); }
   .sedgrid button.c.cN { color: var(--red); border-color: var(--red); }
@@ -360,6 +371,10 @@
   .setrow .bar { margin: 0; flex-wrap: nowrap; }
   .setrow.on { border-color: var(--t4); }
   @media (max-width: 700px) { .setrow { grid-template-columns: 2em minmax(0, 1fr); } .setrow .dim, .setrow .bar { grid-column: 2; } }
+  /* the Play card's transport: previous / fill / next, under them play / stop / ending: two rows of three, a thumb each
+     on a tablet (the count-in and humanize below, in their own row) */
+  .ptrans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 8px; }
+  .ptrans button { min-height: 44px; padding: 8px 10px; white-space: normal; overflow-wrap: anywhere; }
   .setnav { margin: 0 0 12px; align-items: center; } .setnav b { font-size: 20px; font-weight: 400; color: var(--fg); min-width: 8em; }                 /* (the set's song in the player) */
   #sysinfo th { padding-right: 24px; }
   #sysinfo td { color: var(--fg); }
@@ -569,7 +584,8 @@
         <h2 data-t="playTitle" data-ic="symbol_audio"></h2>
         <p class="dim" data-t="playHelp"></p>
         <div class="plive" id="play-live">   <!-- the device's LIVE screen, for the player: as you hear it -->
-          <div class="plive-head"><span id="play-song"></span><span id="pl-bpm"></span></div>
+          <div class="plive-head"><span id="play-song"></span>
+            <span class="plive-tempo"><button id="pl-bpm-dn" title="-1 BPM">&minus;</button><input id="pl-bpm" type="number" min="40" max="240" inputmode="numeric" disabled><span id="pl-bpm-unit">BPM</span><button id="pl-bpm-up" title="+1 BPM">+</button><button id="pl-tap" data-t="playTap"></button></span></div>
           <div class="plive-beats" id="pl-beats"></div>
           <div class="plive-sec" id="pl-sec"></div>
           <div class="plive-bar" id="pl-bar"></div>
@@ -578,10 +594,12 @@
           <div class="plive-tiles" id="play-secs"></div>
           <div class="plive-keys" data-t="playKeys"></div>
         </div>
-        <p class="bar" id="play-bar"><button id="play-prev" data-t="playPrev"></button> <button id="play-next" data-t="playNext"></button>
-          <button id="play-fill" data-t="playFill"></button> <button id="play-end" data-t="playEnd"></button>
-          <button id="play-stop" class="warn" data-t="playStop"></button>
-          <label><span data-t="pedalCount"></span> <select id="play-count"></select></label></p>
+        <div id="play-bar">   <!-- the transport: the pedal's buttons, play (the device's PLAY key) and stop under them -->
+          <div class="ptrans"><button id="play-prev" data-t="playPrev"></button><button id="play-fill" data-t="playFill"></button><button id="play-next" data-t="playNext"></button>
+            <button id="play-play" class="pri" data-t="playPlay"></button><button id="play-stop" class="warn" data-t="playStop"></button><button id="play-end" data-t="playEnd"></button></div>
+          <p class="bar"><label><span data-t="pedalCount"></span> <select id="play-count"></select></label>
+            <label><span data-t="playHum"></span> <select id="play-hum"></select></label></p>
+        </div>
         <p class="bar"><span id="play-kit" class="dim"></span> <button id="play-kitfiles" data-t="playKitFiles"></button>
           <input id="play-kitfile" type="file" accept=".wav,audio/wav" multiple hidden></p>
         <p class="bar"><label><span data-t="pinFrom"></span> <select id="pin-port"></select></label>
@@ -596,6 +614,8 @@
         <p class="bar"><label><span data-t="pedalCh"></span> <select id="pedal-ch"></select></label>
           <label><span data-t="pedalCount"></span> <select id="pedal-count"></select></label>
           <button id="pedal-set" class="pri" data-t="pedalSet"></button> <span class="dim" id="pedal-now"></span></p>
+        <p class="bar"><label><span data-t="pedalClock"></span> <select id="pedal-clock"></select></label>
+          <span class="dim" data-t="pedalClockHelp"></span></p>
       </div>
     </section>
 
@@ -2143,7 +2163,7 @@ const SNG = {
   isObj(id) { return SNG.slotOf(id) >= 0 || id === SNG.OBJ_ARRSET; },
   LANES: ["KICK", "KICK2", "SNARE", "CLAP", "HAT", "OPENHAT", "PEDAL", "RIM", "SNARE2", "LOWTOM", "MIDTOM", "HITOM", "CRASH", "RIDE", "SHAKER", "COWBELL"],
   DIVS: ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1BAR", "2BAR"],
-  LEVELS: { x: 0, g: 1, o: 2, X: 3 }, LEVEL_CHAR: "xgoX", CONDS: { ".": 0, F: 1, N: 2 }, COND_CHAR: ".FN",
+  LEVELS: { x: 0, g: 1, s: 2, X: 3 }, LEVEL_CHAR: "xgsX", CONDS: { ".": 0, F: 1, N: 2 }, COND_CHAR: ".FN",
   DENS: [4, 8, 2, 16],                              /* the meter byte's denominator code (bits 5..6); 0 = 4/4 */
   laneIndex(name) {
     let key = String(name).toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -2183,7 +2203,7 @@ const SNG = {
         if (v.length > steps) throw new Error(`${name}: lane ${lane} has ${v.length} characters for ${steps} steps`);
         [...v].forEach((ch, i) => {
           if (ch === ".") return;
-          if (!(ch in SNG.LEVELS)) throw new Error(`${name}: lane ${lane}: '${ch}' is not one of . g o x X`);
+          if (!(ch in SNG.LEVELS)) throw new Error(`${name}: lane ${lane}: '${ch}' is not one of . g s x X`);
           hit[i][l] = SNG.LEVELS[ch];
         });
       }
@@ -2420,6 +2440,13 @@ const PLAY = {
   STEP_U: { "1/4": 48, "1/8": 24, "1/16": 12, "1/32": 6, "8T": 16, "16T": 8, "1/2": 96, "1BAR": 192, "2BAR": 384 },
   GAIN: [0.85, 0.3, 0.55, 1.0],                     /* LV_NORM, LV_GHOST, LV_SOFT, LV_HARD */
   VEL: [100, 42, 72, 127],                          /* the velocity of each level (drums.c lvl_vel: a step plays 100) */
+  /* humanize, as the device's SETUP > FEEL > HUMANIZE (seq.c hum_hit, hum_shift; 0 off, 1 light, 2 more): a step a
+     little early or late (all its hits together, at most an eighth of the step), each hit a little louder or softer
+     (after its layer is picked: an accent keeps its sample); triangular spreads, from r in [0, 1) */
+  HUM_LVL: [0, 16 / 128, 32 / 128], HUM_SEC: [0, 0.003, 0.006],
+  humTri(r1, r2) { return r1 + r2 - 1; },
+  humGain(amt, r1, r2) { return 1 + PLAY.humTri(r1, r2) * (PLAY.HUM_LVL[amt] || 0); },
+  humShift(amt, stepSecs, r1, r2) { return PLAY.humTri(r1, r2) * Math.min(PLAY.HUM_SEC[amt] || 0, stepSecs / 8); },
   /* the layered kit, as drums.c rk_layer / rk_take: the layer whose own velocity is nearest (vels: hardest first), a take
      other than the lane's last (r in [0, 1)) */
   rkLayer(vels, vel) { let l = 0; while (l + 1 < vels.length && vel * 2 < vels[l] + vels[l + 1]) l++; return l; },
@@ -2674,7 +2701,7 @@ const PCLK = {
 
 /* the section editor's operations on a song (the JSON form), pure: SED.* return new objects; the page draws them */
 const SED = {
-  LEVELS: "xXog",                                  /* the hit characters: normal, hard, soft, ghost */
+  LEVELS: "xXsg",                                  /* the hit characters: normal, hard, soft, ghost */
   spb(sec) { return PLAY.barU(sec) / (PLAY.STEP_U[sec.div] || 12); },   /* steps a bar (in the section's meter; a triplet
                                                      division in an odd meter: not a whole number) */
   beat(sec) { const b = 192 / SNG.meter(sec.time).den / (PLAY.STEP_U[sec.div] || 12); return Number.isInteger(b) && b > 1 ? b : 0; },
@@ -2888,7 +2915,7 @@ const TEXT = {
     steps: "ステップ", reload: "再読み込み", clearSeq: "シーケンスを消去",
     time: "タイム",
     foot: "Chrome か Edge で使えます。", iconsCredit: "アイコン: Fukiai（MIT）Hügelton Instruments",
-    nomidi: "このブラウザでは使えません。Chrome か Edge で開いてください。",
+    nomidi: "このブラウザでは使えません。Chrome か Edge で開いてください。", nomidiCtx: "Web MIDI は https か http://localhost のページでしか使えません。このページは ", nomidiFile: "ダウンロードしたファイルとして開かれています", deniedFile: "Chrome はダウンロードしたファイルに Web MIDI を許可しません（Android）。エディタをアドレスから開いてください（例: http://localhost:8765/webapp/editor/）", pinDenied: "MIDI が許可されませんでした",
     denied: "MIDI（SysEx）の使用が許可されませんでした。",
     nodevice: "BackBeat が見つかりません。USB で接続して、もう一度押してください。",
     connecting: "接続中", reading: "読み込み中 ", steploading: "ステップを読み込み中 ",
@@ -3018,11 +3045,13 @@ const TEXT = {
     sedSteps: "ステップ", sedTime: "拍子", sedOutro: "アウトロ", sedDup: "複製", sedNew: "新規セクション", sedDel: "削除", sedSplit: "分割（小節）", sedSplitBtn: "分割", sedMerge: "次と結合",
     sedBarWarn: "拍子の小節に揃っていません：切り替えは小節線まで待ちます。", sedBarFix: "拍子を {sig} に",
     sedPen: "ペン:", sedRat: "ラチェット", sedMark: "フィル:", sedMarkAlways: "常に", sedMarkF: "フィル時のみ", sedMarkN: "フィル時は休み", sedGridHelp: "クリックでペンのレベル・ラチェット・フィル印の打点、同じ打点をもう一度で消す。フィル印が「フィル時のみ」「フィル時は休み」のとき、既にある打点をクリックするとその印を変えます（黄の枠: フィル時のみ、赤の枠: フィル時は休み）。上の行はステップ全体の印。", sedBarsHelp: "ファイルの小節（このセクションの範囲に印）：1〜4 小節を選んでパターンに、1 小節をフィルに。",
-    sedHear: "クリックで音を聞く", sedKey: "キー: ", sedUndo: "元に戻す", sedRedo: "やり直す", sedPlaySec: "このセクションを試聴", sedKeys: "キー: n 通常、h 強、o 弱、g ゴースト、x 消去、r ラチェット、m フィル印、[ ] 前後のセクション、Delete 選択ステップを消去、Ctrl+C / Ctrl+V ステップのコピーと貼り付け、Ctrl+Z / Ctrl+Y 元に戻す / やり直す、p このセクションを試聴。レーン名をクリックすると音が鳴ります。", sedCols: "ステップ（番号をクリック、Shift+クリックで範囲）:", sedCopy: "コピー", sedPaste: "貼り付け（選択位置に）", sedClear: "消去", sedCopied: "コピーしました: ", sedUseBars: "選んだ小節をパターンに", sedUseFill: "選んだ小節をフィルに", sedEdit: "編集", sedDropped: "パターンと重なるフィルの打点は捨てました: ", sedTooMany: "16 セクションまで", sedNoMerge: "結合できません（分割数が違うか 64 ステップ超）",
+    sedHear: "クリックで音を聞く", sedKey: "キー: ", sedUndo: "元に戻す", sedRedo: "やり直す", sedPlaySec: "このセクションを試聴", sedKeys: "キー: n 通常、h 強、s 弱、g ゴースト、x 消去、r ラチェット、m フィル印、[ ] 前後のセクション、Delete 選択ステップを消去、Ctrl+C / Ctrl+V ステップのコピーと貼り付け、Ctrl+Z / Ctrl+Y 元に戻す / やり直す、p このセクションを試聴。レーン名をクリックすると音が鳴ります。", sedCols: "ステップ（番号をクリック、Shift+クリックで範囲）:", sedCopy: "コピー", sedPaste: "貼り付け（選択位置に）", sedClear: "消去", sedCopied: "コピーしました: ", sedUseBars: "選んだ小節をパターンに", sedUseFill: "選んだ小節をフィルに", sedEdit: "編集", sedDropped: "パターンと重なるフィルの打点は捨てました: ", sedTooMany: "16 セクションまで", sedNoMerge: "結合できません（分割数が違うか 64 ステップ超）",
     playTitle: "試聴（ペダルを模して）", playHelp: "ブラウザでソングを鳴らします：セクションのボタンがペダルです（再生中のセクションがパターンを弾き終えてから切り替え、フィルは付きません。Shift+クリックは待たずに次の小節で。フィルはパターンの終わりまで（最後の小節で押すと次の周回まで）。切り替えの前にフィルを押せば、フィルから次のセクションへ（ペダルでは CC 21 と CC 20 を同じスイッチに）。「前 / 次のセクション」は CC 25 / 24、キーはタイルの下）。上の表示は本体の LIVE 画面で、音と同時に動きます。スウィングは本体と同じに鳴ります。カウントイン（本体の設定と同じ）：停止中にセクションを押すと先にクリックが鳴ります。音はドラムキットページのパッド、または tools/mkkit.py --wavs の WAV（KICK_C2.wav…）。本体のエンジン（tools/fm1_render.py）が基準です。",
-    playKitDefault: "キット: エディタの隣のもの ", kitPreloaded: "ドラムキット: Muldjord (DrumGizmo, CC BY) をパッドに: ", playPrev: "前のセクション", playNext: "次のセクション", playFill: "フィル", playEnd: "エンディング", playStop: "停止", playKitFiles: "キットの WAV を選ぶ", playNoSong: "ソングを開くか、スロットの「試聴」を押してください", playNoKit: "キット: なし（ドラムキットページのパッド、または WAV）", playKitPads: "キット: ドラムキットページのパッド", playKitWavs: "キット: WAV ", playBtn: "試聴", playBar: "小節 ", playCued: "待機中",
-    playKeys: "キー: 1〜8 セクション（0: 9〜16 と切り替え、Shift: 次の小節で）・ f フィル ・ , . 前 / 次 ・ e エンディング ・ スペース 停止",
-    pinFrom: "MIDI 入力", pinClock: "MIDI クロックに合わせる", pinListen: "ペダルを聴く", pinStop: "聴くのをやめる", pinNone: "（FM-1 以外の MIDI 入力なし）", pinOn: "チャンネル {ch} を聴いています", pinNoMidi: "このブラウザには Web MIDI がありません", pinNoSong: "ソングがありません（スロットの「試聴」か、ソングを開いてください）", pinHelp: "本物のペダル（Ampero、または間の USB MIDI インターフェース）でブラウザのプレーヤーを動かします。FM-1 と同じ CC 20..27 と PC を、ペダルカードのチャンネルで受けます。PC n はセット（セットリストタブ）の n 曲目、なければ接続中の FM-1（または模擬 FM-1）のスロット n のソングを開きます。PC 16〜31 はファクトリー・グルーヴ。音を出すため、最初に「ペダルを聴く」を押してください。「MIDI クロックに合わせる」で、その入力のテンポと START / STOP に従います（FM-1 の SETUP > SYNC と同じ。カウントインはなし）。", pedalTitle: "ペダル", pedalHelp: "ペダルボードの MIDI チャンネル（CC 20..27 と PC）と、停止中にセクションを押したときのカウントイン（クリック 1〜2 小節）。電源を切っても保持されます。", pedalCh: "チャンネル", pedalSet: "設定", pedalNow: "今: ", pedalOff: "オフ", pedalAny: "すべて", pedalCount: "カウントイン", pedalBar: "1 小節", pedalBars: "2 小節",
+    playKitDefault: "キット: エディタの隣のもの ", kitPreloaded: "ドラムキット: Muldjord (DrumGizmo, CC BY) をパッドに: ", playPrev: "前のセクション", playNext: "次のセクション", playFill: "フィル", playEnd: "エンディング", playPlay: "再生", playTap: "タップ", playStop: "停止", playKitFiles: "キットの WAV を選ぶ", playNoSong: "ソングを開くか、スロットの「試聴」を押してください", playNoKit: "キット: なし（ドラムキットページのパッド、または WAV）", playKitPads: "キット: ドラムキットページのパッド", playKitWavs: "キット: WAV ", playBtn: "試聴", playBar: "小節 ", playCued: "待機中",
+    playKeys: "キー: 1〜8 セクション（0: 9〜16 と切り替え、Shift: 次の小節で）・ f フィル ・ , . 前 / 次 ・ e エンディング ・ スペース 停止 ・ - / + テンポ ・ t タップ",
+    playHum: "ヒューマナイズ", humOff: "オフ", humLight: "軽め", humMore: "強め",
+    pinFrom: "MIDI 入力", pinClock: "MIDI クロックに合わせる", pinListen: "ペダルを聴く", pinStop: "聴くのをやめる", pinNone: "（FM-1 以外の MIDI 入力なし）", pinOn: "チャンネル {ch} を聴いています", pinNoMidi: "このブラウザには Web MIDI がありません", pinNoSong: "ソングがありません（スロットの「試聴」か、ソングを開いてください）", pinHelp: "本物のペダル（Ampero、または間の USB MIDI インターフェース）でブラウザのプレーヤーを動かします。FM-1 と同じ CC 20..27 と PC を、ペダルカードのチャンネルで受けます。PC n はセット（セットリストタブ）の n 曲目、なければ接続中の FM-1（または模擬 FM-1）のスロット n のソングを開きます。PC 16〜31 はファクトリー・グルーヴ。音を出すため、最初に「ペダルを聴く」を押してください。「MIDI クロックに合わせる」で、その入力のテンポと START / STOP に従います（FM-1 の SETUP > SYNC と同じ。カウントインはなし）。", pedalTitle: "ペダル", pedalHelp: "ペダルボードの MIDI チャンネル（CC 20..27 と PC）と、停止中にセクションを押したときのカウントイン（クリック 1〜2 小節）。電源を切っても保持されます。", pedalCh: "チャンネル", pedalSet: "設定", pedalClock: "MIDI クロック入力", clockTrs: "TRS ジャック", clockUsb: "USB",
+    pedalClockHelp: "ペダルボードのクロックのテンポと START / STOP に従います（Ampero: CLOCK OUT (TRS) をオン）。すぐに設定されます", pedalNow: "今: ", pedalOff: "オフ", pedalAny: "すべて", pedalCount: "カウントイン", pedalBar: "1 小節", pedalBars: "2 小節",
     songBad: "このソングは送れません（16 項目、1〜64 小節まで）", songRefused: "ソングを止めてから送ってください",
     songSent: "ソングを FM-1 に送りました",
   },
@@ -3033,7 +3062,7 @@ const TEXT = {
     steps: "Steps", reload: "Reload", clearSeq: "Clear sequence",
     time: "Time",
     foot: "Works in Chrome or Edge.", iconsCredit: "Icons: Fukiai (MIT), Hügelton Instruments",
-    nomidi: "This browser cannot do it. Open the page in Chrome or Edge.",
+    nomidi: "This browser cannot do it. Open the page in Chrome or Edge.", nomidiCtx: "Web MIDI works only on https or http://localhost pages: this page is ", nomidiFile: "opened as a downloaded file", deniedFile: "Chrome grants no Web MIDI to a downloaded file (Android): open the editor from its address instead, e.g. http://localhost:8765/webapp/editor/", pinDenied: "MIDI access was not allowed",
     denied: "MIDI (SysEx) access was not allowed.",
     nodevice: "BackBeat not found. Connect the FM-1 by USB and press Connect again.",
     connecting: "Connecting", reading: "Reading ", steploading: "Reading steps ",
@@ -3163,11 +3192,13 @@ const TEXT = {
     sedSteps: "steps", sedTime: "time", sedOutro: "outro", sedDup: "Duplicate", sedNew: "New section", sedDel: "Delete", sedSplit: "split at bar", sedSplitBtn: "Split", sedMerge: "Merge with next",
     sedBarWarn: "Not whole bars of its time: a change waits for the bar line.", sedBarFix: "Set time to {sig}",
     sedPen: "pen:", sedRat: "ratchet", sedMark: "fill:", sedMarkAlways: "always", sedMarkF: "only in a fill", sedMarkN: "not in a fill", sedGridHelp: "Click a cell to set a hit with the pen's level, ratchet and fill mark; click the same hit again to clear it. With the fill mark on 'only in a fill' or 'not in a fill', clicking a hit that is there changes its mark instead (amber ring: only in a fill, red ring: not in a fill). The top row marks a whole step at once.", sedBarsHelp: "The file's bars (this section's own range marked): pick 1 to 4 as the pattern, or one as the fill.",
-    sedHear: "click: hear this lane", sedKey: "key: ", sedUndo: "Undo", sedRedo: "Redo", sedPlaySec: "Play this section", sedKeys: "Keys: n normal, h hard, o soft, g ghost, x erase, r ratchet, m fill mark, [ ] previous / next section, Delete clears the selected steps, Ctrl+C / Ctrl+V copy and paste them, Ctrl+Z / Ctrl+Y undo / redo, p plays this section. Click a lane's name to hear its sound.", sedCols: "steps (click a number, shift-click another for a range):", sedCopy: "Copy", sedPaste: "Paste at the selection", sedClear: "Clear", sedCopied: "copied: ", sedUseBars: "Pattern = selected bars", sedUseFill: "Fill = selected bar", sedEdit: "Edit", sedDropped: "fill hits dropped where the pattern hits too: ", sedTooMany: "at most 16 sections", sedNoMerge: "cannot merge (different division, or over 64 steps)",
+    sedHear: "click: hear this lane", sedKey: "key: ", sedUndo: "Undo", sedRedo: "Redo", sedPlaySec: "Play this section", sedKeys: "Keys: n normal, h hard, s soft, g ghost, x erase, r ratchet, m fill mark, [ ] previous / next section, Delete clears the selected steps, Ctrl+C / Ctrl+V copy and paste them, Ctrl+Z / Ctrl+Y undo / redo, p plays this section. Click a lane's name to hear its sound.", sedCols: "steps (click a number, shift-click another for a range):", sedCopy: "Copy", sedPaste: "Paste at the selection", sedClear: "Clear", sedCopied: "copied: ", sedUseBars: "Pattern = selected bars", sedUseFill: "Fill = selected bar", sedEdit: "Edit", sedDropped: "fill hits dropped where the pattern hits too: ", sedTooMany: "at most 16 sections", sedNoMerge: "cannot merge (different division, or over 64 steps)",
     playTitle: "Play (as the pedal would)", playHelp: "The song in the browser: the section buttons are the pedal (a section starts when the one playing has played its pattern out, with no fill of its own; shift-click: on the next bar; Fill: the fill from now to the end of the pattern, pressed in its last bar through the next cycle too, so Fill then a section is a fill into it, as the pedal's CC 21 and CC 20 on one switch; Previous / Next step through the sections, as CC 25 / 24; the keys under the tiles). The view above is the device's LIVE screen, in time with the sound; the song's swing plays as on the device. Count-in as the device's setting: a section pressed while stopped first clicks one or two bars. Sounds: the Drum kit page's pads (the Muldjord Kit is put there when they are empty), or WAVs of tools/mkkit.py --wavs. A preview: the device's own engine (tools/fm1_render.py) is the reference.",
-    playKitDefault: "kit: the device's kit served next to the editor ", kitPreloaded: "Drum kit: Muldjord (DrumGizmo, CC BY) on the pads: ", playPrev: "Previous section", playNext: "Next section", playFill: "Fill", playEnd: "Ending", playStop: "Stop", playKitFiles: "Choose the kit's WAVs", playNoSong: "Open a Guitar Pro file, or press Play on a slot", playNoKit: "kit: none (the Drum kit page's pads, or WAVs)", playKitPads: "kit: the Drum kit page's pads", playKitWavs: "kit: WAVs ", playBtn: "Play", playBar: "bar ", playCued: "cued",
-    playKeys: "keys: 1–8 a section (0: switches to 9–16 and back; shift: on the next bar) · f fill · , . previous / next · e ending · space stop",
-    pinFrom: "MIDI in from", pinClock: "Follow its MIDI clock", pinListen: "Listen to the pedal", pinStop: "Stop listening", pinNone: "(no MIDI input but the FM-1)", pinOn: "listening on channel {ch}", pinNoMidi: "this browser has no Web MIDI", pinNoSong: "no song (press Play on a slot, or open one)", pinHelp: "The real pedal (the Ampero, or a USB MIDI interface between them) drives the player in the browser: the same CC 20..27 and PC as the FM-1, on the Pedal card's channel. PC n opens song n of the set (the Setlist tab), else the song in slot n of the FM-1 connected (or the simulated one); PC 16 to 31 the factory grooves. Press Listen first: the browser plays sound only after a click. With Follow its MIDI clock the player takes that input's tempo and START / STOP, as the FM-1 with SETUP > SYNC (no count-in: the master counts).", pedalTitle: "Pedal", pedalHelp: "The pedalboard's MIDI channel (its CC 20..27 and PC), and the count-in: a section pressed while stopped first clicks one or two bars at the tempo. Kept through power-off.", pedalCh: "channel", pedalSet: "Set", pedalNow: "now: ", pedalOff: "off", pedalAny: "any", pedalCount: "count-in", pedalBar: "1 bar", pedalBars: "2 bars",
+    playKitDefault: "kit: the device's kit served next to the editor ", kitPreloaded: "Drum kit: Muldjord (DrumGizmo, CC BY) on the pads: ", playPrev: "Previous section", playNext: "Next section", playFill: "Fill", playEnd: "Ending", playPlay: "Play", playTap: "Tap", playStop: "Stop", playKitFiles: "Choose the kit's WAVs", playNoSong: "Open a Guitar Pro file, or press Play on a slot", playNoKit: "kit: none (the Drum kit page's pads, or WAVs)", playKitPads: "kit: the Drum kit page's pads", playKitWavs: "kit: WAVs ", playBtn: "Play", playBar: "bar ", playCued: "cued",
+    playKeys: "keys: 1–8 a section (0: switches to 9–16 and back; shift: on the next bar) · f fill · , . previous / next · e ending · space stop · - / + tempo · t tap",
+    playHum: "humanize", humOff: "off", humLight: "light", humMore: "more",
+    pinFrom: "MIDI in from", pinClock: "Follow its MIDI clock", pinListen: "Listen to the pedal", pinStop: "Stop listening", pinNone: "(no MIDI input but the FM-1)", pinOn: "listening on channel {ch}", pinNoMidi: "this browser has no Web MIDI", pinNoSong: "no song (press Play on a slot, or open one)", pinHelp: "The real pedal (the Ampero, or a USB MIDI interface between them) drives the player in the browser: the same CC 20..27 and PC as the FM-1, on the Pedal card's channel. PC n opens song n of the set (the Setlist tab), else the song in slot n of the FM-1 connected (or the simulated one); PC 16 to 31 the factory grooves. Press Listen first: the browser plays sound only after a click. With Follow its MIDI clock the player takes that input's tempo and START / STOP, as the FM-1 with SETUP > SYNC (no count-in: the master counts).", pedalTitle: "Pedal", pedalHelp: "The pedalboard's MIDI channel (its CC 20..27 and PC), and the count-in: a section pressed while stopped first clicks one or two bars at the tempo. Kept through power-off.", pedalCh: "channel", pedalSet: "Set", pedalClock: "MIDI clock in", clockTrs: "TRS jack", clockUsb: "USB",
+    pedalClockHelp: "the tempo and START / STOP from the pedalboard's clock (on the Ampero: CLOCK OUT (TRS) on); set at once", pedalNow: "now: ", pedalOff: "off", pedalAny: "any", pedalCount: "count-in", pedalBar: "1 bar", pedalBars: "2 bars",
     songBad: "This song cannot be sent (16 entries, 1–64 bars each)", songRefused: "Stop the song first, then send",
     songSent: "Song sent to the FM-1",
   },
@@ -3176,6 +3207,14 @@ let lang = (navigator.language || "en").toLowerCase().startsWith("ja") ? "ja" : 
 const t = (k) => TEXT[lang][k] ?? k;
 let lastKey = null, lastArg = "";
 const ERR_KEYS = /fail|error|denied|nomidi|nodevice|noreply|lost|refused|full|bad/i;
+/* why there is no Web MIDI: the browser has none (Firefox on Android, Safari), or Chrome hides it because the page is not
+   a secure context (http:// from another machine, a downloaded file opened as content://); null when it is there */
+const FILE_PAGE = () => /^(?:content|file):$/.test(location.protocol);   /* opened from the disk / a file manager */
+function midiMissing() {
+  if (navigator.requestMIDIAccess) return null;
+  if (window.isSecureContext || window.isSecureContext == null) return { key: "nomidi", arg: "" };
+  return { key: "nomidiCtx", arg: FILE_PAGE() ? t("nomidiFile") : location.origin };
+}
 function sayK(k, arg = "") {
   lastKey = k; lastArg = arg;
   $("status").textContent = t(k) + arg;
@@ -3313,7 +3352,8 @@ const pSlen = () => { const i = dev.pdesc.findIndex((d) => d && d.fmt === F.STEP
 /* -------------------------------------------------------------- MIDI --- */
 async function connect() {
   wantConnected = true;
-  if (!MOCK && !navigator.requestMIDIAccess) { sayK("nomidi"); return; }
+  const missing = MOCK ? null : midiMissing();
+  if (missing) { sayK(missing.key, missing.arg); return; }
   $("connect").disabled = true;
   sayK("connecting");
   try {
@@ -3321,7 +3361,7 @@ async function connect() {
       if (MOCK) { mock = makeMockDevice({ proto: QS.get("proto") ? +QS.get("proto") : undefined }); access = mock.access; }
       else {
         try { access = await navigator.requestMIDIAccess({ sysex: true }); }
-        catch (e) { sayK("denied"); return; }
+        catch (e) { sayK(FILE_PAGE() ? "deniedFile" : "denied"); return; }   /* (Android: content:// has the API, the permission is refused outright) */
       }
       access.onstatechange = onState;
     }
@@ -3710,6 +3750,10 @@ function renderSongs() {
   }
   const cnt = $("pedal-count");
   if (!cnt.options.length) for (const [v, key] of [[0, "pedalOff"], [1, "pedalBar"], [2, "pedalBars"]]) cnt.append(el("option", { value: String(v), text: t(key) }));
+  const ck = $("pedal-clock"), gi = syncId();                /* MIDI clock in: the FM-1's SETUP > PEDAL > MIDI CLOCK IN (G_SYNC) */
+  if (!ck.options.length) for (const [v, key] of [[0, "pedalOff"], [2, "clockTrs"], [1, "clockUsb"]]) ck.append(el("option", { value: String(v), text: t(key) }));
+  ck.disabled = gi < 0 || !dev || !dev.dump;
+  if (!ck.disabled && document.activeElement !== ck) ck.value = String(dev.dump.g[gi] ?? 0);
   if (SONGS.pedal != null) {
     sel.value = String(SONGS.pedal);
     cnt.value = String(SONGS.count || 0);
@@ -3798,7 +3842,8 @@ function renderSet() {
   $("set-add-edited").disabled = !SONGED.spec;
   const cur = SETL[SPLAY.setIdx];
   $("set-now").textContent = cur && SPLAY.spec === cur ? `${SPLAY.setIdx + 1}  ${cur.name}` : "";
-  $("set-nav").hidden = !SETL.length;
+  for (const id of ["set-prev", "set-now", "set-next"]) $(id).hidden = !SETL.length;   /* (Live mode stays: the player's song
+                                                                                        from the Song tab is enough for the stage) */
   $("set-prev").disabled = SPLAY.setIdx <= 0;
   $("set-next").disabled = SPLAY.setIdx >= SETL.length - 1;
   if (GRV.list) renderGrooves();                           /* (its rows: the one playing, Add while the set has room) */
@@ -4043,7 +4088,7 @@ function sedKey(e) {                                       /* the editor's keys 
   if (ctrl && (e.key === "c" || e.key === "C")) { if (SONGED.colA >= 0) { SONGED.clip = SED.copyCols(sec, SONGED.colA, SONGED.colB); sedRender(); } return true; }
   if (ctrl && (e.key === "v" || e.key === "V")) { if (SONGED.colA >= 0 && SONGED.clip) sedSet(SED.pasteCols(sec, Math.min(SONGED.colA, SONGED.colB), SONGED.clip)); return true; }
   if (ctrl || e.altKey) return false;
-  const pen = { n: "x", h: "X", o: "o", g: "g", x: "" };
+  const pen = { n: "x", h: "X", s: "s", g: "g", x: "" };   /* (the first letters, the hits' own but normal) */
   if (e.key in pen) { SONGED.pen = pen[e.key]; sedRender(); return true; }
   switch (e.key) {
   case "r": SONGED.rat = SONGED.rat % 4 + 1; sedRender(); return true;
@@ -4095,7 +4140,7 @@ function sedRender() {
   }
   const pen = $("sed-pen");
   if (!pen.children.length) {
-    for (const [k, label, key] of [["x", "normal", "n"], ["X", "HARD", "h"], ["o", "soft", "o"], ["g", "ghost", "g"], ["", "erase", "x"]])
+    for (const [k, label, key] of [["x", "normal", "n"], ["X", "HARD", "h"], ["s", "soft", "s"], ["g", "ghost", "g"], ["", "erase", "x"]])
       pen.append(el("button", { type: "button", role: "radio", "data-pen": k, title: `${t("sedKey")}${key}`, onclick: () => { SONGED.pen = k; sedRender(); } }, label));
     $("sed-rat").title = t("sedKey") + "r";
     for (const [id, key] of [["sed-undo", "Ctrl+Z"], ["sed-redo", "Ctrl+Y"], ["sed-copy", "Ctrl+C"], ["sed-paste", "Ctrl+V"], ["sed-clear", "Delete"], ["sed-playsec", "p"]])
@@ -4233,8 +4278,8 @@ $("sed-send").addEventListener("click", async () => {
 $("sed-save").addEventListener("click", () => { if (SONGED.spec) { const sp = sedSpecOut(); download(`${fileSlug(sp.name)}.json`, sp); } });
 
 /* Play: the song through Web Audio with the kit's pads (the Drum kit page's, or WAVs named by lane) */
-const SPLAY = { spec: null, name: "", st: null, ctx: null, bufs: new Array(16).fill(null), src: "", timer: 0, next: 0, ui: null, count: 0,
-                queue: [], heard: null, raf: 0, u: 0, marks: [], setIdx: -1 };   /* setIdx: the set's song in the player */   /* u: the units (1/48 beat) scheduled since the start */   /* queue: the steps scheduled ahead, with their time; heard: the one sounding */
+const SPLAY = { spec: null, name: "", st: null, ctx: null, bufs: new Array(16).fill(null), src: "", timer: 0, next: 0, ui: null, count: 0, hum: 1,
+                queue: [], heard: null, raf: 0, u: 0, marks: [], setIdx: -1, taps: [] };   /* taps: the Tap button's times */   /* setIdx: the set's song in the player */   /* u: the units (1/48 beat) scheduled since the start */   /* queue: the steps scheduled ahead, with their time; heard: the one sounding */
 function playSetSong(spec, name) {
   playStop();
   SPLAY.spec = spec; SPLAY.name = name;
@@ -4330,7 +4375,7 @@ async function playPadsFromFiles(files) {
 }
 const PLAY_HAT = 4, PLAY_OPENHAT = 5, PLAY_PEDAL = 6;   /* the closed and pedal hats choke the open one, as the device does */
 function playHit(h, at) {
-  const R = SPLAY.layers ? SPLAY.layers[h.lane] : null;
+  const R = SPLAY.layers ? SPLAY.layers[h.lane] : null, hum = PLAY.humGain(SPLAY.hum, Math.random(), Math.random());
   let b = SPLAY.bufs[h.lane];
   if (!b) return;
   const ctx = playCtx();
@@ -4341,8 +4386,8 @@ function playHit(h, at) {
       const vel = PLAY.VEL[h.level], l = PLAY.rkLayer(R.vel, vel), tk = R.takes[l];
       R.last = PLAY.rkTake(R.last, tk.length, Math.random());
       b = tk[R.last % tk.length];
-      gain = Math.min(1, vel / R.vel[l]);                  /* (the layer is that loud already) */
-    }
+      gain = Math.min(1, vel / R.vel[l] * hum);            /* (the layer is that loud already) */
+    } else gain *= hum;
     src.buffer = b;
     g.gain.value = gain * (k ? 0.8 : 1);
     src.connect(g).connect(ctx.destination);
@@ -4372,7 +4417,8 @@ function playPump() {
     if (!ev) break;
     SPLAY.stepSecs = ev.secs;
     if (ev.click) playClick(SPLAY.next, ev.click === 2);
-    for (const h of ev.hits) playHit(h, SPLAY.next);
+    const at = Math.max(ctx.currentTime, SPLAY.next + PLAY.humShift(SPLAY.hum, ev.secs, Math.random(), Math.random()));
+    for (const h of ev.hits) playHit(h, at);
     SPLAY.queue.push({ at: SPLAY.next, ev });             /* (the view shows it when it sounds, not when scheduled) */
     SPLAY.marks.push({ at: SPLAY.next, u: SPLAY.u });     /* (where the steps fall: the MIDI clock's beats are matched to them) */
     if (SPLAY.marks.length > 96) SPLAY.marks.shift();
@@ -4446,6 +4492,9 @@ function playLiveDraw() {
   stEl.textContent = say;
   stEl.className = cls;
   const cued = ev ? ev.req : st ? st.req : -1;
+  for (const id of ["play-prev", "play-fill", "play-next", "play-end"]) $(id).disabled = !st;   /* (no song: nothing to drive) */
+  $("play-play").disabled = !st || st.playing;
+  $("play-stop").disabled = !st || !st.playing;
   [...$("play-secs").children].forEach((b, k) => {
     b.classList.toggle("on", k === playing);
     b.classList.toggle("cued", k === cued && k !== playing);
@@ -4455,7 +4504,11 @@ function playRender(light = false) {
   const st = SPLAY.st, sp = SPLAY.spec;
   if (!light) {
     $("play-song").textContent = sp ? sp.name : t("playNoSong");
-    $("pl-bpm").textContent = sp ? `${st ? st.bpm : sp.bpm} ${PIN.clock && PCLK.on(PIN.clk, performance.now()) ? "ext" : "BPM"}` : "";
+    const ext = PIN.clock && PCLK.on(PIN.clk, performance.now()), bpmIn = $("pl-bpm");
+    if (document.activeElement !== bpmIn) bpmIn.value = sp ? String(st ? st.bpm : sp.bpm) : "";
+    $("pl-bpm-unit").textContent = ext ? "ext" : "BPM";
+    for (const id of ["pl-bpm", "pl-bpm-dn", "pl-bpm-up", "pl-tap"]) $(id).disabled = !st || ext;
+    $("pl-tap").title = "CC 26  " + t("sedKey") + "t";
     const box = $("play-secs"), n = sp ? sp.sections.length : 0;   /* the sections as the device's tiles, rows of four */
     if (n <= 8) SPLAY.bank = 0;
     box.className = `plive-tiles rows-${Math.max(1, Math.ceil(n / 4))}`;
@@ -4469,11 +4522,17 @@ function playRender(light = false) {
     $("play-fill").title = "CC 21  " + t("sedKey") + "f";
     $("play-end").title = "CC 22  " + t("sedKey") + "e";
     $("play-stop").title = "CC 23  " + t("sedKey") + "space";
+    $("play-play").title = t("sedKey") + "p";
     if (kitPadsOwn && SPLAY.src !== "pads" && kitDraft.pads.some(Boolean)) playPadsFromKit();   /* the user's own pads */
     if (!kitDraft.pads.some(Boolean) && !kitPreloadState) kitPreload();
     if (!kitPadsOwn && !SPLAY.src.startsWith("default") && !playDefaultTried) playPadsDefault();   /* the served kit, at its rates */
     $("play-kit").textContent = SPLAY.src === "pads" ? t("playKitPads") : SPLAY.src.startsWith("default") ? t("playKitDefault") + SPLAY.src.slice(8)
       : SPLAY.src ? t("playKitWavs") + SPLAY.src.slice(5) : t("playNoKit");
+  }
+  const hs = $("play-hum");
+  if (!hs.options.length) {
+    for (const [v, key] of [[0, "humOff"], [1, "humLight"], [2, "humMore"]]) hs.append(el("option", { value: String(v), text: t(key) }));
+    hs.value = String(SPLAY.hum);
   }
   const cnt = $("play-count");
   if (!cnt.options.length) {
@@ -4485,9 +4544,30 @@ function playRender(light = false) {
 $("play-prev").addEventListener("click", () => { if (SPLAY.st) { PLAY.step(SPLAY.st, -1); playStart(); playRender(); } });
 $("play-next").addEventListener("click", () => { if (SPLAY.st) { PLAY.step(SPLAY.st, 1); playStart(); playRender(); } });
 $("play-fill").addEventListener("click", () => { if (SPLAY.st) { PLAY.fillNext(SPLAY.st); playRender(true); } });
+$("play-play").addEventListener("click", () => playPlay());
+/* the tempo (KNOB 1 on the device): from the next step; not under a MIDI clock (the master's); the song's own stays */
+function playBpm(v) {
+  const st = SPLAY.st;
+  if (!st || (PIN.clock && PCLK.on(PIN.clk, performance.now()))) return;
+  const bpm = Math.round(+v);
+  if (bpm) st.bpm = Math.max(40, Math.min(240, bpm));
+  playRender();
+}
+$("pl-bpm-dn").addEventListener("click", () => { if (SPLAY.st) playBpm(SPLAY.st.bpm - 1); });
+$("pl-bpm-up").addEventListener("click", () => { if (SPLAY.st) playBpm(SPLAY.st.bpm + 1); });
+$("pl-bpm").addEventListener("change", () => playBpm($("pl-bpm").value));
+$("pl-bpm").addEventListener("keydown", (e) => { if (e.key === "Enter") $("pl-bpm").blur(); });
+$("pl-tap").addEventListener("click", () => { const bpm = PEDALIN.tap(SPLAY.taps, performance.now()); if (bpm) playBpm(bpm); });
+/* the device's PLAY key while stopped: the section cued, else the first (the count-in too); playing: nothing (Stop is the other button) */
+function playPlay() {
+  const st = SPLAY.st;
+  if (!st || st.playing) return;
+  PLAY.request(st, st.req >= 0 ? st.req : 0); playStart(); playRender();
+}
 $("play-end").addEventListener("click", () => { if (SPLAY.st) { PLAY.ending(SPLAY.st, null); playRender(true); } });
 $("play-stop").addEventListener("click", () => { playStop(); playRender(true); });
 $("play-count").addEventListener("change", () => playCountSet(+$("play-count").value));
+$("play-hum").addEventListener("change", () => { SPLAY.hum = +$("play-hum").value; });
 $("play-kitfiles").addEventListener("click", () => $("play-kitfile").click());
 $("play-kitfile").addEventListener("change", () => { const fs = [...$("play-kitfile").files]; $("play-kitfile").value = ""; if (fs.length) playPadsFromFiles(fs); });
 document.addEventListener("keydown", (e) => {                /* keys 1..8: the sections (0: 1..8 / 9..16), while the Song tab shows;
@@ -4510,6 +4590,9 @@ document.addEventListener("keydown", (e) => {                /* keys 1..8: the s
   else if (e.key === "f") PLAY.fillNext(SPLAY.st);
   else if (e.key === "e") PLAY.ending(SPLAY.st, null);
   else if (e.key === " " || e.key === "s") { e.preventDefault(); playStop(); playRender(true); }
+  else if (e.key === "p") playPlay();
+  else if (e.key === "-" || e.key === "+" || e.key === "=") playBpm(SPLAY.st.bpm + (e.key === "-" ? -1 : 1));
+  else if (e.key === "t") { const bpm = PEDALIN.tap(SPLAY.taps, performance.now()); if (bpm) playBpm(bpm); }
 });
 
 /* the real pedal into the player (PEDALIN): a MIDI input of its own, without SysEx, apart from the FM-1's link (which
@@ -4524,8 +4607,9 @@ function pinLog(line) {
 }
 async function pinAccess() {
   if (PIN.access) return PIN.access;
-  if (!navigator.requestMIDIAccess) { pinLog(t("pinNoMidi")); return null; }
-  try { PIN.access = await navigator.requestMIDIAccess(); } catch (e) { pinLog(`${t("pinNoMidi")}: ${e.message || e}`); return null; }
+  const missing = midiMissing();
+  if (missing) { pinLog(missing.key === "nomidi" ? t("pinNoMidi") : t(missing.key) + missing.arg); return null; }
+  try { PIN.access = await navigator.requestMIDIAccess(); } catch (e) { pinLog(FILE_PAGE() ? t("deniedFile") : `${t("pinDenied")}: ${e.message || e}`); return null; }
   PIN.access.addEventListener("statechange", pinPorts);
   return PIN.access;
 }
@@ -4632,6 +4716,8 @@ $("pin-port").addEventListener("change", pinAttach);
 $("pin-clock").addEventListener("change", () => { PIN.clock = $("pin-clock").checked; PIN.clk = PCLK.create(); PIN.wait = false; playRender(); });
 $("pedal-ch").addEventListener("change", pinAttach);
 
+function syncId() { return dev && dev.gdesc ? dev.gdesc.findIndex((d) => d && d.label === "SYNC") : -1; }   /* (G_SYNC: 0 off, 1 USB, 2 TRS) */
+$("pedal-clock").addEventListener("change", () => { const gi = syncId(); if (gi >= 0) userSet(1, gi, +$("pedal-clock").value, true); });
 $("pedal-set").addEventListener("click", () => op(async () => {
   const rc = await SNG.setPedal(rq, +$("pedal-ch").value, +$("pedal-count").value);
   if (rc) { sayK("songsFail", songsRc(rc)); return; }
@@ -5551,7 +5637,7 @@ async function kitPreload() {
   kitPreloadState = 2;
   if (n) {
     if (!kitDraft.name) kitDraft.name = "MULDJORD";
-    sayK("kitPreloaded", String(n));
+    if (!ERR_KEYS.test(lastKey || "")) sayK("kitPreloaded", String(n));   /* (not over "no Web MIDI": that one must stay) */
     renderKits();
     playRender();
   }
@@ -5980,7 +6066,7 @@ $("connect").addEventListener("click", () => {
 });
 applyLang();
 showTab(tab);
-if (!MOCK && !navigator.requestMIDIAccess) sayK("nomidi");
+{ const missing = MOCK ? null : midiMissing(); if (missing) sayK(missing.key, missing.arg); }
 })();
 /* the site without internet (SLOOP 2.6, webapp/sw.js): opened once online, the editor and the installer work
  * offline too, still on https (Android: a downloaded file opens as content://, where Chrome refuses MIDI) */

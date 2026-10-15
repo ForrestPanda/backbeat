@@ -95,7 +95,8 @@ static uint32_t lights_word(void)
            (uint32_t)(usb_full != 0u) << 11 |
            (uint32_t)(lights_sync % 3u) << 12 | (uint32_t)(lights_mout != 0u) << 14 | (uint32_t)(lights_min == 1u) << 15 |
            (uint32_t)(usb_serial != 0u) << 16 |   /* (17..20: the visualiser's style, gone) */
-           (uint32_t)(lights_min >= 2u && lights_min <= 17u ? lights_min - 1u : 0u) << 21;   /* 2.6: CH n (n 1..16; 0 none) */
+           (uint32_t)(lights_min >= 2u && lights_min <= 17u ? lights_min - 1u : 0u) << 21 |   /* 2.6: CH n (n 1..16; 0 none) */
+           (uint32_t)(drum_hum < HUM_N ? drum_hum : 0u) << 26;   /* fm1-drummer: HUMANIZE (a word saved before it: off) */
 }
 static void lights_from_word(uint32_t w)
 {
@@ -109,6 +110,7 @@ static void lights_from_word(uint32_t w)
     if (((w >> 21) & 31u) >= 1u && ((w >> 21) & 31u) <= 16u)
         lights_min = (uint8_t)(((w >> 21) & 31u) + 1u);   /* 2.6: CH n (an older SLOOP reads NOTES) */
     usb_serial = (uint8_t)((w >> 16) & 1u);
+    drum_hum = (uint8_t)(((w >> 26) & 3u) < HUM_N ? (w >> 26) & 3u : 0u);
 }
 
 static void settings_save(void);              /* project.c: flash copy (FELUCCA_FLASH) */
