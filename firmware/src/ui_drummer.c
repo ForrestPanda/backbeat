@@ -12,8 +12,9 @@
  * The keys go through pedal.c's own calls (the host tests cover both). A change of section brings no fill of
  * its own (as the pedal's CC 20 / 27): a fill is asked for by itself, so one press changes, two fill into it:
  *   white keys 1..16  the song's sections, when the one playing ends; with OCT+ held, on the next bar
- *   black keys        any of them: a fill to the pattern's end (CC 21)
- *   SEL ENV LFO       fill (CC 21); previous, next (as CC 25, 24, without their fill)
+ *   black keys        any of them: the fill (CC 21: the rest of this bar; from its last beat, the next bar); with
+ *                     OCT+ held, the whole next bar (CC 21 value 1: the same hold as the white keys' "next bar")
+ *   SEL ENV LFO       fill (CC 21; with OCT+ held, the next bar); previous, next (as CC 25, 24, without their fill)
  *   PLAY              stopped: the section cued (the count-in first); playing: stop
  *   KNOB 1..4         tempo, kit, drums level, swing (SELECT: tempo; PRESETS: kit)
  * With no song loaded the white keys 1..16 load the page's songs 1..16 (LIVE shows them; ENV / LFO the page). On
@@ -76,7 +77,8 @@ static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.
         if (w < (int32_t)SNG_SECTIONS)
             pedal_section((uint32_t)w, nextbar ? PS_BAR : PS_END);
     } else
-        pedal_cc(PEDAL_CC_FILL, 127);               /* any black key: a fill to the pattern's end (CC 21) */
+        pedal_cc(PEDAL_CC_FILL, nextbar ? 1u : 0u); /* any black key: a fill to the bar's end (CC 21); OCT+ held: the
+                                                     * whole next bar (value 1) */
     fm1_irq_on();
 }
 
@@ -115,8 +117,8 @@ static void drummer_input(uint32_t pressed, uint32_t home)
         } else if (b == B_SCL || b == B_ENV || b == B_LFO) {   /* FILL, PREV, NEXT (no fill of their own, as the
                                                                  * white keys) */
             fm1_irq_off();
-            if (b == B_SCL)
-                pedal_cc(PEDAL_CC_FILL, 127);
+            if (b == B_SCL)                         /* (OCT+ held: the whole next bar, as the keys) */
+                pedal_cc(PEDAL_CC_FILL, (fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u);
             else
                 pedal_step(b == B_LFO ? 1 : -1, PS_END);
             fm1_irq_on();
@@ -257,7 +259,7 @@ static void live_state(uint32_t playing, const char *next)
     static uint32_t cache;
     char b[24];
     uint16_t c = C_AMB;
-    uint32_t fill = fill_now || pedal_fill, hold = pedal_fill_hold, end = pedal_end_req || pedal_end_bars;
+    uint32_t fill = fill_now || pedal_fill, hold = pedal_fill_wait, end = pedal_end_req || pedal_end_bars;
     uint32_t oct = (fm1_in.buttons & dyn_bit[1]) != 0u;   /* OCT+ held: a white key now changes on the next bar */
     uint32_t sig = studio_hash(playing + fill * 3u + hold * 7u + end * 11u + fill_arm * 13u + oct * 17u + pedal_fill_wait * 19u, next);
     if (!ui.force && sig == cache)
@@ -276,11 +278,8 @@ static void live_state(uint32_t playing, const char *next)
     } else if (next[0]) {
         str_cpy(b, "NEXT: ", 7);
         str_cpy(b + 6, next, 13);
-    } else if (pedal_fill_wait) {                 /* asked in the last bar: the next time round */
-        str_cpy(b, "FILL NEXT TIME ROUND", sizeof b);
-        c = TE_DRUM;
-    } else if (hold) {
-        str_cpy(b, "FILL TO THE END", sizeof b);
+    } else if (pedal_fill_wait) {                 /* asked in the bar's last beat: the next bar, whole */
+        str_cpy(b, "FILL NEXT BAR", sizeof b);
         c = TE_DRUM;
     } else if (fill) {
         str_cpy(b, "FILL", sizeof b);

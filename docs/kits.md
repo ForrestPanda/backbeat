@@ -27,20 +27,21 @@ Only the files of `--soft-lanes` (KICK, SNARE, SNARE2, HAT, OPENHAT, PEDAL) are 
 
 ## MULDJORD, the built-in layered kit (2026-10-14)
 
-The device's power-on kit and new songs' default (KIT 46, `"kit": 46`): the same mix as above (Muldjord kick and toms, the DRS Kit's snare,
+The device's power-on kit and new songs' default (KIT 0, `"kit": 0`, first in the list since the evening of 2026-10-15; 46 before, when the five GM-sampled kits ACOUSTIC..DUST still led the list): the same mix as above (Muldjord kick and toms, the DRS Kit's snare,
 Black Pearl's hats, Red Zeppelin's ride, CC0 clap and cowbell), now with velocity layers and round robins,
-built into the firmware (290 KB of the app's flash), so the user slots USR3+4 stay yours.
+built into the firmware (385 KB of the app's flash since the evening of 2026-10-15, 290 KB before: the five GM-sampled
+kits' 86 KB went to the crash), so the user slots USR3+4 stay yours.
 
 | Lane | Source | Layers x takes | Length | Rate |
 | --- | --- | --- | --- | --- |
 | KICK | Muldjord 36 | 4 x 2 (the softest 1) | 0.5 s | 22050 |
-| SNARE | DRS Kit 38 (chosen by ear from six, 2026-10-14) | 4 x 3 | 0.49 s | 22050 |
+| SNARE | DRS Kit 38 (chosen by ear from six, 2026-10-14) | 4 x 3 | 0.6 s | 22050 |
 | HAT | Black Pearl 42 | 4 x 1 | 0.3 s | 32000 |
 | OPENHAT, PEDAL | Black Pearl 46, 44 | 2 x 1 | 0.8, 0.3 s | 32000 |
 | RIM | DRS Kit 37 (the same snare's rim) | 2 x 1 | 0.4 s | 32000 |
 | LOWTOM, MIDTOM, HITOM | Muldjord 41, 47, 48 (Tom4 the floor 69 Hz, Tom2 98 Hz, Tom1 127 Hz: a 5-piece's) | 2 x 1 | 1.0, 0.95, 0.9 s | 22050 |
-| CRASH | Muldjord 49 | 1 | 2.0 s | 32000 |
-| RIDE | Red Zeppelin 51 | 2 x 1 | 1.35 s | 32000 |
+| CRASH | Muldjord 49 | 1 x 2 | 3.2 s (one take of 2.0 s until 2026-10-15) | 32000 |
+| RIDE | Red Zeppelin 51 | 2 x 1 | 1.5 s | 32000 |
 | KICK2, SHAKER | Muldjord 35, 55 | 1 | 0.4..0.45 s | 22050 |
 | SNARE2 | DRS Kit 38 (layer 3, another take) | 1 | 0.5 s | 22050 |
 | CLAP, COWBELL | CC0 | 1 | 0.35 s | 22050 |
@@ -51,11 +52,18 @@ source kits (in `fm1-mvave/kits`, decoded by sox) into `assets/realkit/` (a WAV 
 `ATTRIBUTION.txt`), which the firmware build encodes and the editor's player plays. The layers are levelled on the
 velocity curve x 1.5 (`"dyn"`), the sources' own range being too wide on a small speaker; `"budget"` is the bytes of
 ADPCM (the fit shortens the longest sounds above their floor); `--report` lists what the folder holds. To hear it:
-`python3 tools/fm1_render.py song.json --kit 46`.
+`python3 tools/fm1_render.py song.json --kit 0`.
 
 Credit when sharing: "MuldjordKit by Lars Muldjord / DrumGizmo and the DRSKit's snare by DrumGizmo / DRS Drums, CC BY
 4.0; hi-hats from AVL Drumkits Black Pearl and the ride from Red Zeppelin, by Glen MacArthur, CC BY-SA 3.0; clap
 and cowbell from Versilian Studios, CC0".
+
+**The crash, and the hats left alone (2026-10-15, evening).** With the GM kits out of the image (`docs/design.md`),
+the recipe's budget went from 312 to 412 KB: the crash has two takes and rings 3.2 s, and the snare, open hat and ride
+have the recipe's full lengths (0.6, 0.8, 1.5 s) instead of what the old fit left them. The older lanes' lengths are
+floors (`"min"`) so a tighter fit would only trim the new material. Round-robin hats were tried the same evening from
+the Muldjord kit's own hi-hat (Black Pearl's has one hit a layer, no round robins) and reverted: the user prefers
+Black Pearl's sound. 32 KB of the slot is left.
 
 ## Red Zeppelin (AVL Drumkits), the first rock kit tried
 

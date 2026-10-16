@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* Synthesised drum kits (drums.c kits DRUM_SAMPLED..): analogue-style models in fixed point, in the
+/* Synthesised drum kits (drums.c kits DRUM_DS0..): analogue-style models in fixed point, in the
  * spirit of the classic drum machines. Every sound of a kit is one dsnd_t, written in musical units
  * by tools/gen_drumkits.py (felucca_drumkits.h). A sound is up to four layers into one filter:
  *   tone   SINE / TRI / SQUARE / FM / BELL (two squares 1 : 1.48), with an exponential pitch drop

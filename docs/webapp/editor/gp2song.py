@@ -11,9 +11,10 @@ Needs PyGuitarPro (pip install pyguitarpro): .gp3, .gp4 and .gp5.
 The score's section markers (Intro, Verse 1, Chorus...) bound the sections; the measures of a section give
 its drum pattern: the run of 1, 2 or 4 bars that most of the section repeats (at 1/16; at 1/32, and then
 at most 2 bars, when many hits sit between 16ths). The bar that deviates from the pattern at the end of
-the section, or most often at the end of a phrase, is the fill: its own hits are marked "only during
-a fill", the pattern's hits it leaves out "not during a fill", lane by lane ("fills" in the JSON), so nothing
-is dropped. Every percussion track of the file goes into the pattern (drums and percussion). Sections whose
+the section, or most often at the end of a phrase, is the fill: the section's fill bar of its own ("fillbar" in
+the JSON, since 2026-10-15: that bar as it is, levels and ratchets, which a fill plays instead of the bar it is
+asked in; before, its hits were marks on the pattern's last bar, "fills", and a hit on a step the pattern also
+hit lost its own level). Every percussion track of the file goes into the pattern (drums and percussion). Sections whose
 pattern repeats an earlier one (Chorus 2, Chorus 3) are skipped; at most 16 are kept, the outro always
 (--sections picks and orders them by their marker titles). A section called OUTRO, ENDING, END or CODA is
 the outro. GM drum notes go to the 16 lanes (kick 35 36, snare 38 40, side stick 37, clap 39, hats 42 44
@@ -148,23 +149,21 @@ def make_section(name, bar_measures, outro, max_bars=4):
                 if rat > 1:
                     rats[lane][b * steps_per_bar + s] = str(rat)
     dropped = []
-    marks = {l: ["."] * steps for l in LANES}      # a lane's hit at a step: F only during a fill, N not during one
-    if fill:
-        last = (p - 1) * steps_per_bar
-        body_last = dict(pattern[p - 1][1])
-        fill_hits = dict(fill[1])
-        for s in range(steps_per_bar):
-            b, f = dict(body_last.get(s, ())), dict(fill_hits.get(s, ()))
-            for lane in set(b) | set(f):
-                if lane in f and lane not in b:    # the fill's own hit: only during a fill
-                    lvl, rat = f[lane]
-                    lanes[lane][last + s] = LEVEL_CHAR[lvl]
-                    if rat > 1:
-                        rats[lane][last + s] = str(rat)
-                    marks[lane][last + s] = "F"
-                elif lane in b and lane not in f:  # the pattern's hit the fill leaves out: not during a fill
-                    marks[lane][last + s] = "N"
-                # both: the pattern's hit stays, whatever its level in the fill
+    fillbar = None
+    if fill:                                       # the fill bar of its own: that bar as it is (fill[0] is its steps)
+        fl = {l: ["."] * steps_per_bar for l in LANES}
+        fr = {l: ["."] * steps_per_bar for l in LANES}
+        for s, h in fill[1]:
+            if s >= steps_per_bar:
+                continue
+            for lane, (lvl, rat) in h:
+                fl[lane][s] = LEVEL_CHAR[lvl]
+                if rat > 1:
+                    fr[lane][s] = str(rat)
+        fillbar = {"steps": steps_per_bar, "lanes": {l: "".join(v) for l, v in fl.items() if set(v) != {"."}}}
+        r = {l: "".join(v) for l, v in fr.items() if set(v) != {"."}}
+        if r:
+            fillbar["ratchets"] = r
     sec = {"name": name[:12], "steps": steps, "div": div}
     ts = next(ms[0].header.timeSignature for ms, b in zip(bar_measures, bars) if b[0] == steps_per_bar)   # the pattern's bars'
     num, den = ts.numerator, ts.denominator.value
@@ -176,9 +175,8 @@ def make_section(name, bar_measures, outro, max_bars=4):
     r = {l: "".join(v) for l, v in rats.items() if set(v) != {"."}}
     if r:
         sec["ratchets"] = r
-    m = {l: "".join(v) for l, v in marks.items() if set(v) != {"."}}
-    if m:
-        sec["fills"] = m
+    if fillbar:
+        sec["fillbar"] = fillbar
     return sec, p, score, fill is not None, dropped
 
 
@@ -322,8 +320,8 @@ def convert(source, sections=None, track=None, kit=46, keep_duplicates=False, au
         key = body_key(sec)
         if key in seen and not keep_duplicates and not wanted and not outro:   # (the outro stays: the ending needs it)
             kept = out[seen[key]]
-            if ("fill" in sec or "fills" in sec) and "fill" not in kept and "fills" not in kept:   # the same body, and this one has the fill: take it
-                for k in ("lanes", "ratchets", "fill", "fills"):
+            if any(k in sec for k in ("fill", "fills", "fillbar")) and not any(k in kept for k in ("fill", "fills", "fillbar")):   # the same body, and this one has the fill: take it
+                for k in ("lanes", "ratchets", "fill", "fills", "fillbar"):
                     if k in sec:
                         kept[k] = sec[k]
                 skipped.append(f"{sname} (bars {first}-{last}: as {kept['name']}, whose fill it gives)")
@@ -349,8 +347,9 @@ def convert(source, sections=None, track=None, kit=46, keep_duplicates=False, au
         src = [s for i, s in enumerate(src) if i not in drop]
     # the packed song must fit its flash sector: the longest patterns give way (4 bars -> 2 -> 1). Sections are
     # found by index: their names are the markers cut to 12 characters, so two may share one
-    def packed_size(secs_):                        # as tools/fm1_song.py packs it: 2 bytes a step and a byte a hit
-        return 32 + sum(18 + (x["steps"] + 3) // 4 + 2 * x["steps"] + sum(c != "." for v in x["lanes"].values() for c in v)
+    def packed_size(secs_):                        # as tools/fm1_song.py packs it: 2 bytes a step and a byte a hit (the fill
+        return 32 + sum(18 + (x["steps"] + 3) // 4 + 2 * x["steps"] + sum(c != "." for v in x["lanes"].values() for c in v)   # bar's too)
+                        + (1 + 2 * x["fillbar"]["steps"] + sum(c != "." for v in x["fillbar"]["lanes"].values() for c in v) if "fillbar" in x else 0)
                         for x in secs_)
     limits = [4] * len(out)
     while packed_size(out) > SNG_MAX:
@@ -379,7 +378,7 @@ def main():
     ap.add_argument("--out", help="the song JSON to write")
     ap.add_argument("--sections", help="the marker titles to keep, in order, comma separated")
     ap.add_argument("--track", type=int, help="one track's number (default: every percussion track)")
-    ap.add_argument("--kit", type=int, default=46, help="the kit index (default 46, MULDJORD: the layered kit; 0 ACOUSTIC)")
+    ap.add_argument("--kit", type=int, default=0, help="the kit index (default 0, MULDJORD: the layered kit; 1 808)")
     ap.add_argument("--keep-duplicates", action="store_true", help="keep sections whose pattern repeats an earlier one")
     ap.add_argument("--auto", action="store_true", help="find the sections from the drums alone, ignoring the markers")
     a = ap.parse_args()

@@ -28,7 +28,7 @@ int main(int argc, char **argv)
     struct timespec t0, t1;
     host_tracks_init();
     song.g[G_BPM] = 120;
-    TDRUM->p[P_E0] = DRUM_SAMPLED;
+    TDRUM->p[P_E0] = DRUM_DS0;
     for (k = LY_FX; k < LY_COUNT; k++)                        /* the layer buttons (SLOOP 2.0): bits 8.. */
         ly_bit[k] = 1u << (7u + k);
     dyn_bit[0] = 1u << 14;

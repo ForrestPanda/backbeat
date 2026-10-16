@@ -21,7 +21,7 @@ Song tab with its section editor and a player the real pedal can drive, the devi
 EDIT, SETUP) are done and pass the host tests; the firmware builds and packages, and runs on the fm1-emu emulator.
 Nothing here has run on an FM-1 yet: the TRS jack, the cable type and the speaker are still to be verified
 (`docs/design.md`, milestone 7). The firmware is 541 KB of its 581 KB slot, 290 KB of it the built-in layered
-kit **MULDJORD**, the power-on kit and new songs' default (`"kit": 46`): up to four velocity layers a drum (hard,
+kit **MULDJORD**, the power-on kit and new songs' default (`"kit": 0`): up to four velocity layers a drum (hard,
 normal, soft, ghost: the steps' levels), round-robin takes of the kick and snare (never the same twice running),
 twelve voices so cymbals and toms ring on (`docs/kits.md`).
 
@@ -31,9 +31,9 @@ Footswitches send MIDI on channel 16 (default) to the TRS jack or over USB:
 
 | Message | Meaning |
 | --- | --- |
-| CC 20, value 0..3 | section A..D when the section playing has played its pattern out (a 1-bar section: the next bar), no fill of its own; stopped: start with it. The section already playing: nothing |
+| CC 20, value 0..3 | section A..D when the section playing has played its pattern out (a 1-bar section: the next bar; a fill pending: the bar after it), no fill of its own; stopped: start with it. The section already playing: nothing |
 | CC 27, value 0..3 | on the next bar, without waiting for the section's end, no fill of its own |
-| CC 21 | the fill from now to the end of the section's pattern (in its last bar: through the next cycle too), the section goes on; sent with a CC 20 / 22 / 24 / 25 (either order), the fill into that change, ending with it |
+| CC 21 | the fill, as an arranger's fill-in: the rest of this bar (pressed in its last beat: the whole next bar), then the pattern from its top; sent with a CC 20 / 22 / 24 / 25 / 27 (either order), the fill into that change, which lands on the bar after it. Value 1: the whole next bar from anywhere in this one, for a fill that leads off its bar |
 | CC 22, value 0..3 | ending: the section playing ends, that section once as the outro, stop on the bar (other values: the song's flagged outro, or the section ends, then stop; the outro playing already: it plays to its end, then stop) |
 | CC 23 | stop now |
 | CC 24 / CC 25 | next / previous section (empty ones skipped, wrapping), as CC 20; stopped: the first / the last |
@@ -78,7 +78,7 @@ with the kit's pads as the pedal would, on a view of the device's LIVE screen (t
 time signature, the section with its bar and a progress ticked per bar, the count-in, what comes next, the sections
 as tiles, all in time with what you hear): the tiles are the footswitches, with fills, the ending, stop, the song's
 swing and the count-in as the device has them; keys (shown under the tiles): 1..8 a section (0 switches them to 9..16 and back), shift + the key on the next
-bar, f a fill, comma and period previous / next, e the ending, space stop; **MIDI in from** and **Listen to the pedal** let the real pedal (the
+bar, f a fill (F: the whole next bar), comma and period previous / next, e the ending, space stop; **MIDI in from** and **Listen to the pedal** let the real pedal (the
 Ampero, or a USB MIDI interface between it and the computer) drive that player with the same CCs and PCs as the
 FM-1, on the Pedal card's channel (PC n opens song n of the FM-1 connected, or of the simulated one), so the
 live workflow can be rehearsed before the hardware; **Follow its MIDI clock** makes the player take that input's

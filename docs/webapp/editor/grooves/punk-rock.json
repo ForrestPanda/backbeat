@@ -1,27 +1,29 @@
 {
  "name": "PUNK ROCK",
  "bpm": 180,
- "kit": 46,
+ "kit": 0,
  "swing": 0,
  "drum_level": 100,
  "drum_reverb": 20,
  "sections": [
   {
    "name": "VERSE",
-   "steps": 32,
+   "steps": 8,
    "div": "1/8",
    "lanes": {
-    "LOWTOM": "...............................x",
-    "HITOM": "..............................x.",
-    "SNARE": "..X...X...X...X...X...X...X.XXX.",
-    "HAT": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "KICK": "x.x.x.x.x.x.x.x.x.x.x.x.x.x.x.x."
+    "SNARE": "..X...X.",
+    "HAT": "xxxxxxxx",
+    "KICK": "x.x.x.x."
    },
-   "fills": {
-    "LOWTOM": "...............................F",
-    "HITOM": "..............................F.",
-    "SNARE": "............................FFN.",
-    "HAT": "............................NNNN"
+   "fillbar": {
+    "steps": 8,
+    "lanes": {
+     "LOWTOM": ".......x",
+     "HITOM": "......x.",
+     "SNARE": "..X.XX..",
+     "HAT": "xxxx....",
+     "KICK": "x.x.x.x."
+    }
    }
   },
   {
@@ -29,18 +31,20 @@
    "steps": 32,
    "div": "1/8",
    "lanes": {
-    "LOWTOM": "...............................x",
     "CRASH": "X...............................",
-    "HITOM": "..............................x.",
     "RIDE": "xsxsxsxsxsxsxsxsxsxsxsxsxsxsxsxs",
-    "SNARE": ".X.X.X.X.X.X.X.X.X.X.X.X.X.XXX.X",
+    "SNARE": ".X.X.X.X.X.X.X.X.X.X.X.X.X.X.X.X",
     "KICK": "x.x.x.x.x.x.x.x.x.x.x.x.x.x.x.x."
    },
-   "fills": {
-    "LOWTOM": "...............................F",
-    "HITOM": "..............................F.",
-    "RIDE": "............................NNNN",
-    "SNARE": "............................FN.N"
+   "fillbar": {
+    "steps": 8,
+    "lanes": {
+     "LOWTOM": ".......x",
+     "HITOM": "......x.",
+     "RIDE": "xsxs....",
+     "SNARE": ".X.XX...",
+     "KICK": "x.x.x.x."
+    }
    }
   }
  ]

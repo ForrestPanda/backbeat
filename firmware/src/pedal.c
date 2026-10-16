@@ -3,22 +3,31 @@
  * Commands on the pedal channel (pedal.ch: 1..16, 0 = off, 17 = any channel):
  *
  *   A section change brings no fill of its own (asked 2026-10-14): a fill is CC 21's, and a footswitch that
- *   wants a fill into the change sends CC 21 with its CC 20 (either order: the fill runs to the end of the
- *   section playing, where the change lands, and ends with it).
+ *   wants a fill into the change sends CC 21 with its CC 20 (either order: the fill to the bar's end, the
+ *   change on the bar after it, as an arranger's AUTO FILL IN).
  *   CC 20 n    go to section n (0..3 = A..D) when the section playing ends: it plays its pattern out (its
  *              bars, from where it started); a one-bar section: the next bar. Stopped: start the loop with
  *              it. The section already playing asked for again (nothing else cued): nothing; with an
- *              ending pending it cancels the ending
- *   CC 27 n    now: on the next bar, without waiting for the section's end
- *   CC 21      the fill from now until the section's pattern ends (the FILL ONLY hits in, the NO FILL
- *              hits out, wherever they sit in it), the section goes on; asked for during the pattern's
- *              last bar: through the next cycle too (a 1-bar section: the rest of this bar and all of
- *              the next); a section change landing ends it. SLOOP's fill-next-bar (fill_arm, the GLO
- *              layer's, gone) is not touched
- *   CC 22 n    ending: when the section playing ends (as CC 20), section n (the outro) once, for the bars
- *              its longest pattern takes, then stop on the bar. n out of range or empty: the song's flagged
- *              outro, or with none the section playing ends, then stop. The outro playing already (nothing
- *              cued): it plays to its end, then stop.
+ *              ending pending it cancels the ending. A fill pending (asked before or after): on the bar
+ *              after the fill instead
+ *   CC 27 n    now: on the next bar, without waiting for the section's end, no fill of its own (a fill
+ *              pending: after it, as CC 20)
+ *   CC 21 v    the fill, as an arranger's fill-in (2026-10-15, before: to the pattern's end): from now to
+ *              the end of this bar (the FILL ONLY hits in, the NO FILL hits out; a section's fill bar of
+ *              its own instead of the pattern's, its step i at the bar's step i, so the phrase is cut from
+ *              the front), then the pattern again from its top on the next bar, or the section asked for.
+ *              Asked for in the bar's last beat: the whole next bar is the fill (too late for less than a
+ *              beat of it); in the last beat of a fill, the next bar is a fill too, straight on. A fill bar
+ *              of more than one bar ends on the bar line that many bars on. Value 1 (asked 2026-10-16, for
+ *              a fill bar that leads off its bar: its hits in its first beat, which the cut from the front
+ *              never plays): the whole next bar, from anywhere in this one; playing a fill, the next bar a
+ *              fill too, straight on. Any other value: from now, as above. SLOOP's fill-next-bar (fill_arm,
+ *              the GLO layer's, gone) is not touched
+ *   CC 22 n    ending: when the section playing ends (as CC 20; a fill pending: after it), section n (the
+ *              outro) once, for the bars its longest pattern takes, then stop on the bar. n out of range or
+ *              empty: the song's flagged outro, or with none the section playing ends, then stop (a fill
+ *              pending: the stop after it). The outro playing already (nothing cued): it plays to its end,
+ *              then stop.
  *   CC 23      stop now
  *   CC 24      next section (empty ones skipped, wraps), as CC 20; stopped: the first one
  *   CC 25      previous section; stopped: the last one
@@ -33,7 +42,7 @@
  *              SLOOP's sections A..D again (sng.c)
  *
  * A fill is SLOOP's: the steps marked FILL ONLY play, the NO FILL steps rest; a pattern with no
- * conditions plays as usual through a fill. The value of CC 21, 23..26 does not matter. Section and
+ * conditions plays as usual through a fill. The value of CC 23..26 does not matter. Section and
  * ending commands are absolute, so a footswitch that sends its message on every press (both presses
  * of a toggle) does no harm; next / previous / tap count presses. A section asked for cancels an
  * ending asked for before, and ends a quick chain (as a single section tap does).
@@ -91,38 +100,37 @@ static void pedal_name(uint32_t s, char *out)    /* the section's name for the s
     }
 }
 
-/* the drum track's fill-only hits (a step's FILL ONLY condition, a hit's own F mark) on steps from..to-1 */
-static int pedal_fill_hits(uint32_t from, uint32_t to)
+/* CC 21: the fill, as the arrangers (Yamaha, Korg, Roland, Ketron, the BeatBuddy) do it (2026-10-15, after a day of
+ * fills aligned to the pattern's end): from now to the end of this bar, the pattern again from its top on the next bar
+ * (live_block), or the section asked for meanwhile, which waits for the fill's end instead of the pattern's. Asked
+ * for in the bar's last beat (as Yamaha's last beat; the BeatBuddy's last half beat): the whole next bar is the fill.
+ * A fill playing asked for again: nothing new (it ends at its bar line), except in the last beat of its last bar:
+ * then the next bar is a fill too, straight on (asked 2026-10-16: a two-bar fill from two presses). A fill bar of its
+ * own longer than a bar (fb_bars) ends that many bars on.
+ * next (CC 21 value 1; LIVE's black keys and SEL with OCT+ held; asked 2026-10-16 for a fill bar whose hits lead off
+ * the bar, which the cut from the front never plays): the whole next bar from anywhere in this one, as the last beat's
+ * press; playing a fill in its last bar, the next bar a fill too, straight on. The user has an Ampero patch a song, so
+ * the switch says which; a rule that defers to the next bar by itself when the fill from here would sound like the
+ * groove was considered and parked (design.md). */
+static void pedal_fill_req(uint32_t next)
 {
-    const track_t *t = TDRUM;
-    uint32_t i;
-    for (i = from; i < to && i < NSTEP; i++)
-        if (drum_fonly[i] || (step_fill(t, i) == FC_FILL && dstep_mask(&t->dstep[i])))
-            return 1;
-    return 0;
-}
-/* CC 21: the fill. Asked in the pattern's last bar it waits for the next cycle and plays all of it (the user's rule,
- * 2026-10-15: in the last bar a fill is for the next time round, whatever fill hits are still ahead; a one-bar verse:
- * the next bar); a section change or an ending asked for meanwhile waits for it (live_block: pedal_at_end holds while
- * a fill is pending). Asked before the last bar: the fill from now to the pattern's end, and through the next cycle
- * too when the pattern's fill hits are all behind the request (asked too late to hear them). A fill already playing
- * asked again in the last bar goes on through the next cycle. */
-static void pedal_fill_req(void)
-{
-    uint32_t len = trk_len(TDRUM), next = (uint32_t)TDRUM->seq_idx + 1u, n = live_sec_bars();
+    uint32_t b16 = meter_b16(clk_meter), beat = 16u / meter_den(clk_meter), at = clk_16th() % b16;
     if (!song.playing)
         return;
-    if ((live_bar + 1u) % n == 0u) {              /* the last bar: the next cycle */
-        if (!pedal_fill)
+    if (next)
+        at = b16 - 1u;                            /* as asked in the bar's last beat */
+    if (!pedal_fill && !pedal_fill_wait) {
+        if (at + beat >= b16) {                   /* the bar's last beat: the next bar, whole */
             pedal_fill_wait = 1;
-        if (pedal_end_bars && pedal_fill_hold < 2u)
-            pedal_end_bars += n;                  /* (an ending's stop after the fill) */
-        pedal_fill_hold = 2u;
-    } else {
-        pedal_fill = 1;
-        pedal_fill_wait = 0;
-        pedal_fill_hold = (uint8_t)(pedal_fill_hits(0, len) && !pedal_fill_hits(next, len) ? 2u : 1u);
+        } else {
+            pedal_fill = 1;
+            pedal_fill_bars = (uint8_t)(fb_bars ? fb_bars : 1u);
+        }
+    } else if (pedal_fill && pedal_fill_bars <= 1u && at + beat >= b16) {
+        pedal_fill_wait = 1;                      /* the fill's last beat: another one next bar (live_block chains it) */
     }
+    if (live_req >= 0)
+        pedal_at_end = 0;                         /* a section cued: on the bar after the fill (live_block) */
     pedal_say(PU_FILL, "");
 }
 
@@ -163,7 +171,8 @@ static void pedal_section(uint32_t s, uint32_t how)
         }                                         /* (a count-in running: it starts the section now cued) */
         return;
     }
-    pedal_at_end = (uint8_t)(how == PS_END);      /* (a fill asked for already goes on: it ends when this lands) */
+    pedal_at_end = (uint8_t)(how == PS_END && !pedal_fill && !pedal_fill_wait);   /* (a fill pending: this lands on the
+                                                   * bar after it, live_block) */
     {
         char b[13];
         pedal_name(s, b);
@@ -209,11 +218,11 @@ static void pedal_ending(uint32_t s)
         chain_n = 0;
         live_req = -1;                            /* (a section asked for before: the ending wins) */
         pedal_end_req = 0;
-        {                                         /* the section playing ends, then the stop (a fill pending:
-                                                   * after its cycle) */
+        {                                         /* the section playing ends, then the stop (a fill pending: the
+                                                   * stop at its end, live_block) */
             uint32_t n = live_sec_bars();
             pedal_at_end = 1;
-            pedal_end_bars = (live_bar / n + (pedal_fill_hold > 1u ? 2u : 1u)) * n;
+            pedal_end_bars = (live_bar / n + 1u) * n;
         }
     }
 }
@@ -241,7 +250,7 @@ static void pedal_cc(uint32_t d1, uint32_t d2)
     switch (d1) {
     case PEDAL_CC_SECTION:         pedal_section(d2, PS_END); break;
     case PEDAL_CC_SECTION_NOW:     pedal_section(d2, PS_BAR); break;
-    case PEDAL_CC_FILL:            pedal_fill_req(); break;
+    case PEDAL_CC_FILL:            pedal_fill_req(d2 == 1u); break;
     case PEDAL_CC_ENDING:          pedal_ending(d2); break;
     case PEDAL_CC_STOP:            transport_req = 2; pedal_say(PU_STOP, ""); break;
     case PEDAL_CC_NEXT:            pedal_step(1, PS_END); break;

@@ -19,7 +19,7 @@ int main(int argc,char **argv)
     /* Render the same hits through all five kits; each must be distinct,
      * finite and silent after its one-shots have finished. */
     for(i=0;i<DRUM_USR;i++)   /* (the built-in kits: USR1..3 are the user slots) */ {
-        memset(&drums,0,sizeof drums);drums.set=-2;
+        memset(&drums,0,sizeof drums);
         TDRUM->p[P_E0]=(int16_t)i;
         drum_on(36,110);drum_on(38,100);drum_on(46,80);
         for(j=0;j<FS*2u/CTL;j++) {
@@ -35,7 +35,7 @@ int main(int argc,char **argv)
      * (it clicked while a track recorded: live recording is gone); the first beat of the bar is louder */
     for(v=0;v<4;v++) {
         uint32_t hits=0,loud=0,age0;
-        host_tracks_init();memset(&drums,0,sizeof drums);drums.set=-2;
+        host_tracks_init();memset(&drums,0,sizeof drums);
         song.g[G_BPM]=120;song.g[G_CLOCK]=v==3?0:v==2?2:1;   /* OFF / ON / REC */
         transport_req=1;age0=drums.age;
         for(j=0;j<(FS*2u-FS/4u)/CTL;j++) {               /* up to just before beat 4 */

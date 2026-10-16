@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* The IMA ADPCM samples: the built-in sets (tools/gen_samples.py: PERC, the GM kit), native rates, zones across the
+/* The IMA ADPCM samples: the built-in set (tools/gen_samples.py: REAL, the layered kit MULDJORD; PERC, the GM kit, until 2026-10-15), native rates, zones across the
  * keyboard, loops with the ADPCM state stored at the loop start; and the four user slots in flash. The drum kits
  * (drums.c) and TEXTURE's USR sources (fx.c) play them. (fm1-drummer: what was left of SLOOP's SAMPLE engine.) */
 typedef struct {

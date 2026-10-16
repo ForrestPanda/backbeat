@@ -517,9 +517,9 @@ int main(int argc, char **argv)
         song.playing = 0; ui.force = 1; frame(); ppm("live-cued");
         key(key_of_white(1)); frames(3);
         check(song.playing && live_sec == 1 && !strcmp(sng_ui_name, "VERSE"), "LIVE: white key 2, stopped: VERSE starts the loop");
-        pedal_fill = 0; pedal_fill_hold = 0;
+        pedal_fill = 0; pedal_fill_wait = 0;
         key(key_of_white(2)); frames(2);
-        check(live_req == 2 && pedal_at_end && !pedal_fill && !pedal_fill_hold, "LIVE: white key 3, playing: CHORUS cued for VERSE's end, no fill");
+        check(live_req == 2 && pedal_at_end && !pedal_fill && !pedal_fill_wait, "LIVE: white key 3, playing: CHORUS cued for VERSE's end, no fill");
         str_cpy(sng_ui_next, "CHORUS", sizeof sng_ui_next);
         ui.force = 1; frame(); ppm("live-playing");
         check((keys_lit() >> key_of_white(1)) & 1u, "LIVE: the section playing's key lit");
@@ -553,32 +553,39 @@ int main(int argc, char **argv)
         }
         t_nsec = 3; t_outro = 0xFFu; live_req = -1; pedal_at_end = 0;
         key(key_of_white(1)); frames(2);
-        check(live_req < 0 && !pedal_fill && !pedal_fill_hold, "LIVE: the section playing's key again: nothing (no fill)");
+        check(live_req < 0 && !pedal_fill && !pedal_fill_wait, "LIVE: the section playing's key again: nothing (no fill)");
         sng_ui_next[0] = 0;
         ui.force = 1; frame(); ppm("live-fill");
-        {   /* every black key: a fill to the pattern's end (CC 21); then a white key: the fill into the change */
+        {   /* every black key: the fill (CC 21: this bar, or the next one from its last beat); then a white key: the fill
+             * into the change, on the bar after it */
             static const uint8_t BLACK[11] = {1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25};
             uint32_t b, all = 1;
             for (b = 0; b < 11u; b++) {
-                pedal_fill = 0; pedal_fill_hold = 0;
+                pedal_fill = 0; pedal_fill_wait = 0;
                 key(BLACK[b]); frames(2);
-                all &= pedal_fill_hold != 0u && pedal_fill && song.playing;
+                all &= (pedal_fill || pedal_fill_wait) && song.playing;
             }
-            check(all, "LIVE: every black key: the fill to the pattern's end (CC 21), playing on");
-            key(key_of_white(2)); frames(2);
-            check(live_req == 2 && pedal_at_end && pedal_fill_hold != 0u, "LIVE: a black key, then white key 3: the fill goes on, CHORUS at the end");
+            check(all, "LIVE: every black key: the fill (CC 21), playing on");
+            pedal_fill = 0; pedal_fill_wait = 0;
+            press(B_OCTUP); key(BLACK[3]); release(B_OCTUP); frames(2);
+            check(!pedal_fill && pedal_fill_wait && song.playing, "LIVE: OCT+ held + a black key: the fill on the next bar (CC 21 value 1)");
+            key(key_of_white(2)); frames(2);                /* (that fill pending) */
+            check(live_req == 2 && !pedal_at_end && (pedal_fill || pedal_fill_wait), "LIVE: a black key, then white key 3: the fill, CHORUS on the bar after it");
             ui.force = 1; frame(); ppm("live-fill-next");     /* "FILL > CHORUS" */
-            live_req = -1; pedal_at_end = 0; pedal_fill = 0; pedal_fill_hold = 0;
+            live_req = -1; pedal_at_end = 0; pedal_fill = 0; pedal_fill_wait = 0;
         }
         tap(B_PLAY); frames(3);
         check(!song.playing, "LIVE: PLAY: stop");
         tap(B_PLAY); frames(3);
         check(song.playing && live_sec >= 0, "LIVE: PLAY: the section cued plays");
         {   /* SEL / ENV / LFO: FILL, PREV, NEXT (CC 21, 25, 24) */
-            pedal_fill_hold = 0; pedal_fill = 0; live_req = -1; pedal_at_end = 0;
+            pedal_fill_wait = 0; pedal_fill = 0; live_req = -1; pedal_at_end = 0;
             tap(B_SCL); frames(2);
-            check(pedal_fill_hold != 0u, "LIVE: SEL: the fill (CC 21)");
-            pedal_fill_hold = 0; pedal_fill = 0; live_req = -1; pedal_at_end = 0;
+            check(pedal_fill || pedal_fill_wait, "LIVE: SEL: the fill (CC 21)");
+            pedal_fill_wait = 0; pedal_fill = 0; live_req = -1; pedal_at_end = 0;
+            press(B_OCTUP); tap(B_SCL); release(B_OCTUP); frames(2);
+            check(!pedal_fill && pedal_fill_wait, "LIVE: OCT+ held + SEL: the fill on the next bar (CC 21 value 1)");
+            pedal_fill_wait = 0; pedal_fill = 0; live_req = -1; pedal_at_end = 0;
             tap(B_LFO); frames(2);
             check(live_req == (int8_t)(live_sec + 1) && !pedal_fill, "LIVE: LFO: the next section (as CC 24, no fill)");
             live_req = -1; pedal_at_end = 0;
@@ -590,7 +597,7 @@ int main(int argc, char **argv)
             int16_t bpm = song.g[G_BPM], kit = TDRUM->p[P_E0], lv = song.g[G_DRLVL], sw = song.g[G_SWING];
             frames(16);
             encs[panel.enc[EN_K1]] = 2; frame(); check(song.g[G_BPM] == bpm + 2, "LIVE: KNOB 1: the tempo");
-            encs[panel.enc[EN_K2]] = -1; frame(); check(TDRUM->p[P_E0] != kit && !strncmp(ui.msg, "KIT ", 4), "LIVE: KNOB 2: the kit (said)");   /* (down: the power-on kit is the last) */
+            encs[panel.enc[EN_K2]] = 1; frame(); check(TDRUM->p[P_E0] != kit && !strncmp(ui.msg, "KIT ", 4), "LIVE: KNOB 2: the kit (said)");   /* (up: the power-on kit, MULDJORD, is the first since 2026-10-15) */
             encs[panel.enc[EN_K3]] = -3; frame(); check(song.g[G_DRLVL] == lv - 3, "LIVE: KNOB 3: the drums' level");
             encs[panel.enc[EN_K4]] = 4; frame(); check(song.g[G_SWING] == sw + 4, "LIVE: KNOB 4: the swing");
             ui.force = 1; frame(); ppm("live-knob");

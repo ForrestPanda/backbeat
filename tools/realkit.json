@@ -1,7 +1,7 @@
 {
- "_doc": "The built-in layered kit (tools/gen_realkit.py): per lane its source (an SFZ kit's key, or a WAV), the velocity layers (1..4: hard, normal, soft, ghost as the steps' levels), the round-robin takes, its length in seconds (the floor: how short the fit may cut it) and its sample rate. Sources relative to my_fw/../kits (fm1-mvave/kits) or to the repository.",
+ "_doc": "The built-in layered kit (budget: 2026-10-15 evening, the five GM-sampled kits gone from the image: 100 KB more for the cymbals and hats; the older lanes keep their lengths as floors, so the fit only trims the new material) (tools/gen_realkit.py): per lane its source (an SFZ kit's key, or a WAV), the velocity layers (1..4: hard, normal, soft, ghost as the steps' levels), the round-robin takes, its length in seconds (the floor: how short the fit may cut it) and its sample rate. Sources relative to my_fw/../kits (fm1-mvave/kits) or to the repository.",
  "name": "MULDJORD",
- "budget": 312000,
+ "budget": 412000,
  "dyn": 1.5,
  "sources": {
   "mj": "kits:DrumGizmo.MuldjordKit/DrumGizmo/MuldjordKit/Stereo/DrumGizmo MuldjordKit.sfz",
@@ -11,21 +11,21 @@
   "cc0": "repo:assets/samples-cc0/KIT"
  },
  "lanes": {
-  "KICK":    {"src": "mj", "key": 36, "layers": 4, "takes": 2, "len": 0.55, "min": 0.35, "rate": 22050, "gain": 0},
+  "KICK":    {"src": "mj", "key": 36, "layers": 4, "takes": 2, "len": 0.55, "min": 0.55, "rate": 22050, "gain": 0},
   "KICK2":   {"src": "mj", "key": 35, "layers": 1, "takes": 1, "len": 0.45, "min": 0.3, "rate": 22050, "gain": 0},
-  "SNARE":   {"src": "drs", "key": 38, "layers": 4, "takes": 3, "len": 0.6, "min": 0.35, "rate": 22050, "gain": -1},
+  "SNARE":   {"src": "drs", "key": 38, "layers": 4, "takes": 3, "len": 0.6, "min": 0.54, "rate": 22050, "gain": -1},
   "CLAP":    {"src": "cc0", "file": "13_clap_Clap_rr1.wav", "len": 0.35, "min": 0.25, "rate": 22050, "gain": -3},
   "HAT":     {"src": "bp", "key": 42, "layers": 4, "takes": 1, "len": 0.3, "min": 0.2, "rate": 32000, "gain": -9},
-  "OPENHAT": {"src": "bp", "key": 46, "layers": 2, "takes": 1, "len": 0.8, "min": 0.5, "rate": 32000, "gain": -8},
+  "OPENHAT": {"src": "bp", "key": 46, "layers": 2, "takes": 1, "len": 0.8, "min": 0.57, "rate": 32000, "gain": -8},
   "PEDAL":   {"src": "bp", "key": 44, "layers": 2, "takes": 1, "len": 0.3, "min": 0.2, "rate": 32000, "gain": -10},
   "RIM":     {"src": "drs", "key": 37, "layers": 2, "takes": 1, "len": 0.4, "min": 0.25, "rate": 32000, "gain": -6},
   "SNARE2":  {"src": "drs", "key": 38, "from_layer": 3, "take_from": 5, "layers": 1, "takes": 1, "len": 0.5, "min": 0.3, "rate": 22050, "gain": -2},
-  "LOWTOM":  {"src": "mj", "key": 41, "layers": 2, "takes": 1, "len": 1.0, "min": 0.6, "rate": 22050, "gain": -2},
-  "HITOM":   {"src": "mj", "key": 48, "layers": 2, "takes": 1, "len": 0.9, "min": 0.6, "rate": 22050, "gain": -2.5},
-  "CRASH":   {"src": "mj", "key": 49, "layers": 1, "takes": 1, "len": 2.0, "min": 1.4, "rate": 32000, "gain": -6},
-  "RIDE":    {"src": "rz", "key": 51, "layers": 2, "takes": 1, "len": 1.5, "min": 1.0, "rate": 32000, "gain": -8},
+  "LOWTOM":  {"src": "mj", "key": 41, "layers": 2, "takes": 1, "len": 1.0, "min": 1.0, "rate": 22050, "gain": -2},
+  "HITOM":   {"src": "mj", "key": 48, "layers": 2, "takes": 1, "len": 0.9, "min": 0.9, "rate": 22050, "gain": -2.5},
+  "CRASH":   {"src": "mj", "key": 49, "layers": 1, "takes": 2, "len": 3.2, "min": 2.0, "rate": 32000, "gain": -6},
+  "RIDE":    {"src": "rz", "key": 51, "layers": 2, "takes": 1, "len": 1.5, "min": 1.35, "rate": 32000, "gain": -8},
   "SHAKER":  {"src": "mj", "key": 55, "layers": 1, "takes": 1, "len": 0.4, "min": 0.25, "rate": 22050, "gain": -12},
-  "MIDTOM":  {"src": "mj", "key": 47, "layers": 2, "takes": 1, "len": 0.95, "min": 0.6, "rate": 22050, "gain": -2.25},
+  "MIDTOM":  {"src": "mj", "key": 47, "layers": 2, "takes": 1, "len": 0.95, "min": 0.95, "rate": 22050, "gain": -2.25},
   "COWBELL": {"src": "cc0", "file": "20_cowbell_Cowbell1_Normal_v3.wav", "len": 0.35, "min": 0.25, "rate": 22050, "gain": -6}
  }
 }

@@ -1,29 +1,30 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* The drum track: its kits (the sampled GM kit and its treatments, tools/gen_samples.py; the synthesised kits,
+/* The drum track: its kits (MULDJORD, the built-in layered kit, tools/gen_realkit.py; the synthesised kits,
  * drum_synth.c; the user slots), played by its step pattern, the keys and MIDI (SETUP > MIDI > CH, default 10). NDRUM
  * voices of its own. One-shots: note-offs are ignored; a closed or
  * pedal hi-hat chokes the open one. LEVEL / REV / DLY: SETUP > DRUMS (G_DRLVL, G_DRREV, G_DRDLY);
  * PAN and MUTE: the drum track's P_PAN / P_MUTE. Rendered from the audio ISR. */
 #define NDRUM 12                /* (6 until the layered kit: its cymbals and toms ring under the next hits) */
 #include "drum_synth.c"       /* synthesised kits (DS_KITS) */
-/* P_E0 was unused on the drum track: it holds the kit. 0..4: the GM sample kit and its four
- * treatments (as before: old projects keep their kit), 5..: the synthesised kits, then (2.4) USR1..USR4:
- * a user sample slot as a kit (the web editor's DRUM KIT: a sound per lane, zone lo..hi = the lane's note),
- * and USR3+4: one kit over the slots USR3 and USR4 (a lane's sound in either); SYN1..SYN4; fm1-drummer: MULDJORD, the
- * built-in layered kit (samples.c set REAL, tools/gen_realkit.py: up to 4 velocity layers a lane, round-robin takes) */
-#define DRUM_SAMPLED 5u
-#define DRUM_USR (DRUM_SAMPLED + DS_NKITS)
+/* P_E0 was unused on the drum track: it holds the kit. 0: MULDJORD, the built-in layered kit (samples.c set REAL,
+ * tools/gen_realkit.py: up to 4 velocity layers a lane, round-robin takes), the power-on kit and the songs' default
+ * (first since 2026-10-15, evening; it was the last, 46, and SLOOP's GM sample kit and its four treatments, 0..4,
+ * went the same day: their 86 KB of ADPCM to MULDJORD's crash). 1..: the synthesised kits, then (2.4) USR1..USR4: a
+ * user sample slot as a kit (the web editor's DRUM KIT: a sound per lane, zone lo..hi = the lane's note), and USR3+4:
+ * one kit over the slots USR3 and USR4 (a lane's sound in either); SYN1..SYN4 */
+#define DRUM_REAL 0u                            /* the layered kit, the power-on kit */
+#define DRUM_DS0 (DRUM_REAL + 1u)               /* the first synthesised kit */
+#define DRUM_USR (DRUM_DS0 + DS_NKITS)
 #define DRUM_PAIR (DRUM_USR + SMP_USER_SLOTS)   /* USR3+4: one kit in two slots (the editor splits it), ~15 s */
 #define DRUM_SYN (DRUM_PAIR + 1u)                /* SLOOP 2.5: SYN1..SYN4, your synthesised kits (drum_synth.c dsu) */
-#define DRUM_REAL (DRUM_SYN + DSU_N)           /* the layered kit, the power-on kit */
-#define DRUM_KITS (DRUM_REAL + 1u)
-static const char *const DRUM_KIT_NAMES[] = {"ACOUSTIC", "DEEP", "TIGHT", "BRIGHT", "DUST", DS_KIT_NAME_LIST,
+#define DRUM_KITS (DRUM_SYN + DSU_N)
+static const char *const DRUM_KIT_NAMES[] = {"MULDJORD", DS_KIT_NAME_LIST,
                                              "USR1", "USR2", "USR3", "USR4", "USR3+4",
-                                             "SYN1", "SYN2", "SYN3", "SYN4", "MULDJORD"};
-static const char *const DRUM_KIT_STYLES[] = {"STUDIO", "SOFT", "PUNCHY", "BRIGHT", "DUSTY", DS_KIT_STYLE_LIST,
+                                             "SYN1", "SYN2", "SYN3", "SYN4"};
+static const char *const DRUM_KIT_STYLES[] = {"REAL KIT", DS_KIT_STYLE_LIST,
                                               "YOUR KIT", "YOUR KIT", "YOUR KIT", "YOUR KIT", "BIG KIT",
-                                              "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH", "REAL KIT"};
+                                              "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH"};
 _Static_assert(sizeof(DRUM_KIT_NAMES) / sizeof(DRUM_KIT_NAMES[0]) == DRUM_KITS, "a name per kit");
 static uint32_t drum_kit(void) { return (uint32_t)clamp(TDRUM->p[P_E0], 0, DRUM_KITS - 1); }
 /* the kit s detents of a knob on from kit cur: USR1 and USR2 are passed over (fm1-drummer: their flash holds the songs,
@@ -40,7 +41,6 @@ static int16_t drum_kit_step(int32_t cur, int32_t s)
 static struct {
     voice_t v[NDRUM];
     uint32_t age;
-    int16_t set;                 /* SMP_SETS index of "PERC" (GM map), -1 = none */
     int32_t tail;                /* declick: the last output of cut voices, decaying */
     int32_t peak;                /* largest |output| (it fed the TRACKS screen's meter, gone; the mix unchanged) */
     uint8_t kit[NDRUM];
@@ -50,21 +50,9 @@ static struct {
     volatile uint16_t hits;      /* bit per lane hit since the UI last looked (pads, key LEDs) */
     volatile uint8_t kick;       /* a kick was hit (fx.c DUCK) */
     int32_t a0, a1;              /* the drum track's mute / solo attenuation over this block (fx.c), Q15, 0 = heard */
-} drums = {.set = -2};
+} drums;
 
 static int32_t ds_buf[CTL];
-
-static int32_t drum_set(void)
-{
-    uint32_t i;
-    if (drums.set == -2) {
-        drums.set = -1;
-        for (i = 0; i < SMP_NSETS; i++)
-            if (str_eq(SMP_SETS[i].name, "PERC"))
-                drums.set = (int16_t)i;
-    }
-    return drums.set;
-}
 
 /* ------------------------------------------------------------ lanes --- */
 /* The drum track's 16 sounds, one per white key, F3 (kick) .. G5 (cowbell): kicks, snare and clap,
@@ -283,10 +271,8 @@ static uint32_t hum_vel(uint32_t vel, uint32_t g)
 static void drum_on(uint32_t note, uint32_t vel)
 {
     uint32_t hg = drum_hum_g ? drum_hum_g : 128u;
-    int32_t si = drum_set();
-    const smp_set_t *set;
     voice_t *v = &drums.v[0];
-    uint32_t i, zi = 0xFFFFu, kit = drum_kit();
+    uint32_t i, kit = drum_kit();
     int32_t zid = -1;
     drum_hum_g = 0;
     if (note != 76u && note != 77u)                 /* the pads and key LEDs (not the click's wood block) */
@@ -332,20 +318,9 @@ static void drum_on(uint32_t note, uint32_t vel)
         }
         if (zid < 0)
             return;                                 /* (an empty slot, or no sound on this lane) */
-    } else if (zid < 0 && kit >= DRUM_SAMPLED) {    /* synthesised kit */
-        drum_synth_on(note, hum_vel(vel, hg), kit, DS_KITS[kit - DRUM_SAMPLED].s, DS_KITS[kit - DRUM_SAMPLED].crush);
+    } else if (zid < 0) {                           /* synthesised kit */
+        drum_synth_on(note, hum_vel(vel, hg), kit, DS_KITS[kit - DRUM_DS0].s, DS_KITS[kit - DRUM_DS0].crush);
         return;
-    }
-    if (zid < 0) {                                  /* the GM sample kit */
-        if (si < 0)
-            return;
-        set = &SMP_SETS[si];
-        for (i = 0; i < set->nz; i++)
-            if (note >= SMP_ZONES[set->z0 + i].lo && note <= SMP_ZONES[set->z0 + i].hi)
-                zi = set->z0 + i;
-        if (zi == 0xFFFFu)
-            return;
-        zid = (int32_t)zi;
     }
     if (note == 42u || note == 44u)                 /* hi-hat choke */
         for (i = 0; i < NDRUM; i++)
@@ -378,12 +353,10 @@ static void drum_on(uint32_t note, uint32_t vel)
     }
     {
         uint32_t vi = (uint32_t)(v - drums.v);
-        int32_t shift = kit == 1u ? (note <= 36u ? -5 : -2) : kit == 3u ? 2 : kit == 4u ? -1 : 0;
         drums.kit[vi] = (uint8_t)kit;
         drums.synth[vi] = 0;
         drums.filter[vi] = 0;
         drums.env[vi] = 32767;
-        if (shift) v->s[5] = (int32_t)((pow2_q16((int32_t)note * 16 + shift * 16 - SMP_ZONES[zi].root16) >> 8) * (SMP_ZONES[zi].rate >> 8));
     }
 }
 

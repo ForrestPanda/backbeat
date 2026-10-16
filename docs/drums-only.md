@@ -3,7 +3,7 @@
 The user's decision (2026-10-13): the FM-1 becomes a drummer only. SLOOP's synth side goes: the three synth
 tracks, the twelve engines, voices, the FM6 bank, user presets, arp, chords, scales, the SLICER insert, the
 punch FX and live loop recording (REC, free takes). What stays: the drum track and its kits (ACOUSTIC and
-its treatments, the SYN kits, the user kits USR2..4), the drum grid and kit pages, SLOOP's sections A..D,
+its treatments until 2026-10-15, then MULDJORD; the SYN kits, the user kits USR2..4), the drum grid and kit pages, SLOOP's sections A..D,
 quick chain and song chain, the drummer (pedal, songs, the song screen), the metronome and the pedal's
 count-in, MIDI in (drum notes, the pedal, clock) and out (drum notes), USB audio, the master chain (reverb
 and delay sends, TEXTURE, DUST, the DJ filter, the limiter), backup, OTA and recovery.

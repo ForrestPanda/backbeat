@@ -378,9 +378,8 @@ def main(out):
     b = Builder()
     if have_cc0:
         for name, kind in CC0_SETS:
-            if kind != "kit":                       # the CC0 KIT feeds the GM kit
+            if kind != "kit":                       # (the CC0 KIT fed the GM kit, PERC, until 2026-10-15: gone for the flash)
                 b.cc0_set(name, kind)
-    b.gm_kit(have_cc0)
     b.real_kit()
     text = b.header()
     Path(out).write_text(text)

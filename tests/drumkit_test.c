@@ -12,7 +12,6 @@ static uint32_t one_hit(uint32_t kit, uint32_t note, int32_t *peak, uint64_t *en
     uint32_t j, k, blocks = 0;
     int32_t l[CTL], r[CTL], rv[CTL];
     memset(&drums, 0, sizeof drums);
-    drums.set = -2;
     TDRUM->p[P_E0] = (int16_t)kit;
     song.g[G_DRLVL] = 100;
     drum_on(note, 110);
@@ -44,7 +43,7 @@ int main(int argc, char **argv)
     FILE *rep = argc > 2 ? fopen(argv[2], "w") : stdout;
     host_tracks_init();
     one_hit(0, 36, &ref_peak, &e);                       /* the sampled kick */
-    for (kit = DRUM_SAMPLED; kit < DRUM_USR; kit++) {
+    for (kit = DRUM_DS0; kit < DRUM_USR; kit++) {
         int32_t kpk = 0;
         fprintf(rep, "%-8s %-12s", DRUM_KIT_NAMES[kit], DRUM_KIT_STYLES[kit]);
         for (lane = 0; lane < DS_LANES; lane++) {
@@ -64,8 +63,7 @@ int main(int argc, char **argv)
         for (k = 0; k < 2u; k++) {
             uint32_t rep_n = 2000;
             memset(&drums, 0, sizeof drums);
-            drums.set = -2;
-            TDRUM->p[P_E0] = (int16_t)(k ? DRUM_SAMPLED + 1u : 0u);
+            TDRUM->p[P_E0] = (int16_t)(k ? DRUM_DS0 + 1u : DRUM_REAL);
             clock_gettime(CLOCK_MONOTONIC, &t0);
             for (j = 0; j < rep_n; j++) {
                 if (j % 100u == 0u) {
@@ -83,13 +81,12 @@ int main(int argc, char **argv)
     if (argc > 1) {   /* demo: each kit, one bar: K . H . S . H . K K H . S . H O */
         static const uint8_t P[16][3] = {{36, 42, 0}, {0}, {42, 0}, {0}, {38, 42, 0}, {0}, {42, 0}, {70, 0},
                                          {36, 42, 0}, {36, 0}, {42, 0}, {37, 0}, {38, 39, 0}, {0}, {42, 45, 0}, {46, 0}};
-        uint32_t step = FS * 60u / 120u / 4u, total = (DRUM_USR - DRUM_SAMPLED) * 16u * step;
+        uint32_t step = FS * 60u / 120u / 4u, total = (DRUM_USR - DRUM_DS0) * 16u * step;
         FILE *f = fopen(argv[1], "wb");
         int32_t l[CTL], r[CTL], rv[CTL];
         wav_hdr(f, total / CTL * CTL);
         memset(&drums, 0, sizeof drums);
-        drums.set = -2;
-        for (kit = DRUM_SAMPLED; kit < DRUM_USR; kit++) {
+        for (kit = DRUM_DS0; kit < DRUM_USR; kit++) {
             TDRUM->p[P_E0] = (int16_t)kit;
             for (j = 0; j < 16u; j++) {
                 uint32_t q, s;
@@ -104,6 +101,6 @@ int main(int argc, char **argv)
         fclose(f);
     }
     printf("drum kits: %u synthesised x %u sounds bounded, audible, finite; levels near the sampled kit PASS\n",
-           DRUM_USR - DRUM_SAMPLED, DS_LANES);
+           DRUM_USR - DRUM_DS0, DS_LANES);
     return 0;
 }

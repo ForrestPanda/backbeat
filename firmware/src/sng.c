@@ -19,6 +19,9 @@
  *                 bytes, this header included); fill[(len + 3) / 4] (2 bits a step: FC_*); then each step: its lanes
  *                 u16, and a byte for each lane set, lowest first: level (bits 0..1, LV_*), ratchet (2..3: hits - 1),
  *                 mark (4..5: 1 only during a fill, 2 not during one: seq.c drum_fonly / drum_fno)
+ *   fill bar      (flags bit 1, since 2026-10-15) after the pattern's steps: its steps (a byte, 1..64, one bar of the
+ *                 section's meter and division as packed), then each step as above (no marks: a fill plays it as it
+ *                 is, instead of the bar the fill is in, its step i at the bar's step i: seq.c fb_dstep / drum_src)
  * A section's meter is the bar the pedal counts while it plays (seq.c clk_meter): where a request lands, the fill
  * bar, the ending, the click and the count-in. (The first form, "SNG1", 10 or 14 bytes a step, never reached a
  * device: not read.)
@@ -31,6 +34,7 @@
 #define SNG_SEC_HDR 18u
 #define SNG_MAX 3800u                            /* a packed song (<= proj_tmp, the staging RAM; <= a sector's payload) */
 #define SNG_F_OUTRO 1u
+#define SNG_F_FILLBAR 2u                         /* the section carries a fill bar of its own (after its pattern) */
 
 typedef struct {
     const uint8_t *xip;                          /* the packed song: flash (XIP), or a RAM blob on the host */
@@ -41,6 +45,20 @@ typedef struct {
 static sng_t sng;
 
 static uint32_t sng_u16(const uint8_t *b) { return (uint32_t)b[0] | (uint32_t)b[1] << 8; }
+/* n steps at q (each its lanes u16, then a byte a hit) walked: the offset after them; 0 when they run past end */
+static uint32_t sng_walk(const uint8_t *b, uint32_t q, uint32_t n, uint32_t end)
+{
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        uint32_t on;
+        if (q + 2u > end)
+            return 0;
+        on = sng_u16(b + q);
+        for (q += 2u; on; on &= on - 1u)
+            q++;
+    }
+    return q > end ? 0u : q;
+}
 
 /* the packed song b (n bytes) checked and indexed into *out: 0 ok, else which check failed */
 static int sng_check(const uint8_t *b, uint32_t n, sng_t *out)
@@ -71,18 +89,21 @@ static int sng_check(const uint8_t *b, uint32_t n, sng_t *out)
             end > n)
             return 5;
         out->off[k] = (uint16_t)pos;
-        q = pos + SNG_SEC_HDR + (len + 3u) / 4u;
-        for (i = 0; i < len; i++) {                 /* every step walked: its hits inside the section (a hit's byte
-                                                     * needs no check: any value is a level, a ratchet, a mark) */
-            uint32_t on;
-            if (q + 2u > end)
-                return 6;
-            on = sng_u16(b + q);
-            for (q += 2u; on; on &= on - 1u)
-                q++;
+        q = sng_walk(b, pos + SNG_SEC_HDR + (len + 3u) / 4u, len, end);   /* every step walked: its hits inside the
+                                                     * section (a hit's byte needs no check: any value is a level, a
+                                                     * ratchet, a mark) */
+        if (!q)
+            return 6;
+        if (b[pos + 14] & SNG_F_FILLBAR) {          /* the fill bar of its own: its steps after the pattern's */
+            if (q >= end || !b[q] || b[q] > NSTEP)
+                return 7;
+            q = sng_walk(b, q + 1u, b[q], end);
+            if (!q)
+                return 7;
         }
         if (q != end)
             return 6;
+        (void)i;
         pos = end;
     }
     return 0;
@@ -171,6 +192,29 @@ static void sng_apply(uint32_t k)
             drum_fno[i] |= (uint16_t)((v >> 5 & 1u) << l);
         }
     }
+    if (s[14] & SNG_F_FILLBAR) {                  /* its fill bar of its own (seq.c drum_src plays it; a hit's mark
+                                                  * bits, if any, mean nothing there) */
+        uint32_t fl = *q++;
+        for (i = 0; i < fl && i < NSTEP; i++) {
+            uint32_t on = sng_u16(q);
+            memset(&fb_dstep[i], 0, sizeof(dstep_t));
+            for (q += 2, l = 0; on; on >>= 1, l++) {
+                uint32_t v;
+                if (!(on & 1u))
+                    continue;
+                v = *q++;
+                dstep_set(&fb_dstep[i], l, v, v >> 2);
+            }
+        }
+        fb_len = (uint8_t)(fl <= NSTEP ? fl : NSTEP);
+        {                                         /* the phrase's bars: a bar of the section's meter in its steps
+                                                   * (whole, as packed; else the phrase is one bar) */
+            uint32_t u = div_units((uint32_t)s[13] % NDIV_STEP) / (BEAT_U / 48u), b = 12u * meter_b16(s[15]);
+            uint32_t bs = u && b % u == 0u && b / u <= fb_len ? b / u : fb_len;
+            fb_bar = (uint8_t)bs;
+            fb_bars = (uint8_t)((fb_len + bs - 1u) / bs);
+        }
+    }
     clk_meter = s[15];
     t->p[P_SLEN] = (int16_t)len;
     t->p[P_SDIV] = (int16_t)(s[13] % NDIV_STEP);
@@ -232,8 +276,9 @@ static void sng_lib_refresh(void)                /* seq.c sng_lib: every song re
 
 /* ---- a section edited on the device (EDIT, SAVE held) back into its song: the reverse of sng_apply */
 /* the song loaded, packed again with section k taken from the drum track (its hits, levels, ratchets and marks, its
- * length, division and fill conditions; its name, flags and meter kept), into out (room bytes): its size, 0 = it
- * does not fit (SNG_MAX). Nudges and locks are not kept: SNG2 has no room for them (sng_lossy says so) */
+ * length, division and fill conditions; its name, flags, meter and fill bar of its own kept), into out (room bytes):
+ * its size, 0 = it does not fit (SNG_MAX). Nudges and locks are not kept: SNG2 has no room for them (sng_lossy says
+ * so) */
 static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t room)
 {
     const track_t *t = TDRUM;
@@ -273,6 +318,13 @@ static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t room)
                 if (on & 1u)
                     out[n++] = (uint8_t)(dstep_lvl(d, l) | dstep_rat(d, l) << 2 | ((drum_fonly[i] >> l) & 1u) << 4 |
                                          ((drum_fno[i] >> l) & 1u) << 5);
+        }
+        if (s[14] & SNG_F_FILLBAR) {             /* its fill bar of its own, as it is (the device edits the pattern) */
+            uint32_t from = sng_walk(s, SNG_SEC_HDR + ((uint32_t)s[12] + 3u) / 4u, s[12], size);
+            if (!from || from >= size || n + size - from > room)
+                return 0;
+            memcpy(out + n, s + from, size - from);
+            n += size - from;
         }
         out[at + 16] = (uint8_t)(n - at);        /* its size */
         out[at + 17] = (uint8_t)((n - at) >> 8);

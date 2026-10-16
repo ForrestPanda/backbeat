@@ -47,9 +47,9 @@ repeats its message does no harm; next / previous / tap count presses.
 
 | Message | Meaning | Status |
 | --- | --- | --- |
-| CC 20, value n | go to section n when the section playing has played its pattern out (its bars, counted from where it started), no fill of its own; a 1-bar section: the next bar; stopped: start the loop with it. n the section playing, nothing cued: nothing; with an ending pending it cancels the ending, as any section | done (n = 0..3, A..D; at the section's end 2026-10-13; no fill 2026-10-14) |
-| CC 27, value n | on the next bar, without waiting for the section's end, no fill of its own | done (no fill bar 2026-10-14) |
-| CC 21 | the fill from now until the section's pattern ends (the FILL ONLY hits in, the NO FILL hits out, wherever they sit); asked for in the pattern's last bar: through the next cycle too (a 1-bar section: the rest of this bar and all of the next); the section goes on. Sent with a section change (the same footswitch, either order): the fill into it, ending when the change lands | done (to the pattern's end 2026-10-13) |
+| CC 20, value n | go to section n when the section playing has played its pattern out (its bars, counted from where it started), no fill of its own; a 1-bar section: the next bar; a fill pending (asked before or after): on the bar after the fill instead; stopped: start the loop with it. n the section playing, nothing cued: nothing; with an ending pending it cancels the ending, as any section | done (n = 0..3, A..D; at the section's end 2026-10-13; no fill 2026-10-14; after a fill 2026-10-15) |
+| CC 27, value n | on the next bar, without waiting for the section's end, no fill of its own (a fill pending: after it) | done (no fill bar 2026-10-14) |
+| CC 21, value v | the fill, as an arranger's fill-in: from now to the end of this bar (the FILL ONLY hits in, the NO FILL hits out; a section's fill bar of its own instead of the pattern's, its step i at the bar's step i), then the pattern again from its top on the next bar, or the section asked for. Asked for in the bar's last beat: the whole next bar. Value 1: the whole next bar from anywhere in this one (a fill bar whose hits lead off the bar); in a fill, the next bar a fill too. Any other value: from now. Sent with a section change (the same footswitch, either order): the fill into it, the change on the bar after the fill | done (to the pattern's end 2026-10-13; the arrangers' way 2026-10-15; value 1 2026-10-16) |
 | CC 22, value n | ending: the section playing ends (as CC 20), section n once as the outro, stop on the bar; n empty or out of range: the section ends, then stop | done (at the section's end 2026-10-13) |
 | CC 23 | stop now | done |
 | CC 24 / CC 25 | next / previous section, empty ones skipped, wrapping, as CC 20; stopped (nothing cued): the first / the last | done |
@@ -84,15 +84,13 @@ switches inside the patch are its sections. Starting a song is "go to intro".
   finish its pattern (a 4-bar verse plays its four bars); a 1-bar section switches on the next bar. No fill
   comes with it (asked 2026-10-14: "I don't want to force a fill on every transition"; until then the last
   bar was the fill, and CC 27 put a whole fill bar first): the fill is CC 21's, and a footswitch that wants
-  one sends CC 21 with the section, the fill then running to the change. `pedal_at_end` in seq.c: `live_bar` counts the bars
+  one sends CC 21 with the section, the change then landing on the bar after the fill. `pedal_at_end` in seq.c: `live_bar` counts the bars
   since the section started, the pattern's bars (`sng_bars` / `section_bars`) are the period. CC 27 does
   not wait: it lands on the next bar, for a change that must come now. The ending (CC 22) waits for the section's end the same way, then the outro once,
   then a stop on the bar (no outro: the section's end, then the stop). SLOOP's own section keys and
-  the chain still switch on the next bar: only the pedal waits. A fill request (CC 21, or the section
-  playing pressed again, until 2026-10-14) is on the same count (`pedal_fill_hold`): the fill from now to the pattern's
-  end, so the fill bar of a 4-bar verse comes where the pattern has it; pressed in that last bar, the
-  next cycle too, so a 1-bar section gets the rest of this bar and all of the next. SLOOP's own
-  next-bar fill (`fill_arm`, GLO + key 10) is left to its keys.
+  the chain still switch on the next bar: only the pedal waits. A fill request (CC 21) is bar-aligned since
+  2026-10-15 (see "Fills as the arrangers do them" below; until then it ran to the pattern's end, and from
+  the pattern's last bar through the next cycle). SLOOP's own next-bar fill (`fill_arm`, GLO + key 10) is left to its keys.
 - **Bass: dropped** (deferred 2026-10-11, dropped from the plans 2026-10-13: drums only). If ever wanted,
   it costs little: a section already stores SLOOP's synth tracks, so a bass pattern per section with a
   bass sound works without new code; the chord changes would be written into the pattern, since a
@@ -243,7 +241,8 @@ next bar). No named sections, one song, no fill tied to a section change.
    it back). The song, its sections (the one playing lit, the one cued underlined, a meter other than 4/4), the
    pedal's messages. The keys reach it as the DRUMS grid page's do (seq.c `kb_grid` 2: the keyboard plays nothing,
    the UI gets the keys) and call `pedal_cc` with the IRQ off, the function the MIDI queue calls: white keys
-   1..8 CC 20, 9..16 CC 27 (since 6d: 1..16 CC 20, OCT+ held CC 27), the black keys F#3 CC 25, G#3 CC 24, A#3 CC 21, C#4 CC 22, D#4 CC 23, F#4 CC 26;
+   1..8 CC 20, 9..16 CC 27 (since 6d: 1..16 CC 20, OCT+ held CC 27), the black keys F#3 CC 25, G#3 CC 24, A#3 CC 21, C#4 CC 22, D#4 CC 23, F#4 CC 26
+   (since 2026-10-14 any black key CC 21; OCT+ held, CC 21 value 1: the whole next bar, 2026-10-16);
    PLAY is CC 20 of the section cued (the count-in too) or stop. With no song the white keys 1..8 load songs.
    The section playing's key is lit, the cued one blinks. Small for the flash: no graphics, no bar counts; the
    pedal channel and count-in settings are still the tool's and the editor's. Tests: ui_pages_test.c (a stand-in
@@ -264,7 +263,8 @@ next bar). No named sections, one song, no fill tied to a section change.
      with the IRQ off.
      The keys (asked 2026-10-14, "I don't want to force a fill on every transition"): the white keys change section
      with no fill (`pedal_section` PS_END: when the section playing ends; 9..16 PS_BAR: on the next bar), every
-     black key is a fill to the pattern's end (CC 21), so a fill into a change is a black key then a white one;
+     black key is a fill (CC 21; to the pattern's end then, the rest of the bar since 2026-10-15; with OCT+ held the
+     whole next bar, CC 21 value 1, since 2026-10-16), so a fill into a change is a black key then a white one;
      ENV / LFO step without a fill. The pedal followed the same day: no section change brings a fill (see the
      command map); the web editor's player (`PLAY`) mirrors it. Found while doing it: the wait for the section's
      end (`pedal_at_end`) itself made the last bar a fill, so LIVE's first fill-free keys still filled into a
@@ -291,7 +291,8 @@ next bar). No named sections, one song, no fill tied to a section change.
    so 16 fit (the test song, `tests/data/sixteen.json`, 1156 B); sixteen dense 64-step ones do not, and the packer
    says so. LIVE: white keys 1..16 are sections 1..16 (PS_END), **OCT+ held** + a key on the next bar (PS_BAR: the
    ISR samples OCT+ as the key goes down, `KB_OCTUP` in the lk_q entry; the state line says KEY: ON THE NEXT BAR
-   while it is held). The tiles four to a row, a section always in the same place, as many rows as the song
+   while it is held; since 2026-10-16 the same hold with a black key or SEL is the fill on the next bar, CC 21
+   value 1). The tiles four to a row, a section always in the same place, as many rows as the song
    needs: 1 row (≤ 4) the whole name on two lines, 2 rows (5..8) as before, 3 and 4 rows a line each (number, name
    cut). The pedal's CC 20 / 27 / 22 carry 0..15; `fm1_song.py`, `gp2song.py` (keeps 16, the outro last) and the
    editor follow; its player's keys 1..8 reach 9..16 after `0` (Alt + a digit switches browser tabs on Linux).
@@ -334,6 +335,8 @@ the only big lever is `SMP_DATA`, and the acoustic kit is in it.
 | Static RAM (.data + .bss) / the pool, drums only | 64672 of 98304 B / 200124 of 344064 B |
 | After the UI redesign (2026-10-14, 6c: LIVE, SONGS, SETUP, the section save; the visualiser out) | 244556 B: **337008 B left**; static RAM 57664 B, the pool 194620 B |
 | With the layered kit MULDJORD (2026-10-14: 289642 B of ADPCM, set REAL; 12 drum voices) | 541192 B: **40372 B left**; static RAM 59408 B |
+| The five GM-sampled kits (ACOUSTIC, DEEP, TIGHT, BRIGHT, DUST: the CC0 kit as set PERC, 86144 B of ADPCM) gone, 2026-10-15 evening: nobody played them since the grooves went on MULDJORD; every kit number 5 lower (808 is 0, MULDJORD 41) | 471360 B: **110204 B left**, spent on MULDJORD's crash (below) |
+| MULDJORD's crash (two takes, 3.2 s) and the snare, open hat and ride at their recipe lengths, 2026-10-15 evening: 385288 B of ADPCM (`tools/realkit.json` budget 412000); round-robin hats from the Muldjord hi-hat tried and reverted (the user prefers Black Pearl's) | 549360 B: **32204 B left** |
 | Data region (0x93000..0xE0000): projects, the user sample slots of 80 KB (USR1 and USR2 now hold the songs: USR3 and USR4 are the user's; free: 0xC4000..0xC7FFF, the old user preset banks 0xDC000..0xDFFFF, the FM6 bank 0xE5000..0xE6FFF, 0xFB000) | about 308 KB |
 | Songs 1..8 (0xA0000..0xAFFFF, A/B) and the pedal settings (0xB0000 / 0xB1000); songs 9..16 (0xB4000..0xC3FFF, A/B, since 2026-10-14) | 72 KB of USR1's 80 KB, 64 KB of USR2's; the kit pair USR3+4 stays the user's |
 | ADPCM sample audio | about 11 KB per second (mono 22 kHz, 4 bit) |
@@ -366,7 +369,65 @@ with it set, clicking a hit that is there changes its mark; cells show an amber 
 the packers (Python, JavaScript) follow. Found on the way: the review's project-load fixes (the song unloaded
 by a project, USR1 not scanned at boot) had never landed because their anchor text differed; applied now.
 Since 2026-10-14 a section change brings no fill of its own, so the imported fill bar's F hits play when the
-player asks for the fill (CC 21, with the change or alone; LIVE's black keys or SEL).
+player asks for the fill (CC 21, with the change or alone; LIVE's black keys or SEL). Since 2026-10-15 the importer
+writes a fill bar of its own instead (below), and the marks are for hand-made sections without one.
+
+## The GM kits out, the flash to the cymbals (2026-10-15, evening)
+
+Asked "if I forego user kits, will the built-in kit be much better?": no, 160 KB buys fullness, not a different
+kit. The user chose instead to drop the five GM-sampled kits (ACOUSTIC and its treatments, 86 KB of ADPCM plus
+their code, unplayed since the grooves went on MULDJORD) and spend the room on the hats and the crash, keeping the
+user kit pair USR3+4. Done: drums.c without the PERC set and the treatments' pitch shifts (`DRUM_DS0` is kit 0,
+the first synthesised one; `drums.set` gone), `tools/gen_samples.py` without `gm_kit`, the golden list without
+`drums/gm_kit` and the five grooves (the other 44 renders' hashes unchanged), the CPU baseline rewritten (its
+reference groove, kit 0, is now the 808: the per-mille numbers moved with it), the editor's and the packers' kit
+lists and defaults, the grooves and the example on kit 41. A song from before with `"kit": 46` plays MULDJORD still
+(the device clamps the number; the editor shows the number); `"kit": 0` would now be the 808. Then, the same evening,
+the user asked for MULDJORD as kit 0: it leads the list (`DRUM_REAL` 0, the synthesised kits from 1, `DRUM_DS0`), so
+a song's default is 0 and the knob starts on it; the grooves, the example and the user's songs (songs/, backed up to
+`../fm1-drummer-songs-backup-2026-10-15/`) say 0; the golden and CPU lists renumbered (no render changed).
+
+The flash went to the crash (two takes, 3.2 s), and the snare, open hat and ride got the recipe's full lengths back.
+Round-robin hats were tried the same evening: Black Pearl's hats have one hit a layer (no round robins), so the closed
+and open hats were taken from the Muldjord kit's own hi-hat (4 x 3 and 2 x 2 takes), which cost the crash its ring
+again (2.6 s) and the closed hat its length (0.24 s); renders of CLASSIC ROCK and FOUR FLOOR before and after were
+made, and the user preferred Black Pearl's sound: reverted (commit eb714cf and its revert). Hats with round robins
+would need another hi-hat or the user kit pair. The recipe keeps the older lanes' lengths as floors so a fit only
+shortens new material; `seq2_test` seeds the round robins so two runs match.
+
+## Fills as the arrangers do them (2026-10-15)
+
+The user found the fills "still a bit counterintuitive" and asked for a comparison with arranger keyboards. Yamaha
+(PSR, Genos), Korg (Pa), Roland (BK, E-A), Ketron (SD), Casio, the Alesis SR-16 and the BeatBuddy pedal share one
+model, and BackBeat's (fills aligned to the pattern's cycle: to its end, or the next cycle when asked in its last
+bar) departed from it in two places, so it was replaced by the common model the same day (firmware, the browser
+player, the docs):
+
+- **A fill is one bar, from the press to the bar line**, the phrase cut from the front (pressed on beat 3, its beats 3
+  and 4 are heard: Yamaha, Korg, the BeatBuddy all do this). On the device: `pedal_fill` from the press, over at the
+  next bar line (`pedal_fill_bars`, counted down in `live_block`); the fill bar of its own plays at the bar's own
+  step (`drum_src`: step i of the bar is fill step i), a section without one by its marks and conditions in that
+  bar. A fill bar of more than one bar (`fb_bars`, `fb_bar` steps each, from `sng_apply`) ends that many bars on,
+  the phrase ending with it.
+- **Pressed late, the next bar**: in the bar's last beat (Yamaha's rule, Casio's; the BeatBuddy's is the last half
+  beat) the whole next bar is the fill (`pedal_fill_wait`; the LIVE screen says FILL NEXT BAR). One rule, no
+  cycle arithmetic; `tests/song_render.c --fills` asks for its fills this way, just before the last bar.
+- **After the fill the pattern restarts from its top** (an arranger's variation after its fill-in), its bar count
+  with it (`seq_reset_tracks`, `live_bar = 0`), unless a section is cued: then that one lands. The quick chain
+  keeps its count.
+- **A fill pulls any change to its end**: a section asked for with a fill (CC 21 with CC 20 or 27, either order,
+  before or after) lands on the bar after the fill, not at the pattern's end (`pedal_at_end` is cleared by the fill
+  request, not set by a request made during one). An ending's outro the same; an ending with no outro stops at the
+  fill's end.
+- A fill asked for again while one plays changes nothing (it ends at its bar line), except in the last beat of its
+  last bar: then the next bar is a fill too, straight on, the pattern restarting after both (asked 2026-10-16: the
+  press was ignored there; `pedal_fill_wait` while `pedal_fill`, chained in `live_block`). The "fill hits ahead"
+  rule and the next-cycle rule are gone with `pedal_fill_hold` and `pedal_fill_hits`.
+- Not done, cheap now that fills are bar-aligned if ever wanted: a break (one silent bar: Yamaha, Korg, Ketron, the
+  BeatBuddy's pause) and hold-to-loop (Korg, the BeatBuddy) for a footswitch that sends its release.
+
+Host-tested (`tests/pedal_test.c`, `tests/song_test.c`, `tests/ui_pages_test.c`, `web/test_web.mjs`); to verify on
+hardware with the rest.
 
 ## Review notes (2026-10-11)
 
@@ -482,18 +543,129 @@ hazard; what it found and what was done:
   latency checked on each platform; (b) the firmware's own engine as a desktop program (see "Related
   programs"), faithful but bound to the device's sample limits. Route (a) is the natural one: the pieces
   exist and the phone is already the editor's home.
-- (asked 2026-10-15; not started) **A fill bar of its own.** Today a fill is not a separate pattern: it switches on the
-  pattern's fill-only hits (and off its not-in-a-fill ones), which the importer puts in the phrase's last bar, so a
-  fill asked for in bar 1 of a 4-bar verse is heard in bar 4. Wanted: a section can carry a fill bar of its own (the
-  importer's fill bar, or one chosen in the section editor, in the song format as an extra bar a section), which a
-  fill plays instead of the pattern's bar. To decide: the format (SNG2 has no room in the section header: a flag and
-  the bar after the pattern), what CC 21 does when a section has one, and the editor's view of it.
-- (asked 2026-10-15; not started) **Play the fill now.** Builds on the fill bar: a command (e.g. CC 28, or some of
+- **A responsive site, usable on a smartphone** (asked 2026-10-16). The editor is laid out for a desktop and a
+  tablet (the transport, the tiles in rows of four, the section editor's grid; the Setlist's 16 rows fit a tablet):
+  on a phone it needs a layout of its own, not a scaled one. What that means: the tabs and cards stacking in one
+  column at phone width, the Play card's transport and the LIVE view first (the phone on the floor or the mic stand
+  is the drummer's screen), buttons at a thumb's size, the section editor's grid scrolling sideways with the lane
+  names fixed, the tables (the set, the slots) as rows that wrap, the kit page's pads in a grid that fits, the help
+  texts folded. The PWA already installs on Android; the manifest's orientation and the wake lock want checking
+  there. Test it in headless Chrome at 360 x 780 as the tablet layout was, and on the user's phone over adb as the
+  tablet is served (`docs/`, the reverse rule). Not started.
+- **JAM on the device, fixed** (asked 2026-10-16: "the Jam feature that we lost with SLOOP"). JAM is what is left
+  of SLOOP's own way of playing: its sections A..D with the quick chain and the song chain, reached from the SONGS
+  screen's last row (`sng_view DV_JAM`, `drummer_load(SNG_JAM)`: no song loaded, the drum track's own pattern) and
+  the JAM PROJECTS pages under SETUP > SYSTEM. The drums-only stages and the UI redesign (LIVE, SONGS, SETUP, the
+  song screen) left it as it was found, and the user reports it no longer works as it did on SLOOP: what exactly
+  (the keys and layers on that page, SAVE held + key for the sections, the chain editor, the project pages, SONG
+  REC) is to be established on the device or in `tests/ui_pages_test.c` and `tests/arranger_test.c`, then restored
+  or, where a drummer has no use for it, taken out on purpose and said so. Not started.
+- **The second core** (asked 2026-10-16: "is there any advantage we could take from the two cores?"). The AC791N
+  has two pi32v2 cores (the SDK's `CPU_CORE_NUM 2`); Felucca runs bare metal on one: the audio interrupt (every
+  32-sample block: the sequencer, the drum voices decoding ADPCM in place from flash, the master chain) and the
+  main loop (UI, flash, USB). Core 1 idles; the SDK's two-core RTOS is never started. The host's instruction counts
+  per sample (tests/regress.c, 2026-10-16): the idle mix 397, with the drums 677, MULDJORD's worst case (every lane
+  every step, ratchets) 1630, a synthesised kit's 2425: roughly 30..45 % of a core at 44.1 kHz and 160..240 MHz if
+  the pi32v2 retired an instruction a cycle, which it will not with code and samples executed in place from SPI
+  flash through the cache: twelve ADPCM streams at once is the real unknown, and only hardware gives it. Decided:
+  nothing before the device is measured (the busiest groove with a long crash: dropped blocks, the limiter's
+  declick tail; the health checks on a capture). Then, in order: shorter tails on the toms and ride (fewer voices
+  ringing), the master chain at a lower rate, and only then core 1, with the master chain (reverb, delay, EQ, the
+  limiter: the fixed ~400 instructions a sample, a finished block as its input) as the piece to move there, one
+  block (0.7 ms) of latency more; or the main loop on core 1 so a save or a load can never steal the interrupt's
+  time. Not the drum voices: both cores share the flash controller and the caches, and the mix is one buffer. The
+  cost: bringing core 1 up by hand (its reset vector, stack and interrupt routing from the SDK's bare sources; the
+  part the emulator once stalled on), spinlocks and cache maintenance between two caches with no documented
+  coherence, and one translation unit of static state read from both sides. Not started.
+- **The firmware's own engine in the browser** (from aroum/fm1-custom-fw, 2026-10-16: FM-1 Mobile compiled X0X,
+  Felucca and SLOOP to WebAssembly behind a touch UI; fm1-emu runs unmodified firmware in a browser). Route (b) of
+  "the drummer without the device", made cheap: the host tests already compile the firmware's sources with a plain
+  cc (hostsim.c), so the same sources through emscripten give the web player the real engine (seq.c, pedal.c,
+  drums.c, the ADPCM kit) instead of `PLAY` and `playHit`, which reimplement it and must be kept in step by hand
+  (the fill rules changed three times in two days; each time both). The page would feed it the pedal's messages
+  and take its audio blocks into Web Audio; the kit's WAVs in web/realkit would no longer be needed there. Not
+  started; `tests/hostsim.c` is the starting point.
+- **A one-switch pedal adapter** (from the same list: pfkellogg's Arduino adapter turns a plain 1/4" footswitch
+  into a MIDI CC over TRS). A fill pedal for a guitarist without an Ampero, for a few euros: one switch sending CC
+  21 (or two: a section change and the fill), the firmware already listening. To do: a page in docs/ with the
+  wiring, a recommended sketch (TRS type A or B as the FM-1's jack turns out: an open question) and the CC map;
+  nothing in the firmware. Not started.
+- **Stage modes for a dark room** (from the official open firmware's "LED illumination modes for dark
+  environments"). BackBeat lights the playing section's key on LIVE; a stage mode would raise the LIVE screen's
+  contrast and the key LEDs' brightness, dim the menus, and perhaps blink the beat on a LED (the pedal has no
+  metronome of its own). A SETUP setting, kept with the pedal's. Not started.
+- **To test on the device: USB audio to a DAW.** SLOOP's USB audio out survived the drums-only stages (uac_fir.h,
+  usb.c; `tests/uac_test.c`), so the drums should record into a DAW session as a class-compliant stereo device, as
+  Melodee's outputs do with take-taker on Android. Verify on hardware with BackBeat's own USB names (fm-static
+  exists because renamed USB descriptors confuse the official updater: ours never needs it, but note it in the
+  recovery docs), then document it. Not started.
+- **The drummer without the FM-1 at all** (the user, 2026-10-16: "exploring the idea of not using the FM-1 at all"; a
+  main reason for the FM-1 was its TRS MIDI jack, since the Ampero only sends its footswitch CCs over TRS). The
+  laptop or the tablet as the drummer, the Ampero's TRS into a USB MIDI bridge built on a spare STM32F4-Discovery
+  (the F407's USB OTG FS port as a class-compliant MIDI device through TinyUSB, a UART at 31250 baud behind an
+  optocoupler, H11L1 at 3.3 V, on a TRS jack of the Ampero's type; one direction; a Pico does the same for less).
+  What exists: the editor's player follows the device's rules step for step (`PLAY`, kept in step by test_web
+  against the firmware's tests), "listen to the pedal" (`PEDALIN`: CC 20..27 and PC from any MIDI input the browser
+  sees), the Setlist tab, the LIVE view, humanize, MIDI clock in, the PWA on Android. What it gives: a kit without
+  the flash limits (full-length cymbals, every layer and take, 44.1 kHz: the recipe keeps the sources; a hi-fi
+  folder for the page is a generator option), unlimited songs, a big screen. What it costs: latency (a laptop with
+  an audio interface about 10 ms; Android's Web Audio out 20..100 ms by tablet: measure first), audio out from the
+  browser (the jack, or a USB interface on a hub beside the bridge), a laptop on stage with its sleep and update
+  hygiene (the PWA on the tablet is more pedal-like), browser audio only after a tap (the Listen button). The FM-1
+  keeps: standalone, a speaker, instant boot, a battery, nothing to wake, and that is the point of it: the user's
+  idea with the FM-1 is "a simpler setup without smart devices or laptops" (2026-10-16), so this is a second rig
+  for when a hi-fi kit or a big screen is worth a laptop on stage, not a replacement, and the firmware stays the
+  product. If the second rig is used, "the firmware's own engine in the browser" (WebAssembly) is what keeps the
+  two in step, and "a responsive site" matters more. To test, in this order: the bridge on the laptop, Listen, a
+  groove, a fill from the Ampero's switch, the latency by ear; then the tablet. Not started.
+- (asked and done 2026-10-15, in four stages: the format and the firmware, the packers and the player, the importer,
+  the editor) **A fill bar of its own.** Before, a fill was not a separate pattern: it switched on the pattern's fill-only hits
+  (and off its not-in-a-fill ones), which the importer put in the phrase's last bar, so a fill asked for in bar 1 of
+  a 4-bar verse was heard in bar 4, and a fill's hit on a step the pattern also hits lost its own level. Now a
+  section may carry a fill bar of its own, which a fill plays instead of the bar it is in (instead of the pattern's
+  last bar until the evening of the same day: "Fills as the arrangers do them"). Decided:
+  - **The format**: section flag bit 1 (`SNG_F_FILLBAR`); after the pattern's steps a byte of steps (1..64, one bar
+    of the section's meter and division as packed) and those steps in the step form (lanes, a byte a hit: level and
+    ratchet, no marks); the section's size covers it (sng.c `sng_walk`, check code 7 for a bad fill bar). In the
+    JSON `"fillbar": {"steps": 16, "lanes": {...}, "ratchets": {...}}` (stage 2).
+  - **What a fill does** (CC 21, LIVE's black keys, SEL, the editor's f): while it is on, the drum track's steps come
+    from the fill bar at the bar's own step (seq.c `fb_dstep`, `drum_src`: step i of the bar is fill step i; the
+    phrase cut from the front, as the fill starts where it was asked for), played as they are: no condition, no
+    mark. A section with no fill bar fills by its marks as before. (As first done that day the fill bar sat on the
+    pattern's last bar and the fill ran to the pattern's end; the arranger model replaced that the same evening.)
+  - **The device**: loaded beside the pattern (`fb_len`, 640 B of RAM at most), cleared with the pattern and by a
+    song unloaded; the section save (EDIT, SAVE held) keeps it as it is: the device edits the pattern only. Tests:
+    song_test.c (checked, loaded, the steps a fill takes, saved back with an edited pattern, cleared).
+  - **The editor**: the fill bar as columns of its own after the pattern, a wide amber gap and a FILL label apart,
+    amber dashed cells edited with the pen's level and ratchet (no marks there); **Add a fill bar** starts it as the
+    pattern's last bar the way a fill played it (its F hits in, its N hits out) and leaves that bar as it plays
+    outside a fill (its F hits out), those marks gone (`SED.fbAdd`); **Remove the fill bar** drops it; the bar
+    strip's **Fill = selected bar** sets it from the file's bar as it is (`SED.withFill`, which made marks before);
+    through split it goes with the last bar, through merge the last part's. The importer emits it instead of the
+    marks, losslessly (a hit on a step the pattern also hit keeps its own level now). Tests: test_web.mjs
+    (editorFillBar: the packers, the player, the operations), gp2song_test.py.
+- (asked 2026-10-15; done 2026-10-16 as CC 21's value) **Play the fill now.** Builds on the fill bar: a command (e.g. CC 28, or some of
   LIVE's black keys) that jumps to the fill bar at once (the rest of this bar from the same beat) or plays it whole
   from the next bar line, the pattern then going on (from where it would have been, or from its top: to decide), a
   section change able to follow it. CC 21 kept as it is (raised 2026-10-14 as "two kinds of fill: now and on the
-  next bar"; asked for 2026-10-15).
-- (done 2026-10-15) **A fill asked in the last bar is the next time round.** The user's rule: CC 21 (LIVE's black
+  next bar"; asked for 2026-10-15). Done: the first half is what CC 21 does since the arrangers' model (the rest of
+  this bar from the fill bar, the pattern from its top after); the second is **CC 21 value 1** (asked 2026-10-16:
+  "if I press the fill too early the current bar enters fill mode and the fill on the next bar does not play"): the
+  whole next bar from anywhere in this one, as a press in the last beat; in a fill, the next bar a fill too; a section
+  with it lands on the bar after the fill bar. Any other value is the fill from now. The case: a fill bar whose hits
+  lead off the bar (Another Brick in the Wall), which the cut from the front never reaches. On the device, OCT+ held
+  with a black key or SEL (the hold the white keys use for "on the next bar"); in the editor, a Fill next bar
+  button in the pedal's row (previous, fill, fill next bar, next; the user's layout for the tablet) and the key F,
+  and the pedal in says FILL NEXT BAR. Considered first and parked: a rule that defers to the next bar by itself when the
+  fill from here would sound exactly like the groove (every lane from the press to the bar line, hits added or
+  dropped; a section without a fill bar: its marks). It never makes a fill worse and it costs a scan of 12 lanes
+  by 48 steps at press time, but it is a strict diff (one extra ghost note in the fill bar's back half counts as
+  "hits ahead"), and the user has an Ampero patch a song, so the switch can say which; the value scheme extends to
+  a second fill bar (value 2) if a song ever needs a lead-off and a build-up in the same section, which none does
+  yet (two fill bars were discussed and turned down: a format change for a case no song has shown). Tests:
+  pedal_test, ui_pages_test (OCT+ + a black key, OCT+ + SEL), test_web (the player, the pedal in's router).
+- (done 2026-10-15, superseded the same evening by "Fills as the arrangers do them": a fill is the rest of its bar, or
+  the next bar from the last beat) **A fill asked in the last bar is the next time round.** The user's rule: CC 21 (LIVE's black
   keys, SEL, the editor's f) in a pattern's last bar no longer fills the rest of that bar (whatever fill hits are
   still ahead): the next cycle is the fill, all of it (`pedal_fill_wait`, the editor's `fillWait`; a one-bar verse:
   the next bar). A section change asked for meanwhile waits for the fill (live_block holds `pedal_at_end` while a
@@ -510,8 +682,8 @@ hazard; what it found and what was done:
   that hit's mark as OCT+ does a step's) and a mark on the grid where the selected lane's hit has one (the
   step tile's F / x corner, ui_layers.c, is the step's). To check: which lane the gesture means on a step with
   several hits (the selected sound, as SEQ's SOUND knob), the undo, and that the editor's live sync sees it.
-- (done 2026-10-14, the user's report on Time's verse) **A fill carries into the next cycle only when it is too late
-  for this one.** CC 21 (LIVE's black keys, SEL, the editor's f) made the fill last to the pattern's end, and through
+- (done 2026-10-14, the user's report on Time's verse; gone 2026-10-15 with the arranger model: no fill carries past
+  its bar line) **A fill carries into the next cycle only when it is too late for this one.** CC 21 (LIVE's black keys, SEL, the editor's f) made the fill last to the pattern's end, and through
   the next cycle too when asked in the pattern's last bar: a one-bar pattern (Time's verse) therefore always filled
   twice. Now it carries only when the pattern's fill hits (a step's FILL ONLY, a hit's F mark) are all behind the
   request (pedal.c `pedal_fill_req` from the drum track's step, the editor's `PLAY.fillNext` / `fillHits` alike); a

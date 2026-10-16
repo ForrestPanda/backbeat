@@ -4,9 +4,10 @@
  * stored, C is empty. Checks: a section from stopped starts the loop with it; a section while playing
  * lands exactly on the next bar; next / previous skip the empty section and wrap; empty sections,
  * other channels and program changes are ignored; the pedal channel can be off or omni; tap tempo;
- * stop. Milestone 2: a section asked for makes the rest of the bar a fill (SLOOP's fill_now), CC 27
- * a whole fill bar first, CC 21 fills the next bar, CC 22 plays the outro once and stops on the bar
- * (or stops on the next bar with no outro), and a section asked for cancels an ending. */
+ * stop. Milestone 2: fills and endings. Since 2026-10-15 a fill (CC 21) is an arranger's fill-in: the rest
+ * of this bar (asked in its last beat: the whole next bar), then the pattern from its top, or the section
+ * asked for, which lands on the bar after the fill; CC 22 plays the outro once and stops on the bar (or
+ * stops on the next bar with no outro), and a section asked for cancels an ending. */
 #define FELUCCA_DRUMMER 1
 #define main hostsim_main
 #include "hostsim.c"
@@ -190,22 +191,83 @@ int main(void)
     printf("pedal: CC 27: the section on the next bar, no fill PASS\n");
 
 
-    /* CC 21 in a 1-bar section (D), so in its last bar: the next bar is the fill (2026-10-15: before, the rest of this
-     * bar and the next one), the section stays */
+    /* CC 21 (the fill) in D, on its second beat: the rest of this bar is the fill, over at the bar line, D again from
+     * its top (as an arranger's fill-in: 2026-10-15; before, to the pattern's end); the section stays */
     advance(bar / 4u);
     cc(16, 21, 0); advance(CTL * 2u);                /* (fill_now is read before the MIDI loop: one block more) */
-    assert(!fill_now && pedal_fill_wait && pedal_fill_hold == 2u && !fill_arm);
-    advance(bar - (now - t0) % bar + CTL);                 /* into the next bar: the fill */
-    assert(fill_now && !pedal_fill_wait && pedal_fill_hold == 1u && live_sec == 3);
-    advance(bar);                                          /* over */
-    assert(!fill_now && !pedal_fill_hold && live_sec == 3);
-    printf("pedal: the fill asked in a 1-bar section: the next bar PASS\n");
+    assert(fill_now && pedal_fill && pedal_fill_bars == 1u && !pedal_fill_wait && !fill_arm);
+    advance(bar - (now - t0) % bar + CTL);                 /* into the next bar: over, D from its top */
+    assert(!fill_now && !pedal_fill && live_sec == 3 && live_bar == 0 && TDRUM->seq_idx < 2u);
+    cc(16, 21, 0); advance(CTL * 2u);                      /* asked again at once (its first beat): this bar */
+    assert(fill_now && pedal_fill);
+    cc(16, 21, 0); advance(CTL * 2u);                      /* ..and again while it plays: nothing new */
+    assert(fill_now && pedal_fill && pedal_fill_bars == 1u && !pedal_fill_wait);
+    advance(bar - (now - t0) % bar + CTL);
+    assert(!fill_now && !pedal_fill);
+    /* asked again in a fill's last beat: the next bar is a fill too, straight on (two presses, a two-bar fill), the
+     * pattern from its top after both */
+    cc(16, 21, 0); advance(CTL * 2u);                      /* (the bar's first beat: this bar) */
+    assert(fill_now && pedal_fill && live_bar == 0);
+    advance(3u * bar / 4u + CTL * 2u);                     /* its last beat */
+    cc(16, 21, 0); advance(CTL * 2u);
+    assert(fill_now && pedal_fill && pedal_fill_wait);
+    advance(bar - (now - t0) % bar + CTL);                 /* the next bar: still a fill, no restart between */
+    assert(fill_now && pedal_fill && !pedal_fill_wait && pedal_fill_bars == 1u && live_bar == 1);
+    advance(bar / 2u);
+    assert(fill_now);
+    advance(bar - (now - t0) % bar + CTL);                 /* over after the second bar: D from its top */
+    assert(!fill_now && !pedal_fill && live_bar == 0);
+    /* asked for in the bar's last beat: the whole next bar is the fill (too late for less than a beat of it) */
+    advance(3u * bar / 4u + CTL * 2u);                     /* the last beat */
+    cc(16, 21, 0); advance(CTL * 2u);
+    assert(!fill_now && !pedal_fill && pedal_fill_wait);
+    advance(bar - (now - t0) % bar + CTL);                 /* the next bar: the fill, whole */
+    assert(fill_now && pedal_fill && !pedal_fill_wait && pedal_fill_bars == 1u);
+    advance(bar / 2u);
+    assert(fill_now);
+    advance(bar - (now - t0) % bar + CTL);                 /* over */
+    assert(!fill_now && !pedal_fill && live_sec == 3 && live_bar == 0);
+    printf("pedal: the fill: the rest of this bar, then the pattern from its top; in the last beat, the next bar PASS\n");
+
+    /* CC 21 value 1 (2026-10-16, a fill bar whose hits lead off the bar): the whole next bar from anywhere in this
+     * one, as a press in its last beat; in a fill, the next bar a fill too; a section with it lands on the bar after
+     * the fill bar; any other value is the fill from now (LIVE's keys send 127) */
+    advance(bar / 4u);                                     /* D's second beat */
+    cc(16, 21, 1); advance(CTL * 2u);
+    assert(!fill_now && !pedal_fill && pedal_fill_wait);
+    advance(bar - (now - t0) % bar + CTL);                 /* the next bar: the fill, whole */
+    assert(fill_now && pedal_fill && !pedal_fill_wait && pedal_fill_bars == 1u);
+    cc(16, 21, 1); advance(CTL * 2u);                      /* value 1 in the fill's first beat: the next bar a fill too */
+    assert(fill_now && pedal_fill && pedal_fill_wait);
+    advance(bar - (now - t0) % bar + CTL);
+    assert(fill_now && pedal_fill && !pedal_fill_wait && pedal_fill_bars == 1u && live_bar == 2);   /* (D's third bar
+                                                            * since it started: no restart between) */
+    advance(bar - (now - t0) % bar + CTL);                 /* over after the second: D from its top */
+    assert(!fill_now && !pedal_fill && live_sec == 3 && live_bar == 0);
+    advance(bar / 4u);
+    cc(16, 21, 1); cc(16, 20, 0); advance(CTL * 2u);       /* with a section: A on the bar after the fill bar */
+    assert(!pedal_fill && pedal_fill_wait && live_req == 0 && !pedal_at_end);
+    advance(bar - (now - t0) % bar + CTL);                 /* the fill bar first, still D */
+    assert(fill_now && pedal_fill && live_sec == 3 && live_req == 0);
+    advance(bar - (now - t0) % bar + CTL);                 /* then A */
+    assert(!fill_now && !pedal_fill && live_sec == 0 && live_req < 0);
+    cc(16, 27, 3); advance(bar - (now - t0) % bar + CTL);  /* D again (on the next bar), from its top */
+    assert(live_sec == 3 && live_bar == 0 && !pedal_fill);
+    advance(bar / 4u);
+    cc(16, 21, 127); advance(CTL * 2u);                    /* any other value: from now */
+    assert(fill_now && pedal_fill && !pedal_fill_wait);
+    advance(bar - (now - t0) % bar + CTL);
+    assert(!fill_now && !pedal_fill && live_sec == 3 && live_bar == 0);
+    advance(bar);                                          /* (one bar more: seven bar lines above, and the tests after
+                                                            * count on the bar lines' phase against the blocks, a half
+                                                            * block a bar) */
+    printf("pedal: CC 21 value 1: the whole next bar from anywhere; in a fill, another; a section after the fill bar PASS\n");
 
     /* CC 20 with the section playing (D), nothing cued: nothing (it was a fill before 2026-10-14), D goes on; CC 27
      * the same */
     advance(bar / 4u);
     cc(16, 20, 3); advance(CTL * 2u);
-    assert(!fill_now && !pedal_fill_hold && live_req == -1);
+    assert(!fill_now && !pedal_fill && live_req == -1);
     advance(bar - (now - t0) % bar + CTL);                 /* into the next bar */
     assert(!fill_now && live_sec == 3 && live_bar >= 1);  /* (no restart: the bar count goes on) */
     advance(bar);
@@ -254,7 +316,7 @@ int main(void)
     cc(16, 22, 0); advance(bar + CTL * 2u);
     assert(song.playing && live_sec == 0 && pedal_end_bars == 1);
     cc(16, 20, 0); advance(CTL * 2u);
-    assert(live_req == 0 && !pedal_fill_hold && !pedal_end_req);
+    assert(live_req == 0 && !pedal_fill && !pedal_end_req);
     advance(bar * 2u);
     assert(song.playing && live_sec == 0 && !pedal_end_bars);
     cc(16, 23, 0); advance(CTL * 2u);
@@ -370,8 +432,8 @@ int main(void)
     NEXT_BAR();
     assert(!song.playing);
     printf("pedal: the ending with no outro waits for the section's end PASS\n");
-    /* CC 21 and CC 20 sent together (a footswitch's two messages, either order): the fill to the section's end, the
-     * change there, the fill over */
+    /* CC 21 and CC 20 sent together (a footswitch's two messages, either order): the fill to the bar's end, the change
+     * on the bar after it (an arranger's AUTO FILL IN), the fill over: in D's first bar, D's second bar never plays */
     {
         uint32_t order;
         for (order = 0; order < 2u; order++) {
@@ -379,28 +441,43 @@ int main(void)
             advance(bar / 4u);
             if (order) { cc(16, 20, 0); cc(16, 21, 0); } else { cc(16, 21, 0); cc(16, 20, 0); }
             advance(CTL * 2u);
-            assert(fill_now && pedal_at_end && live_req == 0);
+            assert(fill_now && !pedal_at_end && live_req == 0);
             NEXT_BAR();
-            assert(fill_now && live_sec == 3);             /* D's last bar: still the fill */
-            NEXT_BAR();
-            assert(live_sec == 0 && !fill_now && !pedal_fill_hold);   /* A, the fill over */
+            assert(live_sec == 0 && !fill_now && !pedal_fill && live_bar == 0);   /* A on the next bar, the fill over */
             cc(16, 23, 0); advance(CTL * 2u);
         }
-        /* in the section's last bar: D's next cycle the fill, then the change (it waits for the fill: 2026-10-15) */
+        /* in the bar's last beat: the next bar the fill (whole), then the change */
         cc(16, 20, 3); advance(CTL * 3u);
-        NEXT_BAR();                                        /* D's last bar */
-        advance(bar / 4u);
+        advance(3u * bar / 4u + CTL * 2u);                 /* D's first bar, its last beat */
         cc(16, 21, 0); cc(16, 20, 0); advance(CTL * 2u);
-        assert(!fill_now && pedal_fill_wait && pedal_fill_hold == 2u && live_req == 0 && pedal_at_end);
+        assert(!fill_now && pedal_fill_wait && live_req == 0 && !pedal_at_end);
         NEXT_BAR();
-        assert(live_sec == 3 && fill_now && live_req == 0);   /* D again, the fill */
+        assert(live_sec == 3 && fill_now && pedal_fill && live_req == 0);   /* D's second bar, the fill */
         NEXT_BAR();
-        assert(live_sec == 3 && fill_now);                 /* (its second bar) */
+        assert(live_sec == 0 && !fill_now && !pedal_fill);   /* then A */
+        cc(16, 23, 0); advance(CTL * 2u);
+        /* a section cued first (at D's end), the fill asked for later: the change comes with the fill's end instead */
+        cc(16, 20, 3); advance(CTL * 3u);
+        advance(bar / 4u);
+        cc(16, 20, 0); advance(CTL * 2u);
+        assert(live_req == 0 && pedal_at_end && !fill_now);
+        advance(bar / 4u);
+        cc(16, 21, 0); advance(CTL * 2u);
+        assert(live_req == 0 && !pedal_at_end && fill_now);
         NEXT_BAR();
-        assert(live_sec == 0 && !fill_now && !pedal_fill_hold);   /* then A */
+        assert(live_sec == 0 && !fill_now);                /* A after D's first bar */
+        cc(16, 23, 0); advance(CTL * 2u);
+        /* CC 27 with a fill playing: on the bar after the fill too (the same bar) */
+        cc(16, 20, 3); advance(CTL * 3u);
+        advance(bar / 4u);
+        cc(16, 21, 0); advance(CTL * 2u);
+        cc(16, 27, 0); advance(CTL * 2u);
+        assert(live_req == 0 && !pedal_at_end && fill_now);
+        NEXT_BAR();
+        assert(live_sec == 0 && !fill_now);
         cc(16, 23, 0); advance(CTL * 2u);
     }
-    printf("pedal: CC 21 with CC 20: the fill to the section's end, into the change PASS\n");
+    printf("pedal: CC 21 with CC 20 (or 27, either order, before or after): the fill, the change on the bar after it PASS\n");
     /* the ending with the outro A: after D's end (no fill), A once, the stop */
     cc(16, 20, 3); advance(CTL * 3u);                      /* D from stopped */
     advance(bar / 4u);
@@ -413,28 +490,48 @@ int main(void)
     NEXT_BAR();
     assert(!song.playing);
     printf("pedal: the ending with an outro waits for the section's end PASS\n");
-    /* CC 21 in the 2-bar D: asked for in its first bar, the fill runs to the pattern's end and stops there, D goes on;
-     * asked for in its last bar, through the next cycle (two more bars) */
+    /* CC 21 in the 2-bar D: the fill is the rest of the bar it is asked in, first or last; then D from its top (its bar
+     * count too: the pattern restarts, as an arranger's variation after its fill-in) */
     cc(16, 20, 3); advance(CTL * 3u);                      /* D from stopped */
     advance(bar / 4u);
     cc(16, 21, 0); advance(CTL * 2u);
-    assert(fill_now && pedal_fill_hold == 1u && live_sec == 3);
+    assert(fill_now && pedal_fill && pedal_fill_bars == 1u && live_sec == 3 && live_bar == 0);
     NEXT_BAR();
-    assert(fill_now && live_sec == 3 && live_bar == 1);
+    assert(!fill_now && !pedal_fill && live_sec == 3 && live_bar == 0 && TDRUM->seq_idx < 2u);   /* D from its top, not
+                                                            * its second bar */
     NEXT_BAR();
-    assert(!fill_now && live_sec == 3 && live_bar == 2 && !pedal_fill_hold);   /* (D's second cycle, no fill) */
-    NEXT_BAR();
-    advance(bar / 4u);                                     /* D's last bar: the next cycle is the fill */
+    assert(!fill_now && live_bar == 1);                    /* D's last bar */
+    advance(bar / 4u);
     cc(16, 21, 0); advance(CTL * 2u);
-    assert(!fill_now && pedal_fill_wait && pedal_fill_hold == 2u);
+    assert(fill_now && pedal_fill && live_bar == 1);
     NEXT_BAR();
-    assert(fill_now && live_bar == 4);
+    assert(!fill_now && live_sec == 3 && live_bar == 0 && song.playing);
+    /* the ending with no outro, asked for before a fill: the stop at the fill's end */
+    advance(bar / 4u);
+    cc(16, 22, 9); advance(CTL * 2u);
+    assert(pedal_end_bars == 2u && pedal_at_end && !fill_now);
+    cc(16, 21, 0); advance(CTL * 2u);
+    assert(fill_now && pedal_end_bars);
     NEXT_BAR();
-    assert(fill_now && live_bar == 5);
+    assert(!song.playing);                                 /* (not D's end: the fill's) */
+    /* ..and asked for during a fill: the same */
+    cc(16, 20, 3); advance(CTL * 3u);
+    advance(bar / 4u);
+    cc(16, 21, 0); advance(CTL * 2u);
+    cc(16, 22, 9); advance(CTL * 2u);
+    assert(fill_now && pedal_end_bars);
     NEXT_BAR();
-    assert(!fill_now && live_sec == 3 && song.playing);
-    cc(16, 23, 0); advance(CTL * 2u);
-    printf("pedal: the fill lasts to the pattern's end; asked in its last bar, the next cycle PASS\n");
+    assert(!song.playing);
+    /* the ending with the outro A, asked for with a fill: A after the fill's bar, once, then the stop */
+    cc(16, 20, 3); advance(CTL * 3u);
+    advance(bar / 4u);
+    cc(16, 21, 0); cc(16, 22, 0); advance(CTL * 2u);
+    assert(fill_now && live_req == 0 && pedal_end_req == 1u && !pedal_at_end);
+    NEXT_BAR();
+    assert(live_sec == 0 && !fill_now && pedal_end_bars == 1u && song.playing);
+    NEXT_BAR();
+    assert(!song.playing);
+    printf("pedal: the fill in a 2-bar section: this bar, then the pattern from its top; an ending or an outro after it PASS\n");
 
     /* LIVE's keys (ui_drummer.c): a section with no fill of its own, on the next bar (PS_BAR) or when the one playing
      * ends (PS_END); a fill asked for first (CC 21) goes on into the change */
@@ -454,11 +551,11 @@ int main(void)
         advance(bar / 4u);
         cc(16, 21, 0); advance(CTL * 2u);
         pedal_section(0, PS_END);
-        assert(fill_now && pedal_at_end && live_req == 0);
+        assert(fill_now && !pedal_at_end && live_req == 0);
         for (k = 0; k < 16u * bar / CTL && live_sec == 3; k++) { advance(CTL); assert(fill_now || live_sec != 3); }
-        assert(live_sec == 0);                             /* the fill to D's end, then A */
+        assert(live_sec == 0 && since_start() % bar < 2u * CTL);   /* the fill to the bar's end, then A */
         pedal_section(0, PS_END); advance(CTL * 2u);
-        assert(live_req < 0 && !pedal_fill_hold);         /* the section playing again: nothing, no fill */
+        assert(live_req < 0 && !pedal_fill);              /* the section playing again: nothing, no fill */
         cc(16, 23, 0); advance(CTL * 2u);
     }
     printf("pedal: LIVE's keys: a section on the next bar or at the end with no fill; a fill first goes into it PASS\n");

@@ -1,23 +1,26 @@
 {
  "name": "TRAIN BEAT",
  "bpm": 152,
- "kit": 46,
+ "kit": 0,
  "swing": 0,
  "drum_level": 100,
  "drum_reverb": 20,
  "sections": [
   {
    "name": "VERSE",
-   "steps": 64,
+   "steps": 16,
    "div": "1/16",
    "lanes": {
-    "KICK": "x...x...x...x...x...x...x...x...x...x...x...x...x...x...x...x...",
-    "PEDAL": "....x.......x.......x.......x.......x.......x.......x.......x...",
-    "SNARE": "gsgsXsgsgsgsXsgsgsgsXsgsgsgsXsgsgsgsXsgsgsgsXsgsgsgsXsgsgsgsXsgs"
+    "KICK": "x...x...x...x...",
+    "PEDAL": "....x.......x...",
+    "SNARE": "gsgsXsgsgsgsXsgs"
    },
-   "fills": {
-    "PEDAL": "....................................................N.......N...",
-    "SNARE": ".................................................N..N..N..N....."
+   "fillbar": {
+    "steps": 16,
+    "lanes": {
+     "KICK": "x...x...x...x...",
+     "SNARE": "g.gs.sg.gs.sXsgs"
+    }
    }
   },
   {
@@ -26,14 +29,16 @@
    "div": "1/16",
    "lanes": {
     "CRASH": "X...............................................................",
-    "KICK": "x.......x.......x.......x.......x.......x.......x...x...x...x...",
+    "KICK": "x.......x.......x.......x.......x.......x.......x.......x.......",
     "RIDE": "x.s.x.s.x.s.x.s.x.s.x.s.x.s.x.s.x.s.x.s.x.s.x.s.x.s.x.s.x.s.x.s.",
-    "SNARE": "....X.......X.......X.......X.......X.......X...X.gXXgX.gX.gXXXX"
+    "SNARE": "....X.......X.......X.......X.......X.......X.......X.......X..."
    },
-   "fills": {
-    "KICK": "....................................................F.......F...",
-    "RIDE": "................................................N.N.N.N.N.N.N.N.",
-    "SNARE": "................................................F.FFNFF.FF.F.FFF"
+   "fillbar": {
+    "steps": 16,
+    "lanes": {
+     "KICK": "x...x...x...x...",
+     "SNARE": "X.gX.gX.gX.gXXXX"
+    }
    }
   }
  ]

@@ -104,10 +104,10 @@ int main(void)
     host_tracks_init();
     song.g[G_DRREV] = 0;
     song.g[G_BPM] = 120;
-    check(DRUM_SYN == DRUM_PAIR + 1u && DRUM_KITS == DRUM_SYN + 5u && !strcmp(DRUM_KIT_NAMES[DRUM_SYN], "SYN1") &&
+    check(DRUM_SYN == DRUM_PAIR + 1u && DRUM_KITS == DRUM_SYN + 4u && !strcmp(DRUM_KIT_NAMES[DRUM_SYN], "SYN1") &&
           !strcmp(DRUM_KIT_NAMES[DRUM_SYN + 3u], "SYN4") && !strcmp(DRUM_KIT_STYLES[DRUM_SYN], "YOUR SYNTH") &&
-          DRUM_REAL == DRUM_KITS - 1u && !strcmp(DRUM_KIT_NAMES[DRUM_REAL], "MULDJORD"),
-          "the kit list: SYN1..SYN4 after USR3+4, then MULDJORD (older projects keep their kit)");
+          DRUM_REAL == 0u && DRUM_SYN + DSU_N == DRUM_KITS && !strcmp(DRUM_KIT_NAMES[DRUM_REAL], "MULDJORD"),
+          "the kit list: MULDJORD first (2026-10-15), SYN1..SYN4 last after USR3+4");
     (void)dsu_kit(0);
     ok = 1;
     for (k = 0; k < DSU_N; k++)
@@ -130,7 +130,7 @@ int main(void)
         drum_on(38, 100);
         for (i = 0; i < NDRUM; i++)
             act += drums.v[i].active && drums.synth[i] && drums.ds[i].d == &dsu.k[2].s[1] && drums.kit[i] == DRUM_SYN + 2u;
-        TDRUM->p[P_E0] = (int16_t)(DRUM_SAMPLED + 5u);
+        TDRUM->p[P_E0] = (int16_t)(DRUM_DS0 + 5u);
         drum_on(38, 100);
         for (i = 0; i < NDRUM; i++)
             act += drums.v[i].active && drums.synth[i] && drums.ds[i].d == &DS_KITS[5].s[1];

@@ -12,23 +12,29 @@
 
 The JSON (see docs/design.md):
 
-    {"name": "MY SONG", "bpm": 120, "kit": 46, "swing": 0, "drum_level": 100, "drum_reverb": 20,
+    {"name": "MY SONG", "bpm": 120, "kit": 0, "swing": 0, "drum_level": 100, "drum_reverb": 20,
      "sections": [
        {"name": "VERSE", "steps": 16, "div": "1/16", "time": "4/4", "outro": false,
         "lanes": {"KICK": "x...x...x...x...", "SNARE": "....x.......x...", "HAT": "x.x.x.x.x.x.x.x."},
         "ratchets": {"SNARE": "............2..."},
-        "fills": {"HITOM": "............FF..", "HAT": "............NNNN"}}]}
+        "fills": {"HITOM": "............FF..", "HAT": "............NNNN"},
+        "fillbar": {"lanes": {"KICK": "x...x...x...x...", "SNARE": "....x...x.x.xxxx", "CRASH": "...............X"}}}]}
 
 A lane string has one character a step: '.' rest, 'g' ghost, 's' soft, 'x' normal, 'X' hard. A ratchet
 string: '.' or 1, or 2..4 repeats inside the step. "fills" marks a lane's hits one by one: '.' plays
 always, 'F' only during a fill (the pedal's CC 21, or the LIVE screen's black keys and SEL), 'N' never
-during one. The older "fill" string does the same for a whole step, every lane at once. Lanes:
+during one. The older "fill" string does the same for a whole step, every lane at once. "fillbar" (2026-10-15) is a
+fill bar of the section's own: one bar (of its time and div; "steps" inside it to say otherwise, 1..64) of "lanes"
+and "ratchets" that a fill plays instead of the bar it is in, as it is (no marks there): from the press to the
+bar's end, its step i at the bar's step i (an arranger's fill-in), then the pattern from its top, or the change.
+Lanes:
 KICK, KICK2, SNARE, CLAP, HAT, OPENHAT, PEDAL, RIM, SNARE2, LOWTOM, MIDTOM, HITOM, CRASH, RIDE, SHAKER, COWBELL
 (MIDTOM since 2026-10-14, where the conga was: "CONGA" still reads as it; spaces and case do not matter). div: 1/4 1/8 1/16 1/32 8T 16T 1/2 1BAR 2BAR. time: the section's meter,
 n/d with n 1..16 and d 2, 4, 8 or 16 (none: 4/4); the pedal's bars, the click and the count-in follow it. A section is
 whole bars of its time (a change waits for the bar line): a pickup is a short bar, a 4-step intro of 1/16 "1/4";
 a section that is not gets a warning with the signature that fits. kit: the
-index in the device's KIT list (0 ACOUSTIC .. as the web editor shows them). Up to 16 sections; the packed song
+index in the device's KIT list (0 MULDJORD, 1 808 .., as the web editor shows them since 2026-10-15; before, 0..4
+were the GM-sampled kits ACOUSTIC..DUST, gone, and MULDJORD was 46). Up to 16 sections; the packed song
 ("SNG2": a section header of 18 bytes, the fill conditions, then a step: 2 bytes of lanes and a byte a hit) must
 stay under 3800 bytes: 64 steps of three hits take about 340 bytes, so 8 full sections fit, and 16 of the usual
 16..48 steps (about 60..150 bytes each).
@@ -55,7 +61,7 @@ def song_obj(slot):
 SNG_MAGIC = b"SNG2"
 HDR, SEC_HDR = 32, 18
 SNG_MAX = 3800
-KIT_DEFAULT = 46                                     # drums.c DRUM_REAL: MULDJORD, the layered kit (0 ACOUSTIC before)
+KIT_DEFAULT = 0                                      # drums.c DRUM_REAL: MULDJORD, the layered kit, first (46 until 2026-10-15)
 SNG_SECTIONS = 16                                    # seq.c SNG_SECTIONS (8 until 2026-10-14)
 NSTEP = 64
 LANES = ["KICK", "KICK2", "SNARE", "CLAP", "HAT", "OPENHAT", "PEDAL", "RIM",
@@ -132,17 +138,17 @@ def bar_warnings(spec):
     return out
 
 
-def pack_section(sec, index):
-    name = str(sec.get("name", f"PART {index + 1}"))[:12]
-    steps = int(sec.get("steps", 16))
-    div = sec.get("div", "1/16")
-    if not 1 <= steps <= NSTEP:
-        sys.exit(f"{name}: steps must be 1..{NSTEP}")
-    if div not in DIVS:
-        sys.exit(f"{name}: div must be one of {' '.join(DIVS)}")
-    meter = meter_byte(sec.get("time"), name)
-    hit = [[None] * 16 for _ in range(steps)]        # each lane's hit byte: level, ratchet << 2, mark << 4
-    for lane, s in sec.get("lanes", {}).items():
+def fillbar_steps(sec):
+    """the steps of one bar of the section's time at its div, or None when a bar is not a whole number of them"""
+    num, den = (int(x) for x in str(sec.get("time") or "4/4").split("/"))
+    bar, su = 192 * num // den, STEP_U[sec.get("div", "1/16")]
+    return bar // su if bar % su == 0 and 1 <= bar // su <= NSTEP else None
+
+
+def parse_hits(obj, steps, name):
+    """the hit table of a pattern ("lanes", "ratchets"): each lane's hit byte (level, ratchet << 2) or None a step"""
+    hit = [[None] * 16 for _ in range(steps)]
+    for lane, s in obj.get("lanes", {}).items():
         k = lane_index(lane)
         s = str(s)
         if len(s) > steps:
@@ -153,7 +159,7 @@ def pack_section(sec, index):
             if ch not in LEVELS:
                 sys.exit(f"{name}: lane {lane}: '{ch}' is not one of . g s x X")
             hit[i][k] = LEVELS[ch]
-    for lane, s in sec.get("ratchets", {}).items():
+    for lane, s in obj.get("ratchets", {}).items():
         k = lane_index(lane)
         for i, ch in enumerate(str(s)):
             if ch in ".1":
@@ -162,6 +168,28 @@ def pack_section(sec, index):
                 sys.exit(f"{name}: ratchets {lane}: '{ch}' is not . 1 2 3 4")
             if i < steps and hit[i][k] is not None:
                 hit[i][k] |= (int(ch) - 1) << 2
+    return hit
+
+
+def pack_steps(hit):
+    """the steps of a hit table: 2 bytes of lanes, then a byte a hit"""
+    body = bytearray()
+    for row in hit:
+        on = sum(1 << k for k in range(16) if row[k] is not None)
+        body += struct.pack("<H", on) + bytes(h for h in row if h is not None)
+    return body
+
+
+def pack_section(sec, index):
+    name = str(sec.get("name", f"PART {index + 1}"))[:12]
+    steps = int(sec.get("steps", 16))
+    div = sec.get("div", "1/16")
+    if not 1 <= steps <= NSTEP:
+        sys.exit(f"{name}: steps must be 1..{NSTEP}")
+    if div not in DIVS:
+        sys.exit(f"{name}: div must be one of {' '.join(DIVS)}")
+    meter = meter_byte(sec.get("time"), name)
+    hit = parse_hits(sec, steps, name)               # each lane's hit byte: level, ratchet << 2, mark << 4
     for lane, v in sec.get("fills", {}).items():    # a lane's own marks: F only during a fill, N not during one
         k = lane_index(lane)
         v = str(v)
@@ -182,13 +210,28 @@ def pack_section(sec, index):
         if ch not in CONDS:
             sys.exit(f"{name}: fill: '{ch}' is not . F N")
         fill[i // 4] |= CONDS[ch] << (2 * (i % 4))
-    body = bytearray(fill)
-    for i in range(steps):
-        on = sum(1 << k for k in range(16) if hit[i][k] is not None)
-        body += struct.pack("<H", on) + bytes(h for h in hit[i] if h is not None)
+    body = bytearray(fill) + pack_steps(hit)
+    flags = 1 if sec.get("outro") else 0
+    fb = sec.get("fillbar")
+    if fb is not None:                               # the fill bar of its own: its steps, then them as above
+        if not isinstance(fb, dict):
+            sys.exit(f"{name}: fillbar must be an object of lanes and ratchets")
+        if "fills" in fb or "fill" in fb:
+            sys.exit(f"{name}: fillbar: no fill marks there (a fill plays it as it is)")
+        n = fb.get("steps")
+        if n is None:
+            n = fillbar_steps(sec)
+            if n is None:
+                sys.exit(f"{name}: fillbar: a bar of {sec.get('time') or '4/4'} at {div} is not a whole number of steps: "
+                         f"give it \"steps\"")
+        n = int(n)
+        if not 1 <= n <= NSTEP:
+            sys.exit(f"{name}: fillbar: steps must be 1..{NSTEP}")
+        body += bytes([n]) + pack_steps(parse_hits(fb, n, f"{name} fillbar"))
+        flags |= 2
     size = SEC_HDR + len(body)
     out = bytearray(name.encode("ascii", "replace").ljust(12, b"\0"))
-    out += bytes([steps, DIVS.index(div), 1 if sec.get("outro") else 0, meter]) + struct.pack("<H", size)
+    out += bytes([steps, DIVS.index(div), flags, meter]) + struct.pack("<H", size)
     return bytes(out + body)
 
 
@@ -240,7 +283,7 @@ def describe(blob):
             hits += n
             q += 2 + n
         print(f"  {k}: {sname:12s} {steps:2d} steps {DIVS[div]:5s} {meter_str(meter) or '4/4':5s} {hits:3d} hits {size:4d} bytes"
-              f"{'  OUTRO' if flags & 1 else ''}")
+              f"{'  OUTRO' if flags & 1 else ''}{f'  + a fill bar of {blob[q]} steps' if flags & 2 else ''}")
 
 
 def pack7(b):

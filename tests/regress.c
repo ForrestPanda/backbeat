@@ -212,7 +212,7 @@ static void job_groove(const job_t *j)          /* two passes of the groove, the
 }
 static void job_insert(const job_t *j)          /* the drum track's INSERT (fx.c): type arg, its knobs half up */
 {
-    groove(DRUM_SAMPLED, 0);   /* (808: the renders before the layered kit became the default) */
+    groove(DRUM_DS0, 0);   /* (808: the renders before the layered kit became the default) */
     TDRUM->p[P_ITYPE] = j->arg;
     TDRUM->p[P_IA] = TDRUM->p[P_IB] = TDRUM->p[P_IC] = 64;
     TDRUM->p[P_IMIX] = 100;
@@ -226,7 +226,7 @@ static void job_insert(const job_t *j)          /* the drum track's INSERT (fx.c
 }
 static void job_master(const job_t *j)          /* arg 0: DUST, 1: the DJ filter low-pass, 2: high-pass */
 {
-    groove(DRUM_SAMPLED, 0);   /* (808: the renders before the layered kit became the default) */
+    groove(DRUM_DS0, 0);   /* (808: the renders before the layered kit became the default) */
     if (j->arg == 0u)
         song.g[G_DUST] = 90;
     else
@@ -285,7 +285,7 @@ static void job_cpu(const job_t *j)
     if (j->kit == 0xFEu)
         host_tracks_init();                     /* idle: nothing plays */
     else if (j->busy || j->kit != 0xFFu)
-        groove(j->kit == 0xFFu ? DRUM_SAMPLED : j->kit, j->busy);
+        groove(j->kit == 0xFFu ? DRUM_DS0 : j->kit, j->busy);
     else
         host_tracks_init();
     if (j->busy || (j->kit != 0xFFu && j->kit != 0xFEu))
@@ -428,7 +428,7 @@ static int chk_hang(char *msg, uint32_t n)
     char who[96] = "";
     int bad = 0;
     for (round = 0; round < 3u && !bad; round++) {
-        groove(DRUM_SAMPLED, 0);   /* (808: the renders before the layered kit became the default) */
+        groove(DRUM_DS0, 0);   /* (808: the renders before the layered kit became the default) */
         transport_req = 1;
         for (k = 0; k < 6u * FS / CTL; k++) {
             uint32_t r = rnd(16);
@@ -543,8 +543,8 @@ int main(int argc, char **argv)
 
     /* 1 + 2: the golden renders */
     g0 = nj;
-    add(J_DRUMS, "drums/gm_kit");
-    for (i = 0; i < DRUM_USR; i++) {             /* the built-in kits (the user slots and SYN kits are the user's) */
+    for (i = DRUM_DS0; i < DRUM_USR; i++) {      /* the synthesised kits (the user slots and SYN kits are the user's;
+                                                  * MULDJORD, kit 0, below with its own groove) */
         job_t *j;
         slug(s, DRUM_KIT_NAMES[i], sizeof s);
         snprintf(name, sizeof name, "drums/groove/%02u_%s", i, s);
@@ -568,7 +568,7 @@ int main(int argc, char **argv)
     }
     g1 = nj;
     {   /* determinism: the first render once more */
-        job_t *j = add(J_DRUMS, "repeat");
+        job_t *j = add(J_GROOVE, "repeat");
         *j = J[g0];
         snprintf(j->name, sizeof j->name, "repeat");
     }
@@ -589,7 +589,7 @@ int main(int argc, char **argv)
         j->kit = 0xFFu;
         j->busy = 1;
     }
-    for (i = 0; i < DRUM_USR; i++) {
+    for (i = DRUM_DS0; i < DRUM_USR; i++) {
         slug(s, DRUM_KIT_NAMES[i], sizeof s);
         snprintf(name, sizeof name, "cpu/groove/%02u_%s", i, s);
         add(J_CPU, name)->kit = (uint8_t)i;

@@ -59,7 +59,6 @@ static void reset(uint32_t bpm)
     for (i = 0; i < NTRK; i++)
         steps_clear(&trk[i]);
     memset(&drums, 0, sizeof drums);
-    drums.set = -2;
     nhits = 0;
     blk = 0;
     song.g[G_BPM] = (int16_t)bpm;
@@ -94,6 +93,10 @@ static uint32_t hum_run(uint32_t amt, hit_t *out)
     reset(120);
     drum_hum = (uint8_t)amt;
     TDRUM->p[P_E0] = (int16_t)DRUM_REAL;
+    rk_seed = 1;                                                           /* the round robins from the same point: a run
+                                                                            * is the same as another only from one seed
+                                                                            * (the hats have one take; the crash two) */
+    memset(rk_last, 0, sizeof rk_last);
     for (i = 0; i < 16u; i++) {
         dstep_set(&TDRUM->dstep[i], 4u, LV_NORM, 0);                      /* HAT, every 16th */
         if (!(i & 1u))
@@ -330,6 +333,8 @@ static void t_levels(void)
 {
     uint32_t i, gh = 0, hd = 0;
     reset(120);
+    TDRUM->p[P_E0] = (int16_t)DRUM_DS0;              /* (the 808: a hit at its own velocity; kit 0 is MULDJORD since
+                                                      * 2026-10-15, which plays a layer at the layer's velocity) */
     transport_req = 1;
     run_block();
     fm1_in.buttons = dyn_bit[0];                     /* OCT- held: a ghost snare (A3 = key 4) */

@@ -58,11 +58,14 @@ try:
     app = tmp / "site" / "webapp"
     sw = (app / "sw.js").read_text(encoding="utf-8")
     files = json.loads(re.search(r"const FILES = (\[.*?\]);", sw).group(1))
-    path = lambda f: (app / f / "index.html") if f.endswith("/") else (app / f)   # noqa: E731
+    unq = __import__("urllib.parse").parse.unquote                                 # (the list is URLs: a '#' in a kit
+    path = lambda f: (app / unq(f) / "index.html") if f.endswith("/") else (app / unq(f))   # noqa: E731  sample's name is %23)
     check("sw.js: stamped with the version", 'const STAMP = "9.9-' in sw and "/*" + "FILES*/" not in sw)
     check("sw.js keeps the installer, the editor, its font, the firmware",
           {"installer/", "editor/", "editor/fukiai.ttf", "../firmware/backbeat-9.9.fwsc"} <= set(files))
     check("sw.js: every file it keeps is in the site", all(path(f).is_file() for f in files))
+    check("sw.js: the list is URLs (a '#' in a kit sample's name encoded, or the request stops at it)",
+          any("%23" in f for f in files) and not any("#" in f for f in files))
     m = json.loads((app / "backbeat.webmanifest").read_text(encoding="utf-8"))
     check("manifest: standalone, starts at the editor, icons 192 and 512 (+ maskable)",
           m["display"] == "standalone" and m["start_url"] == "editor/" and

@@ -7,8 +7,8 @@
  *
  * SONG.bin is a packed song (tools/fm1_song.py --out). The play list: "section:bars" entries, each played for
  * that many bars; the next entry is asked for on beat 3 of the last bar, as a foot would (no fill of its own: a
- * change brings none); with FILLS=1 the fill (CC 21) is asked for on beat 3 of the bar before, so the pattern's
- * fill hits play into the change (a fill asked in a pattern's last bar is the next cycle: pedal.c). A last entry without bars is the ending: that section once as the
+ * change brings none); with FILLS=1 the fill (CC 21) is asked for in the last beat of the bar before, so the whole
+ * last bar is the fill (pedal.c: a fill asked in a bar's last beat is the next bar) into the change. A last entry without bars is the ending: that section once as the
  * outro, then the stop on the bar (CC 22); otherwise the stop (CC 23). Section numbers as in the song (0 the
  * first). Environment: KIT=n overrides the song's kit, BPM=n its tempo, TAIL=seconds of silence after the
  * stop (default 1.5), USRKIT=image a user kit (tools/mkkit.py --image: USR3 and USR4 as the device holds
@@ -161,8 +161,8 @@ int main(int argc, char **argv)
         if (!bars[i])
             bars[i] = sng_bars(sec[i]);
         target = start + bars[i] * bar;
-        if (getenv("FILLS") && i + 1u < ntok && target > bar + bar / 2u && target - bar - bar / 2u > now) {
-            advance(target - bar - bar / 2u - now); /* beat 3 of the bar before: the fill */
+        if (getenv("FILLS") && i + 1u < ntok && target > bar + bar / 8u && target - bar - bar / 8u > now) {
+            advance(target - bar - bar / 8u - now); /* the last beat of the bar before: the next bar, whole, is the fill */
             cc(21, 127);
             printf("%8.3f s  fill\n", now / (double)FS);
         }

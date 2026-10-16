@@ -2,7 +2,7 @@
 
 `grooves/` holds sixteen generic grooves (2026-10-15), apart from the user's songs in `songs/`: drums to jam,
 rehearse or write over, not arrangements of particular songs. They are ordinary song JSON (the format
-`tools/fm1_song.py` describes), on kit 46 (MULDJORD), so they load into the web editor's Setlist tab (sixteen fill
+`tools/fm1_song.py` describes), on kit 0 (MULDJORD), so they load into the web editor's Setlist tab (sixteen fill
 the set), go into an FM-1 slot (`python3 tools/fm1_song.py grooves/seven.json --put 3`), or render on the computer
 (`python3 tools/fm1_render.py grooves/seven.json --play "VERSE:8 CHORUS:8 VERSE:4" --fills`).
 
@@ -15,14 +15,17 @@ it and send it to a user slot.
 
 ## How every groove is built
 
-- Two sections, **VERSE** and **CHORUS**, each a phrase of 4 bars (THREE OVER 4: 3 bars).
-- The chorus opens with a crash on its first beat.
-- The phrase's last bar carries the **fill**, written with fill marks (`"fills"` in the JSON): the fill's own hits
-  are F (only in a fill), the groove's hits it replaces are N (not in a fill), the rest plays either way. Without a
-  fill the last bar is the plain groove.
+- Two sections, **VERSE** and **CHORUS**, each with a **fill bar of its own** (`"fillbar"` in the JSON, since the
+  evening of 2026-10-15; until then the phrase's last bar carried the fill as marks, and the verse was that 4-bar
+  phrase). The verse is one bar: the groove, repeated (THREE OVER 4: its 3 bars, the hats meet the bar again only
+  then). The chorus is a 4-bar phrase because it opens with a crash on its first beat (ONE DROP's has none: one bar).
+- The fill bar is what the phrase's last bar played as a fill: the fill's own hits, with the groove's hits that go
+  on under them, and without the ones the fill replaces.
 - To hear the fill into the chorus: ask for the fill (the pedal's CC 21, LIVE's black keys or SEL, the editor's
-  `f`) during bars 1..3 of the phrase, then the chorus; or fill and chorus on one switch. Asked in the phrase's last
-  bar, the fill is the next time round, and a change asked meanwhile waits for it (`docs/design.md`).
+  `f`) early in the bar you want filled, or in the last beat of the bar before (then the whole next bar is the
+  fill), then the chorus, which lands on the bar after the fill; or fill and chorus on one switch. A fill is the
+  rest of the bar it is asked in, as an arranger's fill-in (`docs/design.md`), and the groove restarts from its top
+  after it: in the chorus, that brings its crash back.
 - Levels: `x` normal, `X` hard, `s` soft, `g` ghost (the soft one was `o` until 2026-10-15); a few fills use
   ratchets (`"ratchets"`: 2 = a double stroke).
 - The ride is accented, as a drummer plays it (2026-10-15: written flat, 48 identical hits, it sounded robotic): `x` on
@@ -63,6 +66,7 @@ Each built around one idea to play with; its fill makes the idea heard.
 
 Written for BackBeat on 2026-10-15 (by the assistant, from the user's brief: "meat and potatoes" grooves, then
 non-standard ones to inspire, then directions without the toms in front, then four on the floor, a metal gallop and
-a 6/8 ballad). The fill marks follow one rule: in the phrase's last bar, a hit only in the fill bar is F, a groove
-hit the fill bar leaves out is N. Tempo, kit, levels and fills are edited like any song (the Song tab's section
-editor). They are not transcriptions; any likeness to a record is the style's.
+a 6/8 ballad). Written first as 4-bar phrases with the fill as marks on the last bar, converted on 2026-10-15 to a
+fill bar of its own (the last bar as a fill played it) with the repeated bars dropped. Tempo, kit, levels and fills
+are edited like any song (the Song tab's section editor). They are not transcriptions; any likeness to a record is
+the style's.

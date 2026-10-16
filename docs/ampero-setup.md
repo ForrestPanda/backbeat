@@ -29,14 +29,23 @@ Make one Ampero patch per song. Its footswitches:
 The data value of CC 20 is the section's number in the song's JSON (0 = the first). `tools/gp2song.py`
 prints the numbers; `tools/fm1_song.py song.json` lists them.
 
-**Fills (since 2026-10-14).** A section change brings no fill of its own. For a fill into the change, put
-two messages on the switch: CC 21 (any value) and the CC 20. Their order doesn't matter. The fill runs from
-the press to the end of the section playing, and the change lands there; the fill ends with it. A switch
-with only CC 21 is a fill without a change: from now to the end of the pattern (pressed in its last bar:
-through the next cycle too). Pressing the switch of the section already playing does nothing.
+**Fills (since 2026-10-15: as an arranger's fill-in).** A section change brings no fill of its own. A switch
+with only CC 21 is a fill: the rest of this bar, from the press to the bar line (the section's fill bar of
+its own, cut from the front; without one its fill marks), then the pattern again from its top. Pressed in
+the bar's last beat, the whole next bar is the fill: press just before the bar you want filled, as on a
+Yamaha. Pressed again in the last beat of a fill, the next bar is a fill too: two presses, a two-bar fill. For a fill into a change, put two messages on the switch: CC 21 (value 0) and the CC 20. Their
+order doesn't matter: the fill to the bar line, the new section on the bar after it (Auto Fill In on an
+arranger). Pressing the switch of the section already playing does nothing.
 
-A section pressed early in a 4-bar verse lets the verse play its four bars and switches after them;
-pressed during the fourth bar, the switch is on the next bar. (A 1-bar section switches on the next bar.)
+**CC 21 with value 1 is the fill on the next bar** (since 2026-10-16): the whole next bar from anywhere in
+this one, as a press in the last beat; pressed during a fill, the next bar is a fill too. Use it for a song
+whose fill leads off its bar (the hits in the fill bar's first beat, as Another Brick in the Wall): a plain
+CC 21 pressed early plays the back of the fill bar and never reaches them. Any other value is the fill
+from now. With a CC 20 on the same switch, the new section lands on the bar after the fill bar.
+
+A section pressed early in a 4-bar verse (no fill) lets the verse play its four bars and switches after
+them; pressed during the fourth bar, the switch is on the next bar. (A 1-bar section switches on the next
+bar.) With a fill on the switch it never waits: the fill, then the change.
 
 Variants: CC 27 with the section's number does not wait for the section's end: the section on the next
 bar (with CC 21 on the same switch: the rest of this bar the fill); CC 24 / CC 25 go to the next /
@@ -55,8 +64,8 @@ With five switches free for the drummer, a song of any length (up to 16 sections
 | 5 | 16 | CC 23 | 0 | stop now |
 
 Switches 1 and 2 can carry CC 21 too, for a fill into every change. Switch 3 is the one to spend
-differently if the song needs it: CC 21 alone for a fill in any section, or CC 20 with the section you
-jump to most. Songs authored for this layout keep their sections in playing
+differently if the song needs it: CC 21 alone for a fill in any section (value 1 when the song's fill
+leads off its bar), or CC 20 with the section you jump to most. Songs authored for this layout keep their sections in playing
 order and flag the outro (`"outro": true` in the JSON; the editor's Outro box).
 
 ## A set: patches in song order

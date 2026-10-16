@@ -8,8 +8,9 @@
     tools/fm1_render.py tests/example-song.json --kit 7 --out take.wav --listen
 
 The play list names the sections (or their numbers) with the bars each plays; the next one is asked for
-on beat 3 of the last bar, as a foot would, and lands when the section's pattern ends (its last bar the
-fill), so an entry's bars round up to its pattern's: VERSE:2 with a 4-bar verse plays four. A last entry without
+on beat 3 of the last bar, as a foot would, and lands when the section's pattern ends (no fill of its own;
+--fills asks for one in the last beat before that bar, so the whole last bar is the fill, as a foot pressing
+just before it), so an entry's bars round up to its pattern's: VERSE:2 with a 4-bar verse plays four. A last entry without
 bars is the ending: that section once, then the stop on the bar. Without --play: every section in order,
 2 bars each (the song's outro, if one is flagged, as the ending). The render is the firmware's own drum
 engine, sequencer and pedal (tests/song_render.c, built here on first use; needs a ./build.sh before,
@@ -56,7 +57,7 @@ def main():
     ap.add_argument("--out", help="the WAV (default: build/host/<name>.wav)")
     ap.add_argument("--tail", type=float, default=1.5, help="seconds after the stop (default 1.5)")
     ap.add_argument("--listen", action="store_true", help="play it (sox)")
-    ap.add_argument("--fills", action="store_true", help="ask for a fill (CC 21) a bar before each change: the fills heard")
+    ap.add_argument("--fills", action="store_true", help="ask for a fill (CC 21) in the last beat before each change's last bar: that bar the fill")
     ap.add_argument("--humanize", choices=["off", "light", "more"], default="light",
                     help="SETUP > FEEL > HUMANIZE (default light, as the device)")
     a = ap.parse_args()

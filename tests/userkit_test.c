@@ -79,9 +79,9 @@ int main(void)
     song.g[G_DRREV] = 0;                                 /* (no reverb tail between the checks) */
     slot_build(0, notes, lens, 4);
     check(usr_nz[0] == 4u && !usr_nz[1], "USR1 read by smp_user_scan: 4 zones; USR2 empty");
-    check(DRUM_SYN == DRUM_USR + 5u && DRUM_KITS == DRUM_SYN + 5u && !strcmp(DRUM_KIT_NAMES[DRUM_USR], "USR1") && !strcmp(DRUM_KIT_NAMES[DRUM_USR + 3u], "USR4") &&
-          !strcmp(DRUM_KIT_NAMES[DRUM_PAIR], "USR3+4") && DRUM_PAIR == DRUM_SYN - 1u && !strcmp(DRUM_KIT_NAMES[DRUM_SAMPLED], "808"),
-          "KIT: USR1..USR4, USR3+4 after the synthesised kits (the old kit numbers kept)");
+    check(DRUM_SYN == DRUM_USR + 5u && DRUM_KITS == DRUM_SYN + 4u && !strcmp(DRUM_KIT_NAMES[DRUM_USR], "USR1") && !strcmp(DRUM_KIT_NAMES[DRUM_USR + 3u], "USR4") &&
+          !strcmp(DRUM_KIT_NAMES[DRUM_PAIR], "USR3+4") && DRUM_PAIR == DRUM_SYN - 1u && !strcmp(DRUM_KIT_NAMES[DRUM_DS0], "808") && DRUM_DS0 == 1u,
+          "KIT: MULDJORD, the synthesised kits, USR1..USR4, USR3+4, SYN1..4 (MULDJORD first since 2026-10-15)");
     check(SMP_USER_OFF(0u) == 0xA0000u && SMP_USER_OFF(2u) == 0xC8000u && SMP_USER_OFF(3u) == 0xE7000u &&
           FL_STORE_OK(0xE7000u, 0x14000u) && !FL_STORE_OK(0xE7000u, 0x14001u) && !FL_STORE_OK(0xFB000u, 0x1000u) &&
           SMP_USER_OFF(3u) >= FL_FM6_HI && SMP_USER_OFF(3u) + SMP_USER_SIZE <= FL_GLOB_LO,
@@ -164,7 +164,7 @@ int main(void)
         run_peak(10);
         check(pk > 2000, "the drum steps play the user kit");
     }
-    TDRUM->p[P_E0] = (int16_t)DRUM_SAMPLED;              /* 808: as before */
+    TDRUM->p[P_E0] = (int16_t)DRUM_DS0;              /* 808: as before */
     quiet();
     drum_on(36, 110);
     {
@@ -172,14 +172,7 @@ int main(void)
         for (i = 0; i < NDRUM; i++) syn += drums.v[i].active && drums.synth[i];
         check(syn == 1u, "808 (a synthesised kit) as before");
     }
-    TDRUM->p[P_E0] = 0;                                  /* ACOUSTIC: the GM sample set */
-    quiet();
-    drum_on(38, 110);
-    {
-        uint32_t i, gm = 0;
-        for (i = 0; i < NDRUM; i++) gm += drums.v[i].active && !drums.synth[i] && drums.v[i].s[4] < DZ_USR;
-        check(gm == 1u && run_peak(40) > 2000, "ACOUSTIC (the GM sample set) as before");
-    }
+    /* (ACOUSTIC, the GM sample set, was checked here until 2026-10-15; the built-in sampled kit is MULDJORD below) */
     {   /* 2.4.1: the click (GLO > GLOBAL > CLICK = ON) is its own voice: heard with a user kit (it has no wood
          * block: in 2.4 it was silent), with the drum track muted, at the level of GLO > DRUMS > LVL */
         uint32_t j, k;
@@ -188,7 +181,7 @@ int main(void)
             host_tracks_init();
             song.g[G_BPM] = 120; song.g[G_CLOCK] = 2; song.g[G_DRLVL] = k == 3u ? 0 : 100;
             for (j = 0; j < NSTEP; j++) memset(&TDRUM->dstep[j], 0, sizeof(dstep_t));
-            TDRUM->p[P_E0] = (int16_t)(k == 0u ? DRUM_PAIR : k == 1u ? DRUM_USR + 1u : DRUM_SAMPLED);
+            TDRUM->p[P_E0] = (int16_t)(k == 0u ? DRUM_PAIR : k == 1u ? DRUM_USR + 1u : DRUM_DS0);
             TDRUM->p[P_MUTE] = (int16_t)(k == 2u);
             transport_req = 1;
             pk[k] = run_peak(2u * FS / CTL);

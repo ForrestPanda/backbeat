@@ -345,7 +345,7 @@ int main(int argc, char **argv)
     settings.palette = 4;
     palette_set(4);
     host_tracks_init();
-    TDRUM->p[P_E0] = DRUM_SAMPLED;
+    TDRUM->p[P_E0] = DRUM_DS0;
     song.g[G_BPM] = 120;
     go_home(); ui.force = 1;
     frames(4);
