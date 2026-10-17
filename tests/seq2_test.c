@@ -251,6 +251,75 @@ static void t_ratchet(void)
     check(n == 4u && gaps_ok && count_note(36, 0, blk) == 1u, "drums: a hat x4 plays 4 even hits in its step, the next step plays");
 }
 
+/* a flam (2026-10-17): a hit flagged plays a grace note first, the same lane as a ghost, FLAM_SMP (1100) samples
+ * before the hit, which stays on the grid; a quarter of the step at most at a fast tempo; a ratchet's first hit only;
+ * none for the first step of a bar while a section change is pending (the bar's pattern in doubt) */
+static void t_flam(void)
+{
+    uint32_t i, n = 0, snare = 0, want = (FLAM_SMP + CTL / 2u) / CTL;
+    uint64_t b[4];
+    uint8_t v[4];
+    reset(120);
+    TDRUM->p[P_E0] = DRUM_DS0;                       /* (the 808: a voice's velocity is the hit's; MULDJORD's layers rescale it) */
+    dstep_set(&TDRUM->dstep[4], 2, LV_NORM, 0);      /* a snare on step 4, a flam */
+    drum_flam[4] = 1u << 2;
+    dstep_set(&TDRUM->dstep[8], 2, LV_HARD, 1);      /* a snare x2 on step 8, a flam: one grace, two hits */
+    drum_flam[8] = 1u << 2;
+    dstep_set(&TDRUM->dstep[12], 0, LV_NORM, 0);     /* a kick on step 12, no flam */
+    transport_req = 1;
+    while (blk < div_samples(2) * 16u / CTL + 2u)
+        run_block();
+    for (i = 0; i < nhits; i++)
+        if (hits[i].note == 38 && n < 4u) {
+            b[n] = hits[i].blk;
+            v[n++] = hits[i].vel;
+        }
+    snare = count_note(38, 0, blk);
+    if (n != 4u)
+        printf("seq2:   flam: %u snare hits\n", snare);
+    check(n == 4u && v[0] == lvl_vel(LV_GHOST, 100) && v[1] == lvl_vel(LV_NORM, 100) && v[2] == lvl_vel(LV_GHOST, 100) && v[3] == lvl_vel(LV_HARD, 100)
+          && b[1] - b[0] >= want - 1u && b[1] - b[0] <= want + 1u && b[3] - b[2] >= want - 1u && b[3] - b[2] <= want + 1u
+          && snare == 5u && count_note(36, 0, blk) == 1u,
+          "flam: a ghost grace note ~25 ms before the hit, the hit on the grid; a ratchet's first hit only; the kick plain");
+    {   /* the hit's grid time is the plain step's: the grace does not move it */
+        uint32_t k, plain = 0;
+        for (k = 0; k < nhits; k++)
+            if (hits[k].note == 36)
+                plain = (uint32_t)hits[k].blk;
+        check(plain > b[1] && (plain - (uint32_t)b[1]) * CTL >= div_samples(2) * 8u - CTL && (plain - (uint32_t)b[1]) * CTL <= div_samples(2) * 8u + CTL,
+              "flam: the kick 8 steps after the first snare: the snare's hit stayed on the grid");
+    }
+    reset(240);                                      /* 240 BPM, 1/32 steps (~1378 samples): the grace a quarter of the step */
+    TDRUM->p[P_SDIV] = 3;
+    dstep_set(&TDRUM->dstep[4], 2, LV_NORM, 0);
+    drum_flam[4] = 1u << 2;
+    transport_req = 1;
+    while (blk < div_samples(3) * 8u / CTL + 2u)
+        run_block();
+    n = 0;
+    for (i = 0; i < nhits; i++)
+        if (hits[i].note == 38 && n < 2u)
+            b[n++] = hits[i].blk;
+    check(n == 2u && (b[1] - b[0]) * CTL <= div_samples(3) / 4u + CTL && (b[1] - b[0]) * CTL >= div_samples(3) / 4u - CTL,
+          "flam: at 240 BPM on 32nds the grace is a quarter of the step before the hit");
+    reset(120);                                      /* a section change pending: no grace for a bar's first step */
+    dstep_set(&TDRUM->dstep[0], 2, LV_NORM, 0);
+    drum_flam[0] = 1u << 2;
+    TDRUM->p[P_SLEN] = 16;
+    transport_req = 1;
+    while (blk < div_samples(2) * 12u / CTL)
+        run_block();
+    live_req = 1;
+    while (blk < div_samples(2) * 20u / CTL)
+        run_block();
+    live_req = -1;
+    n = 0;
+    for (i = 0; i < nhits; i++)
+        if (hits[i].note == 38 && hits[i].vel == lvl_vel(LV_GHOST, 100))
+            n++;
+    check(n == 0u, "flam: no grace for a bar's first step while a section change is pending");
+}
+
 static void t_roll(void)
 {
     uint32_t i, k = 6, n;                           /* key 6 = B3 -> lane 3 (clap) */
@@ -1048,6 +1117,7 @@ int main(void)
     t_swing_odd();
     t_len_phase();
     t_ratchet();
+    t_flam();
     t_roll();
     t_erase_undo();
     t_levels();

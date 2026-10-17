@@ -18,7 +18,8 @@
  *                 numerator 1..16 in bits 0..4, the denominator in bits 5..6: SNG_DEN), size u16 (the section's
  *                 bytes, this header included); fill[(len + 3) / 4] (2 bits a step: FC_*); then each step: its lanes
  *                 u16, and a byte for each lane set, lowest first: level (bits 0..1, LV_*), ratchet (2..3: hits - 1),
- *                 mark (4..5: 1 only during a fill, 2 not during one: seq.c drum_fonly / drum_fno)
+ *                 mark (4..5: 1 only during a fill, 2 not during one: seq.c drum_fonly / drum_fno), flam (bit 6,
+ *                 2026-10-17: a grace note before the hit, seq.c drum_flam / seq_flam; bit 7 spare)
  *   fill bar      (flags bit 1, since 2026-10-15) after the pattern's steps: its steps (a byte, 1..64, one bar of the
  *                 section's meter and division as packed), then each step as above (no marks: a fill plays it as it
  *                 is, instead of the bar the fill is in, its step i at the bar's step i: seq.c fb_dstep / drum_src)
@@ -190,6 +191,7 @@ static void sng_apply(uint32_t k)
             dstep_set(&t->dstep[i], l, v, v >> 2);
             drum_fonly[i] |= (uint16_t)((v >> 4 & 1u) << l);
             drum_fno[i] |= (uint16_t)((v >> 5 & 1u) << l);
+            drum_flam[i] |= (uint16_t)((v >> 6 & 1u) << l);
         }
     }
     if (s[14] & SNG_F_FILLBAR) {                  /* its fill bar of its own (seq.c drum_src plays it; a hit's mark
@@ -204,6 +206,7 @@ static void sng_apply(uint32_t k)
                     continue;
                 v = *q++;
                 dstep_set(&fb_dstep[i], l, v, v >> 2);
+                fb_flam[i] |= (uint16_t)((v >> 6 & 1u) << l);
             }
         }
         fb_len = (uint8_t)(fl <= NSTEP ? fl : NSTEP);
@@ -317,7 +320,7 @@ static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t room)
             for (l = 0; on; on >>= 1, l++)
                 if (on & 1u)
                     out[n++] = (uint8_t)(dstep_lvl(d, l) | dstep_rat(d, l) << 2 | ((drum_fonly[i] >> l) & 1u) << 4 |
-                                         ((drum_fno[i] >> l) & 1u) << 5);
+                                         ((drum_fno[i] >> l) & 1u) << 5 | ((drum_flam[i] >> l) & 1u) << 6);
         }
         if (s[14] & SNG_F_FILLBAR) {             /* its fill bar of its own, as it is (the device edits the pattern) */
             uint32_t from = sng_walk(s, SNG_SEC_HDR + ((uint32_t)s[12] + 3u) / 4u, s[12], size);

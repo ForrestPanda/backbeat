@@ -100,13 +100,16 @@ static void pedal_name(uint32_t s, char *out)    /* the section's name for the s
     }
 }
 
-/* CC 21: the fill, as the arrangers (Yamaha, Korg, Roland, Ketron, the BeatBuddy) do it (2026-10-15, after a day of
- * fills aligned to the pattern's end): from now to the end of this bar, the pattern again from its top on the next bar
- * (live_block), or the section asked for meanwhile, which waits for the fill's end instead of the pattern's. Asked
- * for in the bar's last beat (as Yamaha's last beat; the BeatBuddy's last half beat): the whole next bar is the fill.
- * A fill playing asked for again: nothing new (it ends at its bar line), except in the last beat of its last bar:
- * then the next bar is a fill too, straight on (asked 2026-10-16: a two-bar fill from two presses). A fill bar of its
- * own longer than a bar (fb_bars) ends that many bars on.
+/* CC 21: the fill. A section with a fill bar of its own, as the arrangers (Yamaha, Korg, Roland, Ketron, the
+ * BeatBuddy) do it (2026-10-15, after a day of fills aligned to the pattern's end): from now to the end of this bar,
+ * the pattern again from its top on the next bar (live_block), or the section asked for meanwhile, which waits for
+ * the fill's end instead of the pattern's. A fill bar longer than a bar (fb_bars) ends that many bars on. A section
+ * without one (its fill in its marks and conditions, or none at all; 2026-10-17): fill mode from now to the
+ * section's end (fill_bars_from), the marks heard where they sit, the pattern on from its top with no restart, the
+ * section asked for at that end. Asked for in the bar's last beat (as Yamaha's last beat; the BeatBuddy's last half
+ * beat): the whole next bar is the fill (no fill bar, in the section's last bar: the whole next cycle). A fill
+ * playing asked for again: nothing new (it ends at its bar line), except in the last beat of its last bar: then the
+ * next bar is a fill too, straight on (asked 2026-10-16: a two-bar fill from two presses).
  * next (CC 21 value 1; LIVE's black keys and SEL with OCT+ held; asked 2026-10-16 for a fill bar whose hits lead off
  * the bar, which the cut from the front never plays): the whole next bar from anywhere in this one, as the last beat's
  * press; playing a fill in its last bar, the next bar a fill too, straight on. The user has an Ampero patch a song, so
@@ -124,7 +127,7 @@ static void pedal_fill_req(uint32_t next)
             pedal_fill_wait = 1;
         } else {
             pedal_fill = 1;
-            pedal_fill_bars = (uint8_t)(fb_bars ? fb_bars : 1u);
+            pedal_fill_bars = (uint8_t)fill_bars_from(live_bar);
         }
     } else if (pedal_fill && pedal_fill_bars <= 1u && at + beat >= b16) {
         pedal_fill_wait = 1;                      /* the fill's last beat: another one next bar (live_block chains it) */

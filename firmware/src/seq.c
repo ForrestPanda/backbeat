@@ -372,11 +372,19 @@ static uint32_t step_plays(const track_t *t, uint32_t idx)   /* its condition ho
    or "not during a fill" (sng.c: section flag 2, two 16-bit masks a step), on top of SLOOP's condition of the
    whole step. The masks are the song's: cleared with the pattern (steps_clear, a project) */
 static uint16_t drum_fonly[NSTEP], drum_fno[NSTEP];
+/* a flam (2026-10-17): a hit flagged so plays a grace note first, the same lane as a ghost, FLAM_SMP samples before it
+   (about 25 ms, a drummer's, whatever the tempo; a quarter of the step at most), the hit itself on the grid. A bit a
+   lane a step, the pattern's and the fill bar's (sng.c: the hit byte's bit 6). The grace is predicted: seq_flam plays
+   it when the step due next is that close (t->flam_abs: done for it). Moved, rotated and cleared with the marks */
+static uint16_t drum_flam[NSTEP], fb_flam[NSTEP];
+#define FLAM_SMP 1100u
 /* a section's fill bar of its own (sng.c: section flag SNG_F_FILLBAR, 2026-10-15): fb_len steps, played by a fill
    instead of the bar the fill is in (as an arranger's fill-in: from the press to the bar line, the phrase cut from
    the front, so its step i sounds at the bar's step i); a phrase of more than one bar (fb_bars, fb_bar steps each)
-   ends on a bar line that many bars on. With none the fill is the marks' and the conditions'. Cleared with the marks
-   (the pattern's) */
+   ends on a bar line that many bars on. With none the fill is the marks' and the conditions', and it runs to the
+   section's end (fill_bars_from; 2026-10-17): the marks sit where the writer put them, so a fill asked for in a
+   4-bar verse's second bar is heard in its fourth, and the pattern goes on from its top with no restart (a section
+   with no fill at all: nothing changes, nothing restarts). Cleared with the marks (the pattern's) */
 static dstep_t fb_dstep[NSTEP];
 static uint8_t fb_len;
 static uint8_t fb_bar, fb_bars;              /* the phrase's steps a bar and its bars (sng_apply; 0 with no fill bar) */
@@ -392,6 +400,8 @@ static void drum_fill_masks_clear(void)
 {
     memset(drum_fonly, 0, sizeof drum_fonly);
     memset(drum_fno, 0, sizeof drum_fno);
+    memset(drum_flam, 0, sizeof drum_flam);
+    memset(fb_flam, 0, sizeof fb_flam);
     fb_len = 0;
     fb_bar = 0;
     fb_bars = 0;
@@ -415,23 +425,24 @@ static void drum_marks_move(uint32_t to, uint32_t from)   /* a step's marks go w
 {
     drum_fonly[to % NSTEP] = drum_fonly[from % NSTEP];
     drum_fno[to % NSTEP] = drum_fno[from % NSTEP];
+    drum_flam[to % NSTEP] = drum_flam[from % NSTEP];
 }
 static void drum_marks_rotate(uint32_t len, int32_t d)   /* the first len steps' marks one later (d > 0) / earlier */
 {
     uint32_t i, last = len - 1u;
-    uint16_t a, b;
+    uint16_t a, b, c;
     if (!len || len > NSTEP)
         return;
     if (d > 0) {
-        a = drum_fonly[last], b = drum_fno[last];
+        a = drum_fonly[last], b = drum_fno[last], c = drum_flam[last];
         for (i = last; i > 0; i--)
             drum_marks_move(i, i - 1u);
-        drum_fonly[0] = a, drum_fno[0] = b;
+        drum_fonly[0] = a, drum_fno[0] = b, drum_flam[0] = c;
     } else {
-        a = drum_fonly[0], b = drum_fno[0];
+        a = drum_fonly[0], b = drum_fno[0], c = drum_flam[0];
         for (i = 0; i < last; i++)
             drum_marks_move(i, i + 1u);
-        drum_fonly[last] = a, drum_fno[last] = b;
+        drum_fonly[last] = a, drum_fno[last] = b, drum_flam[last] = c;
     }
 }
 #else
@@ -449,6 +460,7 @@ static void drum_hit_clr(track_t *t, uint32_t idx, uint32_t l)
     if (is_drum(t)) {
         drum_fonly[idx % NSTEP] &= (uint16_t)~(1u << l);
         drum_fno[idx % NSTEP] &= (uint16_t)~(1u << l);
+        drum_flam[idx % NSTEP] &= (uint16_t)~(1u << l);
     }
 #endif
 }
@@ -897,6 +909,18 @@ static uint32_t live_sec_bars(void)                /* the bars the section playi
         return 1;
     return sng_cur >= 0 ? sng_bars((uint32_t)live_sec) : section_bars((uint32_t)live_sec);
 }
+/* the bars a fill asked for in bar `bar` of the section lasts, this one counted: its fill bar of its own (fb_bars);
+ * with none, to the section's end (asked 2026-10-17: before, one bar and the pattern from its top, which cut the
+ * phrase of a section whose fill is in its marks, or has none) */
+static uint32_t fill_bars_from(uint32_t bar)
+{
+    uint32_t n = live_sec_bars();
+    if (fb_bars)
+        return fb_bars;
+    if (bar == 0xFFFFFFFFu)
+        bar = 0;
+    return n - bar % n;
+}
 static void live_block(void)                       /* once a block while playing a loop (not the song) */
 {
     uint32_t fill_over = 0;
@@ -907,16 +931,17 @@ static void live_block(void)                       /* once a block while playing
             pedal_fill_bars--;
         } else if (pedal_fill_wait) {               /* asked again in its last beat: another one, straight on */
             pedal_fill_wait = 0;
-            pedal_fill_bars = (uint8_t)(fb_bars ? fb_bars : 1u);
+            pedal_fill_bars = (uint8_t)fill_bars_from(live_bar);
         } else {
             pedal_fill = 0;
             pedal_fill_bars = 0;
             fill_over = 1;
         }
-    } else if (pedal_fill_wait) {                   /* asked in the last beat: this bar, whole */
+    } else if (pedal_fill_wait) {                   /* asked in the last beat: this bar, whole (no fill bar of its own:
+                                                     * to the section's end; at its top, the whole cycle) */
         pedal_fill_wait = 0;
         pedal_fill = 1;
-        pedal_fill_bars = (uint8_t)(fb_bars ? fb_bars : 1u);
+        pedal_fill_bars = (uint8_t)fill_bars_from(live_bar);
     }
     if (pedal_at_end && live_bar % live_sec_bars() == 0u)   /* a request waits for the section's end: the pedal counts
                                                      * its bars since it started (live_bar), its pattern's the period */
@@ -972,9 +997,10 @@ static void live_block(void)                       /* once a block while playing
             pedal_end_req = 0;
             sng_ui_next[0] = 0;                     /* (the screen: it is here) */
         }
-    } else if (fill_over && live_req < 0 && !chain_n) {   /* the fill over, nothing asked for: the pattern again from
-                                                     * its top (an arranger's variation after its fill-in; the quick
-                                                     * chain keeps its count) */
+    } else if (fill_over && fb_bars && live_req < 0 && !chain_n) {   /* a fill bar of its own over, nothing asked for:
+                                                     * the pattern again from its top (an arranger's variation after
+                                                     * its fill-in; the quick chain keeps its count). Without one the
+                                                     * fill ran to the section's end: it is at its top, nothing to do */
         seq_reset_tracks(clk_pos % (BEAT_U / 4u));
         live_bar = 0;
     }
@@ -996,6 +1022,7 @@ static void seq_reset_tracks(uint32_t pos)
     for (i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
         t->seq_abs = SEQ_NONE;
+        t->flam_abs = SEQ_NONE;
         t->seq_idx = 0;
     }
     for (i = 0; i < NROLL; i++)
@@ -1159,6 +1186,55 @@ static __attribute__((noinline)) void seq_fire(track_t *t, uint32_t idx)
         drum_step(t, d, fb ? NSTEP : idx);
     }
 }
+#if FELUCCA_DRUMMER
+/* the grace notes of the step due next (nabs; mu its nudge, in grid units; the grid is into units into step abs of
+ * slen): when it is FLAM_SMP samples away (a sample is BPM units; less at a fast tempo: a quarter of the step at
+ * most), each lane flagged plays a ghost of itself now, the hit itself on the grid when the step fires. Once a step
+ * (flam_abs). Not for the first step of a bar while a section change, a fill's end or its start, an ending or the
+ * chain could change what that bar plays: the prediction would be the pattern as it is now */
+static void seq_flam(track_t *t, uint32_t nabs, int32_t mu, uint32_t abs, uint32_t into, uint32_t slen)
+{
+    uint32_t len = trk_len(t), idx = nabs % len, fb, m, l;
+    int32_t until, reach;
+    const dstep_t *s;
+    if (!is_drum(t) || t->flam_abs == nabs)
+        return;
+    if (abs == nabs)
+        until = mu - (int32_t)into;
+    else if (abs + 1u == nabs)
+        until = (int32_t)slen - (int32_t)into + mu;
+    else
+        return;
+    reach = (int32_t)(FLAM_SMP * (uint32_t)clamp(song.g[G_BPM], 20, 300));
+    if (reach > (int32_t)(slen >> 2))
+        reach = (int32_t)(slen >> 2);
+    if (until > reach)
+        return;
+    t->flam_abs = nabs;                              /* (in reach, or late already: once) */
+    if (until < 0)
+        return;
+    {                                                /* the first step of a bar, with what the bar plays in doubt */
+        uint32_t u = div_units(trk_div(t)) / (BEAT_U / 48u), b = 12u * meter_b16(clk_meter);
+        uint32_t bs = u && b % u == 0u ? b / u : 0u;
+        if ((bs ? idx % bs == 0u : idx == 0u) &&
+            (live_req >= 0 || pedal_fill_wait || (pedal_fill && pedal_fill_bars <= 1u) || pedal_end_bars || chain_n))
+            return;
+    }
+    s = drum_src(t, idx, &fb);
+    if (!fb && !step_plays(t, idx))
+        return;
+    m = dstep_mask(s) & (fb ? fb_flam[s - fb_dstep] : drum_flam[idx]) & ~roll_lanes() & ~(uint32_t)drum_mute &
+        ~drum_fill_mask(fb ? NSTEP : idx);
+    for (l = 0; m; l++, m >>= 1)
+        if (m & 1u) {
+            if (drum_hum)
+                hum_hit(t, l, 5);                    /* (its own hash: not the hit's) */
+            trk_note_on(t, LANE_NOTE[l], lvl_vel(LV_GHOST, 100));
+            drum_hum_g = 0;
+            seq_out_on(t, LANE_NOTE[l], lvl_vel(LV_GHOST, 100));
+        }
+}
+#endif
 /* The steps fire in order, one a block at most, each at its nudged time (micro: 1/64 of a step early
  * or late): the step after the last one played (seq_abs) is due when the grid is in its own step past
  * its nudge, or, nudged early, in the previous grid step past (length - |nudge|). So a step is never
@@ -1168,7 +1244,7 @@ static __attribute__((noinline)) void seq_fire(track_t *t, uint32_t idx)
 static void seq_tick(track_t *t)
 {
     uint32_t len = trk_len(t), into, slen, abs, idx, nabs, fire = 0;
-    int32_t rel;
+    int32_t rel, mu = 0;
     if (!song.playing)
         return;
     abs = trk_grid(t, &into, &slen);
@@ -1180,9 +1256,9 @@ static void seq_tick(track_t *t)
     }
     if (t->seq_abs == SEQ_NONE) {                    /* PLAY: the step the grid is in (nudged late: once there) */
         nabs = abs;
-        fire = micro_units(t, nabs, slen) <= (int32_t)into;
+        mu = micro_units(t, nabs, slen);
+        fire = mu <= (int32_t)into;
     } else {
-        int32_t mu;
         nabs = t->seq_abs + 1u;
         mu = micro_units(t, nabs, slen);
         if (abs == nabs)
@@ -1193,6 +1269,10 @@ static void seq_tick(track_t *t)
             fire = 1;                                /* the grid jumped ahead: catch up, a step a block */
         /* (abs + 1 == seq_abs: SWING turned up inside a played odd step: nothing until the grid is back) */
     }
+#if FELUCCA_DRUMMER
+    if (!fire)
+        seq_flam(t, nabs, mu, abs, into, slen);      /* the next step's grace notes, FLAM_SMP samples before it */
+#endif
     if (fire) {                                      /* a new step: one a block at most */
         t->seq_abs = nabs;
         idx = nabs % len;

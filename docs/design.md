@@ -49,7 +49,7 @@ repeats its message does no harm; next / previous / tap count presses.
 | --- | --- | --- |
 | CC 20, value n | go to section n when the section playing has played its pattern out (its bars, counted from where it started), no fill of its own; a 1-bar section: the next bar; a fill pending (asked before or after): on the bar after the fill instead; stopped: start the loop with it. n the section playing, nothing cued: nothing; with an ending pending it cancels the ending, as any section | done (n = 0..3, A..D; at the section's end 2026-10-13; no fill 2026-10-14; after a fill 2026-10-15) |
 | CC 27, value n | on the next bar, without waiting for the section's end, no fill of its own (a fill pending: after it) | done (no fill bar 2026-10-14) |
-| CC 21, value v | the fill, as an arranger's fill-in: from now to the end of this bar (the FILL ONLY hits in, the NO FILL hits out; a section's fill bar of its own instead of the pattern's, its step i at the bar's step i), then the pattern again from its top on the next bar, or the section asked for. Asked for in the bar's last beat: the whole next bar. Value 1: the whole next bar from anywhere in this one (a fill bar whose hits lead off the bar); in a fill, the next bar a fill too. Any other value: from now. Sent with a section change (the same footswitch, either order): the fill into it, the change on the bar after the fill | done (to the pattern's end 2026-10-13; the arrangers' way 2026-10-15; value 1 2026-10-16) |
+| CC 21, value v | the fill. A section with a fill bar of its own, as an arranger's fill-in: from now to the end of this bar (the fill bar instead of the pattern's, its step i at the bar's step i), then the pattern again from its top on the next bar, or the section asked for. A section without one: fill mode from now to the section's end (the FILL ONLY hits in, the NO FILL hits out, where they sit; a section with no fill at all: nothing changes), then the pattern on from its top, no restart, or the section asked for at that end. Asked for in the bar's last beat: the whole next bar (no fill bar, in the section's last bar: the whole next cycle). Value 1: the whole next bar from anywhere in this one (a fill bar whose hits lead off the bar); in a fill, the next bar a fill too. Any other value: from now. Sent with a section change (the same footswitch, either order): the fill into it, the change on the bar after the fill | done (to the pattern's end 2026-10-13; the arrangers' way 2026-10-15; value 1 2026-10-16; to the section's end without a fill bar 2026-10-17) |
 | CC 22, value n | ending: the section playing ends (as CC 20), section n once as the outro, stop on the bar; n empty or out of range: the section ends, then stop | done (at the section's end 2026-10-13) |
 | CC 23 | stop now | done |
 | CC 24 / CC 25 | next / previous section, empty ones skipped, wrapping, as CC 20; stopped (nothing cued): the first / the last | done |
@@ -69,8 +69,19 @@ switches inside the patch are its sections. Starting a song is "go to intro".
 - A **song** (done in M3): a name, a tempo, a kit, swing, drum level and reverb, up to 8 **sections**.
   Sixteen songs on the device (eight until 2026-10-14: a set needs more).
 - A **section** (M3): a name, a drum pattern (1 to 64 steps at any of SLOOP's divisions, 16 lanes with a
-  level and a ratchet per hit) with its fill conditions (FILL ONLY / NO FILL steps: the fill is inside
+  level, a ratchet and, since 2026-10-17, a flam per hit) with its fill conditions (FILL ONLY / NO FILL steps: the fill is inside
   the pattern, not a second one), and the outro flag.
+- **Why a section is at most 4 bars** (asked 2026-10-17). Because a section is a pattern, and a pattern is at most
+  64 steps. Why that is 4 bars: at 1/16
+  in 4/4, a bar is 16 steps, so 64 steps is 4 bars. The limit moves with the division and the meter: 8 bars at 1/8,
+  4 at 1/16, 5 at 8T (12 steps a bar), 2 at 16T (24 steps a bar), 2 at 1/32. That is also why the Guitar Pro
+  importer looks for a repeating period of 1, 2 or 4 bars, and only 2 at 1/32. Why it is enough by design: a
+  section is a groove that repeats, not a transcription. A verse that is 8 bars of the same 2-bar beat is a 2-bar
+  section that loops until the pedal says otherwise. The things that happen inside a part, the fill and the change,
+  are the pedal's: the fill bar and the next section. Material that never repeats, 16 different bars in a row, is a
+  drum track rather than a drummer, and the device's RAM and flash were not spent on that. If a song really has a
+  part with more than 4 distinct bars at 1/16, the way through is to split it into two sections and step through
+  them with the pedal, or with next-section cues, and the song keeps up to 16 sections for that.
 - **Swing** (2026-10-14): a song's `"swing"` is SLOOP's 0..100 (0 straight, 100 MPC 75 %: `seq.c swing_units`, every
   second step of a straight grid that much late). The importer, `fm1_song.py` and the editor wrote 50 (MPC's "50 %",
   straight on the old scale), which the device played as a shuffle (MPC 62.5 %) while the web player ignored swing:
@@ -161,6 +172,11 @@ next bar). No named sections, one song, no fill tied to a section change.
    PLAY key while stopped (the section cued, else the first, the count-in too; key p), Play and Stop greyed by the state.
    The tempo in the head (KNOB 1 on the device): - / + a BPM, the number typed, Tap (as the pedal's CC 26; keys - + t),
    40..240, from the next step; greyed while a MIDI clock drives the player.
+   The page lays itself out for three sizes (the phone layer 2026-10-16): the desktop's side bar above 860 px, a top
+   bar on a tablet under it, and a phone layer at 600 px and under (live mode on one screen, the pedal's rows with
+   whole words, the grooves and the count-in row away; the grid's cells at 26 px with the lane names sticky).
+   test_web checks the rules are there; the layouts themselves are checked by eye on the user's tablet and phone
+   over adb (the future-work entry "A responsive site" has the method and what is still open).
    No Web MIDI: the status says whether the browser has none, or the page is not a secure context (http:// from another
    machine, a downloaded file opened as content:// on Android): Chrome hides the API there. A preview:
    no ADPCM, no limiter, no reverb; `tools/fm1_render.py` stays the reference. (Since 2026-10-14: no fill comes with
@@ -179,7 +195,7 @@ next bar). No named sections, one song, no fill tied to a section change.
    (`SED`: norm, setHit, setCond, setSteps, split, merge, fromBars, withFill...) tested in
    `web/test_web.mjs`; the page only draws and calls them. (2026-10-12) The import card opens a song JSON
    too, by picker or by a drop on it or on the editor; undo / redo on a history of JSON states (`SED.hist`,
-   `mark` after every render, so a redraw is told from a change), keys for the pen, ratchet, mark and
+   `mark` after every render, so a redraw is told from a change), keys for the pen, ratchet, flam, mark and
    sections, Delete / Ctrl+C / Ctrl+V on the selected columns, a lane's sound on its name, "Play this
    section"; the player counts in as the device's setting (mirrored from the pedal row, or picked on the
    Play card), with a synthesised click.
@@ -206,7 +222,7 @@ next bar). No named sections, one song, no fill tied to a section change.
    does the same for a file with markers).
 3b. **Compact songs and a time signature per section (done 2026-10-13).** The packed form is "SNG2": a section
    header of 18 bytes (name, steps, division, flags, the meter, the section's size), the fill conditions, then a
-   step as 2 bytes of lanes and a byte a hit (level, ratchet, fill mark). A 64-step section of three hits a step
+   step as 2 bytes of lanes and a byte a hit (level, ratchet, fill mark; bit 6 a flam since 2026-10-17). A 64-step section of three hits a step
    takes about 340 bytes instead of 928; the user's songs shrank 3 to 5 times (TIME, 4336 bytes in SNG1, is 856).
    SNG1 is not read: no device ever held one. The meter byte (0 = 4/4, else n 1..16 and d 2, 4, 8, 16) sets the
    bar the pedal counts while the section plays (seq.c `clk_meter`): bars are counted in 16ths from the
@@ -414,7 +430,7 @@ player, the docs):
   cycle arithmetic; `tests/song_render.c --fills` asks for its fills this way, just before the last bar.
 - **After the fill the pattern restarts from its top** (an arranger's variation after its fill-in), its bar count
   with it (`seq_reset_tracks`, `live_bar = 0`), unless a section is cued: then that one lands. The quick chain
-  keeps its count.
+  keeps its count. Since 2026-10-17 only after a fill bar of its own (below).
 - **A fill pulls any change to its end**: a section asked for with a fill (CC 21 with CC 20 or 27, either order,
   before or after) lands on the bar after the fill, not at the pattern's end (`pedal_at_end` is cleared by the fill
   request, not set by a request made during one). An ending's outro the same; an ending with no outro stops at the
@@ -423,6 +439,22 @@ player, the docs):
   last bar: then the next bar is a fill too, straight on, the pattern restarting after both (asked 2026-10-16: the
   press was ignored there; `pedal_fill_wait` while `pedal_fill`, chained in `live_block`). The "fill hits ahead"
   rule and the next-cycle rule are gone with `pedal_fill_hold` and `pedal_fill_hits`.
+- **A section without a fill bar of its own: fill mode to the section's end** (asked 2026-10-17: "play the remaining
+  of the section in fill mode"; "if there's no fill whatsoever, fill should not reset the section"). The one-bar
+  model above fits a fill bar, whose phrase is cut from the front wherever the press lands. A fill written into the
+  section's marks (F / N per lane, or SLOOP's step conditions) is positional: a 4-bar verse with its fill in bar 4
+  never played it unless the press was in bar 4; pressed in bar 2 the player heard bar 2's marks, usually none, and
+  the pattern cut back to its top. A section with no fill at all had its phrase chopped by the restart for nothing.
+  So without a fill bar: `pedal_fill_bars` is the bars to the section's end, this one counted (`fill_bars_from`
+  in seq.c, used by `pedal_fill_req` and `live_block`'s two waits), `fill_now` stays on through them, and at the
+  end there is no restart (the section is at its top; `live_bar` counts on, so a request waiting for the end and
+  the quick chain stay right). One rule for both kinds without a "has marks" test: a section with nothing marked
+  shows FILL on the screen and plays on unchanged. Pressed in the last beat of the section's last bar (or value 1
+  there): the whole next cycle is fill mode (the alternative was a fill of zero bars); the chained press in the
+  fill's last beat the same, another cycle. A change cued with the fill lands at the section's end, the same place a
+  plain change would; an ending's stop too. A 1-bar section without a fill bar: as before minus the restart. The
+  browser player (`PLAY.fillBars`) mirrors it; `tests/pedal_test.c` (SLOOP's A..D have no fill bar) and
+  `web/test_web.mjs` assert the count going on; the fill-bar cases in `tests/song_test.c` are unchanged.
 - Not done, cheap now that fills are bar-aligned if ever wanted: a break (one silent bar: Yamaha, Korg, Ketron, the
   BeatBuddy's pause) and hold-to-loop (Korg, the BeatBuddy) for a footswitch that sends its release.
 
@@ -543,6 +575,45 @@ hazard; what it found and what was done:
   latency checked on each platform; (b) the firmware's own engine as a desktop program (see "Related
   programs"), faithful but bound to the device's sample limits. Route (a) is the natural one: the pieces
   exist and the phone is already the editor's home.
+- **MIDI file import** (asked 2026-10-16). A Standard MIDI File (.mid, type 0 or 1) into a song, as tools/gp2song.py
+  does for Guitar Pro: the drums are channel 10 (and any track whose notes are all in the GM drum range), the same
+  GM note table to the 16 lanes (`GM` in gp2song.py: kick 35 36, snare 38 40, side stick 37, clap 39, hats 42 44
+  46, toms, crash, ride, the rest dropped), velocities to the four levels where Guitar Pro gave accents and ghosts
+  (under ~40 GHOST, under ~70 SOFT, over ~110 HARD; to tune on a few files), notes quantised to the grid the bar
+  needs (16ths, or 12ths when the off-grid share says triplets, as `offgrid_share` picks it today; two notes on a
+  step a ratchet), the tempo from the first set-tempo event, the time signature per bar from the meta events (the
+  song's per-section meter), the sections from the marker meta events (the markers' names, as the Guitar Pro
+  markers) or, without them, from the drums alone (`auto_sections`, the repeating runs of 1..4 bars, a lone
+  different bar before a repeat as the fill bar), duplicates folded as now. The shape: a reader of SMF chunks and
+  variable-length deltas in plain Python (no library: `mido` is not in Pyodide's wheels by default, and the format
+  is a page), the rest of gp2song.py shared, so one importer with two front ends, `gp2song.py file.mid` and the
+  editor's From Guitar Pro card taking .mid too (the drag-and-drop and the file picker already dispatch by
+  extension). Why: MIDI drum tracks are everywhere (drum machine exports, DAW projects, the groove packs the
+  rhythm sites sell), where Guitar Pro files are the tab sites' only; and a DAW is the easier place to write a
+  part by ear. Tests: gp2song_test.py with a type-0 and a type-1 file written by the test itself (a few bars, a
+  marker, a triplet bar, a tempo change), the same sections, levels and fill bar as the Guitar Pro twin. Not started.
+- (asked and done 2026-10-17) **Flams.** A hit flagged as a flam plays a grace note first: the same drum as a ghost,
+  about 25 ms before the hit (`seq.c FLAM_SMP`, 1100 samples: a drummer's flam, the same at any tempo; a quarter of
+  the step at most, so 32nds at 240 BPM still read), the hit itself on the grid; with a ratchet, the grace before
+  its first hit only. The format did not change: the packed hit byte's bit 6 was spare (level 0..1, ratchet 2..3,
+  mark 4..5), so SNG2 stays SNG2 and the editor's check now refuses only bit 7. In the JSON, `"flams"` beside
+  `"ratchets"`: a string a lane, `f` where the hit is a flam, the fill bar's too (`tools/fm1_song.py`). The device:
+  the masks `drum_flam` / `fb_flam` beside the fill marks (moved, rotated and cleared with them; the packer writes
+  them back, so a section edited on the device keeps its flams; the EDIT page does not show or set them). The grace
+  is predicted: `seq_flam` runs each block before the step logic, finds the step due next (the nudge and humanize
+  shift included) and plays its graces once it is within reach (`t->flam_abs` remembers which step's), through the
+  same note-on as the ratchets, humanize's hash of its own. Not for the first step of a bar while a section change,
+  a fill's start or end, an ending or the chain could change what that bar plays (the prediction would be the
+  pattern as it is): that grace is skipped rather than played for the wrong bar. The browser player mirrors it
+  (`PLAY.FLAM`, `flamAt`: a ghost of the same drum scheduled 25 ms before, never in the past); the section editor
+  has a flam box in the pen row (key `l`; `f` stays the player's fill), the cell shows a bar on its left, flams go
+  through split, merge, copy, paste, the fill bar's own and the bar taken from the pattern; the Guitar Pro importer
+  reads the file's grace notes as flams (two 32nds stay a ratchet, a drag written out). Why a grace note and not a
+  ratchet: a ratchet's hits are even and equal, and at 120 BPM two in a 16th are 62 ms apart; a flam is 20..40 ms
+  and soft first. Tests: seq2 (the timing, the level, a ratchet's, the cap, the bar in doubt), the example song
+  (a flam on the chorus's first snare, the packers' round trip, the renders: golden updated), gp2song_test (a
+  grace note), test_web (the packers, the section editor, the player). To hear on the device: whether 25 ms reads
+  as a flam on MULDJORD's snare through the limiter, or wants 20 or 30 (one constant).
 - **A responsive site, usable on a smartphone** (asked 2026-10-16). The editor is laid out for a desktop and a
   tablet (the transport, the tiles in rows of four, the section editor's grid; the Setlist's 16 rows fit a tablet):
   on a phone it needs a layout of its own, not a scaled one. What that means: the tabs and cards stacking in one
@@ -551,7 +622,17 @@ hazard; what it found and what was done:
   names fixed, the tables (the set, the slots) as rows that wrap, the kit page's pads in a grid that fits, the help
   texts folded. The PWA already installs on Android; the manifest's orientation and the wake lock want checking
   there. Test it in headless Chrome at 360 x 780 as the tablet layout was, and on the user's phone over adb as the
-  tablet is served (`docs/`, the reverse rule). Not started.
+  tablet is served (`docs/`, the reverse rule). First stage done 2026-10-16, on the user's phone over adb (1080 x 2400
+  at 440 dpi: 418 x 788 CSS px in Chrome, the page driven through its DevTools socket, `adb forward tcp:9223
+  localabstract:chrome_devtools_remote`, screenshots by `screencap`): a phone layer at 600 px and under, on top of
+  the 860 px top-bar layout that was there. Live mode fits one screen with every element on it, a set of 16
+  sections included (the set's row small, the LIVE view's head wrapping with the tempo row under the name, the
+  section name at 52 px, the tiles and the pedal's two rows at 66 px with whole words, the grooves card and the
+  count-in / humanize row away until the show is over; the user's complaint was that live mode did not fit at
+  all). The frame: the download link folded (it is for a computer), the install button wrapping, the title bar
+  wrapping, the set's and the grooves' rows wrapping their buttons. The section editor: the cells at 26 px
+  (`--cell`, the grid's columns from the same variable) and the lane names sticky while the grid scrolls sideways.
+  Still open: the tables, the kit page's pads and the help texts folded; the manifest's orientation; landscape.
 - **JAM on the device, fixed** (asked 2026-10-16: "the Jam feature that we lost with SLOOP"). JAM is what is left
   of SLOOP's own way of playing: its sections A..D with the quick chain and the song chain, reached from the SONGS
   screen's last row (`sng_view DV_JAM`, `drummer_load(SNG_JAM)`: no song loaded, the drum track's own pattern) and

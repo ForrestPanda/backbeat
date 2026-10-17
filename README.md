@@ -33,7 +33,7 @@ Footswitches send MIDI on channel 16 (default) to the TRS jack or over USB:
 | --- | --- |
 | CC 20, value 0..3 | section A..D when the section playing has played its pattern out (a 1-bar section: the next bar; a fill pending: the bar after it), no fill of its own; stopped: start with it. The section already playing: nothing |
 | CC 27, value 0..3 | on the next bar, without waiting for the section's end, no fill of its own |
-| CC 21 | the fill, as an arranger's fill-in: the rest of this bar (pressed in its last beat: the whole next bar), then the pattern from its top; sent with a CC 20 / 22 / 24 / 25 / 27 (either order), the fill into that change, which lands on the bar after it. Value 1: the whole next bar from anywhere in this one, for a fill that leads off its bar |
+| CC 21 | the fill. A section with a fill bar of its own, as an arranger's fill-in: the rest of this bar (pressed in its last beat: the whole next bar), then the pattern from its top. A section without one: fill mode to the section's end, its fill marks heard where they sit, the pattern on with no restart (nothing marked: nothing changes). Sent with a CC 20 / 22 / 24 / 25 / 27 (either order), the fill into that change, which lands on the bar after the fill. Value 1: the whole next bar from anywhere in this one, for a fill that leads off its bar |
 | CC 22, value 0..3 | ending: the section playing ends, that section once as the outro, stop on the bar (other values: the song's flagged outro, or the section ends, then stop; the outro playing already: it plays to its end, then stop) |
 | CC 23 | stop now |
 | CC 24 / CC 25 | next / previous section (empty ones skipped, wrapping), as CC 20; stopped: the first / the last |
@@ -68,6 +68,11 @@ Its **Setlist** tab keeps the songs of a gig in the browser (offline in the inst
 the real pedal (PC n picks song n of the set), with a **live mode** for a tablet on a music stand (full screen, big
 section tiles, the screen kept awake); with the FM-1 connected it sends the set to the device's slots.
 
+The site works on a **desktop or laptop, a tablet and a phone**: the side bar beside the page above 860 px, a top
+bar under it, and a phone layout at 600 px and under where live mode fits one screen (the song, the LIVE view, the
+pedal's rows) and the section editor's grid scrolls sideways under fixed lane names; checked on a 1080 x 2400
+phone and a tablet. Chrome or Edge for the FM-1 over Web MIDI; the installed app works offline, on Android too.
+
 Or open the web editor (`web/editor.html`): its **Song** tab works without an FM-1 (the import, the section
 editor and the player below); with the FM-1 connected by USB it also lists
 the sixteen slots, takes a song JSON by drop or file picker, saves one back as JSON, erases a slot, and sets
@@ -83,9 +88,10 @@ Ampero, or a USB MIDI interface between it and the computer) drive that player w
 FM-1, on the Pedal card's channel (PC n opens song n of the FM-1 connected, or of the simulated one), so the
 live workflow can be rehearsed before the hardware; **Follow its MIDI clock** makes the player take that input's
 tempo and START / STOP, as the FM-1 does with SETUP > SYNC. Its **Section editor** card edits a song by hand: names, order,
-length, the time signature, the outro, split and merge, the hits on a grid with levels, ratchets and fill marks, the fill
-conditions, columns copied and pasted, undo and redo (Ctrl+Z / Ctrl+Y), keys for the pen (n h o g x, r for the
-ratchet, m for the mark, [ ] between sections), a lane's sound on a click of its name, "Play this section" to
+length (at most 64 steps, 4 bars at 1/16: a section is a groove that repeats, `docs/design.md` says why), the time signature, the outro, split and merge, the hits on a grid with levels, ratchets, flams (a grace note
+before the hit) and fill marks, the fill
+conditions, columns copied and pasted, undo and redo (Ctrl+Z / Ctrl+Y), keys for the pen (n h s g x, r for the
+ratchet, l for the flam, m for the mark, [ ] between sections), a lane's sound on a click of its name, "Play this section" to
 loop it, and, for a song read from Guitar Pro, the file's bars to pick as a section's pattern or its fill; then
 Play, Send or Save JSON. The
 Drum kit page opens with the Muldjord Kit on its pads (served from `web/kit/`, CC BY 4.0, see `docs/kits.md`), and
@@ -167,13 +173,13 @@ on an FM-1.
 
 **LIVE.** What plays, readable from the floor: the song and its slot, the tempo, the beat lights in the bar's
 meter; the section in large letters with "BAR 3 / 8" and a progress ticked per bar ("COUNT 2 / 8" during the
-count-in); what comes next, in colour (NEXT: CHORUS, FILL, FILL TO THE END, FILL > CHORUS for a fill into a change,
+count-in); what comes next, in colour (NEXT: CHORUS, FILL, FILL NEXT BAR, FILL > CHORUS for a fill into a change,
 ENDING); the song's sections as tiles, four to a row as the white keys 1..16, as many rows as the song needs (up
 to 4 sections the whole names, up to 8 a name each, 9..16 a line each: the number and the name cut; the one
 playing lit, the one cued framed and blinking, the outro and any meter but 4/4 marked); and a footer with the kit, the pedal channel and a dot that lights when the pedal sends. The pedal's
 messages ("SONG: BLACK", "NEXT: SOLO") show in the footer. The white keys 1..16 change section when the one
-playing ends, with OCT+ held on the next bar (the state line says KEY: ON THE NEXT BAR), with no fill of their own; any black key asks for a fill to the end of the
-pattern (as CC 21). So a plain change is one press, and a fill into the change is a black key then a white one,
+playing ends, with OCT+ held on the next bar (the state line says KEY: ON THE NEXT BAR), with no fill of their own; any black key asks for a fill (as CC 21:
+the rest of the bar with a fill bar of its own, else to the section's end). So a plain change is one press, and a fill into the change is a black key then a white one,
 as the pedal's CC 21 sent with its CC 20. SEL is a fill too, ENV and LFO the previous and next section
 (without a fill). KNOB 1 (and SELECT) the tempo, KNOB 2 (and PRESETS) the kit, KNOB 3 the drums' level, KNOB 4 the
 swing. With no song loaded it says PICK A SONG and shows the 16 songs of the SONGS page shown (USER or FACTORY;

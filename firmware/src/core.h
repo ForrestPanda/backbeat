@@ -141,6 +141,7 @@ typedef struct track {
     uint8_t seq_skip;            /* the step playing failed its fill condition: nothing of it sounds */
     uint8_t seq_active;          /* any step programmed */
     uint32_t rat_lanes;          /* ratchet hits played in this step, 2 bits a lane */
+    uint32_t flam_abs;           /* the step whose grace notes played (fm1-drummer seq_flam), SEQ_NONE */
     /* mix runtime (fx.c) */
     int32_t att;                 /* mute fade: attenuation, Q15 (0 = heard; fx.c drums_mix) */
     uint8_t tail;                /* blocks to mix after the last hit (the INSERT's tail) */

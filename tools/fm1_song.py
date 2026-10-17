@@ -17,15 +17,18 @@ The JSON (see docs/design.md):
        {"name": "VERSE", "steps": 16, "div": "1/16", "time": "4/4", "outro": false,
         "lanes": {"KICK": "x...x...x...x...", "SNARE": "....x.......x...", "HAT": "x.x.x.x.x.x.x.x."},
         "ratchets": {"SNARE": "............2..."},
+        "flams": {"SNARE": "....f..........."},
         "fills": {"HITOM": "............FF..", "HAT": "............NNNN"},
         "fillbar": {"lanes": {"KICK": "x...x...x...x...", "SNARE": "....x...x.x.xxxx", "CRASH": "...............X"}}}]}
 
 A lane string has one character a step: '.' rest, 'g' ghost, 's' soft, 'x' normal, 'X' hard. A ratchet
-string: '.' or 1, or 2..4 repeats inside the step. "fills" marks a lane's hits one by one: '.' plays
+string: '.' or 1, or 2..4 repeats inside the step. A flam string (2026-10-17): 'f' where the hit is a flam, a
+grace note of the same drum, a ghost, about 25 ms before it (a drummer's flam, whatever the tempo; a quarter of
+the step at most), the hit itself on the grid. "fills" marks a lane's hits one by one: '.' plays
 always, 'F' only during a fill (the pedal's CC 21, or the LIVE screen's black keys and SEL), 'N' never
 during one. The older "fill" string does the same for a whole step, every lane at once. "fillbar" (2026-10-15) is a
-fill bar of the section's own: one bar (of its time and div; "steps" inside it to say otherwise, 1..64) of "lanes"
-and "ratchets" that a fill plays instead of the bar it is in, as it is (no marks there): from the press to the
+fill bar of the section's own: one bar (of its time and div; "steps" inside it to say otherwise, 1..64) of "lanes",
+"ratchets" and "flams" that a fill plays instead of the bar it is in, as it is (no marks there): from the press to the
 bar's end, its step i at the bar's step i (an arranger's fill-in), then the pattern from its top, or the change.
 Lanes:
 KICK, KICK2, SNARE, CLAP, HAT, OPENHAT, PEDAL, RIM, SNARE2, LOWTOM, MIDTOM, HITOM, CRASH, RIDE, SHAKER, COWBELL
@@ -146,7 +149,8 @@ def fillbar_steps(sec):
 
 
 def parse_hits(obj, steps, name):
-    """the hit table of a pattern ("lanes", "ratchets"): each lane's hit byte (level, ratchet << 2) or None a step"""
+    """the hit table of a pattern ("lanes", "ratchets", "flams"): each lane's hit byte (level, ratchet << 2, flam << 6)
+    or None a step"""
     hit = [[None] * 16 for _ in range(steps)]
     for lane, s in obj.get("lanes", {}).items():
         k = lane_index(lane)
@@ -168,6 +172,15 @@ def parse_hits(obj, steps, name):
                 sys.exit(f"{name}: ratchets {lane}: '{ch}' is not . 1 2 3 4")
             if i < steps and hit[i][k] is not None:
                 hit[i][k] |= (int(ch) - 1) << 2
+    for lane, s in obj.get("flams", {}).items():
+        k = lane_index(lane)
+        for i, ch in enumerate(str(s)):
+            if ch == ".":
+                continue
+            if ch != "f":
+                sys.exit(f"{name}: flams {lane}: '{ch}' is not . f")
+            if i < steps and hit[i][k] is not None:
+                hit[i][k] |= 1 << 6
     return hit
 
 
@@ -189,7 +202,7 @@ def pack_section(sec, index):
     if div not in DIVS:
         sys.exit(f"{name}: div must be one of {' '.join(DIVS)}")
     meter = meter_byte(sec.get("time"), name)
-    hit = parse_hits(sec, steps, name)               # each lane's hit byte: level, ratchet << 2, mark << 4
+    hit = parse_hits(sec, steps, name)               # each lane's hit byte: level, ratchet << 2, mark << 4, flam << 6
     for lane, v in sec.get("fills", {}).items():    # a lane's own marks: F only during a fill, N not during one
         k = lane_index(lane)
         v = str(v)
@@ -215,7 +228,7 @@ def pack_section(sec, index):
     fb = sec.get("fillbar")
     if fb is not None:                               # the fill bar of its own: its steps, then them as above
         if not isinstance(fb, dict):
-            sys.exit(f"{name}: fillbar must be an object of lanes and ratchets")
+            sys.exit(f"{name}: fillbar must be an object of lanes, ratchets and flams")
         if "fills" in fb or "fill" in fb:
             sys.exit(f"{name}: fillbar: no fill marks there (a fill plays it as it is)")
         n = fb.get("steps")

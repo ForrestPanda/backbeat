@@ -12,9 +12,10 @@ The score's section markers (Intro, Verse 1, Chorus...) bound the sections; the 
 its drum pattern: the run of 1, 2 or 4 bars that most of the section repeats (at 1/16; at 1/32, and then
 at most 2 bars, when many hits sit between 16ths). The bar that deviates from the pattern at the end of
 the section, or most often at the end of a phrase, is the fill: the section's fill bar of its own ("fillbar" in
-the JSON, since 2026-10-15: that bar as it is, levels and ratchets, which a fill plays instead of the bar it is
+the JSON, since 2026-10-15: that bar as it is, levels, ratchets and flams, which a fill plays instead of the bar it is
 asked in; before, its hits were marks on the pattern's last bar, "fills", and a hit on a step the pattern also
-hit lost its own level). Every percussion track of the file goes into the pattern (drums and percussion). Sections whose
+hit lost its own level). A grace note on a hit is a flam ("flams", since 2026-10-17); two notes a 32nd apart are a
+ratchet. Every percussion track of the file goes into the pattern (drums and percussion). Sections whose
 pattern repeats an earlier one (Chorus 2, Chorus 3) are skipped; at most 16 are kept, the outro always
 (--sections picks and orders them by their marker titles). A section called OUTRO, ENDING, END or CODA is
 the outro. GM drum notes go to the 16 lanes (kick 35 36, snare 38 40, side stick 37, clap 39, hats 42 44
@@ -78,7 +79,8 @@ def beats_of(measures):
 
 
 def bar_hits(measures, ticks_per_step):
-    """one bar on a grid: {step: {lane: (level, ratchet)}} (hashable: a sorted tuple), and its step count"""
+    """one bar on a grid: {step: {lane: (level, ratchet, flam)}} (hashable: a sorted tuple), and its step count; a
+    flam is the file's grace note on the hit (two notes a 32nd apart are a ratchet, as before)"""
     length = measures[0].header.length
     nsteps = max(1, round(length / ticks_per_step))
     raw = {}
@@ -86,12 +88,13 @@ def bar_hits(measures, ticks_per_step):
         step = int(round(pos / ticks_per_step))
         if step >= nsteps:
             continue
-        raw.setdefault((step, GM[note.value]), []).append((pos - step * ticks_per_step, level_of(note)))
+        raw.setdefault((step, GM[note.value]), []).append((pos - step * ticks_per_step, level_of(note), note.effect.grace is not None))
     hits = {}
     for (step, lane), lst in raw.items():
-        level = max(l for _, l in lst)
-        subs = {s for s, _ in lst}
-        hits.setdefault(step, {})[lane] = (level, min(4, len(subs)) if len(subs) > 1 else 1)
+        level = max(l for _, l, _ in lst)
+        subs = {s for s, _, _ in lst}
+        flam = any(f for _, _, f in lst)
+        hits.setdefault(step, {})[lane] = (level, min(4, len(subs)) if len(subs) > 1 else 1, flam)
     return nsteps, tuple(sorted((s, tuple(sorted(h.items()))) for s, h in hits.items()))
 
 
@@ -142,28 +145,37 @@ def make_section(name, bar_measures, outro, max_bars=4):
     steps = steps_per_bar * p
     lanes = {l: ["."] * steps for l in LANES}
     rats = {l: ["."] * steps for l in LANES}
+    flams = {l: ["."] * steps for l in LANES}
     for b, (n, hits) in enumerate(pattern):
         for s, h in hits:
-            for lane, (lvl, rat) in h:
+            for lane, (lvl, rat, fl) in h:
                 lanes[lane][b * steps_per_bar + s] = LEVEL_CHAR[lvl]
                 if rat > 1:
                     rats[lane][b * steps_per_bar + s] = str(rat)
+                if fl:
+                    flams[lane][b * steps_per_bar + s] = "f"
     dropped = []
     fillbar = None
     if fill:                                       # the fill bar of its own: that bar as it is (fill[0] is its steps)
         fl = {l: ["."] * steps_per_bar for l in LANES}
         fr = {l: ["."] * steps_per_bar for l in LANES}
+        ff = {l: ["."] * steps_per_bar for l in LANES}
         for s, h in fill[1]:
             if s >= steps_per_bar:
                 continue
-            for lane, (lvl, rat) in h:
+            for lane, (lvl, rat, flm) in h:
                 fl[lane][s] = LEVEL_CHAR[lvl]
                 if rat > 1:
                     fr[lane][s] = str(rat)
+                if flm:
+                    ff[lane][s] = "f"
         fillbar = {"steps": steps_per_bar, "lanes": {l: "".join(v) for l, v in fl.items() if set(v) != {"."}}}
         r = {l: "".join(v) for l, v in fr.items() if set(v) != {"."}}
         if r:
             fillbar["ratchets"] = r
+        r = {l: "".join(v) for l, v in ff.items() if set(v) != {"."}}
+        if r:
+            fillbar["flams"] = r
     sec = {"name": name[:12], "steps": steps, "div": div}
     ts = next(ms[0].header.timeSignature for ms, b in zip(bar_measures, bars) if b[0] == steps_per_bar)   # the pattern's bars'
     num, den = ts.numerator, ts.denominator.value
@@ -175,6 +187,9 @@ def make_section(name, bar_measures, outro, max_bars=4):
     r = {l: "".join(v) for l, v in rats.items() if set(v) != {"."}}
     if r:
         sec["ratchets"] = r
+    r = {l: "".join(v) for l, v in flams.items() if set(v) != {"."}}
+    if r:
+        sec["flams"] = r
     if fillbar:
         sec["fillbar"] = fillbar
     return sec, p, score, fill is not None, dropped
@@ -189,7 +204,8 @@ def body_key(sec):
         return "".join("." if (i < len(cond) and cond[i] == "F") or (i < len(m) and m[i] == "F") else ch for i, ch in enumerate(v))
     return json.dumps({"steps": sec["steps"], "div": sec["div"],
                        "lanes": {l: strip(l, v) for l, v in sec["lanes"].items() if set(strip(l, v)) != {"."}},
-                       "ratchets": {l: strip(l, v) for l, v in sec.get("ratchets", {}).items() if set(strip(l, v)) != {"."}}},
+                       "ratchets": {l: strip(l, v) for l, v in sec.get("ratchets", {}).items() if set(strip(l, v)) != {"."}},
+                       "flams": {l: strip(l, v) for l, v in sec.get("flams", {}).items() if set(strip(l, v)) != {"."}}},
                       sort_keys=True)
 
 
@@ -272,20 +288,24 @@ def sections_of(song, tracks):
 
 def bar_strings(measures, tps=QUARTER // 4):
     """one bar as the JSON's strings at 1/16: {"steps": n, "time": "7/8" (not in 4/4), "lanes": {lane: "x..."},
-    "ratchets": {lane: "..2."}}"""
+    "ratchets": {lane: "..2."}, "flams": {lane: "f..."}}"""
     n, hits = bar_hits(measures, tps)
-    lanes, rats = {}, {}
+    lanes, rats, flams = {}, {}, {}
     for s, h in hits:
-        for lane, (lvl, rat) in h:
+        for lane, (lvl, rat, fl) in h:
             lanes.setdefault(lane, ["."] * n)[s] = LEVEL_CHAR[lvl]
             if rat > 1:
                 rats.setdefault(lane, ["."] * n)[s] = str(rat)
+            if fl:
+                flams.setdefault(lane, ["."] * n)[s] = "f"
     out = {"steps": n, "lanes": {l: "".join(v) for l, v in lanes.items()}}
     ts = measures[0].header.timeSignature
     if (ts.numerator, ts.denominator.value) != (4, 4):
         out["time"] = f"{ts.numerator}/{ts.denominator.value}"
     if rats:
         out["ratchets"] = {l: "".join(v) for l, v in rats.items()}
+    if flams:
+        out["flams"] = {l: "".join(v) for l, v in flams.items()}
     return out
 
 
@@ -321,7 +341,7 @@ def convert(source, sections=None, track=None, kit=46, keep_duplicates=False, au
         if key in seen and not keep_duplicates and not wanted and not outro:   # (the outro stays: the ending needs it)
             kept = out[seen[key]]
             if any(k in sec for k in ("fill", "fills", "fillbar")) and not any(k in kept for k in ("fill", "fills", "fillbar")):   # the same body, and this one has the fill: take it
-                for k in ("lanes", "ratchets", "fill", "fills", "fillbar"):
+                for k in ("lanes", "ratchets", "flams", "fill", "fills", "fillbar"):
                     if k in sec:
                         kept[k] = sec[k]
                 skipped.append(f"{sname} (bars {first}-{last}: as {kept['name']}, whose fill it gives)")

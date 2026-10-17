@@ -27,7 +27,8 @@ it and send it to a user slot.
   rest of the bar it is asked in, as an arranger's fill-in (`docs/design.md`), and the groove restarts from its top
   after it: in the chorus, that brings its crash back.
 - Levels: `x` normal, `X` hard, `s` soft, `g` ghost (the soft one was `o` until 2026-10-15); a few fills use
-  ratchets (`"ratchets"`: 2 = a double stroke).
+  ratchets (`"ratchets"`: 2 = a double stroke). A flam (`"flams"`: `f`, since 2026-10-17) is a grace note of the
+  same drum, a ghost about 25 ms before the hit; none of the grooves uses one yet.
 - The ride is accented, as a drummer plays it (2026-10-15: written flat, 48 identical hits, it sounded robotic): `x` on
   the beat, `s` between (SLOW ROCK `xss`, BALLAD 6/8 `x.s.s.`, BLUES `x.s` on each triplet beat, the 8th rides
   `x.s.`, PUNK `xs`); where the beat is accented hard (`X`: HALF SHUFFLE, RIDE N KICK, SEVEN) the hits between are

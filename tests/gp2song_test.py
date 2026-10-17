@@ -21,7 +21,8 @@ Q = 960
 
 
 def emit_bar(track, bar, events, n32=32):
-    """events: {pos32: [(gm note, velocity, accent)]} -> sequential beats (notes and rests) of one bar of n32 32nds"""
+    """events: {pos32: [(gm note, velocity, accent[, grace])]} -> sequential beats (notes and rests) of one bar of n32
+    32nds; grace: the note carries a grace note (a flam)"""
     m = track.measures[bar]
     voice = m.voices[0]
     voice.beats = []
@@ -35,9 +36,12 @@ def emit_bar(track, bar, events, n32=32):
     def add(pos, length, notes):
         b = gp.Beat(voice, start=m.header.start + pos * (Q // 8), duration=gp.Duration(value=32 // length))
         b.status = gp.BeatStatus.normal if notes else gp.BeatStatus.rest
-        for k, (value, vel, accent) in enumerate(notes):   # one note a string: the file stores a string mask
+        for k, ev in enumerate(notes):                 # one note a string: the file stores a string mask
+            value, vel, accent = ev[:3]
             n = gp.Note(b, value=value, velocity=vel, string=k + 1, type=gp.NoteType.normal)
             n.effect.accentuatedNote = accent
+            if len(ev) > 3 and ev[3]:
+                n.effect.grace = gp.GraceEffect(fret=value, velocity=vel)
             b.notes.append(n)
         voice.beats.append(b)
 
@@ -91,8 +95,8 @@ def make_song():
     def ev():
         return {}
 
-    def put(e, pos16, value, vel=95, accent=False, pos32=None):
-        e.setdefault(pos32 if pos32 is not None else pos16 * 2, []).append((value, vel, accent))
+    def put(e, pos16, value, vel=95, accent=False, pos32=None, grace=False):
+        e.setdefault(pos32 if pos32 is not None else pos16 * 2, []).append((value, vel, accent, grace))
 
     def verse(variant, fill=False):
         e = ev()
@@ -115,8 +119,8 @@ def make_song():
         for s in range(0, 16, 2):
             put(e, s, 46)
         put(e, 0, 36, accent=True); put(e, 0, 49, accent=True)
-        put(e, 4, 38); put(e, 8, 36)
-        put(e, 12, 38); put(e, 12, 38, pos32=25)   # a flam: 32nds 24 and 25
+        put(e, 4, 38, grace=True); put(e, 8, 36)    # the snare on 2 with a grace note: a flam
+        put(e, 12, 38); put(e, 12, 38, pos32=25)   # two 32nds: a ratchet (a drag written out)
         emit_bar(drums, i, e)
         p = ev()
         for s in range(0, 16, 4):
@@ -223,6 +227,8 @@ def main():
     assert "HITOM" not in v["lanes"] and v["lanes"]["HAT"][28:32] == "s.s." and v["lanes"]["SNARE"][28] == "x", (v["lanes"].get("HAT"), v["lanes"].get("SNARE"))
     assert c["steps"] == 16 and c["lanes"]["CRASH"][0] == "X" and c["lanes"]["KICK"][0] == "X", c["lanes"]
     assert c["lanes"]["SNARE"][12] == "x" and c.get("ratchets", {}).get("SNARE", "")[12] == "2", c.get("ratchets")
+    assert c["flams"]["SNARE"] == "....f...........", c.get("flams")                          # the grace note: a flam
+    assert "flams" not in v and "flams" not in o, (v.get("flams"), o.get("flams"))
     assert c["lanes"]["SHAKER"] == "g...g...g...g...", c["lanes"].get("SHAKER")              # the second track, ghost
     assert c["lanes"]["OPENHAT"] == "x.x.x.x.x.x.x.x.", c["lanes"]["OPENHAT"]
     assert o.get("outro") is True and o["steps"] == 16 and o["lanes"]["CRASH"][0] == "x", o
