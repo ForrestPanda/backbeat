@@ -51,6 +51,30 @@ Variants: CC 27 with the section's number does not wait for the section's end: t
 bar (with CC 21 on the same switch: the rest of this bar the fill); CC 24 / CC 25 go to the next /
 previous section (wrapping; stopped: the first / the last), no fill either; CC 26 is tap tempo.
 
+## Entries and breaks: a switch a section
+
+The layout this was made for (2026-10-18): switches 1..5 the song's sections (CC 20, each with its Ampero scene), 6
+and 7 start and stop. A silent bar or a break between two sections needs no section and no switch of its own: write it
+into the section that comes after it.
+
+- **The entry** (the editor's Entry select, or `"entry"` in the JSON) plays whenever the section comes in from another
+  one or from stopped: the switch stays a plain CC 20. Shine On You Crazy Diamond's way from P3-SYNTH into the ride
+  groove (the GP file's bars 166-169: toms, a hit, a silent bar, the pickup: 4 bars between two 3-bar phrases) can be
+  P3-GUITAR's 4-bar entry, or P3-SYNTH's break with P3-GUITAR pressed during it: the groove from its top at 170.
+- **The break** (`"break"`) is a second way into a section, for the same section too: **CC 28** with the section's
+  number, or **CC 28 127** for the section playing, which serves every song from one switch. With CC 21 on the same
+  switch, the fill first, then the break (Shine On's bar 204 then 205-207). A section with no break plays its entry,
+  and with neither a bar of rest.
+
+| Switch | Channel | Command | Data | What the FM-1 does |
+| --- | --- | --- | --- | --- |
+| 1..5 | 16 | CC 20 | the section's number | that section when the one playing ends, through its entry if it has one |
+| 6 | 16 | CC 21, CC 28 | 0, 127 | a fill, then the section playing again through its break |
+| 7 | 16 | CC 23 | 0 | stop |
+
+Pressing the switch of the section already playing still does nothing, so a switch with CC 21 and its own section's
+CC 20 is a fill in that section (Another Brick's crash fills in the chorus).
+
 ## Five switches
 
 With five switches free for the drummer, a song of any length (up to 16 sections) still fits:

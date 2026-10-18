@@ -11,7 +11,8 @@ The play list names the sections (or their numbers) with the bars each plays; th
 on beat 3 of the last bar, as a foot would, and lands when the section's pattern ends (no fill of its own;
 --fills asks for one in the last beat before that bar, so the whole last bar is the fill, as a foot pressing
 just before it), so an entry's bars round up to its pattern's: VERSE:2 with a 4-bar verse plays four. A last entry without
-bars is the ending: that section once, then the stop on the bar. Without --play: every section in order,
+bars is the ending: that section once, then the stop on the bar. A section written "!NAME:bars" comes in
+through its break (CC 28; the section playing too), the others through their entry if they have one. Without --play: every section in order,
 2 bars each (the song's outro, if one is flagged, as the ending). The render is the firmware's own drum
 engine, sequencer and pedal (tests/song_render.c, built here on first use; needs a ./build.sh before,
 for build/gen). --kit overrides the song's kit (the index in the device's KIT list), --bpm its tempo.
@@ -73,6 +74,8 @@ def main():
             if not tok:
                 continue
             name, _, bars = tok.rpartition(":") if ":" in tok else (tok, "", "")
+            brk = "!" if name.startswith("!") else ""
+            name = name[len(brk):]
             key = name.upper()
             if key.isdigit():
                 idx = int(key)
@@ -80,7 +83,7 @@ def main():
                 idx = names.index(key)
             else:
                 sys.exit(f"no section {name!r}; sections: {' '.join(names)}")
-            entries.append(f"{idx}:{bars}" if bars else str(idx))
+            entries.append(f"{brk}{idx}:{bars}" if bars else str(idx))
     else:
         outro = [i for i, s in enumerate(spec["sections"]) if s.get("outro")]
         entries = [f"{i}:2" for i in range(len(names)) if i not in outro] + [str(outro[0])] if outro else \

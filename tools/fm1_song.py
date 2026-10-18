@@ -19,7 +19,9 @@ The JSON (see docs/design.md):
         "ratchets": {"SNARE": "............2..."},
         "flams": {"SNARE": "....f..........."},
         "fills": {"HITOM": "............FF..", "HAT": "............NNNN"},
-        "fillbar": {"lanes": {"KICK": "x...x...x...x...", "SNARE": "....x...x.x.xxxx", "CRASH": "...............X"}}}]}
+        "fillbar": {"lanes": {"KICK": "x...x...x...x...", "SNARE": "....x...x.x.xxxx", "CRASH": "...............X"}},
+        "entry": {"bars": 2, "lanes": {"KICK": "................................x"}},
+        "break": {"lanes": {"CRASH": "X..............."}}}]}
 
 A lane string has one character a step: '.' rest, 'g' ghost, 's' soft, 'x' normal, 'X' hard. A ratchet
 string: '.' or 1, or 2..4 repeats inside the step. A flam string (2026-10-17): 'f' where the hit is a flam, a
@@ -30,6 +32,10 @@ during one. The older "fill" string does the same for a whole step, every lane a
 fill bar of the section's own: one bar (of its time and div; "steps" inside it to say otherwise, 1..64) of "lanes",
 "ratchets" and "flams" that a fill plays instead of the bar it is in, as it is (no marks there): from the press to the
 bar's end, its step i at the bar's step i (an arranger's fill-in), then the pattern from its top, or the change.
+"entry" and "break" (2026-10-18) are bars written to play before the section's pattern ("bars", default 1, of its time
+and div; or "steps", whole bars, 1..64 in all; "lanes", "ratchets", "flams", as written, no marks; no lanes at all:
+silence), the pattern from its top after them (a change asked for meanwhile lands at their end): the entry when
+the section comes in from another one or from stopped, the break on the pedal's CC 28 (docs/design.md).
 Lanes:
 KICK, KICK2, SNARE, CLAP, HAT, OPENHAT, PEDAL, RIM, SNARE2, LOWTOM, MIDTOM, HITOM, CRASH, RIDE, SHAKER, COWBELL
 (MIDTOM since 2026-10-14, where the conga was: "CONGA" still reads as it; spaces and case do not matter). div: 1/4 1/8 1/16 1/32 8T 16T 1/2 1BAR 2BAR. time: the section's meter,
@@ -242,6 +248,28 @@ def pack_section(sec, index):
             sys.exit(f"{name}: fillbar: steps must be 1..{NSTEP}")
         body += bytes([n]) + pack_steps(parse_hits(fb, n, f"{name} fillbar"))
         flags |= 2
+    for key, bit in (("entry", 4), ("break", 8)):  # its entry and break: the same, after the fill bar, in this order
+        eb = sec.get(key)
+        if eb is None:
+            continue
+        if not isinstance(eb, dict):
+            sys.exit(f"{name}: {key} must be an object of bars, lanes, ratchets and flams")
+        if "fills" in eb or "fill" in eb:
+            sys.exit(f"{name}: {key}: no fill marks there (it plays as written)")
+        bar = fillbar_steps(sec)
+        n = eb.get("steps")
+        if n is None:
+            if bar is None:
+                sys.exit(f"{name}: {key}: a bar of {sec.get('time') or '4/4'} at {div} is not a whole number of steps: "
+                         f"give it \"steps\"")
+            n = int(eb.get("bars", 1)) * bar
+        n = int(n)
+        if not 1 <= n <= NSTEP:
+            sys.exit(f"{name}: {key}: {n} steps; 1..{NSTEP} (whole bars: {NSTEP // bar if bar else 1} at most here)")
+        if bar and n % bar:
+            sys.exit(f"{name}: {key}: {n} steps is not whole bars of {bar}")
+        body += bytes([n]) + pack_steps(parse_hits(eb, n, f"{name} {key}"))
+        flags |= bit
     size = SEC_HDR + len(body)
     out = bytearray(name.encode("ascii", "replace").ljust(12, b"\0"))
     out += bytes([steps, DIVS.index(div), flags, meter]) + struct.pack("<H", size)
@@ -295,8 +323,20 @@ def describe(blob):
             n = bin(blob[q] | blob[q + 1] << 8).count("1")
             hits += n
             q += 2 + n
+        tail = ""
+        for bit, what in ((2, "a fill bar"), (4, "an entry"), (8, "a break")):   # the blocks after the pattern
+            if flags & bit:
+                tail += f"  + {what} of {blob[q]} steps"
+                q = walk(blob, q + 1, blob[q])
         print(f"  {k}: {sname:12s} {steps:2d} steps {DIVS[div]:5s} {meter_str(meter) or '4/4':5s} {hits:3d} hits {size:4d} bytes"
-              f"{'  OUTRO' if flags & 1 else ''}{f'  + a fill bar of {blob[q]} steps' if flags & 2 else ''}")
+              f"{'  OUTRO' if flags & 1 else ''}{tail}")
+
+
+def walk(blob, q, n):
+    """the offset after n packed steps at q"""
+    for _ in range(n):
+        q += 2 + bin(blob[q] | blob[q + 1] << 8).count("1")
+    return q
 
 
 def pack7(b):

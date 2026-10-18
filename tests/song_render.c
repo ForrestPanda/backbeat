@@ -8,7 +8,9 @@
  * SONG.bin is a packed song (tools/fm1_song.py --out). The play list: "section:bars" entries, each played for
  * that many bars; the next entry is asked for on beat 3 of the last bar, as a foot would (no fill of its own: a
  * change brings none); with FILLS=1 the fill (CC 21) is asked for in the last beat of the bar before, so the whole
- * last bar is the fill (pedal.c: a fill asked in a bar's last beat is the next bar) into the change. A last entry without bars is the ending: that section once as the
+ * last bar is the fill (pedal.c: a fill asked in a bar's last beat is the next bar) into the change. An entry written
+ * "!section:bars" comes in through its break (CC 28, the section playing too); the others through their entry, if
+ * written (CC 20). A last entry without bars is the ending: that section once as the
  * outro, then the stop on the bar (CC 22); otherwise the stop (CC 23). Section numbers as in the song (0 the
  * first). Environment: KIT=n overrides the song's kit, BPM=n its tempo, TAIL=seconds of silence after the
  * stop (default 1.5), USRKIT=image a user kit (tools/mkkit.py --image: USR3 and USR4 as the device holds
@@ -45,11 +47,12 @@ static void advance(uint32_t samples)
 {
     uint32_t end = now + samples, k;
     while (now < end) {
-        int8_t sec = live_sec;
+        int8_t sec = live_sec, req = live_req;
         uint8_t playing = song.playing;
         mix_block(out, CTL);
         if (!playing && song.playing) t0 = now;
-        if (sec != live_sec) jumped = now;
+        if (sec != live_sec || (playing && req >= 0 && live_req < 0)) jumped = now;   /* (a landing: the same section
+                                                     * too, through its break) */
         if (playing && !song.playing) stopped = now;
         for (k = 0; k < CTL; k++)
             wav_put(wf, out[k * 2], out[k * 2 + 1]);
@@ -67,7 +70,7 @@ static const char *sec_name(uint32_t k)
 
 int main(int argc, char **argv)
 {
-    uint32_t i, k, n, bar, ntok = 0, sec[64], bars[64], tail;
+    uint32_t i, k, n, bar, ntok = 0, sec[64], bars[64], brk[64], tail;
     int ending = -1;
     FILE *f;
     char *s, *tok;
@@ -86,7 +89,8 @@ int main(int argc, char **argv)
     s = argv[3];
     for (tok = strtok(s, " ,"); tok && ntok < 64u; tok = strtok(0, " ,")) {
         char *colon = strchr(tok, ':');
-        sec[ntok] = (uint32_t)atoi(tok);
+        brk[ntok] = tok[0] == '!';
+        sec[ntok] = (uint32_t)atoi(tok + brk[ntok]);
         bars[ntok] = colon ? (uint32_t)atoi(colon + 1) : 0u;
         if (!colon)
             ending = (int)ntok;
@@ -144,7 +148,7 @@ int main(int argc, char **argv)
     }
     wav_hdr(wf, 0);
     /* the first entry starts the loop */
-    cc(20, sec[0]);
+    cc(brk[0] ? 28 : 20, sec[0]);
     advance(CTL * 3u);
     n = 0;
     while (!song.playing && n < 3u * bar) {           /* (COUNT_IN: the clicks first; the song starts after them) */
@@ -173,11 +177,11 @@ int main(int argc, char **argv)
                 cc(22, sec[i + 1u]);
                 printf("%8.3f s  ending: fill, then %s once\n", now / (double)FS, sec_name(sec[i + 1u]));
             } else {
-                cc(20, sec[i + 1u]);
-                printf("%8.3f s  then %s\n", now / (double)FS, sec_name(sec[i + 1u]));
+                cc(brk[i + 1u] ? 28 : 20, sec[i + 1u]);
+                printf("%8.3f s  then %s%s\n", now / (double)FS, sec_name(sec[i + 1u]), brk[i + 1u] ? " (its break)" : "");
             }
             n = 0;
-            if (sec[i + 1u] == sec[i] && (int)(i + 1u) != ending) {   /* the same section again: nothing to land (it
+            if (sec[i + 1u] == sec[i] && (int)(i + 1u) != ending && !brk[i + 1u]) {   /* the same section again: nothing to land (it
                                                    * plays already), its next entry starts on the bar, as the foot
                                                    * counted it */
                 advance(target - now);

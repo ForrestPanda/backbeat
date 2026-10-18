@@ -341,7 +341,8 @@ empty). Numbers are 5 × 7 bit (u35, LSB first); data is pack7.
 
 **fm1-drummer (objects 16..24, 40..63):** `BK_GET` and `BK_PUT` also reach the songs (object 16 + slot for slots 0..7,
 object 40 + slot - 8 for slots 8..15 since 2026-10-14,
-the packed form of `firmware/src/sng.c`; a PUT of length 0 erases the slot; a slot never written reads empty) and the
+the packed form of `firmware/src/sng.c`, since 2026-10-18 with a section's entry and break after its fill bar (flags 4
+and 8: a firmware before that refuses such a song, rc 2); a PUT of length 0 erases the slot; a slot never written reads empty) and the
 pedal settings (object 24, 16 bytes: "ARS1", the pedal channel 0..17, the count-in's bars 0..2, SETUP's "load the
 last song at start" 0/1 and that song + 1 (0 none, 1..16 a slot, 17..32 a factory groove), 8 zero bytes). `BK_GET`
 alone reaches the factory grooves (object 48 + n - 1 for groove n, 48..63 since 2026-10-15: the songs built into the

@@ -364,6 +364,13 @@
   .sedgrid button.c.fb { border-style: dashed; border-color: var(--t3); }
   .sedgrid button.n.fb { color: var(--t3); border: none; background: none; }
   .sedgrid .lane.fbl { color: var(--t3); }
+  /* its entry and its break (2026-10-18): after a wide blue gap, blue dashed cells */
+  .sedgrid .sep.eb::before { width: 4px; background: var(--t1); }
+  .sedgrid button.c.eb { border-style: dashed; border-color: var(--t1); }
+  .sedgrid button.n.eb { color: var(--t1); border: none; background: none; }
+  .sedgrid .lane.ebl { color: var(--t1); }
+  .sedgrid button.n.fb.sel { color: #000; background: var(--t3); }   /* a block's steps selected (copy, paste, clear) */
+  .sedgrid button.n.eb.sel { color: #000; background: var(--t1); }
   .sedbars { display: flex; flex-wrap: wrap; gap: 2px; }
   .sedbars button { min-width: 28px; padding: 2px 4px; font-size: 11px; }
   .sedbars button.own { border-color: var(--trk); }
@@ -386,7 +393,7 @@
   /* the Play card's transport: previous / fill / next, under them play / stop / ending: two rows of three, a thumb each
      on a tablet (the count-in and humanize below, in their own row) */
   .ptrans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 8px; }
-  .ptrans.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }   /* the pedal's row: previous, fill, fill next bar, next */
+  .ptrans.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }   /* the pedal's rows: previous, fill, fill next bar, next; play, stop, break, ending */
   .ptrans button { min-height: 44px; padding: 8px 10px; white-space: normal; overflow-wrap: anywhere; }
   .setnav { margin: 0 0 12px; align-items: center; } .setnav b { font-size: 20px; font-weight: 400; color: var(--fg); min-width: 8em; }                 /* (the set's song in the player) */
   #sysinfo th { padding-right: 24px; }
@@ -606,6 +613,8 @@
             <button id="sed-split" data-t="sedSplitBtn"></button>
             <button id="sed-merge" data-t="sedMerge"></button>
             <button id="sed-fillbar"></button>
+            <label><span data-t="sedEntry"></span> <select id="sed-entry"></select></label>
+            <label><span data-t="sedBreak"></span> <select id="sed-break"></select></label>
             <span class="dim" id="sed-info"></span>
             <span class="warn-t" id="sed-barwarn" hidden></span> <button id="sed-barfix" hidden></button></p>
           <p class="bar"><span data-t="sedPen"></span>
@@ -624,6 +633,7 @@
             <p class="dim" data-t="sedBarsHelp"></p>
             <div id="sed-bars" class="sedbars"></div>
             <p class="bar"><button id="sed-usebars" data-t="sedUseBars"></button> <button id="sed-usefill" data-t="sedUseFill"></button>
+              <button id="sed-useentry" data-t="sedUseEntry"></button> <button id="sed-usebreak" data-t="sedUseBreak"></button>
               <span id="sed-barsel" class="dim"></span></p>
           </div>
           <p class="bar"><button id="sed-play" class="pri" data-t="playBtn"></button>
@@ -649,7 +659,7 @@
         </div>
         <div id="play-bar">   <!-- the transport: the pedal's buttons, play (the device's PLAY key) and stop under them -->
           <div class="ptrans four"><button id="play-prev" data-t="playPrev"></button><button id="play-fill" data-t="playFill"></button><button id="play-fillnext" data-t="playFillNext"></button><button id="play-next" data-t="playNext"></button></div>
-          <div class="ptrans"><button id="play-play" class="pri" data-t="playPlay"></button><button id="play-stop" class="warn" data-t="playStop"></button><button id="play-end" data-t="playEnd"></button></div>
+          <div class="ptrans four"><button id="play-play" class="pri" data-t="playPlay"></button><button id="play-stop" class="warn" data-t="playStop"></button><button id="play-break" data-t="playBreak"></button><button id="play-end" data-t="playEnd"></button></div>
           <p class="bar"><label><span data-t="pedalCount"></span> <select id="play-count"></select></label>
             <label><span data-t="playHum"></span> <select id="play-hum"></select></label></p>
         </div>
@@ -2325,6 +2335,24 @@ const SNG = {
         body.push(n, ...SNG.stepsBytes(SNG.hitsOf(fb, n, `${name} fillbar`)));
         flags |= 2;
       }
+      for (const [key, bit] of [["entry", 4], ["break", 8]]) {   /* its entry and break (2026-10-18): the same, after the
+                                                     * fill bar, in this order; whole bars of its time */
+        const eb = sec[key];
+        if (eb == null) continue;
+        if (typeof eb !== "object" || Array.isArray(eb)) throw new Error(`${name}: ${key} must be an object of bars, lanes, ratchets and flams`);
+        if (eb.fills || eb.fill) throw new Error(`${name}: ${key}: no fill marks there (it plays as written)`);
+        const bar = SNG.fillbarSteps({ time: sec.time, div });
+        let n = eb.steps;
+        if (n == null) {
+          if (bar == null) throw new Error(`${name}: ${key}: a bar of ${sec.time || "4/4"} at ${div} is not a whole number of steps: give it "steps"`);
+          n = Math.round(eb.bars == null ? 1 : +eb.bars) * bar;
+        }
+        n = Math.round(+n);
+        if (!(n >= 1 && n <= SNG.NSTEP)) throw new Error(`${name}: ${key}: ${n} steps; 1..${SNG.NSTEP} (whole bars: ${bar ? Math.floor(SNG.NSTEP / bar) : 1} at most here)`);
+        if (bar && n % bar) throw new Error(`${name}: ${key}: ${n} steps is not whole bars of ${bar}`);
+        body.push(n, ...SNG.stepsBytes(SNG.hitsOf(eb, n, `${name} ${key}`)));
+        flags |= bit;
+      }
       const size = SNG.SEC_HDR + body.length;
       out.push(...SNG.str12(name), steps, SNG.DIVS.indexOf(div), flags, meter, size & 0xFF, size >> 8, ...body);
     });
@@ -2338,7 +2366,7 @@ const SNG = {
     if (!steps || steps > SNG.NSTEP || div >= SNG.DIVS.length || size < SNG.SEC_HDR + ((steps + 3) >> 2) + 2 * steps) return null;
     const m = b[off + 15];
     if ((m & 31) > 16 || (m & 0x80)) return null;
-    return { off, name: SNG.str(b, off), steps, div: SNG.DIVS[div], outro: !!(b[off + 14] & 1), fillbar: !!(b[off + 14] & 2), time: SNG.meterOf(m), size };
+    return { off, name: SNG.str(b, off), steps, div: SNG.DIVS[div], outro: !!(b[off + 14] & 1), fillbar: !!(b[off + 14] & 2), entry: !!(b[off + 14] & 4), brk: !!(b[off + 14] & 8), time: SNG.meterOf(m), size };
   },
   /* the header and the sections' offsets of a packed song, as sng_check (every step walked); null when it is not one */
   check(b) {
@@ -2366,6 +2394,13 @@ const SNG = {
         s.fbSteps = b[q++];
         s.fbOff = q;
         if (!walk(s.fbSteps)) return null;
+      }
+      for (const k of ["entry", "brk"]) {          /* its entry and break after it, the same (2026-10-18) */
+        if (!s[k]) continue;
+        if (q >= pos + s.size || !b[q] || b[q] > SNG.NSTEP) return null;
+        s[k + "Steps"] = b[q++];
+        s[k + "Off"] = q;
+        if (!walk(s[k + "Steps"])) return null;
       }
       if (q !== pos + s.size) return null;
       h.sections.push(s);
@@ -2419,18 +2454,29 @@ const SNG = {
         if (Object.keys(fr).length) sec.fillbar.ratchets = fr;
         if (Object.keys(ff).length) sec.fillbar.flams = ff;
       }
+      for (const [k, key] of [["entry", "entry"], ["brk", "break"]]) {   /* the entry and the break: in bars when whole */
+        if (!s[k]) continue;
+        const fl = {}, fr = {}, ff = {}, n = s[k + "Steps"], bar = SNG.fillbarSteps({ time: s.time, div: s.div });
+        q = s[k + "Off"];
+        steps(n, fl, fr, null, ff);
+        sec[key] = bar && n % bar === 0 ? { bars: n / bar, lanes: fl } : { steps: n, lanes: fl };
+        if (Object.keys(fr).length) sec[key].ratchets = fr;
+        if (Object.keys(ff).length) sec[key].flams = ff;
+      }
       spec.sections.push(sec);
     }
     return spec;
   },
-  hits(b, h) {                                     /* the hits of every section (its fill bar's too) */
+  hits(b, h) {                                     /* the hits of every section (its fill bar's, entry's, break's too) */
     let n = 0;
+    const count = (q, steps) => {
+      for (let i = 0; i < steps; i++) { let on = b[q] | (b[q + 1] << 8), c = 0; while (on) { c += on & 1; on >>= 1; } n += c; q += 2 + c; }
+    };
     for (const s of h.sections) {
-      let q = s.off + SNG.SEC_HDR + ((s.steps + 3) >> 2);
-      for (let i = 0; i < s.steps + (s.fillbar ? 1 + s.fbSteps : 0); i++) {
-        if (s.fillbar && i === s.steps) { q++; continue; }   /* (the fill bar's step count) */
-        let on = b[q] | (b[q + 1] << 8), c = 0; while (on) { c += on & 1; on >>= 1; } n += c; q += 2 + c;
-      }
+      count(s.off + SNG.SEC_HDR + ((s.steps + 3) >> 2), s.steps);
+      if (s.fillbar) count(s.fbOff, s.fbSteps);
+      if (s.entry) count(s.entryOff, s.entrySteps);
+      if (s.brk) count(s.brkOff, s.brkSteps);
     }
     return n;
   },
@@ -2569,7 +2615,7 @@ const PLAY = {
   rkLayer(vels, vel) { let l = 0; while (l + 1 < vels.length && vel * 2 < vels[l] + vels[l + 1]) l++; return l; },
   rkTake(last, nt, r) { return nt <= 1 ? 0 : ((last < 0 ? 0 : last) + 1 + Math.floor(r * (nt - 1))) % nt; },
   create(spec, countIn = 0) {                        /* countIn: bars of clicks before a start from stopped (the device's setting) */
-    return { spec, sec: -1, cur: null, step: 0, pos: 0, bar: 0, req: -1, atEnd: false, fill: false, fillBars: 0, fillWait: false,
+    return { spec, sec: -1, cur: null, step: 0, pos: 0, bar: 0, req: -1, brk: false, eb: null, ebN: 0, ebB: 0, atEnd: false, fill: false, fillBars: 0, fillWait: false,
              endReq: 0, endBars: 0, playing: false, stopped: false, countIn, counting: 0, ciNum: 4, ciDen: 4, bpm: spec.bpm,
              swing: +spec.swing || 0 };
   },
@@ -2577,7 +2623,7 @@ const PLAY = {
   secBars(s) { return Math.max(1, Math.ceil((s.steps * PLAY.STEP_U[s.div]) / PLAY.barU(s))); },
   bars(spec, k) { return PLAY.secBars(spec.sections[k]); },
   playing(st) { return st.cur || st.spec.sections[st.sec]; },   /* the pattern playing (a song loaded meanwhile: the old one's) */
-  curBars(st) { return PLAY.secBars(PLAY.playing(st)); },
+  curBars(st) { return st.eb ? st.ebB : PLAY.secBars(PLAY.playing(st)); },   /* (an entry or break playing: its bars) */
   outro(spec) { const k = spec.sections.findIndex((s) => s.outro); return k < 0 ? null : k; },
   /* the fill bar of its own (sng.c fb_bar / fb_bars): its steps, the steps of one bar of it (a bar of the section's
      meter when that is whole steps and fits), the bars it takes (a phrase longer than a bar ends that many bars on) */
@@ -2592,13 +2638,24 @@ const PLAY = {
   /* the bars a fill asked for in bar `bar` lasts, this one counted (seq.c fill_bars_from): the fill bar of its own;
      without one, to the section's end (2026-10-17: the marks sit where the writer put them; no restart after) */
   fillBars(s, bar) { if (s.fillbar) return PLAY.fbBars(s); const n = PLAY.secBars(s); return n - (bar % n); },
+  /* the entry or the break a section comes in through (sng.c sng_eb, 2026-10-18): the break (brk) where written, else
+     the entry, else a bar of rest; the entry alone without brk; null none. {eb, n, bars}: its steps and bars, played
+     before the pattern, which starts from its top after them (bar) */
+  ebOf(s, brk) {
+    const eb = brk ? s.break || s.entry || { lanes: {} } : s.entry;
+    if (!eb) return null;
+    const bar = SNG.fillbarSteps(s) || s.steps, n = Math.min(SNG.NSTEP, eb.steps != null ? Math.round(+eb.steps) : Math.round(eb.bars == null ? 1 : +eb.bars) * bar);
+    return { eb, n, bars: Math.ceil(n / bar) };
+  },
   /* the pedal: a section (CC 20 at the section's end / 27 on the next bar, no fill of its own; a fill pending: on the
-     bar after it), the fill (CC 21, sent with it if wanted), the ending (CC 22), stop (CC 23) */
-  request(st, k, now = false) {
+     bar after it), the fill (CC 21, sent with it if wanted), the ending (CC 22), stop (CC 23); brk: through its break
+     (CC 28, PLAY.brk), else through its entry if it comes from another section or from stopped */
+  request(st, k, now = false, brk = false) {
     if (k < 0 || k >= st.spec.sections.length) return;
-    if (st.playing && !st.counting && !st.cur && st.req < 0 && k === st.sec && !st.endReq && !st.endBars) return;   /* the section playing, asked for again: nothing (as pedal.c) */
+    if (st.playing && !st.counting && !st.cur && st.req < 0 && k === st.sec && !st.endReq && !st.endBars && !brk) return;   /* the section playing, asked for again: nothing (as pedal.c) */
     st.endReq = 0; st.endBars = 0;
     st.req = k;
+    st.brk = brk;
     if (st.counting) return;                         /* during the count-in: only what starts changes */
     if (!st.playing) {
       st.sec = -1; st.cur = null; st.playing = true; st.stopped = false; st.step = 0; st.pos = 0; st.bar = 0; st.fill = false;
@@ -2630,9 +2687,17 @@ const PLAY = {
     const s = PLAY.playing(st), barU = PLAY.barU(s), beat = 192 / SNG.meter(s.time).den, at = next ? barU - 1 : st.pos % barU;
     if (!st.fill && !st.fillWait) {
       if (at + beat >= barU) st.fillWait = true;
-      else { st.fill = true; st.fillBars = PLAY.fillBars(s, st.bar); }
+      else { st.eb = null; st.ebB = 0; st.fill = true; st.fillBars = PLAY.fillBars(s, st.bar); }   /* (an entry or break playing: cut) */
     } else if (st.fill && st.fillBars <= 1 && at + beat >= barU) st.fillWait = true;
     if (st.req >= 0) st.atEnd = false;             /* a section cued: on the bar after the fill */
+  },
+  /* CC 28: section k through its break, as CC 20; k not a section: the section playing's (stopped: the one cued, else
+     the last played, else the first) */
+  brk(st, k) {
+    const n = st.spec.sections.length;
+    if (!n) return;
+    if (!(k >= 0 && k < n)) k = st.playing && !st.counting && st.sec >= 0 && !st.cur ? st.sec : st.req >= 0 ? st.req : st.sec >= 0 ? st.sec : 0;
+    PLAY.request(st, k, false, true);
   },
   step(st, dir) {                                    /* CC 24 / 25: the next / previous section, wrapping; stopped: the first / last */
     const n = st.spec.sections.length;
@@ -2668,26 +2733,34 @@ const PLAY = {
     st.spec = spec;
     st.req = -1; st.atEnd = false; st.endReq = 0; st.endBars = 0;
   },
-  stop(st) { st.playing = false; st.stopped = true; st.req = -1; st.fill = st.atEnd = st.fillWait = false; st.fillBars = 0; st.endReq = st.endBars = 0; st.counting = 0; },
+  stop(st) { st.playing = false; st.stopped = true; st.req = -1; st.brk = false; st.eb = null; st.ebB = 0; st.fill = st.atEnd = st.fillWait = false; st.fillBars = 0; st.endReq = st.endBars = 0; st.counting = 0; },
   /* a new bar: the fill over at its bar line (a fill bar of its own: the pattern from its top; or the section cued, or
      the ending's stop), the one asked for in the last beat on, the request at the section's end (live_block) */
   bar(st) {
     let over = false;
+    const ebOver = !!st.eb && st.bar >= st.ebB;      /* the entry or break played: the pattern from its top (below) */
     if (st.fill) {
       if (st.fillBars > 1) st.fillBars--;
       else if (st.fillWait) { st.fillWait = false; st.fillBars = PLAY.fillBars(PLAY.playing(st), st.bar); }   /* (another one, straight on) */
       else { st.fill = false; st.fillBars = 0; over = true; }
-    } else if (st.fillWait) { st.fillWait = false; st.fill = true; st.fillBars = PLAY.fillBars(PLAY.playing(st), st.bar); }
+    } else if (st.fillWait) { st.fillWait = false; st.eb = null; st.ebB = 0; st.fill = true; st.fillBars = PLAY.fillBars(PLAY.playing(st), ebOver ? 0 : st.bar); }   /* (right
+                                                        after an entry or break: from the pattern's top, restarted below) */
     if (st.atEnd && st.bar % PLAY.curBars(st) === 0) st.atEnd = false;   /* waiting for the section's end */
     if (st.endBars && st.req < 0 && (st.bar >= st.endBars || over)) { PLAY.stop(st); return; }
     if (st.req >= 0 && !st.atEnd && !st.fill && !st.fillWait) {
+      const entering = !!st.cur;
       if (st.cur) { st.cur = null; st.bpm = st.spec.bpm; st.swing = +st.spec.swing || 0; }   /* (a song loaded while playing: its tempo
                                                         and swing with its first section, sng.c sng_globals) */
+      const enter = st.brk || st.sec !== st.req || st.sec < 0 || entering;   /* (its entry: from another section, from stopped,
+                                                        a song just loaded; never the section playing asked for again) */
       st.sec = st.req; st.req = -1; st.step = 0; st.pos = 0; st.bar = 0; st.fill = false; st.fillBars = 0; st.fillWait = false; st.endBars = st.endReq; st.endReq = 0;
-    } else if (over && st.req < 0 && PLAY.playing(st).fillbar) { st.step = 0; st.pos = 0; st.bar = 0; }   /* a fill bar of its
+      const e = enter ? PLAY.ebOf(st.spec.sections[st.sec], st.brk) : null;
+      st.eb = e && e.eb; st.ebN = e ? e.n : 0; st.ebB = e ? e.bars : 0; st.brk = false;
+    } else if ((over && st.req < 0 && PLAY.playing(st).fillbar) || ebOver) { st.step = 0; st.pos = 0; st.bar = 0; st.eb = null; st.ebB = 0; }   /* a fill bar of its
                                                         own over, nothing asked for: the pattern from its top (an arranger's
                                                         variation after its fill-in); without one the fill ran to the
-                                                        section's end, which is its top */
+                                                        section's end, which is its top. An entry or break over: the
+                                                        pattern from its top */
   },
   /* the hits of the step the clock is on, then one step further; null when stopped */
   tick(st) {
@@ -2709,14 +2782,18 @@ const PLAY = {
                                                         as packed; none in the JSON: one bar) */
     const fi = fb ? fbn - Math.max(1, st.fillBars) * fbb + (i % fbb) : -1;   /* the phrase's step at the bar's own step, the
                                                         phrase ending with the fill (seq.c drum_src) */
-    if (fb && fi >= 0 && fi < fbn) {                 /* a fill: the fill bar of its own, as it is (no condition, no mark) */
-      for (const [lane, str] of Object.entries(fb.lanes || {})) {
-        const ch = str[fi] || ".";
+    const asIs = (o, j) => {                         /* a block's step j as written (no condition, no mark) */
+      for (const [lane, str] of Object.entries(o.lanes || {})) {
+        const ch = str[j] || ".";
         if (ch === ".") continue;
-        const r = ((fb.ratchets || {})[lane] || "")[fi], f = ((fb.flams || {})[lane] || "")[fi] === "f";
+        const r = ((o.ratchets || {})[lane] || "")[j], f = ((o.flams || {})[lane] || "")[j] === "f";
         hits.push({ lane: SNG.laneIndex(lane), level: SNG.LEVELS[ch], rat: r && "234".includes(r) ? +r : 1, flam: f });
       }
-    } else if (!(cond === "F" && !fillNow) && !(cond === "N" && fillNow)) {
+    };
+    const eb = st.eb && st.step < st.ebN;            /* the entry or break over the section's first steps (seq.c drum_src) */
+    if (eb) asIs(st.eb, st.step);
+    else if (fb && fi >= 0 && fi < fbn) asIs(fb, fi);   /* a fill: the fill bar of its own, as it is */
+    else if (!(cond === "F" && !fillNow) && !(cond === "N" && fillNow)) {
       for (const [lane, str] of Object.entries(s.lanes || {})) {
         const ch = str[i] || ".";
         if (ch === ".") continue;
@@ -2732,7 +2809,7 @@ const PLAY = {
                                                            one's until its first section) */
     const swung = ["1/4", "1/8", "1/16", "1/32"].includes(s.div) ? (su * Math.max(0, Math.min(100, sw))) / 200 : 0;
     const len = Math.round(st.pos / su) % 2 ? su - swung : su + swung;
-    const out = { hits, sec: st.sec, step: i, bar: st.bar, fill: fillNow, fb: !!(fb && fi >= 0 && fi < fbn), secs: ((60 / st.bpm) * len) / 48, u: len, newBar: false,
+    const out = { hits, sec: st.sec, step: i, bar: st.bar, fill: fillNow, fb: !eb && !!(fb && fi >= 0 && fi < fbn), eb, brk: st.brk, secs: ((60 / st.bpm) * len) / 48, u: len, newBar: false,
                   pos: st.pos, req: st.req, wait: !!st.fillWait, end: !!(st.endReq || st.endBars) };   /* (the view: where in the
                                                         bar and the pattern, what comes, at this step) */
     st.step++;
@@ -2767,6 +2844,7 @@ const PEDALIN = {
       case 24: return { kind: "step", dir: 1 };
       case 25: return { kind: "step", dir: -1 };
       case 26: return { kind: "tap" };
+      case 28: return { kind: "break", k: v };    /* (2026-10-18; 127: the section playing's) */
       default: return null;
     }
   },
@@ -2776,6 +2854,7 @@ const PEDALIN = {
     switch (a.kind) {
       case "section": return (a.now ? "NOW: " : "NEXT: ") + name(a.k);
       case "fill": return a.next ? "FILL NEXT BAR" : "FILL";
+      case "break": return "BREAK: " + (spec && spec.sections[a.k] ? name(a.k) : "THIS ONE");
       case "ending": return "ENDING" + (spec && spec.sections[a.k] ? ": " + name(a.k) : spec && PLAY.outro(spec) != null ? ": " + name(PLAY.outro(spec)) : "");
       case "stop": return "STOP";
       case "step": return a.dir > 0 ? "NEXT" : "PREVIOUS";
@@ -2885,6 +2964,28 @@ const SED = {
       if (Object.keys(fr).length) out.fillbar.ratchets = fr;
       if (Object.keys(ff).length) out.fillbar.flams = ff;
     }
+    for (const key of ["entry", "break"]) {        /* its entry and break (2026-10-18): whole bars (64 steps at most), in bars */
+      const eb = sec[key];
+      if (!eb || typeof eb !== "object") continue;
+      const bar = SNG.fillbarSteps(out), per = bar || n, want = eb.steps != null ? Math.round(+eb.steps) : Math.round(eb.bars == null ? 1 : +eb.bars) * per;
+      const bars = Math.max(1, Math.min(Math.floor(SNG.NSTEP / per) || 1, Math.floor(want / per) || 1)), m = Math.min(SNG.NSTEP, bars * per);
+      out[key] = { ...(bar ? { bars } : { steps: m }), ...SED.blockStrings(eb, m) };
+    }
+    return out;
+  },
+  /* a block's strings (lanes, ratchets and flams where a lane hits) at m steps, empty ones dropped */
+  blockStrings(o, m) {
+    const fl = {}, fr = {}, ff = {};
+    for (const [l, v] of Object.entries(o.lanes || {})) { const p = SED.pad(v, m); if (/[^.]/.test(p)) fl[l] = p; }
+    for (const [l, v] of Object.entries(o.ratchets || {})) { const p = SED.pad(v, m); if (/[2-4]/.test(p) && fl[l]) fr[l] = p; }
+    for (const [l, v] of Object.entries(o.flams || {})) {
+      if (!fl[l]) continue;
+      const p = SED.pad(v, m).split("").map((c, i) => (c === "f" && fl[l][i] !== "." ? "f" : ".")).join("");
+      if (/f/.test(p)) ff[l] = p;
+    }
+    const out = { lanes: fl };
+    if (Object.keys(fr).length) out.ratchets = fr;
+    if (Object.keys(ff).length) out.flams = ff;
     return out;
   },
   blank(name, steps = 16, div = "1/16") { return SED.norm({ name, steps, div, lanes: {} }); },
@@ -2951,7 +3052,8 @@ const SED = {
       for (const [l, v] of Object.entries(sec.flams || {})) flams[l] = SED.pad(v, sec.steps).slice(a, b);
       for (const [l, v] of Object.entries(sec.fills || {})) marks[l] = SED.pad(v, sec.steps).slice(a, b);
       return SED.norm({ ...sec, name, steps: b - a, lanes, ratchets: rats, flams, fills: marks, fill: SED.pad(sec.fill, sec.steps).slice(a, b), outro: false,
-                        fillbar: b === sec.steps ? sec.fillbar : null });   /* (the fill bar of its own goes with the last bar) */
+                        fillbar: b === sec.steps ? sec.fillbar : null,   /* (the fill bar of its own goes with the last bar, */
+                        entry: a === 0 ? sec.entry : null, break: a === 0 ? sec.break : null });   /* the entry and the break with the first) */
     };
     return [part(0, cut, sec.name), part(cut, sec.steps, (sec.name + " 2").slice(0, 12))];
   },
@@ -2963,7 +3065,8 @@ const SED = {
     for (const l of new Set([...Object.keys(a.flams || {}), ...Object.keys(b.flams || {})])) flams[l] = SED.pad((a.flams || {})[l], a.steps) + SED.pad((b.flams || {})[l], b.steps);
     for (const l of new Set([...Object.keys(a.fills || {}), ...Object.keys(b.fills || {})])) marks[l] = SED.pad((a.fills || {})[l], a.steps) + SED.pad((b.fills || {})[l], b.steps);
     return SED.norm({ ...a, steps: a.steps + b.steps, lanes, ratchets: rats, flams, fills: marks, fill: SED.pad(a.fill, a.steps) + SED.pad(b.fill, b.steps), outro: a.outro || b.outro,
-                      fillbar: b.fillbar || null });   /* (the fill bar of its own: the last part's) */
+                      fillbar: b.fillbar || null, entry: a.entry || null, break: a.break || null });   /* (the fill bar of its own: the
+                                                     last part's; the entry and the break: the first's) */
   },
   /* a section from bars of the file (the importer's "bars": strings at 1/16, "steps" each: 16 in 4/4, 14 in 7/8, with
      the bar's "time"), at most 4; the first bar's meter is the section's */
@@ -3018,34 +3121,70 @@ const SED = {
     lanes[lane] = v.join(""); rats[lane] = r.join(""); flams[lane] = f.join("");
     return SED.norm({ ...sec, fillbar: { steps: m, lanes, ratchets: rats, flams } });
   },
+  /* ---- the entry and the break (sng.c SNG_F_ENTRY, SNG_F_BREAK, 2026-10-18): whole bars before the section's pattern
+     as it comes in (the entry: from another section or from stopped; the break: CC 28); edited as the fill bar is */
+  ebBar(sec) { return SNG.fillbarSteps(sec) || sec.steps; },   /* a bar's steps (not whole: the pattern) */
+  ebMax(sec) { return Math.max(1, Math.floor(SNG.NSTEP / SED.ebBar(sec))); },   /* bars at most (64 steps) */
+  ebSteps(sec, key) { const eb = sec[key]; return !eb ? 0 : eb.steps != null ? eb.steps : eb.bars * SED.ebBar(sec); },
+  ebBars(sec, key) { return sec[key] ? Math.round(SED.ebSteps(sec, key) / SED.ebBar(sec)) : 0; },
+  ebSet(sec, key, bars) {                          /* its bars (0: none); a new one is silent; shorter: cut, longer: rests */
+    if (!bars) return SED.norm({ ...sec, [key]: null });
+    const eb = sec[key] || { lanes: {} };
+    return SED.norm({ ...sec, [key]: { lanes: eb.lanes, ratchets: eb.ratchets, flams: eb.flams, steps: bars * SED.ebBar(sec) } });
+  },
+  ebCell(sec, key, lane, i) { return SED.fbCell({ fillbar: sec[key] }, lane, i); },
+  ebSetHit(sec, key, lane, i, hit, rat = 1, flam = false) {
+    if (!sec[key]) return sec;
+    const m = SED.ebSteps(sec, key), eb = sec[key], lanes = { ...eb.lanes }, rats = { ...(eb.ratchets || {}) }, flams = { ...(eb.flams || {}) };
+    const v = SED.pad(lanes[lane], m).split(""), r = SED.pad(rats[lane], m).split(""), f = SED.pad(flams[lane], m).split("");
+    v[i] = hit || "."; r[i] = hit && rat > 1 ? String(rat) : "."; f[i] = hit && flam ? "f" : ".";
+    lanes[lane] = v.join(""); rats[lane] = r.join(""); flams[lane] = f.join("");
+    return SED.norm({ ...sec, [key]: { steps: m, lanes, ratchets: rats, flams } });
+  },
+  /* bars of the file (as fromBars: 1/16, at most 4) as the entry or the break, as they are */
+  withBlock(sec, key, bars) {
+    const f = SED.fromBars(bars, sec.name, "1/16");
+    return SED.norm({ ...sec, [key]: { steps: f.steps, lanes: f.lanes, ratchets: f.ratchets, flams: f.flams } });
+  },
   hits(sec) { return Object.values(sec.lanes).reduce((n, v) => n + (v.match(/[^.]/g) || []).length, 0); },
-  /* steps a..b (0-based, inclusive) of every lane as a clip: {n, lanes, ratchets, fill} */
-  copyCols(sec, a, b) {
-    const n = sec.steps;
+  /* the steps of a block: its fill bar of its own, its entry or its break (key), as a pattern without marks */
+  view(sec, key) {
+    const b = sec[key];
+    return { steps: key === "fillbar" ? b.steps : SED.ebSteps(sec, key), lanes: b.lanes || {}, ratchets: b.ratchets || {}, flams: b.flams || {}, fills: {}, fill: "" };
+  },
+  /* steps a..b (0-based, inclusive) of every lane as a clip: {n, lanes, ratchets, flams, fills, fill}; key: of a block
+     (null: the pattern) */
+  copyCols(sec, a, b, key = null) {
+    if (key && !sec[key]) return null;
+    const v = key ? SED.view(sec, key) : sec, n = v.steps;
     a = Math.max(0, Math.min(a, b)); b = Math.min(n - 1, Math.max(a, b));
-    const clip = { n: b - a + 1, lanes: {}, ratchets: {}, flams: {}, fills: {}, fill: SED.pad(sec.fill, n).slice(a, b + 1) };
-    for (const [l, v] of Object.entries(sec.lanes)) clip.lanes[l] = SED.pad(v, n).slice(a, b + 1);
-    for (const [l, v] of Object.entries(sec.ratchets || {})) clip.ratchets[l] = SED.pad(v, n).slice(a, b + 1);
-    for (const [l, v] of Object.entries(sec.flams || {})) clip.flams[l] = SED.pad(v, n).slice(a, b + 1);
-    for (const [l, v] of Object.entries(sec.fills || {})) clip.fills[l] = SED.pad(v, n).slice(a, b + 1);
+    const clip = { n: b - a + 1, lanes: {}, ratchets: {}, flams: {}, fills: {}, fill: SED.pad(v.fill, n).slice(a, b + 1) };
+    for (const [l, x] of Object.entries(v.lanes)) clip.lanes[l] = SED.pad(x, n).slice(a, b + 1);
+    for (const [l, x] of Object.entries(v.ratchets || {})) clip.ratchets[l] = SED.pad(x, n).slice(a, b + 1);
+    for (const [l, x] of Object.entries(v.flams || {})) clip.flams[l] = SED.pad(x, n).slice(a, b + 1);
+    for (const [l, x] of Object.entries(v.fills || {})) clip.fills[l] = SED.pad(x, n).slice(a, b + 1);
     return clip;
   },
-  /* the clip's steps written over the section from step at (what runs past the end is dropped) */
-  pasteCols(sec, at, clip) {
-    const n = sec.steps, k = Math.min(clip.n, n - at);
+  /* the clip's steps written over the section from step at (what runs past the end is dropped); key: into a block (its
+     fill bar, entry or break: the hits as they are, no marks, no conditions there), null: the pattern */
+  pasteCols(sec, at, clip, key = null) {
+    if (key && !sec[key]) return sec;
+    const v = key ? SED.view(sec, key) : sec, n = v.steps, k = Math.min(clip.n, n - at);
     if (at < 0 || k <= 0) return sec;
     const put = (base, piece) => SED.pad(base, n).slice(0, at) + piece.slice(0, k) + SED.pad(base, n).slice(at + k);
     const lanes = {}, rats = {}, marks = {}, flams = {};
-    for (const l of new Set([...Object.keys(sec.lanes), ...Object.keys(clip.lanes)])) lanes[l] = put(sec.lanes[l], SED.pad(clip.lanes[l], clip.n));
-    for (const l of new Set([...Object.keys(sec.ratchets || {}), ...Object.keys(clip.ratchets || {})])) rats[l] = put((sec.ratchets || {})[l], SED.pad((clip.ratchets || {})[l], clip.n));
-    for (const l of new Set([...Object.keys(sec.flams || {}), ...Object.keys(clip.flams || {})])) flams[l] = put((sec.flams || {})[l], SED.pad((clip.flams || {})[l], clip.n));
+    for (const l of new Set([...Object.keys(v.lanes), ...Object.keys(clip.lanes)])) lanes[l] = put(v.lanes[l], SED.pad(clip.lanes[l], clip.n));
+    for (const l of new Set([...Object.keys(v.ratchets || {}), ...Object.keys(clip.ratchets || {})])) rats[l] = put((v.ratchets || {})[l], SED.pad((clip.ratchets || {})[l], clip.n));
+    for (const l of new Set([...Object.keys(v.flams || {}), ...Object.keys(clip.flams || {})])) flams[l] = put((v.flams || {})[l], SED.pad((clip.flams || {})[l], clip.n));
+    if (key) return SED.norm({ ...sec, [key]: { steps: n, lanes, ratchets: rats, flams } });
     for (const l of new Set([...Object.keys(sec.fills || {}), ...Object.keys(clip.fills || {})])) marks[l] = put((sec.fills || {})[l], SED.pad((clip.fills || {})[l], clip.n));
     return SED.norm({ ...sec, lanes, ratchets: rats, flams, fills: marks, fill: put(sec.fill, SED.pad(clip.fill, clip.n)) });
   },
-  clearCols(sec, a, b) {
-    const n = sec.steps;
+  clearCols(sec, a, b, key = null) {
+    if (key && !sec[key]) return sec;
+    const n = key ? SED.view(sec, key).steps : sec.steps;
     a = Math.max(0, Math.min(a, b)); b = Math.min(n - 1, Math.max(a, b));
-    return SED.pasteCols(sec, a, { n: b - a + 1, lanes: {}, ratchets: {}, flams: {}, fills: {}, fill: "" });
+    return SED.pasteCols(sec, a, { n: b - a + 1, lanes: {}, ratchets: {}, flams: {}, fills: {}, fill: "" }, key);
   },
 };
 /*PROTO-END*/
@@ -3231,12 +3370,12 @@ const TEXT = {
     sedSteps: "ステップ", sedTime: "拍子", sedOutro: "アウトロ", sedDup: "複製", sedNew: "新規セクション", sedDel: "削除", sedSplit: "分割（小節）", sedSplitBtn: "分割", sedMerge: "次と結合",
     sedBarWarn: "拍子の小節に揃っていません：切り替えは小節線まで待ちます。", sedBarFix: "拍子を {sig} に",
     sedPen: "ペン:", sedRat: "ラチェット", sedFlam: "フラム", sedMark: "フィル:", sedMarkAlways: "常に", sedMarkF: "フィル時のみ", sedMarkN: "フィル時は休み", sedGridHelp: "クリックでペンのレベル・ラチェット・フィル印の打点、同じ打点をもう一度で消す。フィル印が「フィル時のみ」「フィル時は休み」のとき、既にある打点をクリックするとその印を変えます（黄の枠: フィル時のみ、赤の枠: フィル時は休み）。上の行はステップ全体の印。", sedBarsHelp: "ファイルの小節（このセクションの範囲に印）：1〜4 小節を選んでパターンに、1 小節をフィルに。",
-    sedHear: "クリックで音を聞く", sedKey: "キー: ", sedUndo: "元に戻す", sedRedo: "やり直す", sedPlaySec: "このセクションを試聴", sedKeys: "キー: n 通常、h 強、s 弱、g ゴースト、x 消去、r ラチェット、l フラム、m フィル印、[ ] 前後のセクション、Delete 選択ステップを消去、Ctrl+C / Ctrl+V ステップのコピーと貼り付け、Ctrl+Z / Ctrl+Y 元に戻す / やり直す、p このセクションを試聴。レーン名をクリックすると音が鳴ります。", sedCols: "ステップ（番号をクリック、Shift+クリックで範囲）:", sedCopy: "コピー", sedPaste: "貼り付け（選択位置に）", sedClear: "消去", sedCopied: "コピーしました: ", sedUseBars: "選んだ小節をパターンに", sedUseFill: "選んだ小節をフィルに", sedFbAdd: "フィル小節を追加", sedFbDel: "フィル小節を外す", sedFbInfo: " + フィル小節 {n} ステップ", sedFbHelp: "隙間の右はこのセクション専用のフィル小節：フィルはいま鳴っている小節の代わりにこれを演奏します（印なし。押した所から小節の終わりまで、同じ位置のステップを）。追加すると、パターンの最後の小節（フィル時に鳴る形）が写されます。", sedEdit: "編集", sedDropped: "パターンと重なるフィルの打点は捨てました: ", sedTooMany: "16 セクションまで", sedNoMerge: "結合できません（分割数が違うか 64 ステップ超）",
-    playTitle: "試聴（ペダルを模して）", playHelp: "ブラウザでソングを鳴らします：セクションのボタンがペダルです（再生中のセクションがパターンを弾き終えてから切り替え、フィルは付きません。Shift+クリックは待たずに次の小節で。フィルはこの小節の残り（アレンジャーのフィルインと同じ。小節の最後の拍で押すと次の小節が丸ごとフィル）、その後パターンは頭から、またはセクションの切り替えが次の小節に。切り替えの前にフィルを押せば、フィルから次のセクションへ（ペダルでは CC 21 と CC 20 を同じスイッチに）。「前 / 次のセクション」は CC 25 / 24、キーはタイルの下）。上の表示は本体の LIVE 画面で、音と同時に動きます。スウィングは本体と同じに鳴ります。カウントイン（本体の設定と同じ）：停止中にセクションを押すと先にクリックが鳴ります。音はドラムキットページのパッド、または tools/mkkit.py --wavs の WAV（KICK_C2.wav…）。本体のエンジン（tools/fm1_render.py）が基準です。",
-    playKitDefault: "キット: エディタの隣のもの ", kitPreloaded: "ドラムキット: Muldjord (DrumGizmo, CC BY) をパッドに: ", playPrev: "前のセクション", playNext: "次のセクション", playFill: "フィル", playFillNext: "次の小節にフィル", playEnd: "エンディング", playPlay: "再生", playTap: "タップ", playStop: "停止", playKitFiles: "キットの WAV を選ぶ", playNoSong: "ソングを開くか、スロットの「試聴」を押してください", playNoKit: "キット: なし（ドラムキットページのパッド、または WAV）", playKitPads: "キット: ドラムキットページのパッド", playKitWavs: "キット: WAV ", playBtn: "試聴", playBar: "小節 ", playCued: "待機中",
-    playKeys: "キー: 1〜8 セクション（0: 9〜16 と切り替え、Shift: 次の小節で）・ f フィル（F: 次の小節を丸ごと）・ , . 前 / 次 ・ e エンディング ・ スペース 停止 ・ - / + テンポ ・ t タップ",
+    sedHear: "クリックで音を聞く", sedKey: "キー: ", sedUndo: "元に戻す", sedRedo: "やり直す", sedPlaySec: "このセクションを試聴", sedKeys: "キー: n 通常、h 強、s 弱、g ゴースト、x 消去、r ラチェット、l フラム、m フィル印、[ ] 前後のセクション、Delete 選択ステップを消去、Ctrl+C / Ctrl+V ステップのコピーと貼り付け、Ctrl+Z / Ctrl+Y 元に戻す / やり直す、p このセクションを試聴。レーン名をクリックすると音が鳴ります。", sedCols: "ステップ（番号をクリック、Shift+クリックで範囲。フィル小節・エントリー・ブレイクの番号も：そこへコピーと貼り付け）:", sedCopy: "コピー", sedPaste: "貼り付け（選択位置に）", sedClear: "消去", sedCopied: "コピーしました: ", sedUseBars: "選んだ小節をパターンに", sedUseFill: "選んだ小節をフィルに", sedEntry: "エントリー", sedBreak: "ブレイク", sedEbNone: "なし", sedEbBar: "小節", sedEbBars: "小節", sedUseEntry: "選んだ小節をエントリーに", sedUseBreak: "選んだ小節をブレイクに", sedEbHelp: "エントリーとブレイク：セクションのパターンの前に鳴る小節（無音でも可）。終わるとパターンは頭から始まり、その間に押したセクションはその終わりで切り替わります。エントリーは別のセクションや停止から入るとき、ブレイクは CC 28（再生中のセクションにも）で鳴ります。グリッドでは青い隙間の右。", sedFbAdd: "フィル小節を追加", sedFbDel: "フィル小節を外す", sedFbInfo: " + フィル小節 {n} ステップ", sedFbHelp: "隙間の右はこのセクション専用のフィル小節：フィルはいま鳴っている小節の代わりにこれを演奏します（印なし。押した所から小節の終わりまで、同じ位置のステップを）。追加すると、パターンの最後の小節（フィル時に鳴る形）が写されます。", sedEdit: "編集", sedDropped: "パターンと重なるフィルの打点は捨てました: ", sedTooMany: "16 セクションまで", sedNoMerge: "結合できません（分割数が違うか 64 ステップ超）",
+    playTitle: "試聴（ペダルを模して）", playHelp: "ブラウザでソングを鳴らします：セクションのボタンがペダルです（再生中のセクションがパターンを弾き終えてから切り替え、フィルは付きません。Shift+クリックは待たずに次の小節で。フィルはこの小節の残り（アレンジャーのフィルインと同じ。小節の最後の拍で押すと次の小節が丸ごとフィル）、その後パターンは頭から、またはセクションの切り替えが次の小節に。切り替えの前にフィルを押せば、フィルから次のセクションへ（ペダルでは CC 21 と CC 20 を同じスイッチに）。「前 / 次のセクション」は CC 25 / 24。ブレイクは CC 28：再生中のセクションが終わったら、そのセクションをブレイク（パターンの前に鳴る小節、なければエントリー、なければ 1 小節の休み）から。エントリーは別のセクションや停止から入るときに鳴ります。キーはタイルの下）。上の表示は本体の LIVE 画面で、音と同時に動きます。スウィングは本体と同じに鳴ります。カウントイン（本体の設定と同じ）：停止中にセクションを押すと先にクリックが鳴ります。音はドラムキットページのパッド、または tools/mkkit.py --wavs の WAV（KICK_C2.wav…）。本体のエンジン（tools/fm1_render.py）が基準です。",
+    playKitDefault: "キット: エディタの隣のもの ", kitPreloaded: "ドラムキット: Muldjord (DrumGizmo, CC BY) をパッドに: ", playPrev: "前のセクション", playNext: "次のセクション", playFill: "フィル", playFillNext: "次の小節にフィル", playEnd: "エンディング", playBreak: "ブレイク", playPlay: "再生", playTap: "タップ", playStop: "停止", playKitFiles: "キットの WAV を選ぶ", playNoSong: "ソングを開くか、スロットの「試聴」を押してください", playNoKit: "キット: なし（ドラムキットページのパッド、または WAV）", playKitPads: "キット: ドラムキットページのパッド", playKitWavs: "キット: WAV ", playBtn: "試聴", playBar: "小節 ", playCued: "待機中",
+    playKeys: "キー: 1〜8 セクション（0: 9〜16 と切り替え、Shift: 次の小節で）・ f フィル（F: 次の小節を丸ごと）・ , . 前 / 次 ・ e エンディング ・ b ブレイク ・ スペース 停止 ・ - / + テンポ ・ t タップ",
     playHum: "ヒューマナイズ", humOff: "オフ", humLight: "軽め", humMore: "強め",
-    pinFrom: "MIDI 入力", pinClock: "MIDI クロックに合わせる", pinListen: "ペダルを聴く", pinStop: "聴くのをやめる", pinNone: "（FM-1 以外の MIDI 入力なし）", pinOn: "チャンネル {ch} を聴いています", pinNoMidi: "このブラウザには Web MIDI がありません", pinNoSong: "ソングがありません（スロットの「試聴」か、ソングを開いてください）", pinHelp: "本物のペダル（Ampero、または間の USB MIDI インターフェース）でブラウザのプレーヤーを動かします。FM-1 と同じ CC 20..27 と PC を、ペダルカードのチャンネルで受けます。PC n はセット（セットリストタブ）の n 曲目、なければ接続中の FM-1（または模擬 FM-1）のスロット n のソングを開きます。PC 16〜31 はファクトリー・グルーヴ。音を出すため、最初に「ペダルを聴く」を押してください。「MIDI クロックに合わせる」で、その入力のテンポと START / STOP に従います（FM-1 の SETUP > SYNC と同じ。カウントインはなし）。", pedalTitle: "ペダル", pedalHelp: "ペダルボードの MIDI チャンネル（CC 20..27 と PC）と、停止中にセクションを押したときのカウントイン（クリック 1〜2 小節）。電源を切っても保持されます。", pedalCh: "チャンネル", pedalSet: "設定", pedalClock: "MIDI クロック入力", clockTrs: "TRS ジャック", clockUsb: "USB",
+    pinFrom: "MIDI 入力", pinClock: "MIDI クロックに合わせる", pinListen: "ペダルを聴く", pinStop: "聴くのをやめる", pinNone: "（FM-1 以外の MIDI 入力なし）", pinOn: "チャンネル {ch} を聴いています", pinNoMidi: "このブラウザには Web MIDI がありません", pinNoSong: "ソングがありません（スロットの「試聴」か、ソングを開いてください）", pinHelp: "本物のペダル（Ampero、または間の USB MIDI インターフェース）でブラウザのプレーヤーを動かします。FM-1 と同じ CC 20..28 と PC を、ペダルカードのチャンネルで受けます。PC n はセット（セットリストタブ）の n 曲目、なければ接続中の FM-1（または模擬 FM-1）のスロット n のソングを開きます。PC 16〜31 はファクトリー・グルーヴ。音を出すため、最初に「ペダルを聴く」を押してください。「MIDI クロックに合わせる」で、その入力のテンポと START / STOP に従います（FM-1 の SETUP > SYNC と同じ。カウントインはなし）。", pedalTitle: "ペダル", pedalHelp: "ペダルボードの MIDI チャンネル（CC 20..28 と PC）と、停止中にセクションを押したときのカウントイン（クリック 1〜2 小節）。電源を切っても保持されます。", pedalCh: "チャンネル", pedalSet: "設定", pedalClock: "MIDI クロック入力", clockTrs: "TRS ジャック", clockUsb: "USB",
     pedalClockHelp: "ペダルボードのクロックのテンポと START / STOP に従います（Ampero: CLOCK OUT (TRS) をオン）。すぐに設定されます", pedalNow: "今: ", pedalOff: "オフ", pedalAny: "すべて", pedalCount: "カウントイン", pedalBar: "1 小節", pedalBars: "2 小節",
     songBad: "このソングは送れません（16 項目、1〜64 小節まで）", songRefused: "ソングを止めてから送ってください",
     songSent: "ソングを FM-1 に送りました",
@@ -3379,12 +3518,12 @@ const TEXT = {
     sedSteps: "steps", sedTime: "time", sedOutro: "outro", sedDup: "Duplicate", sedNew: "New section", sedDel: "Delete", sedSplit: "split at bar", sedSplitBtn: "Split", sedMerge: "Merge with next",
     sedBarWarn: "Not whole bars of its time: a change waits for the bar line.", sedBarFix: "Set time to {sig}",
     sedPen: "pen:", sedRat: "ratchet", sedFlam: "flam", sedMark: "fill:", sedMarkAlways: "always", sedMarkF: "only in a fill", sedMarkN: "not in a fill", sedGridHelp: "Click a cell to set a hit with the pen's level, ratchet and fill mark; click the same hit again to clear it. With the fill mark on 'only in a fill' or 'not in a fill', clicking a hit that is there changes its mark instead (amber ring: only in a fill, red ring: not in a fill). The top row marks a whole step at once.", sedBarsHelp: "The file's bars (this section's own range marked): pick 1 to 4 as the pattern, or one as the fill.",
-    sedHear: "click: hear this lane", sedKey: "key: ", sedUndo: "Undo", sedRedo: "Redo", sedPlaySec: "Play this section", sedKeys: "Keys: n normal, h hard, s soft, g ghost, x erase, r ratchet, l flam (a grace note before the hit), m fill mark, [ ] previous / next section, Delete clears the selected steps, Ctrl+C / Ctrl+V copy and paste them, Ctrl+Z / Ctrl+Y undo / redo, p plays this section. Click a lane's name to hear its sound.", sedCols: "steps (click a number, shift-click another for a range):", sedCopy: "Copy", sedPaste: "Paste at the selection", sedClear: "Clear", sedCopied: "copied: ", sedUseBars: "Pattern = selected bars", sedUseFill: "Fill = selected bar", sedFbAdd: "Add a fill bar", sedFbDel: "Remove the fill bar", sedFbInfo: " + a fill bar of {n} steps", sedFbHelp: "Right of the gap: the section's fill bar of its own, which a fill plays instead of the bar it is in, as it is (no marks there): from the press to the bar's end, its step i at the bar's step i. Added, it starts as the pattern's last bar the way a fill played it.", sedEdit: "Edit", sedDropped: "fill hits dropped where the pattern hits too: ", sedTooMany: "at most 16 sections", sedNoMerge: "cannot merge (different division, or over 64 steps)",
-    playTitle: "Play (as the pedal would)", playHelp: "The song in the browser: the section buttons are the pedal (a section starts when the one playing has played its pattern out, with no fill of its own; shift-click: on the next bar; Fill: with a fill bar of its own, the rest of this bar is the fill, as an arranger's fill-in (pressed in the bar's last beat: the whole next bar; pressed again in a fill's last beat: the next bar too), then the pattern from its top, or the section asked for, so Fill then a section is a fill into it on the next bar, as the pedal's CC 21 and CC 20 on one switch; without a fill bar, fill mode to the section's end: its fill marks are heard where they sit, nothing restarts, and a section asked for lands at that end; Previous / Next step through the sections, as CC 25 / 24; the keys under the tiles). The view above is the device's LIVE screen, in time with the sound; the song's swing plays as on the device. Count-in as the device's setting: a section pressed while stopped first clicks one or two bars. Sounds: the Drum kit page's pads (the Muldjord Kit is put there when they are empty), or WAVs of tools/mkkit.py --wavs. A preview: the device's own engine (tools/fm1_render.py) is the reference.",
-    playKitDefault: "kit: the device's kit served next to the editor ", kitPreloaded: "Drum kit: Muldjord (DrumGizmo, CC BY) on the pads: ", playPrev: "Previous section", playNext: "Next section", playFill: "Fill", playFillNext: "Fill next bar", playEnd: "Ending", playPlay: "Play", playTap: "Tap", playStop: "Stop", playKitFiles: "Choose the kit's WAVs", playNoSong: "Open a Guitar Pro file, or press Play on a slot", playNoKit: "kit: none (the Drum kit page's pads, or WAVs)", playKitPads: "kit: the Drum kit page's pads", playKitWavs: "kit: WAVs ", playBtn: "Play", playBar: "bar ", playCued: "cued",
-    playKeys: "keys: 1–8 a section (0: switches to 9–16 and back; shift: on the next bar) · f fill (F: the whole next bar) · , . previous / next · e ending · space stop · - / + tempo · t tap",
+    sedHear: "click: hear this lane", sedKey: "key: ", sedUndo: "Undo", sedRedo: "Redo", sedPlaySec: "Play this section", sedKeys: "Keys: n normal, h hard, s soft, g ghost, x erase, r ratchet, l flam (a grace note before the hit), m fill mark, [ ] previous / next section, Delete clears the selected steps, Ctrl+C / Ctrl+V copy and paste them, Ctrl+Z / Ctrl+Y undo / redo, p plays this section. Click a lane's name to hear its sound.", sedCols: "steps (click a number, shift-click another for a range; the fill bar's, entry's and break's numbers too, to copy and paste there):", sedCopy: "Copy", sedPaste: "Paste at the selection", sedClear: "Clear", sedCopied: "copied: ", sedUseBars: "Pattern = selected bars", sedUseFill: "Fill = selected bar", sedEntry: "Entry", sedBreak: "Break", sedEbNone: "none", sedEbBar: "bar", sedEbBars: "bars", sedUseEntry: "Entry = selected bars", sedUseBreak: "Break = selected bars", sedEbHelp: "Entry and break: bars played before the section's pattern (silence too); after them the pattern starts from its top, and a section asked for meanwhile comes in at their end. The entry plays when the section comes in from another one or from stopped, the break on CC 28 (the section playing too). In the grid: right of a blue gap.", sedFbAdd: "Add a fill bar", sedFbDel: "Remove the fill bar", sedFbInfo: " + a fill bar of {n} steps", sedFbHelp: "Right of the gap: the section's fill bar of its own, which a fill plays instead of the bar it is in, as it is (no marks there): from the press to the bar's end, its step i at the bar's step i. Added, it starts as the pattern's last bar the way a fill played it.", sedEdit: "Edit", sedDropped: "fill hits dropped where the pattern hits too: ", sedTooMany: "at most 16 sections", sedNoMerge: "cannot merge (different division, or over 64 steps)",
+    playTitle: "Play (as the pedal would)", playHelp: "The song in the browser: the section buttons are the pedal (a section starts when the one playing has played its pattern out, with no fill of its own; shift-click: on the next bar; Fill: with a fill bar of its own, the rest of this bar is the fill, as an arranger's fill-in (pressed in the bar's last beat: the whole next bar; pressed again in a fill's last beat: the next bar too), then the pattern from its top, or the section asked for, so Fill then a section is a fill into it on the next bar, as the pedal's CC 21 and CC 20 on one switch; without a fill bar, fill mode to the section's end: its fill marks are heard where they sit, nothing restarts, and a section asked for lands at that end; Previous / Next step through the sections, as CC 25 / 24; Break, CC 28: the section playing comes in again through its break, bars played before its pattern, when it ends (no break: its entry; neither: a bar of rest), and a section's entry plays when it comes in from another one or from stopped; the keys under the tiles). The view above is the device's LIVE screen, in time with the sound; the song's swing plays as on the device. Count-in as the device's setting: a section pressed while stopped first clicks one or two bars. Sounds: the Drum kit page's pads (the Muldjord Kit is put there when they are empty), or WAVs of tools/mkkit.py --wavs. A preview: the device's own engine (tools/fm1_render.py) is the reference.",
+    playKitDefault: "kit: the device's kit served next to the editor ", kitPreloaded: "Drum kit: Muldjord (DrumGizmo, CC BY) on the pads: ", playPrev: "Previous section", playNext: "Next section", playFill: "Fill", playFillNext: "Fill next bar", playEnd: "Ending", playBreak: "Break", playPlay: "Play", playTap: "Tap", playStop: "Stop", playKitFiles: "Choose the kit's WAVs", playNoSong: "Open a Guitar Pro file, or press Play on a slot", playNoKit: "kit: none (the Drum kit page's pads, or WAVs)", playKitPads: "kit: the Drum kit page's pads", playKitWavs: "kit: WAVs ", playBtn: "Play", playBar: "bar ", playCued: "cued",
+    playKeys: "keys: 1–8 a section (0: switches to 9–16 and back; shift: on the next bar) · f fill (F: the whole next bar) · , . previous / next · e ending · b break · space stop · - / + tempo · t tap",
     playHum: "humanize", humOff: "off", humLight: "light", humMore: "more",
-    pinFrom: "MIDI in from", pinClock: "Follow its MIDI clock", pinListen: "Listen to the pedal", pinStop: "Stop listening", pinNone: "(no MIDI input but the FM-1)", pinOn: "listening on channel {ch}", pinNoMidi: "this browser has no Web MIDI", pinNoSong: "no song (press Play on a slot, or open one)", pinHelp: "The real pedal (the Ampero, or a USB MIDI interface between them) drives the player in the browser: the same CC 20..27 and PC as the FM-1, on the Pedal card's channel. PC n opens song n of the set (the Setlist tab), else the song in slot n of the FM-1 connected (or the simulated one); PC 16 to 31 the factory grooves. Press Listen first: the browser plays sound only after a click. With Follow its MIDI clock the player takes that input's tempo and START / STOP, as the FM-1 with SETUP > SYNC (no count-in: the master counts).", pedalTitle: "Pedal", pedalHelp: "The pedalboard's MIDI channel (its CC 20..27 and PC), and the count-in: a section pressed while stopped first clicks one or two bars at the tempo. Kept through power-off.", pedalCh: "channel", pedalSet: "Set", pedalClock: "MIDI clock in", clockTrs: "TRS jack", clockUsb: "USB",
+    pinFrom: "MIDI in from", pinClock: "Follow its MIDI clock", pinListen: "Listen to the pedal", pinStop: "Stop listening", pinNone: "(no MIDI input but the FM-1)", pinOn: "listening on channel {ch}", pinNoMidi: "this browser has no Web MIDI", pinNoSong: "no song (press Play on a slot, or open one)", pinHelp: "The real pedal (the Ampero, or a USB MIDI interface between them) drives the player in the browser: the same CC 20..28 and PC as the FM-1, on the Pedal card's channel. PC n opens song n of the set (the Setlist tab), else the song in slot n of the FM-1 connected (or the simulated one); PC 16 to 31 the factory grooves. Press Listen first: the browser plays sound only after a click. With Follow its MIDI clock the player takes that input's tempo and START / STOP, as the FM-1 with SETUP > SYNC (no count-in: the master counts).", pedalTitle: "Pedal", pedalHelp: "The pedalboard's MIDI channel (its CC 20..28 and PC), and the count-in: a section pressed while stopped first clicks one or two bars at the tempo. Kept through power-off.", pedalCh: "channel", pedalSet: "Set", pedalClock: "MIDI clock in", clockTrs: "TRS jack", clockUsb: "USB",
     pedalClockHelp: "the tempo and START / STOP from the pedalboard's clock (on the Ampero: CLOCK OUT (TRS) on); set at once", pedalNow: "now: ", pedalOff: "off", pedalAny: "any", pedalCount: "count-in", pedalBar: "1 bar", pedalBars: "2 bars",
     songBad: "This song cannot be sent (16 entries, 1–64 bars each)", songRefused: "Stop the song first, then send",
     songSent: "Song sent to the FM-1",
@@ -4239,7 +4378,8 @@ $("gpi-save").addEventListener("click", () => { if (GPI.spec) download(`${fileSl
 $("gpi-play").addEventListener("click", () => { if (GPI.spec) playSetSong(GPI.spec, GPI.name); });
 
 /* The section editor: SONGED holds the working song (the JSON form), the file's bars when it came from Guitar Pro */
-const SONGED = { spec: null, name: "", bars: null, ranges: null, sel: 0, pen: "x", rat: 1, mark: "", flam: false, barA: -1, barB: -1, colA: -1, colB: -1, clip: null, hist: null };
+const SONGED = { spec: null, name: "", bars: null, ranges: null, sel: 0, pen: "x", rat: 1, mark: "", flam: false, barA: -1, barB: -1, colA: -1, colB: -1, colKey: null, clip: null, hist: null };   /* colKey: the steps
+                                                        selected are a block's ("fillbar", "entry", "break"), null the pattern's */
 const SED_GLYPH = { x: "●", X: "●", s: "○", g: "·" };   /* a glyph a level (SED.LEVELS: normal, hard, soft, ghost) */
 function sedLoad(spec, name, extra = {}) {
   const clean = { ...spec };
@@ -4288,8 +4428,8 @@ function sedKey(e) {                                       /* the editor's keys 
   const ctrl = e.ctrlKey || e.metaKey, sec = sedSec();
   if (ctrl && (e.key === "z" || e.key === "Z")) { if (e.shiftKey) sedRedo(); else sedUndo(); return true; }
   if (ctrl && (e.key === "y" || e.key === "Y")) { sedRedo(); return true; }
-  if (ctrl && (e.key === "c" || e.key === "C")) { if (SONGED.colA >= 0) { SONGED.clip = SED.copyCols(sec, SONGED.colA, SONGED.colB); sedRender(); } return true; }
-  if (ctrl && (e.key === "v" || e.key === "V")) { if (SONGED.colA >= 0 && SONGED.clip) sedSet(SED.pasteCols(sec, Math.min(SONGED.colA, SONGED.colB), SONGED.clip)); return true; }
+  if (ctrl && (e.key === "c" || e.key === "C")) { sedCopy(); return true; }
+  if (ctrl && (e.key === "v" || e.key === "V")) { sedPaste(); return true; }
   if (ctrl || e.altKey) return false;
   const pen = { n: "x", h: "X", s: "s", g: "g", x: "" };   /* (the first letters, the hits' own but normal) */
   if (e.key in pen) { SONGED.pen = pen[e.key]; sedRender(); return true; }
@@ -4299,7 +4439,7 @@ function sedKey(e) {                                       /* the editor's keys 
   case "m": SONGED.mark = SONGED.mark === "" ? "F" : SONGED.mark === "F" ? "N" : ""; sedRender(); return true;
   case "[": if (SONGED.sel > 0) { SONGED.sel--; SONGED.colA = SONGED.colB = -1; sedRender(); } return true;
   case "]": if (SONGED.sel + 1 < SONGED.spec.sections.length) { SONGED.sel++; SONGED.colA = SONGED.colB = -1; sedRender(); } return true;
-  case "Delete": case "Backspace": if (SONGED.colA >= 0) sedSet(SED.clearCols(sec, SONGED.colA, SONGED.colB)); return true;
+  case "Delete": case "Backspace": sedClearCols(); return true;
   case "p": sedPlaySec(); return true;
   default: return false;
   }
@@ -4337,6 +4477,12 @@ function sedRender() {
   $("sed-info").textContent = `${SED.hits(sec)} hits, ${nb} bar${nb > 1 ? "s" : ""}` + (sec.fillbar ? t("sedFbInfo").replace("{n}", sec.fillbar.steps) : "");
   setLabel($("sed-fillbar"), t(sec.fillbar ? "sedFbDel" : "sedFbAdd"));
   $("sed-fillbar").title = t("sedFbHelp");
+  for (const key of ["entry", "break"]) {          /* its entry and break: none, or 1.. bars (64 steps at most) */
+    const s = $("sed-" + key), max = SED.ebMax(sec);
+    if (s.options.length !== max + 1) s.replaceChildren(el("option", { value: "0", text: t("sedEbNone") }), ...Array.from({ length: max }, (_, i) => el("option", { value: String(i + 1), text: `${i + 1} ${t(i ? "sedEbBars" : "sedEbBar")}` })));
+    s.value = String(SED.ebBars(sec, key));
+    s.title = t("sedEbHelp");
+  }
   {   /* not whole bars of its time: say so, and offer the signature that fits */
     const fit = SED.barFit(sec);
     $("sed-barwarn").hidden = !fit;
@@ -4366,38 +4512,46 @@ function sedRender() {
   const g = $("sed-grid");
   const barAt = (i) => Math.floor(i / spb + 1e-9) !== Math.floor((i - 1) / spb + 1e-9);   /* (a bar line inside a triplet step: after it) */
   const sepAt = (i) => (i > 0 && barAt(i) ? "bar" : i > 0 && beat && i % beat === 0 ? "beat" : "");   /* a line in a gap before step i */
-  const fb = sec.fillbar, fbn = fb ? fb.steps : 0;      /* the fill bar of its own: its columns after a wide gap */
-  const fbSepAt = (i) => (i === 0 ? "fb" : beat && i % beat === 0 ? "beat" : "");
+  /* the blocks after the pattern, each after a wide gap: the fill bar of its own (amber), the entry and the break (blue);
+     edited with the pen's level, ratchet and flam, no mark */
+  const blocks = [];
+  if (sec.fillbar) blocks.push({ key: "fillbar", n: sec.fillbar.steps, label: "FILL", cls: "fb", what: "fill", cell: (l, i) => SED.fbCell(sec, l, i), set: (l, i, h, r, f) => SED.fbSetHit(sec, l, i, h, r, f) });
+  for (const [key, label] of [["entry", "ENTRY"], ["break", "BREAK"]])
+    if (sec[key]) blocks.push({ key, n: SED.ebSteps(sec, key), label, cls: "eb", what: key, cell: (l, i) => SED.ebCell(sec, key, l, i), set: (l, i, h, r, f) => SED.ebSetHit(sec, key, l, i, h, r, f) });
+  const blkSepAt = (b, i) => (i === 0 ? b.cls : Number.isInteger(spb) && i % spb === 0 ? "bar" : beat && i % beat === 0 ? "beat" : "");
   const cols = ["80px"];
   for (let i = 0; i < sec.steps; i++) { if (sepAt(i)) cols.push(sepAt(i) === "bar" ? "10px" : "6px"); cols.push("var(--cell, 18px)"); }
-  for (let i = 0; i < fbn; i++) { if (fbSepAt(i)) cols.push(fbSepAt(i) === "fb" ? "14px" : "6px"); cols.push("var(--cell, 18px)"); }
+  for (const b of blocks) for (let i = 0; i < b.n; i++) { const k = blkSepAt(b, i); if (k) cols.push(k === "bar" ? "10px" : k === "beat" ? "6px" : "14px"); cols.push("var(--cell, 18px)"); }
   g.style.gridTemplateColumns = cols.join(" ");
   const sep = (i) => (sepAt(i) ? [el("span", { class: "sep " + sepAt(i) })] : []);
-  const fsep = (i) => (fbSepAt(i) ? [el("span", { class: "sep " + fbSepAt(i) })] : []);
+  const bsep = (b, i) => (blkSepAt(b, i) ? [el("span", { class: "sep " + blkSepAt(b, i) })] : []);
+  if (SONGED.colKey && !sec[SONGED.colKey]) SONGED.colA = SONGED.colB = -1;   /* (that block gone) */
+  /* the step numbers select steps, the pattern's or a block's (click; shift-click another in the same: a range) */
+  const colSel = (key, i) => SONGED.colA >= 0 && SONGED.colKey === key && i >= Math.min(SONGED.colA, SONGED.colB) && i <= Math.max(SONGED.colA, SONGED.colB);
+  const colPick = (key, i, e) => {
+    if (e.shiftKey && SONGED.colA >= 0 && SONGED.colKey === key) SONGED.colB = i; else { SONGED.colA = SONGED.colB = i; SONGED.colKey = key; }
+    sedRender();
+  };
   const cells = [el("span", { class: "lane", text: "" })];
   for (let i = 0; i < sec.steps; i++) {                 /* the step numbers: the column selection */
-    const sel = SONGED.colA >= 0 && i >= Math.min(SONGED.colA, SONGED.colB) && i <= Math.max(SONGED.colA, SONGED.colB);
-    cells.push(...sep(i), el("button", { class: "c n" + (sel ? " sel" : ""), title: `step ${i + 1}`, onclick: (e) => {
-      if (e.shiftKey && SONGED.colA >= 0) SONGED.colB = i; else SONGED.colA = SONGED.colB = i;
-      sedRender();
-    } }, String(i + 1)));
+    cells.push(...sep(i), el("button", { class: "c n" + (colSel(null, i) ? " sel" : ""), title: `step ${i + 1}`, onclick: (e) => colPick(null, i, e) }, String(i + 1)));
   }
-  for (let i = 0; i < fbn; i++) cells.push(...fsep(i), el("button", { class: "c n fb", disabled: true, title: `fill bar, step ${i + 1}` }, String(i + 1)));
+  for (const b of blocks) for (let i = 0; i < b.n; i++) cells.push(...bsep(b, i), el("button", { class: "c n " + b.cls + (colSel(b.key, i) ? " sel" : ""), title: `${b.what}, step ${i + 1}`, onclick: (e) => colPick(b.key, i, e) }, String(i + 1)));
   cells.push(el("span", { class: "lane", text: "fill" }));
   for (let i = 0; i < sec.steps; i++) {
     const c = SED.cell(sec, "KICK", i).cond, cls = "c" + (c ? " c" + c : "");
     cells.push(...sep(i), el("button", { class: cls, title: `step ${i + 1}`, onclick: () => sedSet(SED.setCond(sec, i, c === "" ? "F" : c === "F" ? "N" : "")) }, c || "·"));
   }
-  {   /* the condition row under the fill bar: a FILL label over its first cells (up to a beat line), the rest empty */
-    const span = Math.max(1, Math.min(fbn, beat || 4, 4));
-    for (let i = 0; i < fbn; i++) {
-      cells.push(...fsep(i));
-      if (i === 0) cells.push(el("span", { class: "lane fbl", style: `grid-column: span ${span}; text-align: left; padding-left: 2px`, text: "FILL" }));
+  for (const b of blocks) {   /* the condition row under a block: its label over its first cells (up to a beat line), the rest empty */
+    const span = Math.max(1, Math.min(b.n, beat || 4, 4));
+    for (let i = 0; i < b.n; i++) {
+      cells.push(...bsep(b, i));
+      if (i === 0) cells.push(el("span", { class: `lane ${b.cls}l`, style: `grid-column: span ${span}; text-align: left; padding-left: 2px`, text: b.label }));
       else if (i >= span) cells.push(el("span"));
     }
   }
   for (const lane of SNG.LANES) {
-    const on = lane in sec.lanes || (fb && lane in fb.lanes);
+    const on = lane in sec.lanes || ["fillbar", "entry", "break"].some((k) => sec[k] && lane in sec[k].lanes);
     cells.push(el("span", { class: "lane" + (on ? " on" : ""), text: lane, title: t("sedHear"), onclick: () => sedAudition(lane) }));
     for (let i = 0; i < sec.steps; i++) {
       const cell = SED.cell(sec, lane, i), cls = "c" + (cell.hit ? " h" + cell.hit : "") + (cell.mark ? " m" + cell.mark : "") + (cell.flam ? " fl" : "");
@@ -4410,11 +4564,11 @@ function sedRender() {
         sedSet(SED.setHit(sec, lane, i, same || !SONGED.pen ? "" : SONGED.pen, SONGED.rat, SONGED.mark, SONGED.flam));
       } }, cell.hit ? (cell.rat > 1 ? String(cell.rat) : SED_GLYPH[cell.hit]) : ""));
     }
-    for (let i = 0; i < fbn; i++) {                   /* the fill bar's cells: the pen's level, ratchet and flam, no mark */
-      const cell = SED.fbCell(sec, lane, i), cls = "c fb" + (cell.hit ? " h" + cell.hit : "") + (cell.flam ? " fl" : "");
-      cells.push(...fsep(i), el("button", { class: cls, title: `${lane} fill ${i + 1}${cell.rat > 1 ? " x" + cell.rat : ""}${cell.flam ? " (flam)" : ""}`, onclick: () => {
+    for (const b of blocks) for (let i = 0; i < b.n; i++) {   /* a block's cells: the pen's level, ratchet and flam, no mark */
+      const cell = b.cell(lane, i), cls = `c ${b.cls}` + (cell.hit ? " h" + cell.hit : "") + (cell.flam ? " fl" : "");
+      cells.push(...bsep(b, i), el("button", { class: cls, title: `${lane} ${b.what} ${i + 1}${cell.rat > 1 ? " x" + cell.rat : ""}${cell.flam ? " (flam)" : ""}`, onclick: () => {
         const same = cell.hit === SONGED.pen && cell.rat === SONGED.rat && cell.flam === SONGED.flam;
-        sedSet(SED.fbSetHit(sec, lane, i, same || !SONGED.pen ? "" : SONGED.pen, SONGED.rat, SONGED.flam));
+        sedSet(b.set(lane, i, same || !SONGED.pen ? "" : SONGED.pen, SONGED.rat, SONGED.flam));
       } }, cell.hit ? (cell.rat > 1 ? String(cell.rat) : SED_GLYPH[cell.hit]) : ""));
     }
   }
@@ -4422,7 +4576,7 @@ function sedRender() {
   {
     const have = SONGED.colA >= 0, a = Math.min(SONGED.colA, SONGED.colB), b = Math.max(SONGED.colA, SONGED.colB);
     $("sed-copy").disabled = !have; $("sed-clear").disabled = !have; $("sed-paste").disabled = !have || !SONGED.clip;
-    $("sed-colsel").textContent = (have ? (a === b ? `step ${a + 1}` : `steps ${a + 1}-${b + 1}`) : "") + (SONGED.clip ? `  (${t("sedCopied")}${SONGED.clip.n})` : "");
+    $("sed-colsel").textContent = (have ? (SONGED.colKey ? { fillbar: "fill ", entry: "entry ", break: "break " }[SONGED.colKey] : "") + (a === b ? `step ${a + 1}` : `steps ${a + 1}-${b + 1}`) : "") + (SONGED.clip ? `  (${t("sedCopied")}${SONGED.clip.n})` : "");
   }
   /* the file's bars */
   const bb = $("sed-barsbox");
@@ -4442,6 +4596,7 @@ function sedRender() {
     const have = SONGED.barA >= 0;
     $("sed-usebars").disabled = !have;
     $("sed-usefill").disabled = !have || SONGED.barB !== SONGED.barA;
+    $("sed-useentry").disabled = $("sed-usebreak").disabled = !have;
     $("sed-barsel").textContent = have ? (SONGED.barA === SONGED.barB ? `bar ${SONGED.barA}` : `bars ${SONGED.barA}-${SONGED.barB}`) + (r ? `  (${sec.name}: ${r.first}-${r.last})` : "") : (r ? `${sec.name}: bars ${r.first}-${r.last}` : "");
   }
   const sl = $("sed-slot");
@@ -4490,11 +4645,20 @@ $("sed-split").addEventListener("click", () => { const a = SONGED.spec.sections,
 $("sed-merge").addEventListener("click", () => { const a = SONGED.spec.sections, k = SONGED.sel; if (k + 1 >= a.length) return; const m = SED.merge(a[k], a[k + 1]); if (!m) { sayK("sedNoMerge"); return; } a.splice(k, 2, m); sedRender(); });
 $("sed-rat").addEventListener("change", () => { SONGED.rat = +$("sed-rat").value; });
 $("sed-flam").addEventListener("change", () => { SONGED.flam = $("sed-flam").checked; });
-$("sed-copy").addEventListener("click", () => { const sec = sedSec(); if (sec && SONGED.colA >= 0) { SONGED.clip = SED.copyCols(sec, SONGED.colA, SONGED.colB); sedRender(); } });
-$("sed-paste").addEventListener("click", () => { const sec = sedSec(); if (sec && SONGED.colA >= 0 && SONGED.clip) sedSet(SED.pasteCols(sec, Math.min(SONGED.colA, SONGED.colB), SONGED.clip)); });
-$("sed-clear").addEventListener("click", () => { const sec = sedSec(); if (sec && SONGED.colA >= 0) sedSet(SED.clearCols(sec, SONGED.colA, SONGED.colB)); });
+/* the steps selected (the pattern's, or a block's: SONGED.colKey) copied, the clip pasted there (into a block: its hits
+   as they are), cleared */
+function sedCopy() { const sec = sedSec(); if (sec && SONGED.colA >= 0) { SONGED.clip = SED.copyCols(sec, SONGED.colA, SONGED.colB, SONGED.colKey) || SONGED.clip; sedRender(); } }
+function sedPaste() { const sec = sedSec(); if (sec && SONGED.colA >= 0 && SONGED.clip) sedSet(SED.pasteCols(sec, Math.min(SONGED.colA, SONGED.colB), SONGED.clip, SONGED.colKey)); }
+function sedClearCols() { const sec = sedSec(); if (sec && SONGED.colA >= 0) sedSet(SED.clearCols(sec, SONGED.colA, SONGED.colB, SONGED.colKey)); }
+$("sed-copy").addEventListener("click", sedCopy);
+$("sed-paste").addEventListener("click", sedPaste);
+$("sed-clear").addEventListener("click", sedClearCols);
 $("sed-usebars").addEventListener("click", () => { const sec = sedSec(); if (!sec || SONGED.barA < 0) return; const nb = SED.fromBars(SONGED.bars.slice(SONGED.barA - 1, SONGED.barB), sec.name, "1/16"); sedSet(SED.outro(nb, !!sec.outro)); });
 $("sed-usefill").addEventListener("click", () => { const sec = sedSec(); if (!sec || SONGED.barA < 0) return; sedSet(SED.withFill(sec, SONGED.bars[SONGED.barA - 1]).sec); });
+for (const key of ["entry", "break"]) {
+  $("sed-" + key).addEventListener("change", () => { const sec = sedSec(); if (sec) sedSet(SED.ebSet(sec, key, +$("sed-" + key).value)); });
+  $(key === "entry" ? "sed-useentry" : "sed-usebreak").addEventListener("click", () => { const sec = sedSec(); if (!sec || SONGED.barA < 0) return; sedSet(SED.withBlock(sec, key, SONGED.bars.slice(SONGED.barA - 1, SONGED.barB))); });
+}
 $("sed-fillbar").addEventListener("click", () => { const sec = sedSec(); if (sec) sedSet(sec.fillbar ? SED.fbRemove(sec) : SED.fbAdd(sec)); });
 $("sed-play").addEventListener("click", () => { if (SONGED.spec) playSetSong(sedSpecOut(), SONGED.name); });
 $("sed-send").addEventListener("click", async () => {
@@ -4716,6 +4880,7 @@ function playLiveDraw() {
   if (ev && sp) {
     if (ev.end) { say = "ENDING"; cls += " end"; }
     else if (ev.req >= 0 && ev.sec >= 0 && (ev.wait || ev.fill)) { say = `FILL > ${sp.sections[ev.req].name}`; cls += " fill"; }   /* (a fill into the change) */
+    else if (ev.req >= 0 && ev.sec >= 0 && ev.brk) say = `BREAK: ${sp.sections[ev.req].name}`;   /* (CC 28: through its break) */
     else if (ev.req >= 0 && ev.sec >= 0) say = `NEXT: ${sp.sections[ev.req].name}`;
     else if (ev.wait) { say = "FILL NEXT BAR"; cls += " fill"; }
     else if (ev.fill) { say = "FILL"; cls += " fill"; }
@@ -4723,7 +4888,7 @@ function playLiveDraw() {
   stEl.textContent = say;
   stEl.className = cls;
   const cued = ev ? ev.req : st ? st.req : -1;
-  for (const id of ["play-prev", "play-fill", "play-fillnext", "play-next", "play-end"]) $(id).disabled = !st;   /* (no song: nothing to drive) */
+  for (const id of ["play-prev", "play-fill", "play-fillnext", "play-next", "play-break", "play-end"]) $(id).disabled = !st;   /* (no song: nothing to drive) */
   $("play-play").disabled = !st || st.playing;
   $("play-stop").disabled = !st || !st.playing;
   [...$("play-secs").children].forEach((b, k) => {
@@ -4753,6 +4918,7 @@ function playRender(light = false) {
     $("play-fill").title = "CC 21  " + t("sedKey") + "f";
     $("play-fillnext").title = "CC 21, value 1  " + t("sedKey") + "F";
     $("play-end").title = "CC 22  " + t("sedKey") + "e";
+    $("play-break").title = "CC 28 127  " + t("sedKey") + "b  (the section playing through its break, at its end; F first for a fill into it)";
     $("play-stop").title = "CC 23  " + t("sedKey") + "space";
     $("play-play").title = t("sedKey") + "p";
     if (kitPadsOwn && SPLAY.src !== "pads" && kitDraft.pads.some(Boolean)) playPadsFromKit();   /* the user's own pads */
@@ -4798,6 +4964,7 @@ function playPlay() {
   PLAY.request(st, st.req >= 0 ? st.req : 0); playStart(); playRender();
 }
 $("play-end").addEventListener("click", () => { if (SPLAY.st) { PLAY.ending(SPLAY.st, null); playRender(true); } });
+$("play-break").addEventListener("click", () => { if (SPLAY.st) { PLAY.brk(SPLAY.st, -1); playStart(); playRender(); } });
 $("play-stop").addEventListener("click", () => { playStop(); playRender(true); });
 $("play-count").addEventListener("change", () => playCountSet(+$("play-count").value));
 $("play-hum").addEventListener("change", () => { SPLAY.hum = +$("play-hum").value; });
@@ -4823,6 +4990,7 @@ document.addEventListener("keydown", (e) => {                /* keys 1..8: the s
   else if (e.key === "f") PLAY.fillNext(SPLAY.st);
   else if (e.key === "F") PLAY.fillNext(SPLAY.st, true);   /* (shift: the whole next bar, CC 21 value 1) */
   else if (e.key === "e") PLAY.ending(SPLAY.st, null);
+  else if (e.key === "b") { PLAY.brk(SPLAY.st, -1); playStart(); playRender(); }   /* (CC 28 127: the section playing's break) */
   else if (e.key === " " || e.key === "s") { e.preventDefault(); playStop(); playRender(true); }
   else if (e.key === "p") playPlay();
   else if (e.key === "-" || e.key === "+" || e.key === "=") playBpm(SPLAY.st.bpm + (e.key === "-" ? -1 : 1));
@@ -4930,6 +5098,7 @@ function pinMsg(data, stamp = performance.now()) {
   switch (a.kind) {
     case "section": if (a.k < st.spec.sections.length) { PLAY.request(st, a.k, a.now); playStart(); } break;
     case "fill": PLAY.fillNext(st, a.next); break;
+    case "break": PLAY.brk(st, a.k); playStart(); break;
     case "ending": PLAY.ending(st, a.k); break;
     case "stop": playStop(); break;
     case "step": PLAY.step(st, a.dir); playStart(); break;

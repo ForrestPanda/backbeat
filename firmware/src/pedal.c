@@ -28,6 +28,13 @@
  *              empty: the song's flagged outro, or with none the section playing ends, then stop (a fill
  *              pending: the stop after it). The outro playing already (nothing cued): it plays to its end,
  *              then stop.
+ *   CC 28 n    the break (2026-10-18): section n through its break, the bars written to play before its pattern (sng.c),
+ *              when the section playing ends, as CC 20 (a fill pending: after it, so one switch sends the fill and
+ *              the break); the section playing too (it comes in again, through its break). n not a section (127):
+ *              the section playing's (stopped: the one cued, else the first). No break written: its entry; neither:
+ *              a bar of rest. Stopped: the loop starts with it. CC 20, 24, 25, 27 and 22 bring a section in
+ *              through its entry, if it has one (from another section or from stopped; the section playing asked
+ *              for again stays a no-op, so a switch sending a fill and its own section plays the fill alone)
  *   CC 23      stop now
  *   CC 24      next section (empty ones skipped, wraps), as CC 20; stopped: the first one
  *   CC 25      previous section; stopped: the last one
@@ -58,6 +65,7 @@
 #define PEDAL_CC_PREV    25u
 #define PEDAL_CC_TAP     26u
 #define PEDAL_CC_SECTION_NOW 27u
+#define PEDAL_CC_BREAK   28u
 #define PEDAL_CH_OMNI    17u
 #ifndef PEDAL_CH_DEFAULT
 #define PEDAL_CH_DEFAULT 16u
@@ -126,6 +134,8 @@ static void pedal_fill_req(uint32_t next)
         if (at + beat >= b16) {                   /* the bar's last beat: the next bar, whole */
             pedal_fill_wait = 1;
         } else {
+            eb_len = 0;                           /* (an entry or break playing: the fill cuts it) */
+            eb_bars = 0;
             pedal_fill = 1;
             pedal_fill_bars = (uint8_t)fill_bars_from(live_bar);
         }
@@ -140,20 +150,21 @@ static void pedal_fill_req(uint32_t next)
 /* how a section comes in, with no fill of its own: when the section playing ends (CC 20, 24, 25, 22; LIVE's white
  * keys 1..16, ENV, LFO) or on the next bar (CC 27; LIVE's white keys with OCT+ held) */
 enum { PS_END, PS_BAR };
-/* section s: how (PS_*); stopped: the loop starts with it on its bar 0 (seq_start resets the bar count,
- * live_block then applies the request at once). An empty section, or a section while the song chain plays
- * (as the UI: "SONG PLAYS"), is ignored. */
-static void pedal_section(uint32_t s, uint32_t how)
+/* section s: how (PS_*), through its break (brk: CC 28) or its entry; stopped: the loop starts with it on its bar 0
+ * (seq_start resets the bar count, live_block then applies the request at once). An empty section, or a section
+ * while the song chain plays (as the UI: "SONG PLAYS"), is ignored. */
+static void pedal_section_to(uint32_t s, uint32_t how, uint32_t brk)
 {
     if (!pedal_section_ok(s) || arrangement_clock.running)
         return;
-    if (song.playing && live_req < 0 && (int32_t)s == live_sec && !pedal_end_req && !pedal_end_bars &&
+    if (song.playing && live_req < 0 && (int32_t)s == live_sec && !pedal_end_req && !pedal_end_bars && !brk &&
         !(sng_cur >= 0 && sng_pending()))      /* (a song just loaded waits for a section: its own, not this one's) */
         return;                                   /* the section playing, asked for again: it plays already */
     chain_n = 0;                                  /* a section asked for ends a quick chain */
     pedal_end_req = 0;                            /* ..and an ending asked for before */
     pedal_end_bars = 0;
     live_req = (int8_t)s;
+    live_req_brk = (uint8_t)brk;                  /* (the last asked for wins: its break or not) */
     if (!song.playing) {
         char b[13];
         pedal_fill = 0;
@@ -179,9 +190,22 @@ static void pedal_section(uint32_t s, uint32_t how)
     {
         char b[13];
         pedal_name(s, b);
-        pedal_say(PU_NEXT, b);
+        pedal_say(brk ? PU_BREAK : PU_NEXT, b);
         str_cpy(sng_ui_next, b, sizeof sng_ui_next);   /* (shown until it starts) */
     }
+}
+static void pedal_section(uint32_t s, uint32_t how) { pedal_section_to(s, how, 0); }
+
+/* CC 28: section s through its break; s not a section: the section playing's (stopped: the one cued, else the
+ * first ready) */
+static void pedal_break(uint32_t s)
+{
+    if (!pedal_section_ok(s)) {
+        uint32_t ready = pedal_ready();
+        s = song.playing && live_sec >= 0 ? (uint32_t)live_sec : live_req >= 0 ? (uint32_t)live_req :
+            live_sec >= 0 && ((ready >> live_sec) & 1u) ? (uint32_t)live_sec : ready ? (uint32_t)__builtin_ctz(ready) : 0u;
+    }
+    pedal_section_to(s, PS_END, 1);
 }
 
 static void pedal_step(int dir, uint32_t how)     /* the next / previous ready section, wrapping; how: PS_* */
@@ -246,7 +270,7 @@ static void pedal_tap(void)                       /* the beat from the last taps
         song.g[G_BPM] = (int16_t)clamp((int32_t)((60u * FS * n + sum / 2u) / sum), 40, 240);
 }
 
-/* a pedal's control change (CC 20..27, value d2): from the MIDI in queue, or the song screen's keys (ui_drummer.c,
+/* a pedal's control change (CC 20..28, value d2): from the MIDI in queue, or the song screen's keys (ui_drummer.c,
  * with the IRQ off) */
 static void pedal_cc(uint32_t d1, uint32_t d2)
 {
@@ -259,6 +283,7 @@ static void pedal_cc(uint32_t d1, uint32_t d2)
     case PEDAL_CC_NEXT:            pedal_step(1, PS_END); break;
     case PEDAL_CC_PREV:            pedal_step(-1, PS_END); break;
     case PEDAL_CC_TAP:             pedal_tap(); break;
+    case PEDAL_CC_BREAK:           pedal_break(d2); break;
     default: break;
     }
 }

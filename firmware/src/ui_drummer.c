@@ -261,7 +261,8 @@ static void live_state(uint32_t playing, const char *next)
     uint16_t c = C_AMB;
     uint32_t fill = fill_now || pedal_fill, hold = pedal_fill_wait, end = pedal_end_req || pedal_end_bars;
     uint32_t oct = (fm1_in.buttons & dyn_bit[1]) != 0u;   /* OCT+ held: a white key now changes on the next bar */
-    uint32_t sig = studio_hash(playing + fill * 3u + hold * 7u + end * 11u + fill_arm * 13u + oct * 17u + pedal_fill_wait * 19u, next);
+    uint32_t sig = studio_hash(playing + fill * 3u + hold * 7u + end * 11u + fill_arm * 13u + oct * 17u + pedal_fill_wait * 19u +
+                               live_req_brk * 23u, next);
     if (!ui.force && sig == cache)
         return;
     cache = sig;
@@ -275,6 +276,9 @@ static void live_state(uint32_t playing, const char *next)
         str_cpy(b, "FILL > ", 8);
         str_cpy(b + 7, next, 13);
         c = TE_DRUM;
+    } else if (next[0] && live_req_brk) {         /* CC 28: the section through its break */
+        str_cpy(b, "BREAK: ", 8);
+        str_cpy(b + 7, next, 13);
     } else if (next[0]) {
         str_cpy(b, "NEXT: ", 7);
         str_cpy(b + 6, next, 13);

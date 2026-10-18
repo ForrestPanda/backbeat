@@ -489,6 +489,7 @@ static void ui_draw(void)
         case PU_NOSONG: ui_say(nm[0] ? "NO SONG " : "SECTIONS A-D", nm); break;
         case PU_STOP:   ui_message("STOP"); break;
         case PU_COUNT:  ui_say("COUNT-IN: ", nm); break;
+        case PU_BREAK:  ui_say("BREAK: ", nm); break;
         default: break;
         }
         ui.msg_t = 90;                                  /* (longer than a knob's message: read from the floor) */

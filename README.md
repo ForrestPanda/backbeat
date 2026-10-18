@@ -31,10 +31,11 @@ Footswitches send MIDI on channel 16 (default) to the TRS jack or over USB:
 
 | Message | Meaning |
 | --- | --- |
-| CC 20, value 0..3 | section A..D when the section playing has played its pattern out (a 1-bar section: the next bar; a fill pending: the bar after it), no fill of its own; stopped: start with it. The section already playing: nothing |
+| CC 20, value 0..3 | section A..D when the section playing has played its pattern out (a 1-bar section: the next bar; a fill pending: the bar after it), no fill of its own; stopped: start with it. The section already playing: nothing. A section with an entry comes in through it (below) |
 | CC 27, value 0..3 | on the next bar, without waiting for the section's end, no fill of its own |
 | CC 21 | the fill. A section with a fill bar of its own, as an arranger's fill-in: the rest of this bar (pressed in its last beat: the whole next bar), then the pattern from its top. A section without one: fill mode to the section's end, its fill marks heard where they sit, the pattern on with no restart (nothing marked: nothing changes). Sent with a CC 20 / 22 / 24 / 25 / 27 (either order), the fill into that change, which lands on the bar after the fill. Value 1: the whole next bar from anywhere in this one, for a fill that leads off its bar |
 | CC 22, value 0..3 | ending: the section playing ends, that section once as the outro, stop on the bar (other values: the song's flagged outro, or the section ends, then stop; the outro playing already: it plays to its end, then stop) |
+| CC 28, value n | the break: section n through its break, when the section playing ends (as CC 20; with CC 21 on the switch: the fill, then the break); the section playing too. Value 127 (not a section): the section playing's, so one switch serves every song. No break written: its entry; neither: a bar of rest. Stopped: start with it |
 | CC 23 | stop now |
 | CC 24 / CC 25 | next / previous section (empty ones skipped, wrapping), as CC 20; stopped: the first / the last |
 | CC 26 | tap tempo |
@@ -47,6 +48,17 @@ clicks one or two bars at the song's tempo (the metronome's voice, the first bea
 the loop starts with that section. CC 23 cancels it; another section pressed meanwhile only changes what starts.
 `python3 tools/fm1_song.py --count-in 1`, the Song tab's pedal row, or SETUP > PEDAL on the device; hear it with
 `fm1_render.py --count-in 1`.
+
+**Entries and breaks.** A section can carry an entry and a break: one to four bars (64 steps), silence too, played
+before its pattern as it comes in; after them the pattern starts from its top, and a section pressed meanwhile comes in
+at their end (Shine On's 4 bars between two 3-bar phrases: the next section on the 5th bar, not the 4th). The entry
+plays when the section comes in from another section or from stopped; pressing the section already playing still does
+nothing, so a switch with a fill and its own section plays just the fill. The break plays on CC 28, at the end of
+the section playing (as CC 20). A fill pressed during one cuts it; CC 21 value 1 in its last bar (or a plain CC 21
+in its last beat) lets it play out and fills the bar after it. In the JSON
+`"entry": {"bars": 4, "lanes": {...}}` and `"break": {"lanes": {}}` (a silent bar); in the editor, the section's
+Entry and Break selects and their blue columns, or **Entry / Break = selected bars** from a Guitar Pro file;
+`fm1_render.py --play "VERSE:4, !VERSE:4"` plays a section through its break.
 
 **Songs.** A song is up to 16 named drum sections (intro, verse, chorus, bridge, solo, outro...) with its
 tempo, kit and swing (`"swing"`: 0 straight, the default, up to 100, MPC's 50 to 75 %; every second step of a 1/4,

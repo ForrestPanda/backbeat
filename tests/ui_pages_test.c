@@ -89,6 +89,7 @@ static uint32_t sng_meter(uint32_t k) { return k == 1u ? 7u | 1u << 5 : 0u; }
 static uint32_t sng_outro(void) { return t_outro; }
 static int sng_pending(void) { return 0; }
 static void sng_apply(uint32_t k) { sng_name(k, sng_ui_name); }
+static void sng_eb(uint32_t k, uint32_t brk) { (void)k; (void)brk; }
 static uint32_t sec_saves;
 static int sng_save_section(void) { if (song.playing) return 1; sec_saves++; return 0; }   /* (project.c's packs and writes) */
 static int sng_lossy(void) { return 0; }

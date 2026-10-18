@@ -49,6 +49,7 @@ repeats its message does no harm; next / previous / tap count presses.
 | --- | --- | --- |
 | CC 20, value n | go to section n when the section playing has played its pattern out (its bars, counted from where it started), no fill of its own; a 1-bar section: the next bar; a fill pending (asked before or after): on the bar after the fill instead; stopped: start the loop with it. n the section playing, nothing cued: nothing; with an ending pending it cancels the ending, as any section | done (n = 0..3, A..D; at the section's end 2026-10-13; no fill 2026-10-14; after a fill 2026-10-15) |
 | CC 27, value n | on the next bar, without waiting for the section's end, no fill of its own (a fill pending: after it) | done (no fill bar 2026-10-14) |
+| CC 28, value n | the break: section n through its break (bars written to play before its pattern, below), when the section playing ends, as CC 20 (a fill pending: after it, so one switch can send the fill and the break); the section playing too (it comes in again through its break). n not a section (127): the section playing's (stopped: the one cued, else the first). No break written: its entry; neither: a bar of rest. Stopped: the loop starts with it. CC 20, 22, 24, 25, 27 bring a section in through its **entry**, if written, from another section or from stopped; the section playing asked for again stays a no-op | done 2026-10-18 (firmware, the browser player, the section editor) |
 | CC 21, value v | the fill. A section with a fill bar of its own, as an arranger's fill-in: from now to the end of this bar (the fill bar instead of the pattern's, its step i at the bar's step i), then the pattern again from its top on the next bar, or the section asked for. A section without one: fill mode from now to the section's end (the FILL ONLY hits in, the NO FILL hits out, where they sit; a section with no fill at all: nothing changes), then the pattern on from its top, no restart, or the section asked for at that end. Asked for in the bar's last beat: the whole next bar (no fill bar, in the section's last bar: the whole next cycle). Value 1: the whole next bar from anywhere in this one (a fill bar whose hits lead off the bar); in a fill, the next bar a fill too. Any other value: from now. Sent with a section change (the same footswitch, either order): the fill into it, the change on the bar after the fill | done (to the pattern's end 2026-10-13; the arrangers' way 2026-10-15; value 1 2026-10-16; to the section's end without a fill bar 2026-10-17) |
 | CC 22, value n | ending: the section playing ends (as CC 20), section n once as the outro, stop on the bar; n empty or out of range: the section ends, then stop | done (at the section's end 2026-10-13) |
 | CC 23 | stop now | done |
@@ -353,6 +354,7 @@ the only big lever is `SMP_DATA`, and the acoustic kit is in it.
 | With the layered kit MULDJORD (2026-10-14: 289642 B of ADPCM, set REAL; 12 drum voices) | 541192 B: **40372 B left**; static RAM 59408 B |
 | The five GM-sampled kits (ACOUSTIC, DEEP, TIGHT, BRIGHT, DUST: the CC0 kit as set PERC, 86144 B of ADPCM) gone, 2026-10-15 evening: nobody played them since the grooves went on MULDJORD; every kit number 5 lower (808 is 0, MULDJORD 41) | 471360 B: **110204 B left**, spent on MULDJORD's crash (below) |
 | MULDJORD's crash (two takes, 3.2 s) and the snare, open hat and ride at their recipe lengths, 2026-10-15 evening: 385288 B of ADPCM (`tools/realkit.json` budget 412000); round-robin hats from the Muldjord hi-hat tried and reverted (the user prefers Black Pearl's) | 549360 B: **32204 B left** |
+| With entries and breaks (CC 28, 2026-10-18; the flams and the fills to the section's end before it) | 550984 B: **30580 B left**; static RAM 61312 B |
 | Data region (0x93000..0xE0000): projects, the user sample slots of 80 KB (USR1 and USR2 now hold the songs: USR3 and USR4 are the user's; free: 0xC4000..0xC7FFF, the old user preset banks 0xDC000..0xDFFFF, the FM6 bank 0xE5000..0xE6FFF, 0xFB000) | about 308 KB |
 | Songs 1..8 (0xA0000..0xAFFFF, A/B) and the pedal settings (0xB0000 / 0xB1000); songs 9..16 (0xB4000..0xC3FFF, A/B, since 2026-10-14) | 72 KB of USR1's 80 KB, 64 KB of USR2's; the kit pair USR3+4 stays the user's |
 | ADPCM sample audio | about 11 KB per second (mono 22 kHz, 4 bit) |
@@ -455,8 +457,74 @@ player, the docs):
   plain change would; an ending's stop too. A 1-bar section without a fill bar: as before minus the restart. The
   browser player (`PLAY.fillBars`) mirrors it; `tests/pedal_test.c` (SLOOP's A..D have no fill bar) and
   `web/test_web.mjs` assert the count going on; the fill-bar cases in `tests/song_test.c` are unchanged.
-- Not done, cheap now that fills are bar-aligned if ever wanted: a break (one silent bar: Yamaha, Korg, Ketron, the
-  BeatBuddy's pause) and hold-to-loop (Korg, the BeatBuddy) for a footswitch that sends its release.
+- Not done, cheap now that fills are bar-aligned if ever wanted: hold-to-loop (Korg, the BeatBuddy) for a footswitch
+  that sends its release. The break (Yamaha's, Korg's, Ketron's, the BeatBuddy's pause) is CC 28 since 2026-10-18
+  (below: entries and breaks).
+
+## Entries and breaks (2026-10-18)
+
+Asked 2026-10-18, after a day of playing with a footswitch a section (scenes 1..5, start and stop on 6 and 7): "for
+songs that have a silent bar or two requiring a separate section for the interval is not good". A section for the
+silence costs a switch and a second press on the bar. Shine On You Crazy Diamond's drum track (the GP4, bars 166-170
+and 204-208) showed the shape: P3-SYNTH's 3-bar phrase ends with its fill at 165 and the ride groove's starts at 170
+(its fills sit on 181, 187, 193, 199, 202: the phrase's last bar), so the way between them is **4 bars where the cycle
+counts 3** (the user, the same day: "there's an extra bar between the 3-bar pattern, specifically I think the extra
+bar is 168"); 204-207 is a fill bar and a 3-bar break. So:
+
+- **An entry and a break, a section's own**, each bars written (any lanes, silence too, whole bars of its meter, 64
+  steps at most) played **before its pattern** as it comes in; after them the pattern starts from its top
+  (`live_block` restarts it, as after a fill bar), and a section asked for meanwhile lands at their end: while one
+  plays the section's bars are its bars (`eb_bars`, `live_sec_bars`). So a 4-bar break on P3-SYNTH with P3-GUITAR
+  pressed during it puts the groove's top on 170, as a 4-bar entry on P3-GUITAR does. (The first form, the same
+  morning, laid them over the section's first bars with its count running underneath, the pattern then going on at
+  bar N mod its length; read from the transcription as "the cycle keeps counting", it put the groove a bar off, and a
+  change pressed during a 4-bar break landed after 3.) The steps are the drum track's 0..eb_len-1 from the landing
+  (`drum_src`, by the absolute step).
+- **The entry** plays when the section comes in from another one or from stopped (after the count-in), whatever
+  brought it (CC 20, 22, 24, 25, 27, LIVE's keys). Never when the section playing is asked for again: that stays a
+  no-op, which a switch sending a fill with its own section relies on (Another Brick: the crash fills in the chorus).
+- **The break** is a command of its own, CC 28 (the user's choice over "press the section playing again"). CC 28 n
+  waits as CC 20 does and composes with CC 21 the same way: the fill (its fill bar or its marks), then the break. CC 28
+  with a value that is not a section is the section playing's break, so one BREAK switch serves every song; stopped,
+  the section cued (else the first) starts with it. A section with no break falls back to its entry, then to a bar of
+  rest, which also serves SLOOP's A..D.
+- **What cuts one**: a fill (CC 21) pressed during it (the fill takes over as from the pattern; `eb_len = 0` where the
+  fill starts), a stop, another landing. **A fill right after one** (asked 2026-10-18): CC 21 value 1 in its last bar,
+  or a plain CC 21 in its last beat: it plays out, the next bar is the fill from the pattern's top (the fill bar, or
+  fill mode for the whole cycle: `fill_bars_from(0)`, not the break's bar count), then the pattern. CC 28 itself
+  waits for the section's end, as CC 20; a "break on the next bar" (as CC 27) is not done. External MIDI START with nothing cued: no entry (no landing).
+- **The device**: `sng_eb` decodes the entry or the break at the landing (`live_block`, `live_req_brk` from
+  `pedal_section_to`) into one buffer (`eb_dstep`, `eb_flam`: 768 B of RAM; only one plays at a time), read as a fill
+  bar is (no condition, no mark, its flams). The section save keeps both as they are. The LIVE footer says
+  "BREAK: name" while one waits, the top bar "BREAK: name" on the press.
+- **The format**: flags bits 2 and 3 (`SNG_F_ENTRY`, `SNG_F_BREAK`), each a byte of steps and the steps, after the fill
+  bar, in that order (check code 7 for a bad block). Old firmware refuses such a song (code 6); the firmware and the
+  editor ship together. JSON: `"entry": {"bars": 4, "lanes": {...}}`, `"break": {...}` (`tools/fm1_song.py`; "steps"
+  instead of "bars" allowed, whole bars); `tools/fm1_render.py --play "... !GROOVE:6"`: that entry through its break.
+- Tests: `tests/song_test.c` (checked, saved back, from stopped and from another section, never on a re-press, the
+  pattern from its top after a 4-bar entry into a 3-bar section and a change pressed during it at its end, not at the
+  pattern's 3 bars, CC 28 on the section playing with the entry as
+  fallback, a bar of rest, with a fill on one switch, from stopped after a count-in, a fill cutting one, SLOOP's A..D),
+  `tests/song_bars_test.py` (the JSON side). Rendered: the user's Shine On (P3-SYNTH's 4-bar break, bars 166-169,
+  P3-GUITAR pressed during it) sounds as the GP4, the ride groove from its top at 170. To verify on hardware with the
+  rest.
+- **The browser player** (stage 2): `SNG` packs, checks and unpacks both (in bars when whole: the same bytes as
+  `tools/fm1_song.py`), `PLAY` lands them as `live_block` does (`PLAY.ebOf`, `st.eb` over `st.step` from the landing;
+  `PLAY.brk` is CC 28), the transport's **Break** (CC 28 127, key b), the pedal input's CC 28, "BREAK: name" on the LIVE
+  line. `tests/example-song.json` carries an entry (CHORUS) and a break (SOLO). Tests: test_web.mjs (editorEntryBreak).
+- **The section editor** (stage 3): **Entry** and **Break** selects beside the fill bar's button (none, or 1 to 4 bars of
+  1/16 in 4/4, 64 steps at most), a new one silent; their columns after the fill bar's, each after a wide blue gap,
+  blue dashed cells on the pen (level, ratchet, flam; no marks), bar lines inside; **Entry = selected bars** and
+  **Break = selected bars** in the file's bar strip (1 to 4 bars, as they are: Shine On's 166-169 and 205-207 in one
+  click each). Through split both go with the first part, through merge the first's (`SED.ebSet`, `ebSetHit`,
+  `withBlock`, `norm` in bars). Tests: test_web.mjs (editorEntryBreak's sed part); looked at in headless Chrome.
+  Copy and paste reach the blocks (asked 2026-10-18: "copy sequencer entries into fills, entries, and breaks"): the
+  fill bar's, entry's and break's step numbers select steps as the pattern's do (`SONGED.colKey`), so Copy / Paste /
+  Clear (Ctrl+C / Ctrl+V / Delete) work there; pattern steps pasted into a block keep their levels, ratchets and
+  flams, not their marks or conditions (a block plays as written); a block's steps paste back into the pattern
+  (`SED.copyCols`, `pasteCols`, `clearCols` with a block's key; `SED.view`).
+- The user docs (stage 4): README (the pedal table, entries and breaks), `docs/ampero-setup.md` (a switch a section,
+  the BREAK switch), `web/EDITOR_PROTOCOL.md` (the song objects' new blocks).
 
 Host-tested (`tests/pedal_test.c`, `tests/song_test.c`, `tests/ui_pages_test.c`, `web/test_web.mjs`); to verify on
 hardware with the rest.

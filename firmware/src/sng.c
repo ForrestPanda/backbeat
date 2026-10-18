@@ -23,6 +23,10 @@
  *   fill bar      (flags bit 1, since 2026-10-15) after the pattern's steps: its steps (a byte, 1..64, one bar of the
  *                 section's meter and division as packed), then each step as above (no marks: a fill plays it as it
  *                 is, instead of the bar the fill is in, its step i at the bar's step i: seq.c fb_dstep / drum_src)
+ *   entry, break  (flags bit 2, bit 3, since 2026-10-18) after the fill bar, in that order: the same, a byte of steps
+ *                 (1..64, whole bars of the section's meter) then the steps, played once before the section's
+ *                 pattern as it comes in (the entry: from another section or from stopped; the break: the pedal's
+ *                 CC 28), the pattern from its top after them (seq.c eb_dstep / sng_eb)
  * A section's meter is the bar the pedal counts while it plays (seq.c clk_meter): where a request lands, the fill
  * bar, the ending, the click and the count-in. (The first form, "SNG1", 10 or 14 bytes a step, never reached a
  * device: not read.)
@@ -36,6 +40,9 @@
 #define SNG_MAX 3800u                            /* a packed song (<= proj_tmp, the staging RAM; <= a sector's payload) */
 #define SNG_F_OUTRO 1u
 #define SNG_F_FILLBAR 2u                         /* the section carries a fill bar of its own (after its pattern) */
+#define SNG_F_ENTRY 4u                           /* ..an entry (after the fill bar) */
+#define SNG_F_BREAK 8u                           /* ..a break (after the entry) */
+#define SNG_F_TAIL (SNG_F_FILLBAR | SNG_F_ENTRY | SNG_F_BREAK)   /* the blocks after the pattern, in this order */
 
 typedef struct {
     const uint8_t *xip;                          /* the packed song: flash (XIP), or a RAM blob on the host */
@@ -95,22 +102,53 @@ static int sng_check(const uint8_t *b, uint32_t n, sng_t *out)
                                                      * ratchet, a mark) */
         if (!q)
             return 6;
-        if (b[pos + 14] & SNG_F_FILLBAR) {          /* the fill bar of its own: its steps after the pattern's */
-            if (q >= end || !b[q] || b[q] > NSTEP)
-                return 7;
-            q = sng_walk(b, q + 1u, b[q], end);
-            if (!q)
-                return 7;
-        }
+        for (i = SNG_F_FILLBAR; i <= SNG_F_BREAK; i <<= 1)   /* the fill bar of its own, the entry, the break: their
+                                                     * steps after the pattern's */
+            if (b[pos + 14] & i) {
+                if (q >= end || !b[q] || b[q] > NSTEP)
+                    return 7;
+                q = sng_walk(b, q + 1u, b[q], end);
+                if (!q)
+                    return 7;
+            }
         if (q != end)
             return 6;
-        (void)i;
         pos = end;
     }
     return 0;
 }
 
 static const uint8_t *sng_sec(uint32_t k) { return sng.xip + sng.off[k % SNG_SECTIONS]; }
+/* the block (flag f: SNG_F_FILLBAR, _ENTRY, _BREAK) of section s, checked: its offset in s (its steps byte), 0 none */
+static uint32_t sng_block(const uint8_t *s, uint32_t f)
+{
+    uint32_t size = sng_u16(s + 16), q = sng_walk(s, SNG_SEC_HDR + ((uint32_t)s[12] + 3u) / 4u, s[12], size), i;
+    for (i = SNG_F_FILLBAR; q && i <= SNG_F_BREAK; i <<= 1)
+        if (s[14] & i) {
+            if (i == f)
+                return q;
+            q = sng_walk(s, q + 1u, s[q], size);
+        }
+    return 0;
+}
+/* n packed steps at q into d (and their flams), as written (a hit's mark bits, if any, mean nothing there) */
+static void sng_steps(const uint8_t *q, uint32_t n, dstep_t *d, uint16_t *flam)
+{
+    uint32_t i, l;
+    for (i = 0; i < n && i < NSTEP; i++) {
+        uint32_t on = sng_u16(q);
+        memset(&d[i], 0, sizeof(dstep_t));
+        flam[i] = 0;
+        for (q += 2, l = 0; on; on >>= 1, l++) {
+            uint32_t v;
+            if (!(on & 1u))
+                continue;
+            v = *q++;
+            dstep_set(&d[i], l, v, v >> 2);
+            flam[i] |= (uint16_t)((v >> 6 & 1u) << l);
+        }
+    }
+}
 static uint32_t sng_ready(void)
 {
     return sng_cur >= 0 ? (1u << sng.nsec) - 1u : 0u;
@@ -194,21 +232,9 @@ static void sng_apply(uint32_t k)
             drum_flam[i] |= (uint16_t)((v >> 6 & 1u) << l);
         }
     }
-    if (s[14] & SNG_F_FILLBAR) {                  /* its fill bar of its own (seq.c drum_src plays it; a hit's mark
-                                                  * bits, if any, mean nothing there) */
+    if (s[14] & SNG_F_FILLBAR) {                  /* its fill bar of its own (seq.c drum_src plays it) */
         uint32_t fl = *q++;
-        for (i = 0; i < fl && i < NSTEP; i++) {
-            uint32_t on = sng_u16(q);
-            memset(&fb_dstep[i], 0, sizeof(dstep_t));
-            for (q += 2, l = 0; on; on >>= 1, l++) {
-                uint32_t v;
-                if (!(on & 1u))
-                    continue;
-                v = *q++;
-                dstep_set(&fb_dstep[i], l, v, v >> 2);
-                fb_flam[i] |= (uint16_t)((v >> 6 & 1u) << l);
-            }
-        }
+        sng_steps(q, fl, fb_dstep, fb_flam);
         fb_len = (uint8_t)(fl <= NSTEP ? fl : NSTEP);
         {                                         /* the phrase's bars: a bar of the section's meter in its steps
                                                    * (whole, as packed; else the phrase is one bar) */
@@ -226,6 +252,24 @@ static void sng_apply(uint32_t k)
         sng_globals();
     sync_reload = 1;
     ui.force = 1;
+}
+
+/* the entry (brk 0) or the break of section k armed before its pattern, as it lands (live_block, after the reset:
+ * eb_dstep's step i at the drum track's step i). A break asked for where none is written: the entry; neither: a bar of
+ * rest (also SLOOP's sections A..D, which have neither) */
+static __attribute__((noinline)) void sng_eb(uint32_t k, uint32_t brk)
+{
+    const uint8_t *s = sng_cur >= 0 && k < sng.nsec ? sng_sec(k) : 0;
+    uint32_t at = s ? sng_block(s, brk ? SNG_F_BREAK : SNG_F_ENTRY) : 0u;
+    eb_len = 0;
+    if (!at && brk && s)
+        at = sng_block(s, SNG_F_ENTRY);
+    if (at) {
+        sng_steps(s + at + 1u, s[at], eb_dstep, eb_flam);
+        eb_arm(s[at]);
+    } else if (brk) {
+        eb_rest();                                /* a bar of rest */
+    }
 }
 
 /* song k's packed form, read in place (0: none): a user slot (0..15) its current copy in flash, a slot never written
@@ -322,7 +366,8 @@ static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t room)
                     out[n++] = (uint8_t)(dstep_lvl(d, l) | dstep_rat(d, l) << 2 | ((drum_fonly[i] >> l) & 1u) << 4 |
                                          ((drum_fno[i] >> l) & 1u) << 5 | ((drum_flam[i] >> l) & 1u) << 6);
         }
-        if (s[14] & SNG_F_FILLBAR) {             /* its fill bar of its own, as it is (the device edits the pattern) */
+        if (s[14] & SNG_F_TAIL) {                /* its fill bar of its own, entry and break, as they are (the device
+                                                  * edits the pattern) */
             uint32_t from = sng_walk(s, SNG_SEC_HDR + ((uint32_t)s[12] + 3u) / 4u, s[12], size);
             if (!from || from >= size || n + size - from > room)
                 return 0;

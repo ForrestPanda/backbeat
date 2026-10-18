@@ -389,6 +389,18 @@ static dstep_t fb_dstep[NSTEP];
 static uint8_t fb_len;
 static uint8_t fb_bar, fb_bars;              /* the phrase's steps a bar and its bars (sng_apply; 0 with no fill bar) */
 static volatile uint8_t pedal_fill_bars;     /* bars of the pedal's fill left, this one counted (seq.c live_block) */
+/* a section's entry and break (sng.c: section flags SNG_F_ENTRY, SNG_F_BREAK, 2026-10-18): bars written to play
+   before the section, its pattern from its top after them (live_block restarts it at their end; a request waiting
+   for the section's end lands there: eb_bars are the section's bars meanwhile). Shine On's way from P3-SYNTH into the
+   ride groove is 4 bars between two 3-bar phrases (the morning's first form laid them over the pattern, its count
+   running underneath: the groove then came in a bar off). The entry when the section comes in from another one or
+   from stopped, the break on the pedal's CC 28 (a break of the section playing too); one at a time, so one buffer:
+   eb_len steps from the step the section landed on (the drum track's seq_abs 0), decoded at the landing (sng_eb).
+   Played as a fill bar is, as written (no condition, no mark); a fill cuts it (the count goes on from the landing),
+   a stop or a new landing ends it */
+static dstep_t eb_dstep[NSTEP];
+static uint16_t eb_flam[NSTEP];
+static volatile uint8_t eb_len, eb_bars;     /* its steps, and the bars they take (0: none playing) */
 static uint32_t drum_fill_mask(uint32_t idx)       /* the lanes that do not play at this step, now (NSTEP: a fill bar
                                                     * step, no mark of the pattern's) */
 {
@@ -402,14 +414,21 @@ static void drum_fill_masks_clear(void)
     memset(drum_fno, 0, sizeof drum_fno);
     memset(drum_flam, 0, sizeof drum_flam);
     memset(fb_flam, 0, sizeof fb_flam);
+    eb_len = 0;
+    eb_bars = 0;
     fb_len = 0;
     fb_bar = 0;
     fb_bars = 0;
 }
-/* the step the drum track plays at idx: the fill bar's (*fb set) while a fill plays, at the bar's own step (the
- * phrase ends with the fill: with bars of it left, the earlier ones), else the pattern's */
-static const dstep_t *drum_src(const track_t *t, uint32_t idx, uint32_t *fb)
+/* the step the drum track plays at grid step abs (from the section's start; idx: its place in the pattern): the
+ * entry's or break's (*fb set) over its first eb_len steps; the fill bar's (*fb set) while a fill plays, at the bar's
+ * own step (the phrase ends with the fill: with bars of it left, the earlier ones); else the pattern's */
+static const dstep_t *drum_src(const track_t *t, uint32_t abs, uint32_t idx, uint32_t *fb)
 {
+    if (eb_len && abs < eb_len && is_drum(t)) {
+        *fb = 1;
+        return &eb_dstep[abs];
+    }
     if (fb_len && fill_now && is_drum(t)) {
         uint32_t left = pedal_fill_bars ? pedal_fill_bars : 1u;
         int32_t fi = (int32_t)fb_len - (int32_t)(left * fb_bar) + (int32_t)(idx % fb_bar);
@@ -448,7 +467,7 @@ static void drum_marks_rotate(uint32_t len, int32_t d)   /* the first len steps'
 #else
 static uint32_t drum_fill_mask(uint32_t idx) { (void)idx; return 0; }
 static void drum_fill_masks_clear(void) {}
-static const dstep_t *drum_src(const track_t *t, uint32_t idx, uint32_t *fb) { *fb = 0; return &t->dstep[idx % NSTEP]; }
+static const dstep_t *drum_src(const track_t *t, uint32_t abs, uint32_t idx, uint32_t *fb) { (void)abs; *fb = 0; return &t->dstep[idx % NSTEP]; }
 static void drum_marks_move(uint32_t to, uint32_t from) { (void)to; (void)from; }
 static void drum_marks_rotate(uint32_t len, int32_t d) { (void)len; (void)d; }
 #endif
@@ -836,6 +855,7 @@ static volatile uint8_t pedal_at_end;              /* live_req (or the ending's 
 static volatile uint8_t pedal_fill_wait;           /* CC 21 in the bar's last beat: the fill is the next bar, whole */
 static volatile uint8_t pedal_end_req;             /* bars of the outro asked for (taken when its section starts) */
 static volatile uint32_t pedal_end_bars;           /* stop when the section playing has played this many (0: none) */
+static volatile uint8_t live_req_brk;              /* live_req comes in through its break (CC 28), not its entry */
 /* fm1-drummer (sng.c, arranger_scene.c): a song loaded from flash: its sections replace A..D for live_req */
 #define SNG_SLOTS 16u                              /* the user's songs, in flash (8 until 2026-10-14) */
 #define SNG_FAC0 SNG_SLOTS                         /* songs 16..31: the factory grooves, read-only in the firmware image
@@ -853,6 +873,7 @@ static void sng_label(char *b, uint32_t k)         /* how the screens name song 
     fmt_int(b + str_len(b), (int32_t)(k % SNG_SLOTS) + 1);
 }
 static void sng_apply(uint32_t k);                 /* section k of the song into the drum track (at the bar) */
+static void sng_eb(uint32_t k, uint32_t brk);      /* its entry (brk 0) or break armed (eb_dstep), as it lands */
 static uint32_t sng_ready(void);                   /* bit k: section k exists */
 static uint32_t sng_bars(uint32_t k);              /* the bars section k takes */
 static uint32_t sng_meter(uint32_t k);             /* section k's meter (clk_meter's form) */
@@ -885,6 +906,8 @@ static void sng_unload(void)                       /* SLOOP's sections A..D agai
     sng_cur = -1;
     clk_meter = 0;
     fb_len = 0;                                     /* (the drum track keeps its pattern, not the song's fill bar) */
+    eb_len = 0;
+    eb_bars = 0;
     fb_bar = 0;
     fb_bars = 0;
     sng_ui_song[0] = 0;
@@ -892,7 +915,7 @@ static void sng_unload(void)                       /* SLOOP's sections A..D agai
 }
 static volatile uint8_t pedal_ui;                  /* an event to say: PU_* (the UI thread clears it) */
 static char pedal_ui_name[13];                     /* its name (the section asked for, the song) */
-enum { PU_NONE, PU_NEXT, PU_SONG, PU_ENDING, PU_FILL, PU_NOSONG, PU_STOP, PU_COUNT };
+enum { PU_NONE, PU_NEXT, PU_SONG, PU_ENDING, PU_FILL, PU_NOSONG, PU_STOP, PU_COUNT, PU_BREAK };
 static void pedal_say(uint32_t ev, const char *name)
 {
     uint32_t i;
@@ -903,8 +926,11 @@ static void pedal_say(uint32_t ev, const char *name)
 }
 static void seq_stop(void);
 static void seq_reset_tracks(uint32_t pos);
-static uint32_t live_sec_bars(void)                /* the bars the section playing takes (its pattern's; 1 with none) */
+static uint32_t live_sec_bars(void)                /* the bars the section playing takes (its pattern's; 1 with none; its
+                                                    * entry's or break's while one plays) */
 {
+    if (eb_bars)
+        return eb_bars;
     if (live_sec < 0)
         return 1;
     return sng_cur >= 0 ? sng_bars((uint32_t)live_sec) : section_bars((uint32_t)live_sec);
@@ -921,11 +947,33 @@ static uint32_t fill_bars_from(uint32_t bar)
         bar = 0;
     return n - bar % n;
 }
-static void live_block(void)                       /* once a block while playing a loop (not the song) */
+static uint32_t eb_bar_steps(void)                 /* a bar of the section landed, in its steps (not whole: its pattern) */
 {
-    uint32_t fill_over = 0;
+    uint32_t u = div_units((uint32_t)TDRUM->p[P_SDIV] % NDIV_STEP) / (BEAT_U / 48u), b = 12u * meter_b16(clk_meter);
+    return u && b % u == 0u && b / u <= NSTEP ? b / u : trk_len(TDRUM);
+}
+static void eb_arm(uint32_t n)                     /* an entry or break of n steps decoded: it plays, its bars counted */
+{
+    uint32_t bs = eb_bar_steps();
+    eb_len = (uint8_t)n;
+    eb_bars = (uint8_t)((n + bs - 1u) / bs);
+}
+static __attribute__((noinline)) void eb_rest(void)                       /* the break where none is written: a bar of rest, in the section's
+                                                    * meter and division (the drum track's, landed) */
+{
+    memset(eb_dstep, 0, sizeof eb_dstep);
+    memset(eb_flam, 0, sizeof eb_flam);
+    eb_arm(eb_bar_steps());
+}
+static __attribute__((noinline)) void live_block(void)   /* once a block while playing a loop (not the song; out of line
+                                                    * since 2026-10-18: its code inside mix_block made a jump table
+                                                    * there read as a loop, tests/target_budget.py) */
+{
+    uint32_t fill_over = 0, eb_over, started = live_bar == 0xFFFFFFFFu;   /* (started: the transport's first bar, from
+                                                     * stopped; a landing or a fill's restart sets live_bar itself) */
     if (!clk_new_bar(&live_bar))                    /* a new bar (in the section's meter) */
         return;
+    eb_over = eb_bars && live_bar >= eb_bars;       /* the entry or break played: the pattern from its top (below) */
     if (pedal_fill) {                               /* the pedal's fill (CC 21): over at the bar line that ends it */
         if (pedal_fill_bars > 1u) {
             pedal_fill_bars--;
@@ -940,8 +988,11 @@ static void live_block(void)                       /* once a block while playing
     } else if (pedal_fill_wait) {                   /* asked in the last beat: this bar, whole (no fill bar of its own:
                                                      * to the section's end; at its top, the whole cycle) */
         pedal_fill_wait = 0;
+        eb_len = 0;                                 /* (an entry or break playing: the fill cuts it) */
+        eb_bars = 0;
         pedal_fill = 1;
-        pedal_fill_bars = (uint8_t)fill_bars_from(live_bar);
+        pedal_fill_bars = (uint8_t)fill_bars_from(eb_over ? 0u : live_bar);   /* (an entry or break over: the fill
+                                                     * right after it, from the pattern's top, restarted below) */
     }
     if (pedal_at_end && live_bar % live_sec_bars() == 0u)   /* a request waits for the section's end: the pedal counts
                                                      * its bars since it started (live_bar), its pattern's the period */
@@ -971,8 +1022,12 @@ static void live_block(void)                       /* once a block while playing
     }
     if (live_req >= 0 && !pedal_at_end && !pedal_fill && !pedal_fill_wait) {   /* (at_end: the section playing goes on
                                                      * to its end first; a fill pending: the change at its end) */
-        uint32_t s = (uint32_t)live_req;
+        uint32_t s = (uint32_t)live_req, brk = live_req_brk;
+        uint32_t enter = brk || started || (int32_t)s != live_sec || (sng_cur >= 0 && sng_pending());   /* (its entry:
+                                                     * from another section, from stopped, a song just loaded; never
+                                                     * the section playing asked for again) */
         live_req = -1;
+        live_req_brk = 0;
         {                                           /* (the UI asked for a section it checked: no hash here) */
             if (sng_cur >= 0) {
                 sng_apply(s);                       /* (fm1-drummer: the song's section, named by it) */
@@ -986,6 +1041,11 @@ static void live_block(void)                       /* once a block while playing
             seq_reset_tracks(clk_pos % (BEAT_U / 4u));   /* on the bar: every track from its step 0 (a bar
                                                      * line inside a beat: the remainder past it) */
             live_bar = 0;
+            if (enter && sng_cur >= 0)
+                sng_eb(s, brk);                     /* its entry or break before its pattern (after the reset:
+                                                     * counted from this step 0) */
+            else if (brk)
+                eb_rest();                          /* (SLOOP's A..D: a break is a bar of rest) */
             if (chain_n)
                 chain_bars = (uint8_t)section_bars(chain_sec[chain_i % CHAIN_MAX]);
             if (srec == 2u && sng_cur < 0)
@@ -997,10 +1057,11 @@ static void live_block(void)                       /* once a block while playing
             pedal_end_req = 0;
             sng_ui_next[0] = 0;                     /* (the screen: it is here) */
         }
-    } else if (fill_over && fb_bars && live_req < 0 && !chain_n) {   /* a fill bar of its own over, nothing asked for:
-                                                     * the pattern again from its top (an arranger's variation after
-                                                     * its fill-in; the quick chain keeps its count). Without one the
-                                                     * fill ran to the section's end: it is at its top, nothing to do */
+    } else if ((fill_over && fb_bars && live_req < 0 && !chain_n) || eb_over) {   /* a fill bar of its own over, nothing
+                                                     * asked for: the pattern again from its top (an arranger's
+                                                     * variation after its fill-in; the quick chain keeps its count).
+                                                     * Without one the fill ran to the section's end: it is at its top,
+                                                     * nothing to do. An entry or break over: the pattern from its top */
         seq_reset_tracks(clk_pos % (BEAT_U / 4u));
         live_bar = 0;
     }
@@ -1031,6 +1092,8 @@ static void seq_reset_tracks(uint32_t pos)
     clk_pos = pos;
 #if FELUCCA_DRUMMER
     live_bar = 0xFFFFFFFFu;                        /* (bar 0 is a new bar: SONG REC can start on it) */
+    eb_len = 0;                                    /* (an entry or break counts from its landing: armed after this) */
+    eb_bars = 0;
 #endif
     fill_last_bar = 0xFFFFFFFFu;                   /* (the same for an armed fill bar) */
     click_last = SEQ_NONE;
@@ -1079,6 +1142,9 @@ static void seq_stop(void)
     pedal_fill_wait = 0;
     pedal_end_req = 0;
     pedal_end_bars = 0;
+    live_req_brk = 0;
+    eb_len = 0;
+    eb_bars = 0;
     sng_ui_next[0] = 0;
 #endif
     song.playing = 0;
@@ -1141,7 +1207,7 @@ static void drum_step(track_t *t, const dstep_t *s, uint32_t idx)
 static void seq_ratchets(track_t *t, uint32_t into, uint32_t slen)
 {
     uint32_t fb;
-    const dstep_t *s = drum_src(t, t->seq_idx, &fb);
+    const dstep_t *s = drum_src(t, t->seq_abs, t->seq_idx, &fb);
     uint32_t i, m = dstep_mask(s) & ~roll_lanes() & ~(uint32_t)drum_mute & ~drum_fill_mask(fb ? NSTEP : t->seq_idx);
     if (t->seq_skip)
         return;                                     /* (its condition failed: no hit at all) */
@@ -1176,7 +1242,7 @@ static int32_t micro_units(const track_t *t, uint32_t abs, uint32_t slen)
 static __attribute__((noinline)) void seq_fire(track_t *t, uint32_t idx)
 {
     uint32_t fb;
-    const dstep_t *d = drum_src(t, idx, &fb);
+    const dstep_t *d = drum_src(t, t->seq_abs, idx, &fb);   /* (seq_abs: this step, idx its place in the pattern) */
     t->seq_skip = (uint8_t)(!fb && !step_plays(t, idx));
     if (t->seq_skip) {                               /* its fill condition fails: as a REST with no lock */
         lock_step(t, NSTEP);                         /* (no step has locks there: the bases are back) */
@@ -1220,10 +1286,11 @@ static void seq_flam(track_t *t, uint32_t nabs, int32_t mu, uint32_t abs, uint32
             (live_req >= 0 || pedal_fill_wait || (pedal_fill && pedal_fill_bars <= 1u) || pedal_end_bars || chain_n))
             return;
     }
-    s = drum_src(t, idx, &fb);
+    s = drum_src(t, nabs, idx, &fb);
     if (!fb && !step_plays(t, idx))
         return;
-    m = dstep_mask(s) & (fb ? fb_flam[s - fb_dstep] : drum_flam[idx]) & ~roll_lanes() & ~(uint32_t)drum_mute &
+    m = dstep_mask(s) & (!fb ? drum_flam[idx] : s >= eb_dstep && s < eb_dstep + NSTEP ? eb_flam[s - eb_dstep] :
+                         fb_flam[s - fb_dstep]) & ~roll_lanes() & ~(uint32_t)drum_mute &
         ~drum_fill_mask(fb ? NSTEP : idx);
     for (l = 0; m; l++, m >>= 1)
         if (m & 1u) {
@@ -1543,8 +1610,8 @@ static void events_block(uint32_t n)
             continue;
         }
 #if FELUCCA_DRUMMER
-        if ((st == 0xC0u || (st == 0xB0u && d1 >= PEDAL_CC_SECTION && d1 <= PEDAL_CC_SECTION_NOW)) &&
-            pedal_listens(ch)) {                      /* the pedalboard's channel: its CCs (20..27) and PC (a song)
+        if ((st == 0xC0u || (st == 0xB0u && d1 >= PEDAL_CC_SECTION && d1 <= PEDAL_CC_BREAK)) &&
+            pedal_listens(ch)) {                      /* the pedalboard's channel: its CCs (20..28) and PC (a song)
                                                        * go to pedal.c before any track or CC map sees them; the
                                                        * other CCs (sustain, learned ones) pass as usual */
             pedal_msg(st, ch, d1, d2);
