@@ -576,7 +576,7 @@
         <h2 data-t="gpiTitle" data-ic="symbol_upload"></h2>
         <p class="dim" data-t="gpiHelp"></p>
         <p class="bar"><button id="gpi-open" class="pri" data-t="gpiOpen"></button>
-          <input id="gpi-file" type="file" accept=".gp3,.gp4,.gp5,.json,application/json" hidden>
+          <input id="gpi-file" type="file" accept=".gp3,.gp4,.gp5,.mid,.midi,audio/midi,audio/x-midi,.json,application/json" hidden>
           <label><input type="checkbox" id="gpi-auto"> <span data-t="gpiAuto"></span></label>
           <label><span data-t="gpiSections"></span> <input id="gpi-sections" type="text" size="28" placeholder="Intro, Verse 1, Chorus, Outro"></label></p>
         <p class="dim" id="gpi-status" hidden></p>
@@ -597,7 +597,8 @@
           <p class="bar"><label><span data-t="sedName"></span> <input id="sed-name" type="text" maxlength="12" size="12" spellcheck="false"></label>
             <label>BPM <input id="sed-bpm" type="number" min="40" max="240" style="width: 5em"></label>
             <label><span data-t="sedKit"></span> <select id="sed-kit"></select></label>
-            <label><span data-t="sedSwing"></span> <input id="sed-swing" type="number" min="0" max="100" style="width: 4em"></label></p>
+            <label><span data-t="sedSwing"></span> <input id="sed-swing" type="number" min="0" max="100" style="width: 4em"></label>
+            <label><span data-t="sedSwingOn"></span> <select id="sed-swgrid"><option value="1/16">1/16</option><option value="1/8">1/8</option></select></label></p>
           <div class="bar sedchips" id="sed-chips"></div>
           <p class="bar"><input id="sed-secname" type="text" maxlength="12" size="12" spellcheck="false">
             <label><span data-t="sedSteps"></span> <input id="sed-steps" type="number" min="1" max="64" style="width: 4em"></label>
@@ -666,7 +667,7 @@
         <p class="bar"><span id="play-kit" class="dim"></span> <button id="play-kitfiles" data-t="playKitFiles"></button>
           <input id="play-kitfile" type="file" accept=".wav,audio/wav" multiple hidden></p>
         <p class="bar"><label><span data-t="pinFrom"></span> <select id="pin-port"></select></label>
-          <button id="pin-listen" data-t="pinListen"></button> <span class="dim" id="pin-ch"></span>
+          <button id="pin-listen" data-t="pinListen"></button> <button id="pin-ble" data-t="bleConnect"></button> <span class="dim" id="pin-ch"></span>
           <label><input type="checkbox" id="pin-clock"> <span data-t="pinClock"></span></label></p>
         <p class="dim" data-t="pinHelp"></p>
         <pre id="pin-log" class="dim" hidden style="white-space: pre-wrap; font-size: 12px; max-height: 120px; overflow: auto;"></pre>
@@ -2226,6 +2227,7 @@ const SNG = {
   isObj(id) { return SNG.slotOf(id) >= 0 || id === SNG.OBJ_ARRSET; },
   LANES: ["KICK", "KICK2", "SNARE", "CLAP", "HAT", "OPENHAT", "PEDAL", "RIM", "SNARE2", "LOWTOM", "MIDTOM", "HITOM", "CRASH", "RIDE", "SHAKER", "COWBELL"],
   DIVS: ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1BAR", "2BAR"],
+  SWING_GRIDS: ["1/16", "1/8"],                   /* "swing_grid": what the swing moves (the header's flags byte, bit 0: the 8ths) */
   LEVELS: { x: 0, g: 1, s: 2, X: 3 }, LEVEL_CHAR: "xgsX", CONDS: { ".": 0, F: 1, N: 2 }, COND_CHAR: ".FN",
   DENS: [4, 8, 2, 16],                              /* the meter byte's denominator code (bits 5..6); 0 = 4/4 */
   laneIndex(name) {
@@ -2299,8 +2301,10 @@ const SNG = {
     const bpm = Math.round(+spec.bpm || 120), kit = spec.kit == null || spec.kit === "" ? SNG.KIT_DEFAULT : Math.round(+spec.kit), swing = Math.round(spec.swing == null ? 0 : +spec.swing);   /* 0 straight .. 100 the most */
     if (!(bpm >= 40 && bpm <= 240)) throw new Error("bpm must be 40..240");
     if (!(swing >= 0 && swing <= 100)) throw new Error("swing must be 0..100");
+    const swingGrid = spec.swing_grid == null || spec.swing_grid === "" ? "1/16" : String(spec.swing_grid);
+    if (!SNG.SWING_GRIDS.includes(swingGrid)) throw new Error(`swing_grid must be one of ${SNG.SWING_GRIDS.join(" ")}`);
     const out = [...SNG.MAGIC, ...SNG.str12(String(spec.name || "SONG")), bpm & 0xFF, (bpm >> 8) & 0xFF, kit & 0xFF, swing,
-      Math.round(spec.drum_level == null ? 100 : +spec.drum_level) & 0xFF, Math.round(spec.drum_reverb == null ? 20 : +spec.drum_reverb) & 0xFF, secs.length, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      Math.round(spec.drum_level == null ? 100 : +spec.drum_level) & 0xFF, Math.round(spec.drum_reverb == null ? 20 : +spec.drum_reverb) & 0xFF, secs.length, SNG.SWING_GRIDS.indexOf(swingGrid), 0, 0, 0, 0, 0, 0, 0, 0];
     secs.forEach((sec, k) => {
       const name = String(sec.name || `PART ${k + 1}`), steps = Math.round(+sec.steps || 16), div = sec.div || "1/16";
       if (!(steps >= 1 && steps <= SNG.NSTEP)) throw new Error(`${name}: steps must be 1..${SNG.NSTEP}`);
@@ -2371,7 +2375,7 @@ const SNG = {
   /* the header and the sections' offsets of a packed song, as sng_check (every step walked); null when it is not one */
   check(b) {
     if (!b || b.length < SNG.HDR || b.length > SNG.MAX || SNG.MAGIC.some((v, i) => b[i] !== v)) return null;
-    const h = { name: SNG.str(b, 4), bpm: b[16] | (b[17] << 8), kit: b[18], swing: b[19], drum_level: b[20], drum_reverb: b[21], nsec: b[22], sections: [] };
+    const h = { name: SNG.str(b, 4), bpm: b[16] | (b[17] << 8), kit: b[18], swing: b[19], swing8: !!(b[23] & 1), drum_level: b[20], drum_reverb: b[21], nsec: b[22], sections: [] };
     if (h.bpm < 40 || h.bpm > 240 || h.swing > 100 || !h.nsec || h.nsec > SNG.SECTIONS) return null;
     let pos = SNG.HDR;
     for (let k = 0; k < h.nsec; k++) {
@@ -2413,7 +2417,7 @@ const SNG = {
   unpack(b) {
     const h = SNG.check(b);
     if (!h) return null;
-    const spec = { name: h.name, bpm: h.bpm, kit: h.kit, swing: h.swing, drum_level: h.drum_level, drum_reverb: h.drum_reverb, sections: [] };
+    const spec = { name: h.name, bpm: h.bpm, kit: h.kit, swing: h.swing, ...(h.swing8 ? { swing_grid: "1/8" } : {}), drum_level: h.drum_level, drum_reverb: h.drum_reverb, sections: [] };
     const put = (o, lane, n, i, ch) => { o[lane] = o[lane] || ".".repeat(n); o[lane] = o[lane].slice(0, i) + ch + o[lane].slice(i + 1); };
     for (const s of h.sections) {
       const lanes = {}, rats = {}, fills = {}, flams = {};
@@ -2617,7 +2621,7 @@ const PLAY = {
   create(spec, countIn = 0) {                        /* countIn: bars of clicks before a start from stopped (the device's setting) */
     return { spec, sec: -1, cur: null, step: 0, pos: 0, bar: 0, req: -1, brk: false, eb: null, ebN: 0, ebB: 0, atEnd: false, fill: false, fillBars: 0, fillWait: false,
              endReq: 0, endBars: 0, playing: false, stopped: false, countIn, counting: 0, ciNum: 4, ciDen: 4, bpm: spec.bpm,
-             swing: +spec.swing || 0 };
+             swing: +spec.swing || 0, swing8: spec.swing_grid === "1/8" };
   },
   barU(s) { const m = SNG.meter(s.time); return (192 * m.num) / m.den; },
   secBars(s) { return Math.max(1, Math.ceil((s.steps * PLAY.STEP_U[s.div]) / PLAY.barU(s))); },
@@ -2729,7 +2733,7 @@ const PLAY = {
       return;
     }
     st.cur = PLAY.playing(st);
-    st.swing = +st.spec.swing || 0;                  /* (the old song's swing goes on with its pattern) */
+    st.swing = +st.spec.swing || 0; st.swing8 = st.spec.swing_grid === "1/8";   /* (the old song's swing goes on with its pattern) */
     st.spec = spec;
     st.req = -1; st.atEnd = false; st.endReq = 0; st.endBars = 0;
   },
@@ -2749,7 +2753,7 @@ const PLAY = {
     if (st.endBars && st.req < 0 && (st.bar >= st.endBars || over)) { PLAY.stop(st); return; }
     if (st.req >= 0 && !st.atEnd && !st.fill && !st.fillWait) {
       const entering = !!st.cur;
-      if (st.cur) { st.cur = null; st.bpm = st.spec.bpm; st.swing = +st.spec.swing || 0; }   /* (a song loaded while playing: its tempo
+      if (st.cur) { st.cur = null; st.bpm = st.spec.bpm; st.swing = +st.spec.swing || 0; st.swing8 = st.spec.swing_grid === "1/8"; }   /* (a song loaded while playing: its tempo
                                                         and swing with its first section, sng.c sng_globals) */
       const enter = st.brk || st.sec !== st.req || st.sec < 0 || entering;   /* (its entry: from another section, from stopped,
                                                         a song just loaded; never the section playing asked for again) */
@@ -2804,11 +2808,14 @@ const PLAY = {
       }
     }
     /* swing as the device (seq.c trk_grid): on the straight grids inside a beat, every second step of the grid
-       (counted from the section's start) starts swing x step / 200 late; the step before it is that much longer */
+       (counted from the section's start) starts swing x step / 200 late; the step before it is that much longer. A
+       song's swing on the 8ths ("swing_grid": "1/8", seq.c grid_den8): under 1/16 and 1/32 the 8ths swing so and the
+       steps inside each share its length evenly (a shuffle with the hats on the 8ths) */
     const sw = st.cur ? st.swing : +st.spec.swing || 0;   /* (the song's, as edited; a song loaded while playing: the old
                                                            one's until its first section) */
-    const swung = ["1/4", "1/8", "1/16", "1/32"].includes(s.div) ? (su * Math.max(0, Math.min(100, sw))) / 200 : 0;
-    const len = Math.round(st.pos / su) % 2 ? su - swung : su + swung;
+    const on8 = (st.cur ? st.swing8 : st.spec.swing_grid === "1/8") && (s.div === "1/16" || s.div === "1/32"), gu = on8 ? 24 : su;
+    const swung = ["1/4", "1/8", "1/16", "1/32"].includes(s.div) ? (gu * Math.max(0, Math.min(100, sw))) / 200 : 0;
+    const len = on8 ? (Math.floor(st.pos / gu) % 2 ? gu - swung : gu + swung) / (gu / su) : Math.round(st.pos / su) % 2 ? su - swung : su + swung;
     const out = { hits, sec: st.sec, step: i, bar: st.bar, fill: fillNow, fb: !eb && !!(fb && fi >= 0 && fi < fbn), eb, brk: st.brk, secs: ((60 / st.bpm) * len) / 48, u: len, newBar: false,
                   pos: st.pos, req: st.req, wait: !!st.fillWait, end: !!(st.endReq || st.endBars) };   /* (the view: where in the
                                                         bar and the pattern, what comes, at this step) */
@@ -3187,6 +3194,53 @@ const SED = {
     return SED.pasteCols(sec, a, { n: b - a + 1, lanes: {}, ratchets: {}, flams: {}, fills: {}, fill: "" }, key);
   },
 };
+/* BLE MIDI 1.0 into MIDI messages (the MIDI Association's spec, ../fm1-midi-bridge/docs/ble-midi.md). A notification of
+   the MIDI I/O characteristic is one packet: a header byte 10tttttt (bits 12..7 of the sender's 13-bit millisecond clock),
+   then messages, each a timestamp byte 1ttttttt (bits 6..0) and a status byte with its data bytes; data bytes with no
+   timestamp continue the last status (running status, at the same time); a real-time byte F8..FF has a timestamp of its
+   own and may come anywhere, inside a SysEx too; a SysEx (F0 .. F7) may span packets, the next ones starting with the
+   header and data bytes only. The clock is the sender's: it orders the messages of a packet and gives their spacing;
+   across packets the receiver's own time is used (bleNotify). The parser keeps the running status and an open SysEx
+   between packets; a message cut by the end of a packet is dropped. */
+const BLEMIDI = {
+  SERVICE: "03b80e5a-ede8-4b33-a751-6ce34ec4c700", CHAR: "7772e5db-3868-4112-a1a9-f2669d106bf3",
+  create() { return { status: 0, sysex: null }; },
+  dataLen(st) { return st < 0xC0 ? 2 : st < 0xE0 ? 1 : st < 0xF0 ? 2 : st === 0xF1 || st === 0xF3 ? 1 : st === 0xF2 ? 2 : 0; },
+  /* -> [{ data: [status, ...], t }], t in ms, rising within the packet (the low bits wrapping adds 128) */
+  parse(p, bytes) {
+    const out = [], n = bytes.length;
+    if (!n || !(bytes[0] & 0x80)) return out;
+    let hi = bytes[0] & 0x3F, lo = -1, t = 0, i = 1, stamped = false;
+    const take = (st) => {                                 /* the status and its data bytes, if they are all there */
+      const len = BLEMIDI.dataLen(st), d = [st];
+      while (d.length <= len && i < n && !(bytes[i] & 0x80)) d.push(bytes[i++]);
+      if (d.length === len + 1) out.push({ data: d, t });
+    };
+    while (i < n) {
+      const b = bytes[i];
+      if (b & 0x80) {
+        if (!stamped) {                                    /* a timestamp: the next byte is a status */
+          if (lo >= 0 && (b & 0x7F) < lo) hi++;
+          lo = b & 0x7F; t = (hi << 7) | lo; stamped = true; i++;
+          continue;
+        }
+        stamped = false; i++;
+        if (b >= 0xF8) { out.push({ data: [b], t }); continue; }
+        if (b === 0xF0) { p.sysex = [0xF0]; p.status = 0; continue; }
+        if (b === 0xF7) { if (p.sysex) { p.sysex.push(0xF7); out.push({ data: p.sysex, t }); p.sysex = null; } continue; }
+        p.sysex = null;                                    /* (a status inside an unfinished SysEx ends it) */
+        p.status = b < 0xF0 ? b : 0;                       /* (system common: no running status) */
+        take(b);
+        continue;
+      }
+      stamped = false;                                     /* data: the SysEx open, or the running status */
+      if (p.sysex) { while (i < n && !(bytes[i] & 0x80)) p.sysex.push(bytes[i++]); continue; }
+      if (!p.status) { i++; continue; }
+      take(p.status);
+    }
+    return out;
+  },
+};
 /*PROTO-END*/
 
 /* ===================================================================== UI === */
@@ -3278,7 +3332,7 @@ const TEXT = {
     kitUsing: "ドラムトラックの KIT: ", kitNoKit: "このファームウェアのドラムトラックにはそのキットがありません。",
     kitConfirm: "{x} を上書きしてこのキットを書き込みますか？", kitAssigned: "振り分けました: ",
     kitFull: "16 パッドとも埋まっています", kitLoaded: "ZIP を読み込みました: ",
-    needDevice: "FM-1 を接続すると編集できます。", songsOffline: "FM-1 が接続されていません：Guitar Pro ファイルやソングの JSON を開いて、ここで編集・試聴できます。スロットへの送信とペダルの設定には FM-1 を接続してください。", smpNone: "このファームウェアにはユーザーサンプルのスロットがありません。",
+    needDevice: "FM-1 を接続すると編集できます。", songsOffline: "FM-1 が接続されていません：Guitar Pro や MIDI ファイル、ソングの JSON を開いて、ここで編集・試聴できます。スロットへの送信とペダルの設定には FM-1 を接続してください。", smpNone: "このファームウェアにはユーザーサンプルのスロットがありません。",
     drumGridHelp: "クリック：ヒット／消去（同じレベルとロールなら）。Shift＋クリック：ヒットを一段強く（GHOST・SOFT・NORM・HARD）。白鍵 F3〜G5 の 16 音。",
     kit: "キット", hitLevel: "レベル", ratchet: "ロール",
     stepDetail: "ステップ", nudge: "ナッジ", locks: "パラメータロック", addLock: "+ ロック", noLock: "ロックなし",
@@ -3363,10 +3417,10 @@ const TEXT = {
     songsEmpty: "空", songsSend: "JSON を送る", songsDownload: "JSON を保存", songsErase: "消去", songsSections: "セクション",
     songsConfirm: "スロット {n} のソングを置き換えますか？", songsEraseConfirm: "スロット {n} のソングを消去しますか？", songsSent: "送りました", songsErased: "消去しました",
     songsBad: "ソングではありません: ", songsFail: "拒否: ", songsStop: "FM-1 を停止してください", songsFlash: "フラッシュへの書き込みに失敗しました", songsReading: "読み込み中…",
-    gpiTitle: "Guitar Pro または JSON から", gpiHelp: "ソングの JSON（ここで保存したもの、songs/ のもの）はそのままセクションエディタに開きます。このカードかエディタにファイルを落としても開きます。Guitar Pro ファイル（.gp3 / .gp4 / .gp5）のドラムトラックをソングにします。tools/gp2song.py がブラウザ内の Python（Pyodide、初回に約 10 MB を読み込み、ネット接続が必要）で動きます。セクションはマーカーから（なければドラムから）。",
-    gpiOpen: "ファイルを開く（Guitar Pro / JSON）", gpiAuto: "マーカーを無視してドラムから", gpiSections: "セクション", gpiSlot: "スロット", gpiLoading: "Python を読み込み中…", gpiInstalling: "PyGuitarPro を準備中…", gpiConverting: "変換中…", gpiFail: "変換できません: ", gpiNoSrc: "gp2song.py が見つかりません（エディタの隣か ../tools/ に置いてください）",
+    gpiTitle: "Guitar Pro / MIDI / JSON から", gpiHelp: "ソングの JSON（ここで保存したもの、songs/ のもの）はそのままセクションエディタに開きます。このカードかエディタにファイルを落としても開きます。Guitar Pro ファイル（.gp3 / .gp4 / .gp5）または MIDI ファイル（.mid：チャンネル 10、マーカー、拍子）のドラムトラックをソングにします。tools/gp2song.py がブラウザ内の Python（Pyodide、初回に約 10 MB を読み込み、ネット接続が必要。PyGuitarPro は Guitar Pro ファイルのときだけ取得）で動きます。セクションはマーカーから（なければドラムから）。",
+    gpiOpen: "ファイルを開く（Guitar Pro / MIDI / JSON）", gpiAuto: "マーカーを無視してドラムから", gpiSections: "セクション", gpiSlot: "スロット", gpiLoading: "Python を読み込み中…", gpiInstalling: "PyGuitarPro を準備中…", gpiConverting: "変換中…", gpiFail: "変換できません: ", gpiNoSrc: "gp2song.py が見つかりません（エディタの隣か ../tools/ に置いてください）",
     sedTitle: "セクションエディタ", sedHelp: "ソングのセクションを手で直します：名前、順序、長さ、アウトロ、分割と結合、グリッドの打点（レベルとラチェット）、フィル条件（上の行：F = フィル時のみ、N = フィル時は休み）。Guitar Pro から読んだソングでは、ファイルの小節を選んでパターンやフィルにできます。",
-    sedOpen: "JSON を開く", sedBlank: "新しいソング", sedNone: "Guitar Pro を開くか、JSON を開くか、スロットの「編集」を押してください。", sedName: "名前", sedKit: "キット", sedSwing: "スウィング",
+    sedOpen: "JSON を開く", sedBlank: "新しいソング", sedNone: "Guitar Pro か MIDI を開くか、JSON を開くか、スロットの「編集」を押してください。", sedName: "名前", sedKit: "キット", sedSwing: "スウィング", sedSwingOn: "単位",
     sedSteps: "ステップ", sedTime: "拍子", sedOutro: "アウトロ", sedDup: "複製", sedNew: "新規セクション", sedDel: "削除", sedSplit: "分割（小節）", sedSplitBtn: "分割", sedMerge: "次と結合",
     sedBarWarn: "拍子の小節に揃っていません：切り替えは小節線まで待ちます。", sedBarFix: "拍子を {sig} に",
     sedPen: "ペン:", sedRat: "ラチェット", sedFlam: "フラム", sedMark: "フィル:", sedMarkAlways: "常に", sedMarkF: "フィル時のみ", sedMarkN: "フィル時は休み", sedGridHelp: "クリックでペンのレベル・ラチェット・フィル印の打点、同じ打点をもう一度で消す。フィル印が「フィル時のみ」「フィル時は休み」のとき、既にある打点をクリックするとその印を変えます（黄の枠: フィル時のみ、赤の枠: フィル時は休み）。上の行はステップ全体の印。", sedBarsHelp: "ファイルの小節（このセクションの範囲に印）：1〜4 小節を選んでパターンに、1 小節をフィルに。",
@@ -3375,7 +3429,7 @@ const TEXT = {
     playKitDefault: "キット: エディタの隣のもの ", kitPreloaded: "ドラムキット: Muldjord (DrumGizmo, CC BY) をパッドに: ", playPrev: "前のセクション", playNext: "次のセクション", playFill: "フィル", playFillNext: "次の小節にフィル", playEnd: "エンディング", playBreak: "ブレイク", playPlay: "再生", playTap: "タップ", playStop: "停止", playKitFiles: "キットの WAV を選ぶ", playNoSong: "ソングを開くか、スロットの「試聴」を押してください", playNoKit: "キット: なし（ドラムキットページのパッド、または WAV）", playKitPads: "キット: ドラムキットページのパッド", playKitWavs: "キット: WAV ", playBtn: "試聴", playBar: "小節 ", playCued: "待機中",
     playKeys: "キー: 1〜8 セクション（0: 9〜16 と切り替え、Shift: 次の小節で）・ f フィル（F: 次の小節を丸ごと）・ , . 前 / 次 ・ e エンディング ・ b ブレイク ・ スペース 停止 ・ - / + テンポ ・ t タップ",
     playHum: "ヒューマナイズ", humOff: "オフ", humLight: "軽め", humMore: "強め",
-    pinFrom: "MIDI 入力", pinClock: "MIDI クロックに合わせる", pinListen: "ペダルを聴く", pinStop: "聴くのをやめる", pinNone: "（FM-1 以外の MIDI 入力なし）", pinOn: "チャンネル {ch} を聴いています", pinNoMidi: "このブラウザには Web MIDI がありません", pinNoSong: "ソングがありません（スロットの「試聴」か、ソングを開いてください）", pinHelp: "本物のペダル（Ampero、または間の USB MIDI インターフェース）でブラウザのプレーヤーを動かします。FM-1 と同じ CC 20..28 と PC を、ペダルカードのチャンネルで受けます。PC n はセット（セットリストタブ）の n 曲目、なければ接続中の FM-1（または模擬 FM-1）のスロット n のソングを開きます。PC 16〜31 はファクトリー・グルーヴ。音を出すため、最初に「ペダルを聴く」を押してください。「MIDI クロックに合わせる」で、その入力のテンポと START / STOP に従います（FM-1 の SETUP > SYNC と同じ。カウントインはなし）。", pedalTitle: "ペダル", pedalHelp: "ペダルボードの MIDI チャンネル（CC 20..28 と PC）と、停止中にセクションを押したときのカウントイン（クリック 1〜2 小節）。電源を切っても保持されます。", pedalCh: "チャンネル", pedalSet: "設定", pedalClock: "MIDI クロック入力", clockTrs: "TRS ジャック", clockUsb: "USB",
+    pinFrom: "MIDI 入力", pinClock: "MIDI クロックに合わせる", pinListen: "ペダルを聴く", pinStop: "聴くのをやめる", pinNone: "（FM-1 以外の MIDI 入力なし）", pinOn: "チャンネル {ch} を聴いています", pinNoMidi: "このブラウザには Web MIDI がありません", bleConnect: "Bluetooth で接続", bleOff: "{name} を切断", bleOffLog: "Bluetooth を切断しました", bleOn: "Bluetooth: {name} に接続、チャンネル {ch} を聴いています", bleNo: "このブラウザには Web Bluetooth がありません。Android・Windows・macOS の Chrome か Edge で開いてください（Linux の Chrome は chrome://flags の Web Bluetooth を有効に。Firefox と Safari にはありません）", bleCtx: "Web Bluetooth は https か http://localhost のページでしか使えません。このページは ", bleNone: "デバイスが選ばれませんでした", bleLost: "Bluetooth が切れました。再接続します", bleGone: "Bluetooth が切れました。もう一度「Bluetooth で接続」を押してください", pinNoSong: "ソングがありません（スロットの「試聴」か、ソングを開いてください）", pinHelp: "本物のペダル（Ampero、または間の USB MIDI インターフェース）でブラウザのプレーヤーを動かします。FM-1 と同じ CC 20..28 と PC を、ペダルカードのチャンネルで受けます。PC n はセット（セットリストタブ）の n 曲目、なければ接続中の FM-1（または模擬 FM-1）のスロット n のソングを開きます。PC 16〜31 はファクトリー・グルーヴ。音を出すため、最初に「ペダルを聴く」を押してください。「MIDI クロックに合わせる」で、その入力のテンポと START / STOP に従います（FM-1 の SETUP > SYNC と同じ。カウントインはなし）。「Bluetooth で接続」は代わりに BLE MIDI でペダルを受けます（Bluetooth MIDI のペダル、または MIDI ブリッジを入れた FM-1）。Android・Windows・macOS の Chrome か Edge で、https か localhost のページから（Linux の Chrome はフラグが必要）。Firefox と iPhone の Safari には Web Bluetooth がありません。", pedalTitle: "ペダル", pedalHelp: "ペダルボードの MIDI チャンネル（CC 20..28 と PC）と、停止中にセクションを押したときのカウントイン（クリック 1〜2 小節）。電源を切っても保持されます。", pedalCh: "チャンネル", pedalSet: "設定", pedalClock: "MIDI クロック入力", clockTrs: "TRS ジャック", clockUsb: "USB",
     pedalClockHelp: "ペダルボードのクロックのテンポと START / STOP に従います（Ampero: CLOCK OUT (TRS) をオン）。すぐに設定されます", pedalNow: "今: ", pedalOff: "オフ", pedalAny: "すべて", pedalCount: "カウントイン", pedalBar: "1 小節", pedalBars: "2 小節",
     songBad: "このソングは送れません（16 項目、1〜64 小節まで）", songRefused: "ソングを止めてから送ってください",
     songSent: "ソングを FM-1 に送りました",
@@ -3426,7 +3480,7 @@ const TEXT = {
     kitUsing: "Drum track KIT: ", kitNoKit: "This firmware's drum track has no such kit.",
     kitConfirm: "Replace {x} with this kit?", kitAssigned: "Sorted: ",
     kitFull: "All 16 pads are taken", kitLoaded: "ZIP opened: ",
-    needDevice: "Connect the FM-1 to edit.", songsOffline: "No FM-1 connected: open a Guitar Pro file or a song JSON, edit it and play it here. Connect the FM-1 to send songs to its slots and to set the pedal.", smpNone: "This firmware has no user sample slots.",
+    needDevice: "Connect the FM-1 to edit.", songsOffline: "No FM-1 connected: open a Guitar Pro or MIDI file or a song JSON, edit it and play it here. Connect the FM-1 to send songs to its slots and to set the pedal.", smpNone: "This firmware has no user sample slots.",
     drumGridHelp: "Click: a hit / clear it (same level and roll). Shift+click: a hit one level louder (GHOST, SOFT, NORM, HARD). The 16 sounds of the white keys F3..G5.",
     kit: "Kit", hitLevel: "Level", ratchet: "Roll",
     stepDetail: "Step", nudge: "Nudge", locks: "Parameter locks", addLock: "+ lock", noLock: "no lock",
@@ -3511,10 +3565,10 @@ const TEXT = {
     songsEmpty: "empty", songsSend: "Send JSON", songsDownload: "Save JSON", songsErase: "Erase", songsSections: "sections",
     songsConfirm: "Replace the song in slot {n}?", songsEraseConfirm: "Erase the song in slot {n}?", songsSent: "Sent", songsErased: "Erased",
     songsBad: "not a song: ", songsFail: "Refused: ", songsStop: "Stop the FM-1 first", songsFlash: "the flash write failed", songsReading: "Reading…",
-    gpiTitle: "From Guitar Pro or JSON", gpiHelp: "A song JSON (saved from here, or from songs/) opens straight into the section editor; drop a file on this card or on the editor. The drum track of a Guitar Pro file (.gp3 / .gp4 / .gp5) into a song: tools/gp2song.py itself, run in the browser by Python (Pyodide: about 10 MB loaded the first time, the internet needed). The sections come from the markers, else from the drums. The result stays in the page: Send puts it on the FM-1, Save JSON downloads it (edit it, keep it in songs/), Play plays it below.",
-    gpiOpen: "Open a file (Guitar Pro or JSON)", gpiAuto: "sections from the drums, ignoring the markers", gpiSections: "sections", gpiSlot: "slot", gpiLoading: "Loading Python…", gpiInstalling: "Preparing PyGuitarPro…", gpiConverting: "Converting…", gpiFail: "Cannot convert: ", gpiNoSrc: "gp2song.py not found (next to the editor, or in ../tools/)",
+    gpiTitle: "From Guitar Pro, MIDI or JSON", gpiHelp: "A song JSON (saved from here, or from songs/) opens straight into the section editor; drop a file on this card or on the editor. The drum track of a Guitar Pro file (.gp3 / .gp4 / .gp5) or of a MIDI file (.mid: channel 10, the markers, the time signatures) into a song: tools/gp2song.py itself, run in the browser by Python (Pyodide: about 10 MB loaded the first time, the internet needed; PyGuitarPro fetched for Guitar Pro files only). The sections come from the markers, else from the drums. The result stays in the page: Send puts it on the FM-1, Save JSON downloads it (edit it, keep it in songs/), Play plays it below.",
+    gpiOpen: "Open a file (Guitar Pro, MIDI or JSON)", gpiAuto: "sections from the drums, ignoring the markers", gpiSections: "sections", gpiSlot: "slot", gpiLoading: "Loading Python…", gpiInstalling: "Preparing PyGuitarPro…", gpiConverting: "Converting…", gpiFail: "Cannot convert: ", gpiNoSrc: "gp2song.py not found (next to the editor, or in ../tools/)",
     sedTitle: "Section editor", sedHelp: "The song's sections by hand: names, order, length, the outro, split and merge, the hits on the grid (a level and a ratchet each), the fill conditions (the top row: F plays only during a fill, N rests then). For a song read from Guitar Pro, the file's bars can be picked as a section's pattern or its fill.",
-    sedOpen: "Open JSON", sedBlank: "New song", sedNone: "Open a Guitar Pro file, open a JSON, or press Edit on a slot.", sedName: "name", sedKit: "kit", sedSwing: "swing",
+    sedOpen: "Open JSON", sedBlank: "New song", sedNone: "Open a Guitar Pro or MIDI file, open a JSON, or press Edit on a slot.", sedName: "name", sedKit: "kit", sedSwing: "swing", sedSwingOn: "on the",
     sedSteps: "steps", sedTime: "time", sedOutro: "outro", sedDup: "Duplicate", sedNew: "New section", sedDel: "Delete", sedSplit: "split at bar", sedSplitBtn: "Split", sedMerge: "Merge with next",
     sedBarWarn: "Not whole bars of its time: a change waits for the bar line.", sedBarFix: "Set time to {sig}",
     sedPen: "pen:", sedRat: "ratchet", sedFlam: "flam", sedMark: "fill:", sedMarkAlways: "always", sedMarkF: "only in a fill", sedMarkN: "not in a fill", sedGridHelp: "Click a cell to set a hit with the pen's level, ratchet and fill mark; click the same hit again to clear it. With the fill mark on 'only in a fill' or 'not in a fill', clicking a hit that is there changes its mark instead (amber ring: only in a fill, red ring: not in a fill). The top row marks a whole step at once.", sedBarsHelp: "The file's bars (this section's own range marked): pick 1 to 4 as the pattern, or one as the fill.",
@@ -3523,7 +3577,7 @@ const TEXT = {
     playKitDefault: "kit: the device's kit served next to the editor ", kitPreloaded: "Drum kit: Muldjord (DrumGizmo, CC BY) on the pads: ", playPrev: "Previous section", playNext: "Next section", playFill: "Fill", playFillNext: "Fill next bar", playEnd: "Ending", playBreak: "Break", playPlay: "Play", playTap: "Tap", playStop: "Stop", playKitFiles: "Choose the kit's WAVs", playNoSong: "Open a Guitar Pro file, or press Play on a slot", playNoKit: "kit: none (the Drum kit page's pads, or WAVs)", playKitPads: "kit: the Drum kit page's pads", playKitWavs: "kit: WAVs ", playBtn: "Play", playBar: "bar ", playCued: "cued",
     playKeys: "keys: 1–8 a section (0: switches to 9–16 and back; shift: on the next bar) · f fill (F: the whole next bar) · , . previous / next · e ending · b break · space stop · - / + tempo · t tap",
     playHum: "humanize", humOff: "off", humLight: "light", humMore: "more",
-    pinFrom: "MIDI in from", pinClock: "Follow its MIDI clock", pinListen: "Listen to the pedal", pinStop: "Stop listening", pinNone: "(no MIDI input but the FM-1)", pinOn: "listening on channel {ch}", pinNoMidi: "this browser has no Web MIDI", pinNoSong: "no song (press Play on a slot, or open one)", pinHelp: "The real pedal (the Ampero, or a USB MIDI interface between them) drives the player in the browser: the same CC 20..28 and PC as the FM-1, on the Pedal card's channel. PC n opens song n of the set (the Setlist tab), else the song in slot n of the FM-1 connected (or the simulated one); PC 16 to 31 the factory grooves. Press Listen first: the browser plays sound only after a click. With Follow its MIDI clock the player takes that input's tempo and START / STOP, as the FM-1 with SETUP > SYNC (no count-in: the master counts).", pedalTitle: "Pedal", pedalHelp: "The pedalboard's MIDI channel (its CC 20..28 and PC), and the count-in: a section pressed while stopped first clicks one or two bars at the tempo. Kept through power-off.", pedalCh: "channel", pedalSet: "Set", pedalClock: "MIDI clock in", clockTrs: "TRS jack", clockUsb: "USB",
+    pinFrom: "MIDI in from", pinClock: "Follow its MIDI clock", pinListen: "Listen to the pedal", pinStop: "Stop listening", pinNone: "(no MIDI input but the FM-1)", pinOn: "listening on channel {ch}", pinNoMidi: "this browser has no Web MIDI", bleConnect: "Connect Bluetooth", bleOff: "Disconnect {name}", bleOffLog: "Bluetooth disconnected", bleOn: "Bluetooth: {name} connected, listening on channel {ch}", bleNo: "this browser has no Web Bluetooth: open the page in Chrome or Edge on Android, Windows or macOS (on Linux, Chrome keeps it behind its Web Bluetooth flag in chrome://flags; Firefox and Safari have none)", bleCtx: "Web Bluetooth works only on https or http://localhost pages: this page is ", bleNone: "no device chosen", bleLost: "Bluetooth connection lost, reconnecting", bleGone: "Bluetooth connection lost: press Connect Bluetooth again", pinNoSong: "no song (press Play on a slot, or open one)", pinHelp: "The real pedal (the Ampero, or a USB MIDI interface between them) drives the player in the browser: the same CC 20..28 and PC as the FM-1, on the Pedal card's channel. PC n opens song n of the set (the Setlist tab), else the song in slot n of the FM-1 connected (or the simulated one); PC 16 to 31 the factory grooves. Press Listen first: the browser plays sound only after a click. With Follow its MIDI clock the player takes that input's tempo and START / STOP, as the FM-1 with SETUP > SYNC (no count-in: the master counts). Connect Bluetooth takes the pedal over BLE MIDI instead (a Bluetooth MIDI pedal, or an FM-1 running the MIDI bridge): Chrome or Edge on Android, Windows or macOS, from https or localhost (Chrome on Linux needs its Web Bluetooth flag); Firefox and Safari on the iPhone have no Web Bluetooth.", pedalTitle: "Pedal", pedalHelp: "The pedalboard's MIDI channel (its CC 20..28 and PC), and the count-in: a section pressed while stopped first clicks one or two bars at the tempo. Kept through power-off.", pedalCh: "channel", pedalSet: "Set", pedalClock: "MIDI clock in", clockTrs: "TRS jack", clockUsb: "USB",
     pedalClockHelp: "the tempo and START / STOP from the pedalboard's clock (on the Ampero: CLOCK OUT (TRS) on); set at once", pedalNow: "now: ", pedalOff: "off", pedalAny: "any", pedalCount: "count-in", pedalBar: "1 bar", pedalBars: "2 bars",
     songBad: "This song cannot be sent (16 entries, 1–64 bars each)", songRefused: "Stop the song first, then send",
     songSent: "Song sent to the FM-1",
@@ -4281,34 +4335,48 @@ $("songs-file").addEventListener("change", async () => {
   if (f && dev) await songsFromFile(SONGS.target, f);
 });
 /* From Guitar Pro: tools/gp2song.py in the browser (Pyodide + PyGuitarPro from PyPI), loaded on first use */
-const GPI = { py: null, spec: null, name: "" };
+const GPI = { py: null, gp: false, spec: null, name: "" };   /* gp: PyGuitarPro installed (a Guitar Pro file asked for it) */
 const GPI_CDN = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
 function gpiStatus(k) { const e = $("gpi-status"); e.hidden = !k; e.textContent = k ? t(k) : ""; }
-async function gpiLoad() {
-  if (GPI.py) return GPI.py;
-  gpiStatus("gpiLoading");
-  if (!window.loadPyodide) {
-    await new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = GPI_CDN + "pyodide.js"; sc.onload = res; sc.onerror = () => rej(new Error("cannot load Pyodide from " + GPI_CDN)); document.head.append(sc); });
+async function gpiLoad(gp) {                             /* gp: the file is Guitar Pro, PyGuitarPro needed (a MIDI file: gp2song.py alone) */
+  if (!GPI.py) {
+    gpiStatus("gpiLoading");
+    if (!window.loadPyodide) {
+      await new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = GPI_CDN + "pyodide.js"; sc.onload = res; sc.onerror = () => rej(new Error("cannot load Pyodide from " + GPI_CDN)); document.head.append(sc); });
+    }
+    const py = await loadPyodide({ indexURL: GPI_CDN });
+    let src = null;
+    for (const u of ["gp2song.py", "../tools/gp2song.py"]) {
+      try { const r = await fetch(u); if (r.ok) { src = await r.text(); break; } } catch (e) { /* next */ }
+    }
+    if (!src) throw new Error(t("gpiNoSrc"));
+    py.FS.writeFile("/gp2song.py", src);
+    try { await py.runPythonAsync('import sys\nsys.path.insert(0, "/")\nimport gp2song'); }
+    catch (e) {                                            /* the gp2song.py before 2026-10-19, still in the browser's cache
+                                                              next to a newer page: it insists on PyGuitarPro as it loads */
+      if (!/guitarpro/i.test(String(e.message || e))) throw e;
+      await gpiPyGuitarPro(py);
+      await py.runPythonAsync('import gp2song');
+    }
+    GPI.py = py;
   }
-  const py = await loadPyodide({ indexURL: GPI_CDN });
+  if (gp) await gpiPyGuitarPro(GPI.py);
+  gpiStatus("");
+  return GPI.py;
+}
+async function gpiPyGuitarPro(py) {                      /* PyGuitarPro from PyPI, once */
+  if (GPI.gp) return;
   gpiStatus("gpiInstalling");
   await py.loadPackage("micropip");
   await py.runPythonAsync('import micropip\nawait micropip.install("pyguitarpro")');
-  let src = null;
-  for (const u of ["gp2song.py", "../tools/gp2song.py"]) {
-    try { const r = await fetch(u); if (r.ok) { src = await r.text(); break; } } catch (e) { /* next */ }
-  }
-  if (!src) throw new Error(t("gpiNoSrc"));
-  py.FS.writeFile("/gp2song.py", src);
-  await py.runPythonAsync('import sys\nsys.path.insert(0, "/")\nimport gp2song');
-  GPI.py = py;
-  gpiStatus("");
-  return py;
+  GPI.gp = true;
 }
+function gpiIsMidi(bytes) { return bytes.length > 4 && bytes[0] === 0x4D && bytes[1] === 0x54 && bytes[2] === 0x68 && bytes[3] === 0x64; }   /* "MThd" */
 async function gpiConvert(file) {
-  const py = await gpiLoad();
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const py = await gpiLoad(!gpiIsMidi(bytes));
   gpiStatus("gpiConverting");
-  py.FS.writeFile("/in.gp", new Uint8Array(await file.arrayBuffer()));
+  py.FS.writeFile("/in.gp", bytes);
   py.globals.set("gpi_sections", $("gpi-sections").value.trim() || null);
   py.globals.set("gpi_auto", $("gpi-auto").checked);
   py.globals.set("gpi_title", file.name.replace(/\.[^.]+$/, ""));
@@ -4335,7 +4403,7 @@ $("gpi-file").addEventListener("change", async () => {
   $("gpi-file").value = "";
   if (f) await gpiTake(f);
 });
-async function gpiTake(f) {                               /* a Guitar Pro file converted, or a song JSON as it is: into the editor */
+async function gpiTake(f) {                               /* a Guitar Pro or MIDI file converted, or a song JSON as it is: into the editor */
   $("gpi-log").hidden = true;
   GPI.spec = null;
   gpiRender();
@@ -4356,7 +4424,7 @@ async function gpiTake(f) {                               /* a Guitar Pro file c
     try { SNG.pack(spec); } catch (e) { $("gpi-log").textContent += "\n" + t("songsBad") + e.message; }
   } catch (e) {
     gpiStatus("");
-    sayK("gpiFail", String(e.message || e).split("\n").pop());
+    sayK("gpiFail", String(e.message || e).trim().split("\n").pop());   /* (a Python traceback ends in a newline: its last line, not "") */
   }
   gpiRender();
 }
@@ -4392,7 +4460,7 @@ function sedLoad(spec, name, extra = {}) {
 }
 function sedSpecOut() {                                   /* the song as sent or saved: nothing of the editor's */
   const sp = SONGED.spec;
-  return { name: $("sed-name").value.trim() || sp.name, bpm: +$("sed-bpm").value || sp.bpm, kit: $("sed-kit").value === "" ? SNG.KIT_DEFAULT : +$("sed-kit").value, swing: +$("sed-swing").value || 0,
+  return { name: $("sed-name").value.trim() || sp.name, bpm: +$("sed-bpm").value || sp.bpm, kit: $("sed-kit").value === "" ? SNG.KIT_DEFAULT : +$("sed-kit").value, swing: +$("sed-swing").value || 0, ...($("sed-swgrid").value === "1/8" ? { swing_grid: "1/8" } : {}),
            drum_level: sp.drum_level ?? 100, drum_reverb: sp.drum_reverb ?? 20, sections: sp.sections };
 }
 function sedSec() { return SONGED.spec ? SONGED.spec.sections[SONGED.sel] : null; }
@@ -4458,6 +4526,7 @@ function sedRender() {
   if (SONGED.sel >= sp.sections.length) SONGED.sel = Math.max(0, sp.sections.length - 1);
   if (document.activeElement !== $("sed-name")) $("sed-name").value = sp.name;
   $("sed-bpm").value = sp.bpm; sedKitOptions(sp.kit ?? SNG.KIT_DEFAULT); $("sed-kit").value = sp.kit ?? SNG.KIT_DEFAULT; $("sed-swing").value = sp.swing ?? 0;
+  $("sed-swgrid").value = sp.swing_grid === "1/8" ? "1/8" : "1/16";
   const chips = $("sed-chips");
   chips.replaceChildren(...sp.sections.map((x, k) => el("button", { "aria-pressed": k === SONGED.sel ? "true" : "false", title: t("sedKey") + "[ ]", onclick: () => { SONGED.sel = k; SONGED.barA = SONGED.barB = -1; SONGED.colA = SONGED.colB = -1; sedRender(); } },
     `${k + 1}: ${x.name}${x.outro ? "*" : ""}`)));   /* (1..16, as the device's tiles and keys; CC 20 counts from 0) */
@@ -4616,7 +4685,7 @@ $("sed-file").addEventListener("change", async () => {
 });
 $("sed-blank").addEventListener("click", () => sedLoad({ name: "NEW SONG", bpm: 120, kit: SNG.KIT_DEFAULT, swing: 0, sections: [SED.blank("INTRO"), SED.blank("VERSE", 32), SED.blank("CHORUS", 32)] }, "new-song"));
 $("sed-name").addEventListener("input", () => { SONGED.spec.name = $("sed-name").value.toUpperCase().slice(0, 12); });
-for (const id of ["sed-name", "sed-secname", "sed-kit", "sed-swing"]) $(id).addEventListener("change", sedMark);   /* (into the history, as one step) */
+for (const id of ["sed-name", "sed-secname", "sed-kit", "sed-swing", "sed-swgrid"]) $(id).addEventListener("change", sedMark);   /* (into the history, as one step) */
 $("sed-bpm").addEventListener("change", () => { SONGED.spec.bpm = Math.max(40, Math.min(240, +$("sed-bpm").value || 120)); sedRender(); });
 function sedKitOptions(cur) {                              /* the kits by name (USR1 and USR2 hold the songs: not offered) */
   const sel = $("sed-kit");
@@ -4625,7 +4694,13 @@ function sedKitOptions(cur) {                              /* the kits by name (
   if (cur >= KIT_NAMES.length) sel.append(el("option", { value: String(cur), text: String(cur) }));   /* (a number this list lacks) */
 }
 $("sed-kit").addEventListener("change", () => { SONGED.spec.kit = +$("sed-kit").value; });
-$("sed-swing").addEventListener("change", () => { SONGED.spec.swing = Math.max(0, Math.min(100, +$("sed-swing").value || 0)); });
+$("sed-swing").addEventListener("change", () => { SONGED.spec.swing = Math.max(0, Math.min(100, +$("sed-swing").value || 0)); sedSwingLive(); });
+$("sed-swgrid").addEventListener("change", () => { if ($("sed-swgrid").value === "1/8") SONGED.spec.swing_grid = "1/8"; else delete SONGED.spec.swing_grid; sedSwingLive(); });
+function sedSwingLive() {                                  /* the song playing below is this one: its swing follows the box at once */
+  if (!SPLAY.st || !SPLAY.spec || SPLAY.name !== SONGED.name) return;
+  SPLAY.st.spec.swing = SONGED.spec.swing;
+  if (SONGED.spec.swing_grid === "1/8") SPLAY.st.spec.swing_grid = "1/8"; else delete SPLAY.st.spec.swing_grid;
+}
 $("sed-secname").addEventListener("input", () => { const sec = sedSec(); if (sec) { SONGED.spec.sections[SONGED.sel] = SED.rename(sec, $("sed-secname").value); const chips = $("sed-chips").children[SONGED.sel]; if (chips) chips.textContent = `${SONGED.sel + 1}: ${sedSec().name}${sedSec().outro ? "*" : ""}`; } });
 $("sed-steps").addEventListener("change", () => { const sec = sedSec(); if (sec) sedSet(SED.setSteps(sec, +$("sed-steps").value)); });
 $("sed-div").addEventListener("change", () => { const sec = sedSec(); if (sec) sedSet(SED.setDiv(sec, $("sed-div").value)); });
@@ -5015,20 +5090,23 @@ async function pinAccess() {
   PIN.access.addEventListener("statechange", pinPorts);
   return PIN.access;
 }
-function pinPorts() {                                      /* every input but the FM-1's own */
+function pinPorts() {                                      /* the Bluetooth device connected, then every Web MIDI input
+                                                              but the FM-1's own */
   const sel = $("pin-port"), was = sel.value;
   const ins = PIN.access ? [...PIN.access.inputs.values()].filter((p) => !/felucca/i.test(p.name || "") && p.state !== "disconnected") : [];
-  sel.replaceChildren(...(ins.length ? ins.map((p) => el("option", { value: p.id, text: p.name })) : [el("option", { value: "", text: t("pinNone") })]));
-  if (ins.some((p) => p.id === was)) sel.value = was;
+  const opts = (BLE.dev ? [el("option", { value: "ble", text: "Bluetooth: " + (BLE.dev.name || "BLE") })] : []).concat(ins.map((p) => el("option", { value: p.id, text: p.name })));
+  sel.replaceChildren(...(opts.length ? opts : [el("option", { value: "", text: t("pinNone") })]));
+  if ((was === "ble" && BLE.dev) || ins.some((p) => p.id === was)) sel.value = was;
   pinAttach();
 }
 function pinAttach() {
-  const port = PIN.on && PIN.access ? PIN.access.inputs.get($("pin-port").value) || null : null;
+  const v = $("pin-port").value, ble = v === "ble" && !!BLE.dev;   /* (the Bluetooth device feeds pinMsg from bleNotify) */
+  const port = !ble && PIN.on && PIN.access ? PIN.access.inputs.get(v) || null : null;
   if (PIN.port && PIN.port !== port) PIN.port.onmidimessage = null;
   PIN.port = port;
   if (port) port.onmidimessage = (e) => pinMsg(e.data, e.timeStamp || performance.now());
   const ch = pinChannel();
-  $("pin-ch").textContent = port ? t("pinOn").replace("{ch}", ch === 17 ? t("pedalAny") : ch === 0 ? t("pedalOff") : String(ch)) : "";
+  $("pin-ch").textContent = port || ble ? t("pinOn").replace("{ch}", ch === 17 ? t("pedalAny") : ch === 0 ? t("pedalOff") : String(ch)) : "";
   setLabel($("pin-listen"), t(PIN.on ? "pinStop" : "pinListen"));
 }
 async function pinSong(slot) {                              /* PC n: song n of the set, else slot n of the FM-1 connected
@@ -5118,6 +5196,74 @@ $("pin-listen").addEventListener("click", async () => {
 $("pin-port").addEventListener("change", pinAttach);
 $("pin-clock").addEventListener("change", () => { PIN.clock = $("pin-clock").checked; PIN.clk = PCLK.create(); PIN.wait = false; playRender(); });
 $("pedal-ch").addEventListener("change", pinAttach);
+
+/* the pedal over Bluetooth (BLE MIDI, BLEMIDI): the page is the central, the pedal the peripheral, a Bluetooth MIDI pedal
+   or an FM-1 running the MIDI bridge (fm1-midi-bridge: TRS in to BLE). Chrome and Edge have Web Bluetooth on Android,
+   Windows and macOS, from https or localhost (on Linux Chrome keeps it behind its Web Bluetooth flag); Firefox and Safari
+   have none. The button is always there: pressed without the API it says why (hidden, it was not found: 2026-10-19). The
+   notifications go through pinMsg as a Web MIDI port's messages do; the Connect click is the one that lets the browser
+   sound. A connection lost is retried three times (a phone drops BLE now and then). */
+const BLE = { dev: null, chr: null, p: null, want: false };
+function bleMissing() {
+  if (navigator.bluetooth) return null;
+  if (window.isSecureContext || window.isSecureContext == null) return t("bleNo");
+  return t("bleCtx") + (FILE_PAGE() ? t("nomidiFile") : location.origin);
+}
+function bleRender() {
+  setLabel($("pin-ble"), BLE.dev ? t("bleOff").replace("{name}", BLE.dev.name || "BLE") : t("bleConnect"));
+}
+async function bleOpen(dev) {
+  const server = await dev.gatt.connect();
+  const svc = await server.getPrimaryService(BLEMIDI.SERVICE);
+  const chr = await svc.getCharacteristic(BLEMIDI.CHAR);
+  chr.addEventListener("characteristicvaluechanged", bleNotify);
+  await chr.startNotifications();
+  BLE.dev = dev; BLE.chr = chr; BLE.p = BLEMIDI.create();
+  const ch = pinChannel();
+  pinLog(t("bleOn").replace("{name}", dev.name || dev.id).replace("{ch}", ch === 17 ? t("pedalAny") : ch === 0 ? t("pedalOff") : String(ch)));
+  bleRender();
+  pinPorts();                                                /* the device in MIDI in from, and chosen */
+  $("pin-port").value = "ble";
+  pinAttach();
+}
+function bleNotify(e) {
+  if ($("pin-port").value !== "ble") return;                 /* (another input chosen: the Bluetooth one waits) */
+  const v = e.target.value, msgs = BLEMIDI.parse(BLE.p, new Uint8Array(v.buffer, v.byteOffset, v.byteLength)), now = performance.now();
+  if (!msgs.length) return;
+  const last = msgs[msgs.length - 1].t;
+  for (const m of msgs) pinMsg(Uint8Array.from(m.data), now - (last - m.t));   /* (the packet's spacing kept, its last message now) */
+}
+async function bleRetry(dev) {
+  for (let k = 1; BLE.want && k <= 3; k++) {
+    pinLog(`${t("bleLost")} ${k}/3`);
+    await new Promise((r) => setTimeout(r, 1000 * k));
+    if (!BLE.want) return;
+    try { await bleOpen(dev); return; } catch (e) { /* once more */ }
+  }
+  if (BLE.want) { BLE.want = false; pinLog(t("bleGone")); bleRender(); }
+}
+function bleLost(e) { BLE.dev = null; BLE.chr = null; bleRender(); pinPorts(); if (BLE.want) bleRetry(e.target); }
+$("pin-ble").addEventListener("click", async () => {
+  if (BLE.dev || BLE.want) {                                 /* disconnect */
+    BLE.want = false;
+    const dev = BLE.dev; BLE.dev = null; BLE.chr = null;
+    if (dev && dev.gatt.connected) dev.gatt.disconnect();
+    pinLog(t("bleOffLog")); bleRender(); pinPorts();
+    return;
+  }
+  const missing = bleMissing();
+  if (missing) { pinLog(missing); return; }
+  const ctx = playCtx();                                     /* (this click lets the browser sound) */
+  if (ctx.state === "suspended") ctx.resume();
+  let dev;
+  try { dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [BLEMIDI.SERVICE] }] }); }
+  catch (e) { pinLog(e.name === "NotFoundError" ? t("bleNone") : `BT: ${e.message || e}`); return; }
+  dev.addEventListener("gattserverdisconnected", bleLost);
+  BLE.want = true;
+  try { await bleOpen(dev); } catch (e) { BLE.want = false; pinLog(`BT: ${e.message || e}`); bleRender(); }
+});
+bleRender();
+pinPorts();                                                  /* (the box says what it holds from the start) */
 
 function syncId() { return dev && dev.gdesc ? dev.gdesc.findIndex((d) => d && d.label === "SYNC") : -1; }   /* (G_SYNC: 0 off, 1 USB, 2 TRS) */
 $("pedal-clock").addEventListener("change", () => { const gi = syncId(); if (gi >= 0) userSet(1, gi, +$("pedal-clock").value, true); });

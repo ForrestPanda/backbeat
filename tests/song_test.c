@@ -230,7 +230,10 @@ int main(int argc, char **argv)
     memcpy(blob[2], blob[1], pos); blob[2][0] ^= 1; blob_n[2] = pos;
 
     /* the packed form's checks */
-    assert(sng_check(blob[0], blob_n[0], &tmp) == 0 && tmp.nsec == 3u && tmp.bpm == 132u && tmp.kit == 7u);
+    assert(sng_check(blob[0], blob_n[0], &tmp) == 0 && tmp.nsec == 3u && tmp.bpm == 132u && tmp.kit == 7u && !tmp.swing8);
+    blob[0][23] = SNG_H_SWING8;                      /* the header's flags: the swing on the 8ths (a shuffle) */
+    assert(sng_check(blob[0], blob_n[0], &tmp) == 0 && tmp.swing8 == SNG_H_SWING8);
+    blob[0][23] = 0;
     /* (a step: 2 bytes of lanes and a byte a hit: INTRO 18 + 4 + 32 + 14 hits, VERSE 18 + 8 + 64 + 24 hits) */
     assert(tmp.off[0] == SNG_HDR && tmp.off[1] == SNG_HDR + 68u && tmp.off[2] == tmp.off[1] + 114u);
     assert(sng_check(blob[2], blob_n[2], &tmp) == 2);

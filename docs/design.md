@@ -21,8 +21,7 @@ scales and chords, three of its four tracks) is out, and with it 332 KB of flash
 ## The pedalboard
 
 A Hotone Ampero II Stage. Its MIDI OUT is a 3.5 mm TRS jack, Type A (Hotone's quickstart). The FM-1's
-TRS MIDI IN type is not documented: **verify** with a plain stereo cable on the stock firmware; if it
-stays silent, a Type A to Type B crossed cable.
+TRS MIDI IN is Type A too: a plain stereo 3.5 mm cable from the Ampero works (verified 2026-10-19).
 
 Each Ampero footswitch sends up to three MIDI messages (CC 0..127 or PC, with a value, on a channel),
 only in Stomp mode and only when the switch's own function is Effect Slot, Scene or OFF. Scenes are the
@@ -87,6 +86,20 @@ switches inside the patch are its sections. Starting a song is "go to intro".
   second step of a straight grid that much late). The importer, `fm1_song.py` and the editor wrote 50 (MPC's "50 %",
   straight on the old scale), which the device played as a shuffle (MPC 62.5 %) while the web player ignored swing:
   the default is 0 now, the songs were set to 0, and the web player swings as the device does.
+  (2026-10-19: "I think the swing option might be broken".) It was not, but it moved the wrong steps for every song on the
+  bench: all at 1/16 with the hats on the 8ths, so hardly a hit on an odd 16th, and the swing had nothing to move; the
+  user's case was Money, whose score is marked with the shuffle (two 8ths as a triplet's quarter and 8th, Guitar Pro's
+  eighth triplet feel on every measure). Now a song's swing has a grid, `"swing_grid"`: `"1/16"` (the default: every
+  second step of the section's grid, as before) or `"1/8"` (the 8ths go long-short and the 16ths or 32nds inside each
+  share its length evenly: `seq.c grid_den8`, chosen by `trk_grid` under 1/16 and 1/32 when the song says so; under
+  1/8 it is the plain swing, and 1/4 and the triplet grids are untouched). The packed header's first spare byte is a
+  flags byte, bit 0 the 8ths (`SNG_H_SWING8`; older firmware reads it as reserved and swings the 16ths). The web player
+  does the same (`PLAY.tick`, the grid kept with the old song's swing when a song is loaded while playing); the section
+  editor has the grid next to the swing, and both follow live into the song playing below (before, a swing edited while
+  playing waited for the next Play); `fm1_song.py` packs and describes it; `gp2song.py` sets swing 67 (2:1, MPC 66.7 %)
+  from a triplet feel on most measures, on the 8ths for an eighth feel. Tests: seq2_test t_swing8 (16ths 3:3:1:1 in
+  each beat at swing 100), song_test (the flag read), test_web.mjs (the player's times, the packers, the editor).
+  Not on the device yet: the FM-1 runs the bridge; the next BackBeat install carries it.
 - A section is a whole number of bars of its time signature (2026-10-14, asked when Back in Black's 4-step
   intro in 4/4 looped four times before the verse: the signature rules, the firmware keeps counting bars).
   `tools/fm1_song.py` (`bar_fit`, `tests/song_bars_test.py`) and the editor's section editor (`SED.barFit`) flag one
@@ -244,6 +257,22 @@ next bar). No named sections, one song, no fill tied to a section change.
    cued; playing: the pattern goes on, the new song's sections from the next one asked for, its tempo with it).
    The router and the player are unit-tested; the port side is still to be tried by hand, through a USB MIDI
    interface on the Ampero's TRS out (the Ampero sends its footswitch MIDI from that jack only: "The pedalboard").
+5d. **The pedal over Bluetooth (done 2026-10-19).** The Play card's **Connect Bluetooth**: the page is a BLE central
+   (Web Bluetooth, Chrome and Edge on Android, Windows, macOS and Linux, from https or localhost; Safari on the iPhone
+   has neither it nor Web MIDI; Chrome on Linux keeps it behind a flag, so the button is always there and says why
+   when pressed without the API: hidden, it was not found, 2026-10-19), `requestDevice` filtered on the MIDI
+   service `03B80E5A-EDE8-4B33-A751-6CE34EC4C700`, notifications of the MIDI I/O characteristic
+   `7772E5DB-3868-4112-A1A9-F2669D106BF3` decoded by `BLEMIDI.parse` (the header and timestamp bytes, running
+   status, real-time bytes anywhere, a SysEx across packets, the 13-bit clock's low bits wrapping; the rules are
+   `../fm1-midi-bridge/docs/ble-midi.md`) and fed to `pinMsg` as a Web MIDI port's messages are, each stamped with
+   the receiver's time less the packet's spacing (the clock follower keeps working). The device connected is listed
+   first in **MIDI in from** and chosen ("Bluetooth: FM-1 MIDI"; another input chosen there makes the Bluetooth one
+   wait), and the box says what it holds from the start instead of staying empty until Listen. A connection lost is
+   retried three times. The peripheral is a Bluetooth MIDI pedal, or an FM-1 running the MIDI bridge (TRS in to BLE): the
+   player on a phone with nothing else installed. Not in it: sending (the editor's SysEx stays on Web MIDI; BackBeat
+   has no radio). Tests: test_web.mjs (the parser's cases, the page's wiring, both languages). To try by hand: a phone
+   and a BLE MIDI source; the Linux desktop here has BlueZ without its MIDI plugin, which does not matter to the page
+   (Chrome talks GATT itself) but means no local peripheral to test against.
 6. **The screen (done 2026-10-11, first version).** On the TRACKS screen (the one on stage) the title's
    place shows the section playing (the song's name for it, or A..D) and under it the bar it is in,
    grey and "cued" while stopped; the parameter pages' top bar shows the same in the octave's place.
@@ -282,7 +311,10 @@ next bar). No named sections, one song, no fill tied to a section change.
      with no fill (`pedal_section` PS_END: when the section playing ends; 9..16 PS_BAR: on the next bar), every
      black key is a fill (CC 21; to the pattern's end then, the rest of the bar since 2026-10-15; with OCT+ held the
      whole next bar, CC 21 value 1, since 2026-10-16), so a fill into a change is a black key then a white one;
-     ENV / LFO step without a fill. The pedal followed the same day: no section change brings a fill (see the
+     ENV / LFO step without a fill. (2026-10-19, asked: "make the first black key do a fill now, the second a
+     fill-next-bar, and the fourth a break": F#3 the fill as before, G#3 CC 21 value 1 without the hold, C#4 the
+     break, CC 28 value 127: the section playing through its break when it ends; A#3 and the rest as F#3.
+     `key_black` in ui_drummer.c. Test: ui_pages_test.) The pedal followed the same day: no section change brings a fill (see the
      command map); the web editor's player (`PLAY`) mirrors it. Found while doing it: the wait for the section's
      end (`pedal_at_end`) itself made the last bar a fill, so LIVE's first fill-free keys still filled into a
      section longer than a bar; `live_block` no longer does.
@@ -320,6 +352,18 @@ next bar). No named sections, one song, no fill tied to a section change.
 7. **Hardware.** Everything above on a real FM-1: the TRS jack, the cable type, the UART driver, the
    speaker. Before the first install: `sh tests/run_tests.sh` green (but for the known `fm1_alnk0_irq`
    budget failure, identical on untouched SLOOP 2.6), then SLOOP's installer page with `build/felucca.fwsc`.
+   **Installed 2026-10-19** on the first unit: tests green, a full dump of the stock flash first (the soft
+   key into the ROM, jl-uboot-tool; nothing of the unit's where the songs go), then `tools/fm1_install.py
+   build/felucca.fwsc` from stock V15 in one go; the FM-1 enumerates as "Felucca MIDI 1" plus USB audio
+   and answers `FM-1_900`. A reinstall of the same package started the loader from BackBeat (step 1 works)
+   but the loader dropped off USB a quarter of the way in; nothing was written (equal sectors are skipped)
+   and BackBeat started again: cause open, see `../fm1-midi-bridge/docs/recovery.md`, "The first unit".
+   The procedure is `../fm1-midi-bridge/tools/fm1_safe_install.sh`. **Played 2026-10-19 afternoon** (the user):
+   the Ampero's MIDI OUT into the TRS jack over a plain stereo 3.5 mm cable (so Type A), Another Brick in the
+   Wall and Back in Black start to end, cued from the footswitches with fills and section changes, heard on the
+   speaker and from the audio out into the Ampero. So the TRS jack, the cable type, the UART driver and the
+   speaker are facts. Not yet tried on the unit: CC 24 / 25 (next / previous), and every other "verify on
+   hardware" note above.
 
 The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log
@@ -643,7 +687,7 @@ hazard; what it found and what was done:
   latency checked on each platform; (b) the firmware's own engine as a desktop program (see "Related
   programs"), faithful but bound to the device's sample limits. Route (a) is the natural one: the pieces
   exist and the phone is already the editor's home.
-- **MIDI file import** (asked 2026-10-16). A Standard MIDI File (.mid, type 0 or 1) into a song, as tools/gp2song.py
+- **MIDI file import** (asked 2026-10-16, done 2026-10-19: see the end of this item). The plan: a Standard MIDI File (.mid, type 0 or 1) into a song, as tools/gp2song.py
   does for Guitar Pro: the drums are channel 10 (and any track whose notes are all in the GM drum range), the same
   GM note table to the 16 lanes (`GM` in gp2song.py: kick 35 36, snare 38 40, side stick 37, clap 39, hats 42 44
   46, toms, crash, ride, the rest dropped), velocities to the four levels where Guitar Pro gave accents and ghosts
@@ -659,7 +703,32 @@ hazard; what it found and what was done:
   extension). Why: MIDI drum tracks are everywhere (drum machine exports, DAW projects, the groove packs the
   rhythm sites sell), where Guitar Pro files are the tab sites' only; and a DAW is the easier place to write a
   part by ear. Tests: gp2song_test.py with a type-0 and a type-1 file written by the test itself (a few bars, a
-  marker, a triplet bar, a tempo change), the same sections, levels and fill bar as the Guitar Pro twin. Not started.
+  marker, a triplet bar, a tempo change), the same sections, levels and fill bar as the Guitar Pro twin.
+  Done 2026-10-19, as planned with these choices. gp2song.py now reads a file into bars of its own (`Bar`: length,
+  time signature, notes as position, lane, level, flam) through one of two readers, `read_gp` (PyGuitarPro, imported
+  only then) and `read_midi` (the SMF chunks and running status in a page of Python, no library), told apart by the
+  first bytes (`MThd`), and everything after the reader is the one code: patterns, fills, duplicates, the cuts to fit
+  the sector, `bars` and `ranges` for the editor. The drums: channel 10 on any track; `--track n` one track whatever
+  its channels; without channel 10, a track named for drums (DRUM, PERC, KIT, BATT, SCHLAG), else one whose notes all
+  sit in 35..81 with a kick or a snare among them; none: the error lists the tracks. The levels are the same velocity
+  thresholds as for Guitar Pro notes without accent flags (under 50 ghost, under 80 soft, 110 and over hard: one
+  table, `level_of_velocity`, to tune for both at once). Flams: two notes of one drum less than a 32nd apart, the
+  first the grace, the hit's own velocity (Guitar Pro has the grace as a flag on the note; a DAW writes it as a
+  note); a drag written as two 32nds stays a ratchet, as before. Humanised parts: a note within a 64th triplet
+  (1/24 of a quarter) of a 32nd line is put on it; 8th and 16th triplets (160 and 320 ticks of 960) stay off the
+  grid and count as Guitar Pro's off-grid hits do (towards 1/32, not a triplet grid: the importer still never picks
+  8T or 16T, for either format; a later item). The bars follow the time signature meta events (a change takes the
+  bar line it sits on, or the next), the markers (cue points when there are none) take the nearest bar line, the
+  tempo is the first set-tempo event and later ones are counted and said to be ignored; the title is the first
+  track's name unless it names the drums, else the file's. The editor's card is **From Guitar Pro, MIDI or JSON**:
+  the picker accepts .mid / .midi, the page sniffs `MThd` and loads Pyodide and gp2song.py without the PyGuitarPro
+  install for a MIDI file (`gpiLoad(gp)`), so a MIDI import costs the Pyodide download alone. Tests:
+  `tests/midi2song_test.py` (its own SMF writer: the Guitar Pro test's synthetic song as a type-1 file, with the same
+  assertions, its bars equal to the twin's; a type-0 file with a 7/8 section, humanised notes, a tempo change; the
+  drums found by the track's name; `--track`; no drums; junk), run unconditionally by run_tests.sh, where the Guitar
+  Pro test still needs PyGuitarPro; `web/test_web.mjs` for the card. Not verified in a browser yet: the Pyodide path
+  with a .mid on the tablet (the laptop's Chrome ran it for Guitar Pro files before; the reader itself has no
+  browser-side code).
 - (asked and done 2026-10-17) **Flams.** A hit flagged as a flam plays a grace note first: the same drum as a ghost,
   about 25 ms before the hit (`seq.c FLAM_SMP`, 1100 samples: a drummer's flam, the same at any tempo; a quarter of
   the step at most, so 32nds at 240 BPM still read), the hit itself on the grid; with a ratchet, the grace before
@@ -708,7 +777,10 @@ hazard; what it found and what was done:
   song screen) left it as it was found, and the user reports it no longer works as it did on SLOOP: what exactly
   (the keys and layers on that page, SAVE held + key for the sections, the chain editor, the project pages, SONG
   REC) is to be established on the device or in `tests/ui_pages_test.c` and `tests/arranger_test.c`, then restored
-  or, where a drummer has no use for it, taken out on purpose and said so. Not started.
+  or, where a drummer has no use for it, taken out on purpose and said so. **Dormant (decided 2026-10-19):** left
+  in as found, a SLOOP leftover, neither fixed nor removed; the user likes the idea of sketching a rough song
+  structure on the device alone and will decide later. Not a blocker for sharing BackBeat: say so where it is
+  shared (JAM is SLOOP's, unsupported).
 - **The second core** (asked 2026-10-16: "is there any advantage we could take from the two cores?"). The AC791N
   has two pi32v2 cores (the SDK's `CPU_CORE_NUM 2`); Felucca runs bare metal on one: the audio interrupt (every
   32-sample block: the sequencer, the drum voices decoding ADPCM in place from flash, the master chain) and the
@@ -737,7 +809,7 @@ hazard; what it found and what was done:
 - **A one-switch pedal adapter** (from the same list: pfkellogg's Arduino adapter turns a plain 1/4" footswitch
   into a MIDI CC over TRS). A fill pedal for a guitarist without an Ampero, for a few euros: one switch sending CC
   21 (or two: a section change and the fill), the firmware already listening. To do: a page in docs/ with the
-  wiring, a recommended sketch (TRS type A or B as the FM-1's jack turns out: an open question) and the CC map;
+  wiring, a recommended sketch (TRS Type A, the FM-1's jack, verified 2026-10-19) and the CC map;
   nothing in the firmware. Not started.
 - **Stage modes for a dark room** (from the official open firmware's "LED illumination modes for dark
   environments"). BackBeat lights the playing section's key on LIVE; a stage mode would raise the LIVE screen's
@@ -940,6 +1012,41 @@ hazard; what it found and what was done:
   (`PCLK.timeOf` over the steps scheduled) and the steps not yet scheduled move half the difference, 20 ms at most
   a beat. To check by hand with a real master (the mock has no clock): the lock at 60..200 BPM, a tempo ramp, and the
   output latency (the master's sound against the browser's; an offset setting if it shows).
+
+- (done 2026-10-19, the same evening) **Eye of the Tiger and Money refused by the device** (asked 2026-10-19, evening: both
+  "issue errors when sending to device"). The cause: both songs were imported in the browser that day and both carry
+  `"kit": 46`, where every song that sends has kit 0. 46 was MULDJORD's index before 2026-10-15, when the GM kits
+  went and MULDJORD became kit 0; `gp2song.py convert()` still defaults `kit=46` (the command line's `--kit` default
+  was moved to 0, the function's was not, and the editor's import calls `convert()` without a kit). The firmware
+  refuses a song whose kit is past the device's kits (`sng.c sng_read`: `kit >= DRUM_KITS`, rc 2, the editor's
+  "not a song"). Done: `convert()` defaults to `KIT_DEFAULT` (0) like the command line, gp2song_test.py
+  calls it as the editor does and checks the kit, the site rebuilt, the two songs' JSON set to kit 0. Still open: the
+  device could clamp an old kit index instead of refusing the song (a song saved before 2026-10-15 has the same 46).
+- **Demo songs for newcomers** (asked 2026-10-20: do the songs in `songs/` show a guitarist how the tool is used? No).
+  `songs/` cannot be the overview: it is never committed, and every song in it is a transcription of a commercial
+  record. It is also narrow (classic rock, mostly Pink Floyd, nearly all 4/4, two of eight finished) and a song file
+  shows sections, not how a guitarist plays them. The plan: (1) the factory grooves (`grooves/`, original, already
+  shipped) as the range of styles; (2) two or three **original demo songs** built from them, written to show the
+  workflow: a verse/chorus rock song with fills into changes, a break and an outro; a 12-bar blues shuffle; a 6/8
+  ballad with a count-in; each committed with its **pedal plan** (switch, message, what happens), in the README or a
+  `docs/demos.md`, and in the Setlist tab like the grooves; (3) a short video or audio clip of the user playing Back
+  in Black from the Ampero (playing over a record is not publishing its transcription). Also noticed:
+  `songs/seven-nation(wip).json` holds a copy of Shine On (named SHINE ON YOU, sections P2/P3), not Seven Nation
+  Army. Not started.
+- **A crash after a fill** (asked 2026-10-20: "often times a fill is followed by a crash on beat 1 of the next bar").
+  Today nothing adds hits to the bar after a fill: `live_block` restarts the pattern from its top when a pedal fill
+  ends, but an entry plays only when a section comes in from another one (never on the same section looping, and it
+  replaces the bar), and a crash written on the pattern's step 0 would sound on every cycle. The plan: a **landing
+  accent** per section, an overlay on step 0 of the first bar after a pedal fill (CC 21, a fill bar or fill mode),
+  a lane mask (crash, optionally kick) and a level, **added** to the pattern's own hits. A one-shot flag set in
+  `live_block` where the fill ends; the drum track's step-0 read (`drum_src`) ORs the overlay in and clears the flag.
+  The section whose bar it is carries it, so a fill into a change crashes the chorus and not the verse. **Only after
+  a fill**: a plain section change (the white keys, CC 20, CC 27) gets nothing (the entry stays the tool for that).
+  The format: a flags bit (as `SNG_F_ENTRY`, `SNG_F_BREAK`) and a byte or two (old firmware refuses such a song, code
+  6; firmware and editor ship together); JSON `"landing": {...}`; the section editor a "Crash after fill" select
+  (off, crash, crash + kick); `PLAY` in the web player mirrors `live_block`. Tests: `song_test.c` (a fill back into the
+  same section, a fill into a change, no accent without a fill), `test_web.mjs`; the existing renders and
+  `tests/golden.txt` do not change. Not started.
 
 ## Open questions
 

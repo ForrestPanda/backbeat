@@ -35,7 +35,7 @@ const E = vm.runInNewContext(proto + `
    wavFile, zipStore, crc32, startWatch, fmtValue, F, DRUM_LANES, LV_NAMES, emptyDrum, lockable, MICRO, FC, fillGet, fillSet, pack7, unpack7,
    parseNote, backupCapture, backupRestore, backupObjects, b64enc, b64dec, BK, KIT, KIT_SONGS, kitOptions, kitPad, kitZones, kitLen, kitBytes,
    kitFit, kitSplit, kitLaneOf, kitPlace, zipRead, ARR, mockSettings, DSYN, DSYN_MOCK_NAMES, DSYN_MOCK_KITS, SetGate, bkProjFormat, bkProjOk,
-   bkFwAtLeast, SNG, PLAY, SED, PEDALIN, PCLK, SET })`,
+   bkFwAtLeast, SNG, PLAY, SED, PEDALIN, PCLK, SET, BLEMIDI })`,
 { setTimeout, clearTimeout, setInterval, clearInterval, console, TextEncoder, TextDecoder, Blob, Response, DecompressionStream });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const js = (x) => JSON.stringify(x);
@@ -315,6 +315,20 @@ function editorPlay() {
     ok(Math.abs(P.tick(tr).secs - P.tick(tr).secs) < 1e-12, "play: no swing on the triplet grids (as the device)");
     sp.swing = 0;                                            /* (edited while playing: at once) */
     ok(Math.abs(P.tick(w).secs - 0.125) < 1e-9, "play: the song's swing edited while playing applies at once");
+    /* swing on the 8ths ("swing_grid": "1/8", since 2026-10-19, for Money's shuffle): under 1/16 the 8ths go long-short and the
+       two 16ths inside each share it, so the hats on the 8ths move; the header's flags byte carries it (bit 0) */
+    const e8 = P.create({ ...spec, swing: 100, swing_grid: "1/8" }); P.request(e8, 0);
+    const t8 = Array.from({ length: 8 }, () => P.tick(e8).secs);
+    ok(t8.every((v, i) => Math.abs(v - (i % 4 < 2 ? 0.1875 : 0.0625)) < 1e-9), "play: swing 100 on the 8ths under 1/16 at 120 BPM: 188, 188, 62, 62 ms in each beat");
+    const e16 = P.create({ ...spec, swing: 100, swing_grid: "1/16" }); P.request(e16, 0);
+    ok(Math.abs(P.tick(e16).secs - 0.1875) < 1e-9 && Math.abs(P.tick(e16).secs - 0.0625) < 1e-9, "play: swing_grid 1/16 (the default): as before, every second 16th late");
+    const e8t = P.create({ name: "T", bpm: 120, swing: 100, swing_grid: "1/8", sections: [{ name: "T", steps: 8, div: "1/8", lanes: { KICK: "x" } }] }); P.request(e8t, 0);
+    ok(Math.abs(P.tick(e8t).secs - 0.375) < 1e-9 && Math.abs(P.tick(e8t).secs - 0.125) < 1e-9, "play: swing on the 8ths under a 1/8 grid is the plain swing");
+    const p8 = E.SNG.pack({ name: "S8", bpm: 120, swing: 67, swing_grid: "1/8", sections: [spec.sections[0]] }), p16 = E.SNG.pack({ name: "S", bpm: 120, sections: [spec.sections[0]] });
+    ok(p8[23] === 1 && E.SNG.unpack(p8).swing_grid === "1/8" && E.SNG.unpack(p8).swing === 67 && p16[23] === 0 && !("swing_grid" in E.SNG.unpack(p16)),
+      "songs: the swing's grid in the header's flags byte (bit 0: the 8ths), unpacked back; 1/16, the default, leaves it 0 and out of the JSON");
+    let badGrid = false; try { E.SNG.pack({ name: "S", bpm: 120, swing_grid: "8T", sections: [spec.sections[0]] }); } catch (e) { badGrid = true; }
+    ok(badGrid, "songs: a swing_grid other than 1/16 or 1/8 is refused");
   }
   ok(/"swing": 0,/.test(readFileSync(join(HERE, "../tests/example-song.json"), "utf8")) && /swing = Math\.round\(spec\.swing == null \? 0/.test(html)
     && /"swing": 0, "drum_level"/.test(readFileSync(join(HERE, "../tools/gp2song.py"), "utf8")),
@@ -1156,6 +1170,37 @@ async function editorPedalIn() {
     "clock in: the page: realtime bytes to pinClock when the box is ticked, the start on the downbeat, no count-in");
 }
 
+/* the pedal over Bluetooth: BLE MIDI packets into messages, and the page's Connect Bluetooth */
+function bleMidi() {
+  const B = E.BLEMIDI, p = B.create();
+  const pk = (hi, ...rest) => Uint8Array.from([0x80 | hi, ...rest]);
+  const one = B.parse(p, pk(5, 0x80 | 10, 0xBF, 20, 0));
+  ok(one.length === 1 && eq(one[0].data, [0xBF, 20, 0]) && one[0].t === (5 << 7) + 10, "ble midi: header + timestamp + CC: one message, t = high << 7 | low");
+  const run = B.parse(p, pk(0, 0x80 | 1, 0x9F, 36, 100, 38, 100, 0x80 | 7, 0xBF, 21, 1));
+  ok(run.length === 3 && eq(run[0].data, [0x9F, 36, 100]) && eq(run[1].data, [0x9F, 38, 100]) && run[0].t === run[1].t && eq(run[2].data, [0xBF, 21, 1]) && run[2].t === 7,
+    "ble midi: running status continues the last status at the same time; a new timestamp starts a new message");
+  const rt = B.parse(p, pk(0, 0x80 | 2, 0xF8, 0x80 | 3, 0xBF, 22, 0, 0x80 | 4, 0xFA));
+  ok(rt.length === 3 && eq(rt[0].data, [0xF8]) && eq(rt[1].data, [0xBF, 22, 0]) && eq(rt[2].data, [0xFA]), "ble midi: real-time bytes with their own timestamps, between messages");
+  const sx1 = B.parse(p, pk(0, 0x80 | 1, 0xF0, 0x7D, 1, 2)), sx2 = B.parse(p, pk(0, 3, 4, 0x80 | 2, 0xF8, 5, 0x80 | 3, 0xF7, 0x80 | 4, 0xC0, 7));
+  ok(!sx1.length && sx2.length === 3 && eq(sx2[0].data, [0xF8]) && eq(sx2[1].data, [0xF0, 0x7D, 1, 2, 3, 4, 5, 0xF7]) && eq(sx2[2].data, [0xC0, 7]),
+    "ble midi: a SysEx across two packets (data bytes right after the header, a clock inside it), then a PC");
+  const wrap = B.parse(p, pk(0, 0x80 | 127, 0xDF, 50, 0x80 | 0, 0xBF, 23, 0));
+  ok(wrap.length === 2 && eq(wrap[0].data, [0xDF, 50]) && wrap[0].t === 127 && wrap[1].t === 128, "ble midi: channel pressure takes one data byte; the low bits wrapping adds 128");
+  const cut = B.parse(p, pk(0, 0x80 | 1, 0xBF, 24)), after = B.parse(p, pk(0, 0x80 | 2, 0xBF, 25, 0));
+  ok(!cut.length && after.length === 1 && eq(after[0].data, [0xBF, 25, 0]) && !B.parse(p, Uint8Array.from([])).length && !B.parse(p, Uint8Array.from([0x80])).length,
+    "ble midi: a message cut by the packet's end is dropped, the next packet is read; empty and header-only packets give nothing");
+  const r = E.PEDALIN.route(Uint8Array.from(one[0].data), 16);
+  ok(r && r.kind === "section" && r.k === 0 && B.SERVICE === "03b80e5a-ede8-4b33-a751-6ce34ec4c700" && B.CHAR === "7772e5db-3868-4112-a1a9-f2669d106bf3",
+    "ble midi: the message routes as the pedal's (CC 20 0 on channel 16: section 1); the MIDI service and characteristic UUIDs");
+  const page = html.slice(html.indexOf("const BLE = {"), html.indexOf("\nbleRender();\n", html.indexOf("const BLE = {")));
+  ok(/id="pin-ble"/.test(html) && /requestDevice\(\{ filters: \[\{ services: \[BLEMIDI\.SERVICE\] \}\] \}\)/.test(page) && /getCharacteristic\(BLEMIDI\.CHAR\)/.test(page)
+    && /startNotifications\(\)/.test(page) && /"characteristicvaluechanged", bleNotify/.test(page) && /pinMsg\(Uint8Array\.from\(m\.data\), now - \(last - m\.t\)\)/.test(page)
+    && /"gattserverdisconnected", bleLost/.test(page) && /playCtx\(\)/.test(page) && /bleConnect: "Connect Bluetooth"/.test(html) && /bleConnect: "Bluetooth で接続"/.test(html)
+    && !/id="pin-ble"[^>]*hidden/.test(html) && /bleMissing\(\)/.test(page) && /value: "ble", text: "Bluetooth: "/.test(html)
+    && /\$\("pin-port"\)\.value = "ble"/.test(page) && /if \(\$\("pin-port"\)\.value !== "ble"\) return;/.test(page) && /const v = \$\("pin-port"\)\.value, ble = v === "ble"/.test(html),
+    "ble midi: the page: Connect Bluetooth (always shown; pressed without the API it says why; the device in MIDI in from and chosen), requestDevice on the MIDI service, notifications into pinMsg with the packet's spacing, a retry on disconnect, both languages");
+}
+
 
 /* ------------------------------------- editor v6: backup / restore --- */
 async function editorBackup() {
@@ -1628,11 +1673,24 @@ function editorTabs() {
       "editor: ... the same four as the firmware's TE_COL");
     ok(/SLOOP-FONT\*\/url\(data:font\/ttf;base64,[A-Za-z0-9+\/=]{20000,}\)/.test(html), "editor: the device's Terminus font inlined (tools/gen_webfont.py)");
     /* the import card takes a song JSON too (into the editor), the player has the count-in, the editor undo / redo and keys */
-    ok(/id="gpi-file" type="file" accept="\.gp3,\.gp4,\.gp5,\.json,application\/json"/.test(html) && /id="play-count"/.test(html)
+    ok(/id="gpi-file" type="file" accept="\.gp3,\.gp4,\.gp5,\.mid,\.midi,audio\/midi,audio\/x-midi,\.json,application\/json"/.test(html) && /id="play-count"/.test(html)
       && /id="sed-undo"/.test(html) && /id="sed-redo"/.test(html) && /id="sed-playsec"/.test(html) && /function sedKey\(e\)/.test(script)
       && /\$\("sed"\)|for \(const id of \["gpi", "sed"\]\)/.test(script) && /PLAY\.create\(spec, SPLAY\.count\)/.test(script)
       && /title: `\$\{t\("sedKey"\)\}\$\{key\}`/.test(script) && /\["sed-undo", "Ctrl\+Z"\]/.test(script) && /\$\("play-fill"\)\.title = "CC 21  " \+ t\("sedKey"\) \+ "f"/.test(script),
       "editor: the import card opens a JSON (or a drop on it or the editor), the player counts in, the editor has undo / redo / keys / play this section");
+    /* a MIDI file (since 2026-10-19): told by its MThd bytes, converted by gp2song.py's own reader; PyGuitarPro fetched for Guitar Pro files only */
+    ok(/function gpiIsMidi\(bytes\) \{ return bytes\.length > 4 && bytes\[0\] === 0x4D && bytes\[1\] === 0x54 && bytes\[2\] === 0x68 && bytes\[3\] === 0x64; \}/.test(script)
+      && /const py = await gpiLoad\(!gpiIsMidi\(bytes\)\);/.test(script) && /if \(gp\) await gpiPyGuitarPro\(GPI\.py\);/.test(script) && /if \(!\/guitarpro\/i\.test\(String\(e\.message \|\| e\)\)\) throw e;\n\s*await gpiPyGuitarPro\(py\);/.test(script)
+      && /def read_midi\(data, track=None, title=None\):/.test(readFileSync(join(HERE, "../tools/gp2song.py"), "utf8")) && /if data\[:4\] == b"MThd":/.test(readFileSync(join(HERE, "../tools/gp2song.py"), "utf8"))
+      && /gpiTitle: "From Guitar Pro, MIDI or JSON"/.test(script) && /gpiTitle: "Guitar Pro \/ MIDI \/ JSON から"/.test(script),
+      "editor: the import card takes a MIDI file (gp2song.py's SMF reader; PyGuitarPro only for Guitar Pro)");
+    /* the swing's grid next to the swing in the section editor (1/16 or 1/8), live into the song playing; the importer sets it from a triplet feel */
+    ok(/<select id="sed-swgrid"><option value="1\/16">1\/16<\/option><option value="1\/8">1\/8<\/option><\/select>/.test(html) && /sedSwingOn: "on the"/.test(script) && /sedSwingOn: "単位"/.test(script)
+      && /\$\("sed-swgrid"\)\.value = sp\.swing_grid === "1\/8" \? "1\/8" : "1\/16";/.test(script) && /function sedSwingLive\(\)/.test(script)
+      && /SHUFFLE_SWING = 67/.test(readFileSync(join(HERE, "../tools/gp2song.py"), "utf8")) && /spec\["swing_grid"\] = "1\/8"/.test(readFileSync(join(HERE, "../tools/gp2song.py"), "utf8"))
+      && /SWING_GRIDS = \["1\/16", "1\/8"\]/.test(readFileSync(join(HERE, "../tools/fm1_song.py"), "utf8")),
+      "sed: the swing's grid picked next to the swing, followed live by the player; gp2song.py and fm1_song.py know it");
+    ok(/sayK\("gpiFail", String\(e\.message \|\| e\)\.trim\(\)\.split\("\\n"\)\.pop\(\)\);/.test(script), "gpi: a failed conversion shows the error's last line (a Python traceback ends in a newline: it showed nothing)");
     /* the player steps through the sections (CC 24 / 25, keys . and ,) and says a section pressed again is a fill */
     ok(/id="play-prev" data-t="playPrev"/.test(html) && /id="play-next" data-t="playNext"/.test(html)
       && /class="ptrans four"><button id="play-prev"[^\n]*id="play-fill"[^\n]*id="play-fillnext" data-t="playFillNext"[^\n]*id="play-next"/.test(html)
@@ -1852,6 +1910,7 @@ editorMeter();
 await editorSet();
 await editorRealKit();
 await editorPedalIn();
+bleMidi();
 await editorSong();
 await editorDsyn();
 editorTabs();

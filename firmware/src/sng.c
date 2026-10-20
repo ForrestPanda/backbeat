@@ -13,7 +13,8 @@
  *
  * The packed song (little endian), "SNG2": a byte a hit, so that 8 sections of 64 steps fit in a sector (16 of the
  * usual 16..48 steps fit too; SNG_MAX is the limit, in bytes, not the sections)
- *   header (32)   "SNG2", name[12], bpm u16, kit, swing, drum level, drum reverb, nsec, rsv[9]
+ *   header (32)   "SNG2", name[12], bpm u16, kit, swing, drum level, drum reverb, nsec, flags (bit 0, since 2026-10-19:
+ *                 the swing on the 8ths, SNG_H_SWING8, a shuffle: seq.c grid_den8; the other bits spare), rsv[8]
  *   per section   name[12], len (1..64), div (N_SDIV index), flags (bit 0: the outro), meter (0: 4/4; else the
  *                 numerator 1..16 in bits 0..4, the denominator in bits 5..6: SNG_DEN), size u16 (the section's
  *                 bytes, this header included); fill[(len + 3) / 4] (2 bits a step: FC_*); then each step: its lanes
@@ -43,12 +44,13 @@
 #define SNG_F_ENTRY 4u                           /* ..an entry (after the fill bar) */
 #define SNG_F_BREAK 8u                           /* ..a break (after the entry) */
 #define SNG_F_TAIL (SNG_F_FILLBAR | SNG_F_ENTRY | SNG_F_BREAK)   /* the blocks after the pattern, in this order */
+#define SNG_H_SWING8 1u                          /* the header's flags: the swing moves the 8ths, not the section's steps */
 
 typedef struct {
     const uint8_t *xip;                          /* the packed song: flash (XIP), or a RAM blob on the host */
     uint16_t off[SNG_SECTIONS];                  /* each section's offset in it (nsec of them) */
     uint16_t bpm;
-    uint8_t kit, swing, drlvl, drrev, nsec, pend;   /* pend: tempo and kit wait for the next section */
+    uint8_t kit, swing, swing8, drlvl, drrev, nsec, pend;   /* swing8: SNG_H_SWING8; pend: tempo and kit wait for the next section */
 } sng_t;
 static sng_t sng;
 
@@ -81,6 +83,7 @@ static int sng_check(const uint8_t *b, uint32_t n, sng_t *out)
     out->bpm = (uint16_t)sng_u16(b + 16);
     out->kit = b[18];
     out->swing = b[19];
+    out->swing8 = b[23] & SNG_H_SWING8;
     out->drlvl = b[20];
     out->drrev = b[21];
     out->nsec = b[22];
@@ -194,6 +197,7 @@ static void sng_globals(void)                    /* the song's tempo, kit, swing
 {
     song.g[G_BPM] = (int16_t)clamp((int32_t)sng.bpm, GP[G_BPM].min, GP[G_BPM].max);
     song.g[G_SWING] = (int16_t)clamp((int32_t)sng.swing, GP[G_SWING].min, GP[G_SWING].max);
+    seq_swing8 = sng.swing8;
     song.g[G_DRLVL] = (int16_t)clamp((int32_t)sng.drlvl, GP[G_DRLVL].min, GP[G_DRLVL].max);
     song.g[G_DRREV] = (int16_t)clamp((int32_t)sng.drrev, GP[G_DRREV].min, GP[G_DRREV].max);
     TDRUM->p[P_E0] = (int16_t)clamp((int32_t)sng.kit, DRUM_KIT_DESC.min, DRUM_KIT_DESC.max);

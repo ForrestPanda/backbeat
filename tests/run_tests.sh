@@ -58,6 +58,7 @@ if [ -f ../../kits/avl-drumkits/Red_Zeppelin_5pc.sfz ] && command -v sox >/dev/n
 else
     echo "== skip the Red Zeppelin kit (no ../../kits/avl-drumkits, or no sox)"
 fi
+run "songs: tools/gp2song.py on MIDI files written by the test (type 0 and 1, markers, 7/8, flams, the drums found)" python3 tests/midi2song_test.py
 if python3 -c "import guitarpro" 2>/dev/null; then
     run "songs: tools/gp2song.py on a Guitar Pro file written with PyGuitarPro (sections, pattern, fill, flam, accents)" python3 tests/gp2song_test.py
 else

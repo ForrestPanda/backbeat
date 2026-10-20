@@ -557,19 +557,30 @@ int main(int argc, char **argv)
         check(live_req < 0 && !pedal_fill && !pedal_fill_wait, "LIVE: the section playing's key again: nothing (no fill)");
         sng_ui_next[0] = 0;
         ui.force = 1; frame(); ppm("live-fill");
-        {   /* every black key: the fill (CC 21: this bar, or the next one from its last beat); then a white key: the fill
-             * into the change, on the bar after it */
+        {   /* the black keys (2026-10-19): the first the fill (CC 21: this bar, or the next one from its last beat), the
+             * second the whole next bar (value 1), the fourth the break (CC 28), the others as the first; then a white
+             * key: the fill into the change, on the bar after it */
             static const uint8_t BLACK[11] = {1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25};
             uint32_t b, all = 1;
             for (b = 0; b < 11u; b++) {
+                if (b == 1u || b == 3u)
+                    continue;
                 pedal_fill = 0; pedal_fill_wait = 0;
                 key(BLACK[b]); frames(2);
                 all &= (pedal_fill || pedal_fill_wait) && song.playing;
             }
-            check(all, "LIVE: every black key: the fill (CC 21), playing on");
+            check(all, "LIVE: the first black key and the others: the fill (CC 21), playing on");
             pedal_fill = 0; pedal_fill_wait = 0;
-            press(B_OCTUP); key(BLACK[3]); release(B_OCTUP); frames(2);
-            check(!pedal_fill && pedal_fill_wait && song.playing, "LIVE: OCT+ held + a black key: the fill on the next bar (CC 21 value 1)");
+            key(BLACK[1]); frames(2);
+            check(!pedal_fill && pedal_fill_wait && song.playing, "LIVE: the second black key (G#3): the fill on the next bar (CC 21 value 1), no hold");
+            pedal_fill = 0; pedal_fill_wait = 0; live_req = -1; live_req_brk = 0;
+            key(BLACK[3]); frames(2);
+            check(live_req == live_sec && live_req_brk && !pedal_fill && !pedal_fill_wait && song.playing,
+                  "LIVE: the fourth black key (C#4): the break (CC 28): the section playing again through its break, no fill");
+            live_req = -1; live_req_brk = 0;
+            pedal_fill = 0; pedal_fill_wait = 0;
+            press(B_OCTUP); key(BLACK[0]); release(B_OCTUP); frames(2);
+            check(!pedal_fill && pedal_fill_wait && song.playing, "LIVE: OCT+ held + the first black key: the fill on the next bar (CC 21 value 1)");
             key(key_of_white(2)); frames(2);                /* (that fill pending) */
             check(live_req == 2 && !pedal_at_end && (pedal_fill || pedal_fill_wait), "LIVE: a black key, then white key 3: the fill, CHORUS on the bar after it");
             ui.force = 1; frame(); ppm("live-fill-next");     /* "FILL > CHORUS" */

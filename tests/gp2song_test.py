@@ -210,6 +210,9 @@ def main():
         assert r.returncode == 0, r.stderr
         with open(out) as f:
             spec = json.load(f)
+        import gp2song                                 # the editor's call: convert() with no kit (2026-10-19: it said 46,
+        direct = gp2song.convert(gpf, log=lambda *a: None)   # MULDJORD's index before 2026-10-15, and the device refused the song)
+        assert direct["kit"] == spec["kit"] == fm1_song.KIT_DEFAULT == 0, (direct["kit"], spec["kit"])
     names = [s["name"] for s in spec["sections"]]
     assert names == ["VERSE", "CHORUS", "OUTRO"], names
     assert spec["bpm"] == 120

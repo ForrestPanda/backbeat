@@ -7,10 +7,9 @@ a scene change and a section change share one press.
 
 ## The cable
 
-The Ampero's MIDI OUT is a 3.5 mm TRS jack, Type A. The FM-1's MIDI IN is a 3.5 mm TRS jack of
-unknown type: try a plain stereo cable first (with the stock firmware, a footswitch sending a note
-should play a sound); if it stays silent, a Type A to Type B crossed cable. Set the Ampero's jack to
-OUT, not THRU.
+The Ampero's MIDI OUT is a 3.5 mm TRS jack, Type A, and so is the FM-1's MIDI IN: a plain stereo
+3.5 mm cable (tip to tip, ring to ring) is all it takes (verified 2026-10-19). Set the Ampero's jack
+to OUT, not THRU.
 
 ## A song: one patch
 

@@ -97,12 +97,12 @@
   
   
   <h1>Firmware for the M-VAVE FM-1</h1>
-  <p class="lead">A groovebox you play live: four tracks — three synths and a drum machine — 12 synth engines (with six-operator FM and DX7 patches), 153 sounds, 37 drum kits from 808 to techno, amapiano and ambient, your own samples and drum kits, 27 punch-in effects. House, techno, hip-hop, drum &amp; bass, synthwave, lo-fi, ambient: make what you want. No factory patterns, nothing to load: everything you hear, you play.</p>
+  <p class="lead">A drummer for guitarists: your songs as sections (intro, verse, chorus, bridge, solo, outro) that you switch live from your pedalboard over the TRS MIDI jack, with fills where you ask for them. No backing tracks: how long each section lasts is decided on stage.</p>
   <div class="tiles">
-    <div class="tile" style="--c: var(--blue)"><b>153</b><span>sounds, 12 engines, your samples</span></div>
-    <div class="tile" style="--c: var(--green)"><b>37</b><span>drum kits, 909 to afro, + your own</span></div>
-    <div class="tile" style="--c: var(--yellow)"><b>27</b><span>punch-in fx: hold fx + key</span></div>
-    <div class="tile" style="--c: var(--orange)"><b>rec</b><span>no click: the loop follows you</span></div>
+    <div class="tile" style="--c: var(--blue)"><b>16</b><span>songs, up to 16 sections each</span></div>
+    <div class="tile" style="--c: var(--green)"><b>16</b><span>factory grooves, ready to play</span></div>
+    <div class="tile" style="--c: var(--yellow)"><b>4</b><span>velocity layers a drum: the muldjord kit</span></div>
+    <div class="tile" style="--c: var(--orange)"><b>trs</b><span>midi in: cc and pc from your pedalboard</span></div>
   </div>
   <p data-t="intro"></p>
   <p data-t="warn"></p>
@@ -131,7 +131,7 @@
   </details>
   <p class="small">BackBeat is a fork of SLOOP, based on Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>.
     Hold OCT− alone while switching on for USB rescue.<br>
-    Font: Terminus (Dimitar Toshkov Zhekov, SIL OFL 1.1). Samples: Versilian Studios VSCO-2 Community Edition and VCSL (CC0 1.0), and the Hügelton Sample Pack (© Hügelton Instruments, not CC0).<br>
+    Font: Terminus (Dimitar Toshkov Zhekov, SIL OFL 1.1). The MULDJORD kit: MuldjordKit and the DRSKit's snare by DrumGizmo (CC BY 4.0), hi-hats and ride from AVL Drumkits by Glen MacArthur (CC BY-SA 3.0), clap and cowbell from Versilian Studios (CC0). Other samples: Versilian Studios VSCO-2 Community Edition and VCSL (CC0 1.0), and the Hügelton Sample Pack (© Hügelton Instruments, not CC0).<br>
     M-VAVE and FM-1 are trademarks of their respective owners; BackBeat is not affiliated with them.<br>
     <span data-t="license"></span> <a href="https://github.com/hugelton/Felucca" target="_blank" rel="noopener">github.com/hugelton/Felucca</a></p>
 </main>
@@ -435,7 +435,7 @@ const TEXT = {
     intro: "FM-1 を USB で接続してください。（Chrome か Edge で使えます）",
     warn: "書き込み中は USB を抜かないでください。",
     install: "インストール", other: "English",
-    editor: "エディタ（インストール後、パソコンから音色やシーケンスを編集）",
+    editor: "エディタ（インストール後、Guitar Pro や MIDI から曲を取り込み、編集して FM-1 に送る）",
     edOffline: "エディタをダウンロード（パソコンでインターネットなしで使う：ファイルを Chrome / Edge で開く）",
     appInstall: "アプリとしてインストール（エディタとインストーラーがオフラインで使える・Android も）",
     direct: "USB ケーブルはパソコンに直接つないでください。Probe や Transporter などの機材は不要です。",
@@ -459,7 +459,7 @@ const TEXT = {
     license: "GPL-3.0、無保証。ソース:",
     stockTitle: "公式ファームウェア（V15）に戻す",
     stockHelp: "M-VAVE のサイトから公式の FM-1 V15 をダウンロードし、中の FM-1.fwsc（変更していないもの）を選んでください。ファイルはこのブラウザの中で確認され、どこにも送られません。",
-    stockBackup: "公式ファームウェアは BackBeat の曲・プロジェクト・サンプルを開けません。先にエディタでバックアップを保存してください（Projects → Backup）。SLOOP を入れ直せば、エディタから復元できます。",
+    stockBackup: "公式ファームウェアは BackBeat の曲・プロジェクト・サンプルを開けません。先にエディタでバックアップを保存してください（Projects → Backup）。BackBeat を入れ直せば、エディタから復元できます。",
     stockEditor: "エディタを開いてバックアップする", stockSaved: "バックアップをパソコンに保存しました",
     stockFile: "公式の FM-1.fwsc", stockGo: "公式 V15 をインストール",
     stockValid: "公式 V15 を確認しました", stockBad: "公式 V15 ではありません: ",
@@ -471,7 +471,7 @@ const TEXT = {
     intro: "Connect the FM-1 by USB. (Works in Chrome or Edge.)",
     warn: "Do not unplug the USB cable while writing.",
     install: "Install", other: "日本語",
-    editor: "Editor (after installing: edit sounds and sequences from the computer)",
+    editor: "Editor (after installing: import songs from Guitar Pro or MIDI, edit them and send them to the FM-1)",
     edOffline: "Download the editor to use it without internet on a computer (open the file in Chrome or Edge)",
     appInstall: "Install the app (the editor and the installer offline, Android too)",
     direct: "Connect the USB cable directly to the computer. No probe or Transporter is needed.",
@@ -535,7 +535,7 @@ const sayK = (k, arg = "") => { lastKey = k; lastArg = arg; $("status").textCont
 const say = (txt) => { lastKey = null; $("status").textContent = txt; };
 const log = (t) => { $("log").textContent += t + "\n"; };
 let image = null;
-const meta = {"version": "1.0", "product": "FM-1_900", "pkg": "../../firmware/backbeat-1.0.fwsc", "sha256": "1da93a79081368ef9cb448581a5135457544a1d1794806272ec6f17f79f873f2"};
+const meta = {"version": "1.0", "product": "FM-1_900", "pkg": "../../firmware/backbeat-1.0.fwsc", "sha256": "adc2fcee5eb4861d3eb550656c7a039df6ff5671f28f21d55321572daf0616fd"};
 
 let writing = false, stock = null;
 const lockAll = (on) => {

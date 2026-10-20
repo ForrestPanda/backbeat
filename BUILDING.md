@@ -100,6 +100,15 @@ python3 tools/fm1_install.py build/felucca.fwsc
 python3 tools/fm1_install.py --info          # identity of the connected FM-1
 ```
 
+The first install on a unit, with a full backup of its flash first (the chip's ROM download mode
+over the same cable, kagaimiq's jl-uboot-tool) and a check of what the backup holds:
+
+```
+sh ../fm1-midi-bridge/tools/fm1_safe_install.sh build/felucca.fwsc     # --no-dump once the unit has its dump
+```
+
+The steps, what they need and what the first unit did on 2026-10-19: `../fm1-midi-bridge/docs/recovery.md`.
+
 Or, to install your own build from the web installer, make a local copy of the site and open it from `localhost`
 (Web MIDI needs a secure context):
 

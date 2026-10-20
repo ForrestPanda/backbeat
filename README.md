@@ -15,15 +15,57 @@ drum track, sequencer and sections (SLOOP's own manual is upstream). What this f
 [docs/design.md](docs/design.md). The firmware reports itself as BACKBEAT 1.0 (the editor's INFO keeps its
 `FELUCCA ` prefix, and the USB port names and the backup format stay SLOOP's, so the tools keep working).
 
-Status: **everything but the hardware (October 2026)**. The pedal control, songs in flash (compact, with a
+Status: **on an FM-1 since 2026-10-19, played from the pedalboard over TRS**. The pedal control, songs in flash (compact, with a
 time signature per section), the fills, the renderer, the Guitar Pro importer, the kit tool, the web editor's
 Song tab with its section editor and a player the real pedal can drive, the device's own screens (LIVE, SONGS,
 EDIT, SETUP) are done and pass the host tests; the firmware builds and packages, and runs on the fm1-emu emulator.
-Nothing here has run on an FM-1 yet: the TRS jack, the cable type and the speaker are still to be verified
-(`docs/design.md`, milestone 7). The firmware is 541 KB of its 581 KB slot, 290 KB of it the built-in layered
+Installed on an FM-1 on 2026-10-19, over stock V15 with `tools/fm1_install.py`: it starts, enumerates and
+answers as `FM-1_900` (the record, and the recovery steps verified that day, are in
+`../fm1-midi-bridge/docs/recovery.md`). Played the same afternoon from an Ampero II Stage over a plain stereo
+3.5 mm cable (the FM-1's jack is Type A): two whole songs cued from the footswitches, fills and section
+changes, heard on the speaker and from the audio out (`docs/design.md`, milestone 7). The firmware is 541 KB of its 581 KB slot, 290 KB of it the built-in layered
 kit **MULDJORD**, the power-on kit and new songs' default (`"kit": 0`): up to four velocity layers a drum (hard,
 normal, soft, ghost: the steps' levels), round-robin takes of the kick and snare (never the same twice running),
 twelve voices so cymbals and toms ring on (`docs/kits.md`).
+
+## Getting started
+
+**What you need.** An M-VAVE FM-1; a pedalboard or MIDI controller with a 3.5 mm TRS MIDI out (Type A, as the
+FM-1's jack; the Hotone Ampero II Stage is the one it was built with, see [docs/ampero-setup.md](docs/ampero-setup.md))
+or one that sends MIDI over USB; a plain stereo 3.5 mm cable; Chrome or Edge on a computer for the install.
+
+**Before you install.** This is a replacement firmware, installed at your own risk. It has run on one FM-1 so far.
+The FM-1 updates over its USB cable; if a firmware ever fails to start, getting it back needs the chip's ROM mode
+and [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter). The way back to the official firmware is
+the installer itself, with M-VAVE's FM-1 V15 file (m-vave.com, Downloads, PC Firmware).
+
+**Install.** Serve the site in [docs/](docs/) (`cd docs && python3 -m http.server 8000`), open
+`http://localhost:8000/webapp/installer/` in Chrome or Edge, plug in the FM-1 and follow the page; the package
+is `docs/firmware/backbeat-1.0.fwsc`. If BackBeat stops starting after an install, hold **OCT-** alone while
+switching on: the BACKBEAT USB RESCUE screen takes the package again.
+
+**Play something.** BackBeat starts on its LIVE screen with sixteen factory grooves on board (the SONGS screen,
+the pedal's PC 16..31). PLAY starts, SEL fills, ENV / LFO go to the previous / next section.
+
+**Your songs.** Open the editor (`http://localhost:8000/webapp/editor/` from the same server): its Song tab
+imports a Guitar Pro or MIDI file, finds the sections, lets you fix them on a grid and play them; Send puts the
+song in one of the FM-1's 16 slots.
+
+**Your pedal.** Set it to send on channel 16. The five messages that cover a gig:
+
+| Switch | Sends | Does |
+| --- | --- | --- |
+| a section | CC 20, value 0..15 | that section when the one playing reaches its end (stopped: starts with it) |
+| fill | CC 21 | a fill; sent with a section's CC 20, the fill leads into it |
+| ending | CC 22, value 127 | the song's outro, then stop (no outro: the section ends, then stop) |
+| stop | CC 23 | stop now |
+| a song | PC 0..15 | load song 1..16 |
+
+Everything else (breaks, next / previous, tap tempo, entries, the count-in) is in the full table below.
+
+**Known limits.** No MIDI out: the FM-1 has no MIDI out jack. JAM, on the SONGS screen, is SLOOP's own A..D
+sections, left as SLOOP had it and not supported. Next / previous section from the pedal (CC 24 / 25) has
+not yet been tried on a unit.
 
 ## The pedal
 
@@ -62,7 +104,9 @@ Entry and Break selects and their blue columns, or **Entry / Break = selected ba
 
 **Songs.** A song is up to 16 named drum sections (intro, verse, chorus, bridge, solo, outro...) with its
 tempo, kit and swing (`"swing"`: 0 straight, the default, up to 100, MPC's 50 to 75 %; every second step of a 1/4,
-1/8, 1/16 or 1/32 grid comes late); 16 songs live in flash. The screens (the device and the editor) number
+1/8, 1/16 or 1/32 grid comes late; `"swing_grid": "1/8"` moves the 8ths instead, the 16ths inside each sharing them:
+a shuffle for a 1/16 pattern with its hats on the 8ths, which a swing on the 16ths would leave straight; the importer
+sets it from a Guitar Pro triplet feel, with swing 67, two to one); 16 songs live in flash. The screens (the device and the editor) number
 them 1..16; the pedal's PC and `fm1_song.py --put` count from 0 (song 1 is PC 0, `--put 0`). Sections the same:
 the screens show 1..16, the value of CC 20 / 27 / 22 counts from 0 (section 1 is CC 20 value 0). Each section has a time signature (`"time"`, 4/4 if left out) and is
 a whole number of its bars: the FM-1 counts bars, so a change waits for the bar line. A pickup or a short intro is a
@@ -83,13 +127,15 @@ section tiles, the screen kept awake); with the FM-1 connected it sends the set 
 The site works on a **desktop or laptop, a tablet and a phone**: the side bar beside the page above 860 px, a top
 bar under it, and a phone layout at 600 px and under where live mode fits one screen (the song, the LIVE view, the
 pedal's rows) and the section editor's grid scrolls sideways under fixed lane names; checked on a 1080 x 2400
-phone and a tablet. Chrome or Edge for the FM-1 over Web MIDI; the installed app works offline, on Android too.
+phone and a tablet. Chrome or Edge for the FM-1 over Web MIDI, and for the pedal over Bluetooth (Web Bluetooth, BLE MIDI);
+the installed app works offline, on Android too.
 
 Or open the web editor (`web/editor.html`): its **Song** tab works without an FM-1 (the import, the section
 editor and the player below); with the FM-1 connected by USB it also lists
 the sixteen slots, takes a song JSON by drop or file picker, saves one back as JSON, erases a slot, and sets
-the pedal's MIDI channel. Its **From Guitar Pro or JSON** card runs `tools/gp2song.py` itself in the browser (Python
-through Pyodide, loaded from the internet the first time), or opens a song JSON as it is (one saved from the
+the pedal's MIDI channel. Its **From Guitar Pro, MIDI or JSON** card runs `tools/gp2song.py` itself in the browser (Python
+through Pyodide, loaded from the internet the first time; PyGuitarPro fetched for Guitar Pro files only) on a
+Guitar Pro file or a MIDI file, or opens a song JSON as it is (one saved from the
 editor, or from `songs/`); a file dropped on that card or on the editor opens too. Its **Play** card plays a song
 with the kit's pads as the pedal would, on a view of the device's LIVE screen (the beat lights in the section's
 time signature, the section with its bar and a progress ticked per bar, the count-in, what comes next, the sections
@@ -99,7 +145,10 @@ bar, f a fill (F: the whole next bar), comma and period previous / next, e the e
 Ampero, or a USB MIDI interface between it and the computer) drive that player with the same CCs and PCs as the
 FM-1, on the Pedal card's channel (PC n opens song n of the FM-1 connected, or of the simulated one), so the
 live workflow can be rehearsed before the hardware; **Follow its MIDI clock** makes the player take that input's
-tempo and START / STOP, as the FM-1 does with SETUP > SYNC. Its **Section editor** card edits a song by hand: names, order,
+tempo and START / STOP, as the FM-1 does with SETUP > SYNC; **Connect Bluetooth** takes the pedal over BLE MIDI instead
+(a Bluetooth MIDI pedal, or an FM-1 running the MIDI bridge next door, which turns its TRS input into BLE), so a phone
+with nothing installed can be the player: Chrome or Edge on Android, Windows or macOS, from https or
+localhost (Chrome on Linux keeps Web Bluetooth behind a flag; Firefox and Safari on the iPhone have none). Its **Section editor** card edits a song by hand: names, order,
 length (at most 64 steps, 4 bars at 1/16: a section is a groove that repeats, `docs/design.md` says why), the time signature, the outro, split and merge, the hits on a grid with levels, ratchets, flams (a grace note
 before the hit) and fill marks, the fill
 conditions, columns copied and pasted, undo and redo (Ctrl+Z / Ctrl+Y), keys for the pen (n h s g x, r for the
@@ -112,12 +161,15 @@ or those pads once you edit them, or WAVs you pick. The page must be served, not
 root `python3 -m http.server 8000`, then `http://localhost:8000/web/editor.html?mock=1` for the simulated
 FM-1 (serving `web/` itself works too: the importer is linked there).
 
-Or take the drum track of a Guitar Pro file (.gp3 / .gp4 / .gp5; `pip install pyguitarpro`): the score's
-section markers become the sections, each with the pattern its bars repeat and the bar that deviates as
-the fill; edit the JSON afterwards:
+Or take the drum track of a Guitar Pro file (.gp3 / .gp4 / .gp5; `pip install pyguitarpro`) or of a MIDI file
+(.mid, type 0 or 1, nothing to install: channel 10 is the drums, the marker meta events the sections, the time
+signatures the bars, the first set-tempo the tempo): the section markers become the sections, each with the
+pattern its bars repeat and the bar that deviates as the fill; a file without markers gets its sections from the
+drums alone; edit the JSON afterwards:
 
 ```
 python3 tools/gp2song.py "song.gp4" --out songs/song.json
+python3 tools/gp2song.py "song.mid" --out songs/song.json
 ```
 
 Then PC 0 from the pedal loads it and CC 20 picks its sections (0 = the first). Hear it on the computer
@@ -170,8 +222,8 @@ pedalboard with a MIDI out does.
 
 ## On the device
 
-Four screens, a button each. Every one of them was checked on the fm1-emu emulator and in the host tests, not yet
-on an FM-1.
+Four screens, a button each. Every one of them was checked on the fm1-emu emulator and in the host tests; LIVE
+has been played from the pedal on an FM-1 (2026-10-19).
 
 | Button | Tapped | Held |
 | --- | --- | --- |
@@ -190,8 +242,9 @@ ENDING); the song's sections as tiles, four to a row as the white keys 1..16, as
 to 4 sections the whole names, up to 8 a name each, 9..16 a line each: the number and the name cut; the one
 playing lit, the one cued framed and blinking, the outro and any meter but 4/4 marked); and a footer with the kit, the pedal channel and a dot that lights when the pedal sends. The pedal's
 messages ("SONG: BLACK", "NEXT: SOLO") show in the footer. The white keys 1..16 change section when the one
-playing ends, with OCT+ held on the next bar (the state line says KEY: ON THE NEXT BAR), with no fill of their own; any black key asks for a fill (as CC 21:
-the rest of the bar with a fill bar of its own, else to the section's end). So a plain change is one press, and a fill into the change is a black key then a white one,
+playing ends, with OCT+ held on the next bar (the state line says KEY: ON THE NEXT BAR), with no fill of their own; the first black key (F#3) asks for a fill (as CC 21:
+the rest of the bar with a fill bar of its own, else to the section's end; with OCT+ held the whole next bar), the second (G#3) the fill on the whole next bar,
+the fourth (C#4) the break (as CC 28: the section playing comes in again through its break when it ends); the other black keys as the first. So a plain change is one press, and a fill into the change is a black key then a white one,
 as the pedal's CC 21 sent with its CC 20. SEL is a fill too, ENV and LFO the previous and next section
 (without a fill). KNOB 1 (and SELECT) the tempo, KNOB 2 (and PRESETS) the kit, KNOB 3 the drums' level, KNOB 4 the
 swing. With no song loaded it says PICK A SONG and shows the 16 songs of the SONGS page shown (USER or FACTORY;
@@ -259,11 +312,11 @@ firmware ([BUILDING.md](BUILDING.md)): at your own risk.
 | `tools/fm1_emu.py` | the firmware on the fm1-emu emulator, songs imported into its flash: a script of keys, knobs and pedal MIDI, screens and sound saved |
 | `tools/fm1_song.py`, `songs/` | songs from JSON: check, pack, send, read back; `songs/` holds your songs (sent to the device or played from the setlist; the factory songs are the grooves) |
 | `grooves/`, `docs/grooves.md` | generic grooves, not songs (two sections, verse and chorus, 4-bar phrases, a fill at each phrase's end; each one's tempo, meter, verse, chorus and fill in `docs/grooves.md`): classic rock, blues, rock ballad, slow rock, punk, half-time shuffle, train beat, one drop, four on the floor, metal gallop, a 6/8 ballad, and some to spark ideas (7/8, a tom groove, linear funk, three over four, ride and kick only); the firmware's factory songs, slots 1..16 in `grooves/factory.txt`'s order |
-| `web/editor.html` | the web editor (SLOOP's, drums only, protocol v11) with a Song tab (no FM-1 needed but to send and set the pedal): the pedal channel, Guitar Pro import (Pyodide), the section editor, a player; a Setlist tab: the device's sixteen slots; `web/test_web.mjs` tests it against the simulated FM-1 |
+| `web/editor.html` | the web editor (SLOOP's, drums only, protocol v11) with a Song tab (no FM-1 needed but to send and set the pedal): the pedal channel, Guitar Pro and MIDI file import (Pyodide), the section editor, a player; a Setlist tab: the device's sixteen slots; `web/test_web.mjs` tests it against the simulated FM-1 |
 | `web/kit/` | the kit the editor serves (the Muldjord Kit with two velocity layers), the files `tools/mkkit.py` makes the device image from |
 | `tools/gen_realkit.py`, `tools/realkit.json`, `assets/realkit/` | the built-in layered kit MULDJORD: the recipe, rendered once from the source kits into WAVs (layers, takes, levels, fitted to 290 KB); `tools/gen_samples.py` builds them in as set REAL, the editor's player plays them (`web/realkit/`) |
 | `tools/fm1_render.py`, `tests/song_render.c` | a song played by the pedal, rendered to a WAV on the host |
-| `tools/gp2song.py`, `tests/gp2song_test.py` | the drum track of a Guitar Pro file into a song (markers, patterns, fills, levels, ratchets) |
+| `tools/gp2song.py`, `tests/gp2song_test.py`, `tests/midi2song_test.py` | the drum track of a Guitar Pro file or a MIDI file into a song (markers, patterns, fills, levels, ratchets, flams); the MIDI reader is its own, the tests write their files |
 | `tools/mkkit.py` | a sampled kit from a folder of WAVs or an SFZ kit onto USR3+4: lanes by name, two velocity layers, trim, cut, level; an image for the renderer, or the upload |
 | `firmware/src/seq.c` | SLOOP's sequencer; the pedal hooks in its MIDI loop and `events_block` |
 | `tests/pedal_test.c` | the pedal through the real sequencer: sections on the bar, fills, endings, next / previous, stop, tap |

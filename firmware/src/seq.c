@@ -173,11 +173,32 @@ static uint32_t grid_at(uint32_t div, uint32_t sw, uint32_t *into, uint32_t *len
 /* swing is for the straight grids inside a beat: off on the triplet grids (on 8T the odd steps would
  * change from one beat to the next, as on most machines) and on steps of whole beats */
 static uint32_t swings(uint32_t div) { return div < 4u; }
+/* a song's swing on the 8ths (sng.c SNG_H_SWING8, since 2026-10-19: a shuffle, straight 8ths played long-short) under a
+ * finer grid: the 8th-note grid swings as above and the 16ths or 32nds inside each 8th share it evenly, so a pattern
+ * with its hats on the 8ths shuffles, where swing on the 16ths moves only the steps between them (nothing, in such a
+ * pattern). seq_swing8: set by sng_globals from the song's header, cleared with the song */
+static uint8_t seq_swing8;
+static __attribute__((noinline)) uint32_t grid_den8(uint32_t den, uint32_t sw8, uint32_t *into, uint32_t *len)   /* (once a block: its
+                                                      * divides out of mix_block's loops, tests/target_budget.py) */
+{
+    uint32_t k = den / 2u, u8 = BEAT_U / 2u, into8, len8, part, sub;
+    uint32_t abs8 = grid_swing(clk_beat * 2u + clk_pos / u8, clk_pos % u8, u8, sw8, &into8, &len8);
+    part = len8 / k;
+    sub = into8 / part;
+    if (sub >= k)
+        sub = k - 1u;
+    *into = into8 - sub * part;
+    *len = sub == k - 1u ? len8 - sub * part : part;
+    return abs8 * k + sub;
+}
 static uint32_t trk_div(const track_t *t) { return (uint32_t)t->p[P_SDIV] % NDIV_STEP; }
 static uint32_t trk_grid(const track_t *t, uint32_t *into, uint32_t *len)
 {
     uint32_t div = trk_div(t);
-    return grid_at(div, swings(div) ? swing_units(t->p[P_SSWING] + song.g[G_SWING], div_units(div)) : 0u, into, len);
+    int32_t pct = t->p[P_SSWING] + song.g[G_SWING];
+    if (seq_swing8 && (div == 2u || div == 3u) && pct > 0)   /* 1/16, 1/32 under a shuffle: the 8ths swing, shared */
+        return grid_den8(DIV_DEN[div], swing_units(pct, BEAT_U / 2u), into, len);
+    return grid_at(div, swings(div) ? swing_units(pct, div_units(div)) : 0u, into, len);
 }
 static uint32_t trk_len(const track_t *t) { return t->p[P_SLEN] > 0 ? (uint32_t)t->p[P_SLEN] : 1u; }
 
@@ -904,6 +925,7 @@ static char sng_ui_next[13];                       /* the section the pedal aske
 static void sng_unload(void)                       /* SLOOP's sections A..D again (a project loaded over the song) */
 {
     sng_cur = -1;
+    seq_swing8 = 0;
     clk_meter = 0;
     fb_len = 0;                                     /* (the drum track keeps its pattern, not the song's fill bar) */
     eb_len = 0;

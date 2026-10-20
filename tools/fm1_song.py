@@ -43,7 +43,10 @@ n/d with n 1..16 and d 2, 4, 8 or 16 (none: 4/4); the pedal's bars, the click an
 whole bars of its time (a change waits for the bar line): a pickup is a short bar, a 4-step intro of 1/16 "1/4";
 a section that is not gets a warning with the signature that fits. kit: the
 index in the device's KIT list (0 MULDJORD, 1 808 .., as the web editor shows them since 2026-10-15; before, 0..4
-were the GM-sampled kits ACOUSTIC..DUST, gone, and MULDJORD was 46). Up to 16 sections; the packed song
+were the GM-sampled kits ACOUSTIC..DUST, gone, and MULDJORD was 46). swing: 0 straight .. 100 (MPC 75 %), on every
+second step of a section's grid; "swing_grid": "1/8" (since 2026-10-19) moves the 8ths instead, the 16ths or 32nds inside
+each sharing them: a shuffle for a 1/16 pattern with its hats on the 8ths (seq.c grid_den8; "1/16" is the default and
+left out). Up to 16 sections; the packed song
 ("SNG2": a section header of 18 bytes, the fill conditions, then a step: 2 bytes of lanes and a byte a hit) must
 stay under 3800 bytes: 64 steps of three hits take about 340 bytes, so 8 full sections fit, and 16 of the usual
 16..48 steps (about 60..150 bytes each).
@@ -68,6 +71,7 @@ def song_obj(slot):
         sys.exit(f"a song slot is 0..{SLOTS - 1}")
     return OBJ_SONG0 + slot if slot < 8 else OBJ_SONG8 + slot - 8
 SNG_MAGIC = b"SNG2"
+SWING_GRIDS = ["1/16", "1/8"]                   # the header's flags byte, bit 0 (sng.c SNG_H_SWING8)
 HDR, SEC_HDR = 32, 18
 SNG_MAX = 3800
 KIT_DEFAULT = 0                                      # drums.c DRUM_REAL: MULDJORD, the layered kit, first (46 until 2026-10-15)
@@ -287,9 +291,12 @@ def pack(spec):
     swing = int(spec.get("swing", 0))                # 0 straight .. 100 the most (MPC 50 .. 75 %): seq.c swing_units
     if not 0 <= swing <= 100:
         sys.exit("swing must be 0..100")
+    swing_grid = str(spec.get("swing_grid", "1/16") or "1/16")   # what the swing moves: "1/16", every second step of the
+    if swing_grid not in SWING_GRIDS:                  # section's grid (SLOOP's), or "1/8", a shuffle: the 8ths, the 16ths inside
+        sys.exit(f"swing_grid must be one of {' '.join(SWING_GRIDS)}")   # each sharing them (seq.c grid_den8, since 2026-10-19)
     name = str(spec.get("name", "SONG"))[:12].encode("ascii", "replace").ljust(12, b"\0")
-    hdr = SNG_MAGIC + name + struct.pack("<HBBBBB", bpm, kit, swing, int(spec.get("drum_level", 100)),
-                                          int(spec.get("drum_reverb", 20)), len(secs)) + bytes(9)
+    hdr = SNG_MAGIC + name + struct.pack("<HBBBBBB", bpm, kit, swing, int(spec.get("drum_level", 100)),
+                                          int(spec.get("drum_reverb", 20)), len(secs), SWING_GRIDS.index(swing_grid)) + bytes(8)
     body = b"".join(pack_section(s, i) for i, s in enumerate(secs))
     for w in bar_warnings(spec):                     # (a warning: the device plays it, but times it in whole bars)
         print(f"warning: {w}", file=sys.stderr)
@@ -316,7 +323,7 @@ def sections(blob):
 def describe(blob):
     name = blob[4:16].rstrip(b"\0").decode("ascii", "replace")
     bpm, kit, swing, lvl, rev, nsec = struct.unpack("<HBBBBB", blob[16:23])
-    print(f"{name}: {bpm} BPM, kit {kit}, swing {swing}, drums {lvl} / reverb {rev}, {nsec} sections, {len(blob)} bytes")
+    print(f"{name}: {bpm} BPM, kit {kit}, swing {swing}{' on the 8ths' if blob[23] & 1 else ''}, drums {lvl} / reverb {rev}, {nsec} sections, {len(blob)} bytes")
     for k, (sname, steps, div, flags, meter, q, size) in enumerate(sections(blob)):
         hits = 0
         for _ in range(steps):

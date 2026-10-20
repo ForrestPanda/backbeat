@@ -218,6 +218,35 @@ static void t_swing_odd(void)
     check(ok, "SWING 75 %, LEN 3: in phase with the bar after 15 bars (no drift)");
 }
 
+/* a song's swing on the 8ths (seq_swing8, sng.c SNG_H_SWING8) under 1/16: the 8ths long-short, the two 16ths of each 8th
+ * sharing its length: 3:3:1:1 in every beat at swing 100 (Money's shuffle: the hats on the 8ths move) */
+static void t_swing8(void)
+{
+    uint32_t i, k, n = 0, ok = 1;
+    uint64_t d[64];
+    reset(120);
+    song.g[G_SWING] = 100;
+    seq_swing8 = 1;
+    TDRUM->p[P_SDIV] = 2;                             /* 1/16 */
+    TDRUM->p[P_SLEN] = 16;
+    for (i = 0; i < 16u; i++)
+        dstep_set(&TDRUM->dstep[i], 4, LV_NORM, 0);
+    transport_req = 1;
+    for (k = 0; k < 4u * (uint32_t)(FS / CTL); k++) run_block();   /* 4 s = 8 beats = 32 hits */
+    for (i = 0; i < nhits && n < 64u; i++)
+        if (hits[i].vel && hits[i].note != 76u && hits[i].note != 77u) d[n++] = hits[i].blk;
+    for (i = 4; i + 4u < n; i += 4) {
+        uint64_t a = d[i + 1] - d[i], b = d[i + 2] - d[i + 1], c = d[i + 3] - d[i + 2], e = d[i + 4] - d[i + 3];
+        if (a + 1u < b || b + 1u < a || c + 1u < e || e + 1u < c || a < 5u * c / 2u || a > 7u * c / 2u) ok = 0;
+    }
+    if (!ok || n < 28u)
+        printf("seq2:   swing8: %u hits; gaps %llu %llu %llu %llu\n", n, n > 8u ? (unsigned long long)(d[5] - d[4]) : 0ull,
+               n > 8u ? (unsigned long long)(d[6] - d[5]) : 0ull, n > 8u ? (unsigned long long)(d[7] - d[6]) : 0ull, n > 8u ? (unsigned long long)(d[8] - d[7]) : 0ull);
+    check(n >= 28u && ok, "swing on the 8ths (a song's shuffle) under 1/16: the 16ths 3:3:1:1 in each beat at swing 100");
+    seq_swing8 = 0;
+    song.g[G_SWING] = 0;
+}
+
 static void t_len_phase(void)
 {
     reset(120);
@@ -1115,6 +1144,7 @@ int main(void)
     t_drift();
     t_burst();
     t_swing_odd();
+    t_swing8();
     t_len_phase();
     t_ratchet();
     t_flam();

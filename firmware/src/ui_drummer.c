@@ -12,8 +12,12 @@
  * The keys go through pedal.c's own calls (the host tests cover both). A change of section brings no fill of
  * its own (as the pedal's CC 20 / 27): a fill is asked for by itself, so one press changes, two fill into it:
  *   white keys 1..16  the song's sections, when the one playing ends; with OCT+ held, on the next bar
- *   black keys        any of them: the fill (CC 21: the rest of this bar; from its last beat, the next bar); with
- *                     OCT+ held, the whole next bar (CC 21 value 1: the same hold as the white keys' "next bar")
+ *   black keys        (since 2026-10-19, asked: "the first black key a fill now, the second a fill next bar, the
+ *                     fourth a break") F#3, the first: the fill (CC 21: the rest of this bar; from its last beat,
+ *                     the next bar); with OCT+ held, the whole next bar (CC 21 value 1: the same hold as the white
+ *                     keys' "next bar"). G#3, the second: the whole next bar always (CC 21 value 1). C#4, the
+ *                     fourth: the break (CC 28 value 127: the section playing comes in again through its break
+ *                     when it ends; stopped, the one cued starts through it). The other black keys as the first
  *   SEL ENV LFO       fill (CC 21; with OCT+ held, the next bar); previous, next (as CC 25, 24, without their fill)
  *   PLAY              stopped: the section cued (the count-in first); playing: stop
  *   KNOB 1..4         tempo, kit, drums level, swing (SELECT: tempo; PRESETS: kit)
@@ -62,10 +66,17 @@ static void lib_load(uint32_t row)                  /* a row of the page shown: 
     drummer_load(row < SNG_SLOTS ? lib_page() * SNG_SLOTS + row : SNG_JAM);
 }
 
+static int32_t key_black(uint32_t k)             /* a key (0..26, from F3) -> its black key index 0.., -1 = a white key */
+{
+    static const int8_t B[12] = {-1, 0, -1, 1, -1, 2, -1, -1, 3, -1, 4, -1};   /* from F: F# G# A# C# D# */
+    int32_t i = B[k % 12u];
+    return i < 0 ? -1 : (int32_t)(k / 12u) * 5 + i;
+}
+
 static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.c: seq.c's KB_GRID events; nextbar:
                                                      * OCT+ was held) */
 {
-    int32_t w = key_white(k);
+    int32_t w = key_white(k), b = key_black(k);
     if (sng_cur < 0 || sng_view == DV_LIB) {
         if (w >= 0 && w < (int32_t)SNG_SLOTS)
             lib_load((uint32_t)w);
@@ -76,9 +87,13 @@ static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.
                                                      * OCT+ held: on the next bar */
         if (w < (int32_t)SNG_SECTIONS)
             pedal_section((uint32_t)w, nextbar ? PS_BAR : PS_END);
-    } else
-        pedal_cc(PEDAL_CC_FILL, nextbar ? 1u : 0u); /* any black key: a fill to the bar's end (CC 21); OCT+ held: the
-                                                     * whole next bar (value 1) */
+    } else if (b == 1)                              /* the second black key (G#3): the whole next bar (CC 21 value 1) */
+        pedal_cc(PEDAL_CC_FILL, 1u);
+    else if (b == 3)                                /* the fourth (C#4): the break (CC 28, the section playing's) */
+        pedal_cc(PEDAL_CC_BREAK, 127u);
+    else
+        pedal_cc(PEDAL_CC_FILL, nextbar ? 1u : 0u); /* the first (F#3) and the others: a fill to the bar's end (CC 21);
+                                                     * OCT+ held: the whole next bar (value 1) */
     fm1_irq_on();
 }
 
