@@ -4,7 +4,8 @@
 
     tools/fm1_render.py tests/example-song.json
     tools/fm1_render.py tests/example-song.json --play "INTRO:2 VERSE:8 CHORUS:8 SOLO:8 CHORUS:8 OUTRO"
-    tools/fm1_render.py songs/black.json --play "INTRO:2, VERSE 1:4, PRE - CHORUS:4, CHORUS:4"   # commas: names with spaces
+    tools/fm1_render.py song_examples/first-light.json --play "INTRO:2 VERSE:4 PRE:1 CHORUS:4 !CHORUS:4 OUTRO" --fills
+    tools/fm1_render.py my.json --play "INTRO:2, VERSE 1:4, PRE - CHORUS:4"   # commas: names with spaces
     tools/fm1_render.py tests/example-song.json --kit 7 --out take.wav --listen
 
 The play list names the sections (or their numbers) with the bars each plays; the next one is asked for

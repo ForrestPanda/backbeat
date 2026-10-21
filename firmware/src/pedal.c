@@ -111,7 +111,8 @@ static void pedal_name(uint32_t s, char *out)    /* the section's name for the s
 /* CC 21: the fill. A section with a fill bar of its own, as the arrangers (Yamaha, Korg, Roland, Ketron, the
  * BeatBuddy) do it (2026-10-15, after a day of fills aligned to the pattern's end): from now to the end of this bar,
  * the pattern again from its top on the next bar (live_block), or the section asked for meanwhile, which waits for
- * the fill's end instead of the pattern's. A fill bar longer than a bar (fb_bars) ends that many bars on. A section
+ * the fill's end instead of the pattern's. A fill bar longer than a bar (fb_bars) ends on the section's last bar line
+ * (2026-10-20; fill_wait_from): asked for earlier, it waits, then plays whole; later, its last bars from now. A section
  * without one (its fill in its marks and conditions, or none at all; 2026-10-17): fill mode from now to the
  * section's end (fill_bars_from), the marks heard where they sit, the pattern on from its top with no restart, the
  * section asked for at that end. Asked for in the bar's last beat (as Yamaha's last beat; the BeatBuddy's last half
@@ -131,8 +132,10 @@ static void pedal_fill_req(uint32_t next)
     if (next)
         at = b16 - 1u;                            /* as asked in the bar's last beat */
     if (!pedal_fill && !pedal_fill_wait) {
-        if (at + beat >= b16) {                   /* the bar's last beat: the next bar, whole */
-            pedal_fill_wait = 1;
+        uint32_t late = at + beat >= b16, wait = late + fill_wait_from(live_bar + late);
+        if (wait) {                               /* the bar's last beat: the next bar, whole; a fill of several bars:
+                                                   * its start, to end on the section's end */
+            pedal_fill_wait = (uint8_t)wait;
         } else {
             eb_len = 0;                           /* (an entry or break playing: the fill cuts it) */
             eb_bars = 0;

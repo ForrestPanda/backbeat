@@ -487,21 +487,46 @@ int main(int argc, char **argv)
         while (TDRUM->seq_idx != 2u)                                       /* over at the bar line: the pattern from its top */
             advance(CTL);
         assert(!pedal_fill && !fill_now && live_bar == 0 && drum_src(TDRUM, 2, (2) % trk_len(TDRUM), &fb) == &TDRUM->dstep[2] && !fb);
-        {   /* a fill bar of two bars (32 steps): the fill lasts two bars, the phrase ending with it (cut from the
-             * front): asked in bar 0, bar 0 plays its steps 0..15 and bar 1 its 16..31 */
+        {   /* a fill bar of two bars (32 steps) in this 2-bar section, ending on its last bar line (2026-10-20; before, it
+             * ran two bars from the press, past the end): asked in bar 1, its last bar from now (cut from the front);
+             * asked in bar 0, both; then the pattern from its top */
             fb_len = 32; fb_bar = 16; fb_bars = 2;                         /* (as sng_apply would set them) */
             while (TDRUM->seq_idx != 20u)
                 advance(CTL);
             cc(16, 21, 127); advance(CTL * 2u);
-            assert(pedal_fill && pedal_fill_bars == 2u && drum_src(TDRUM, 20, (20) % trk_len(TDRUM), &fb) == &fb_dstep[4] && fb);
+            assert(pedal_fill && pedal_fill_bars == 1u && !pedal_fill_wait && drum_src(TDRUM, 20, (20) % trk_len(TDRUM), &fb) == &fb_dstep[20] && fb);
             while (TDRUM->seq_idx != 2u)
                 advance(CTL);
-            assert(pedal_fill && pedal_fill_bars == 1u && live_bar == 2 && drum_src(TDRUM, 2, (2) % trk_len(TDRUM), &fb) == &fb_dstep[18] && fb);   /* (the
-                                                                             * cycle went round: no restart mid-fill) */
+            assert(!pedal_fill && live_bar == 0 && drum_src(TDRUM, 2, (2) % trk_len(TDRUM), &fb) == &TDRUM->dstep[2] && !fb);
+            while (TDRUM->seq_idx != 4u)
+                advance(CTL);
+            cc(16, 21, 127); advance(CTL * 2u);
+            assert(pedal_fill && pedal_fill_bars == 2u && drum_src(TDRUM, 4, (4) % trk_len(TDRUM), &fb) == &fb_dstep[4] && fb);
             while (TDRUM->seq_idx != 18u)
                 advance(CTL);
-            assert(!pedal_fill && drum_src(TDRUM, 18, (18) % trk_len(TDRUM), &fb) == &TDRUM->dstep[18] && !fb);   /* over; (bar 0 came back
-                                                                             * from the top: not a second bar) */
+            assert(pedal_fill && pedal_fill_bars == 1u && drum_src(TDRUM, 18, (18) % trk_len(TDRUM), &fb) == &fb_dstep[18] && fb);
+            while (TDRUM->seq_idx != 2u)
+                advance(CTL);
+            assert(!pedal_fill && live_bar == 0 && drum_src(TDRUM, 2, (2) % trk_len(TDRUM), &fb) == &TDRUM->dstep[2] && !fb);
+            /* three bars (48 steps), longer than the pattern: the first section end it reaches whole, bar 4, so
+             * asked in bar 0 it waits a bar, then plays whole over the cycle going round (no restart mid-fill) */
+            fb_len = 48; fb_bars = 3;
+            while (TDRUM->seq_idx != 4u)
+                advance(CTL);
+            cc(16, 21, 127); advance(CTL * 2u);
+            assert(!pedal_fill && pedal_fill_wait == 1u);
+            while (TDRUM->seq_idx != 18u)
+                advance(CTL);
+            assert(pedal_fill && pedal_fill_bars == 3u && !pedal_fill_wait && drum_src(TDRUM, 18, (18) % trk_len(TDRUM), &fb) == &fb_dstep[2] && fb);
+            while (TDRUM->seq_idx != 2u)
+                advance(CTL);
+            assert(pedal_fill && pedal_fill_bars == 2u && live_bar == 2 && drum_src(TDRUM, 2, (2) % trk_len(TDRUM), &fb) == &fb_dstep[18] && fb);
+            while (TDRUM->seq_idx != 18u)
+                advance(CTL);
+            assert(pedal_fill && pedal_fill_bars == 1u && drum_src(TDRUM, 18, (18) % trk_len(TDRUM), &fb) == &fb_dstep[34] && fb);
+            while (TDRUM->seq_idx != 2u)
+                advance(CTL);
+            assert(!pedal_fill && live_bar == 0 && drum_src(TDRUM, 2, (2) % trk_len(TDRUM), &fb) == &TDRUM->dstep[2] && !fb);
             fm1_irq_off(); sng_apply(0); fm1_irq_on();                     /* (the real fill bar back) */
             assert(fb_len == 16u && fb_bars == 1u);
         }

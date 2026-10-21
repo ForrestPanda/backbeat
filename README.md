@@ -17,7 +17,7 @@ drum track, sequencer and sections (SLOOP's own manual is upstream). What this f
 
 Status: **on an FM-1 since 2026-10-19, played from the pedalboard over TRS**. The pedal control, songs in flash (compact, with a
 time signature per section), the fills, the renderer, the Guitar Pro importer, the kit tool, the web editor's
-Song tab with its section editor and a player the real pedal can drive, the device's own screens (LIVE, SONGS,
+Song editor tab with its section editor and a player the real pedal can drive, the device's own screens (LIVE, SONGS,
 EDIT, SETUP) are done and pass the host tests; the firmware builds and packages, and runs on the fm1-emu emulator.
 Installed on an FM-1 on 2026-10-19, over stock V15 with `tools/fm1_install.py`: it starts, enumerates and
 answers as `FM-1_900` (the record, and the recovery steps verified that day, are in
@@ -47,7 +47,7 @@ switching on: the BACKBEAT USB RESCUE screen takes the package again.
 **Play something.** BackBeat starts on its LIVE screen with sixteen factory grooves on board (the SONGS screen,
 the pedal's PC 16..31). PLAY starts, SEL fills, ENV / LFO go to the previous / next section.
 
-**Your songs.** Open the editor (`http://localhost:8000/webapp/editor/` from the same server): its Song tab
+**Your songs.** Open the editor (`http://localhost:8000/webapp/editor/` from the same server): its Song editor tab
 imports a Guitar Pro or MIDI file, finds the sections, lets you fix them on a grid and play them; Send puts the
 song in one of the FM-1's 16 slots.
 
@@ -75,7 +75,7 @@ Footswitches send MIDI on channel 16 (default) to the TRS jack or over USB:
 | --- | --- |
 | CC 20, value 0..3 | section A..D when the section playing has played its pattern out (a 1-bar section: the next bar; a fill pending: the bar after it), no fill of its own; stopped: start with it. The section already playing: nothing. A section with an entry comes in through it (below) |
 | CC 27, value 0..3 | on the next bar, without waiting for the section's end, no fill of its own |
-| CC 21 | the fill. A section with a fill bar of its own, as an arranger's fill-in: the rest of this bar (pressed in its last beat: the whole next bar), then the pattern from its top. A section without one: fill mode to the section's end, its fill marks heard where they sit, the pattern on with no restart (nothing marked: nothing changes). Sent with a CC 20 / 22 / 24 / 25 / 27 (either order), the fill into that change, which lands on the bar after the fill. Value 1: the whole next bar from anywhere in this one, for a fill that leads off its bar |
+| CC 21 | the fill. A section with a fill bar of its own, as an arranger's fill-in: the rest of this bar (pressed in its last beat: the whole next bar), then the pattern from its top. A fill of several bars (up to 4, the section editor's Fill select) ends on the section's last bar line: asked earlier, it waits (the screen says FILL AT THE END), then plays whole; asked with fewer bars left, its last bars from now. A section without one: fill mode to the section's end, its fill marks heard where they sit, the pattern on with no restart (nothing marked: nothing changes). Sent with a CC 20 / 22 / 24 / 25 / 27 (either order), the fill into that change, which lands on the bar after the fill. Value 1: the whole next bar from anywhere in this one, for a fill that leads off its bar |
 | CC 22, value 0..3 | ending: the section playing ends, that section once as the outro, stop on the bar (other values: the song's flagged outro, or the section ends, then stop; the outro playing already: it plays to its end, then stop) |
 | CC 28, value n | the break: section n through its break, when the section playing ends (as CC 20; with CC 21 on the switch: the fill, then the break); the section playing too. Value 127 (not a section): the section playing's, so one switch serves every song. No break written: its entry; neither: a bar of rest. Stopped: start with it |
 | CC 23 | stop now |
@@ -88,7 +88,7 @@ Footswitches send MIDI on channel 16 (default) to the TRS jack or over USB:
 **Count-in.** A setting kept with the pedal channel (off by default): a section pressed while stopped first
 clicks one or two bars at the song's tempo (the metronome's voice, the first beat of each bar accented), then
 the loop starts with that section. CC 23 cancels it; another section pressed meanwhile only changes what starts.
-`python3 tools/fm1_song.py --count-in 1`, the Song tab's pedal row, or SETUP > PEDAL on the device; hear it with
+`python3 tools/fm1_song.py --count-in 1`, the Song editor tab's pedal row, or SETUP > PEDAL on the device; hear it with
 `fm1_render.py --count-in 1`.
 
 **Entries and breaks.** A section can carry an entry and a break: one to four bars (64 steps), silence too, played
@@ -111,7 +111,7 @@ them 1..16; the pedal's PC and `fm1_song.py --put` count from 0 (song 1 is PC 0,
 the screens show 1..16, the value of CC 20 / 27 / 22 counts from 0 (section 1 is CC 20 value 0). Each section has a time signature (`"time"`, 4/4 if left out) and is
 a whole number of its bars: the FM-1 counts bars, so a change waits for the bar line. A pickup or a short intro is a
 short bar (4 steps of 1/16 is `"time": "1/4"`); `fm1_song.py` and the editor's section editor flag a section that
-is not whole bars and offer the signature that fits. Write one as JSON (`tests/example-song.json` is the model; `songs/` is yours) and send it over USB:
+is not whole bars and offer the signature that fits. Write one as JSON (`tests/example-song.json` is the model; `song_examples/` has three demo songs, docs/demos.md) and send it over USB:
 
 ```
 python3 tools/fm1_song.py tests/example-song.json            # check it
@@ -136,7 +136,7 @@ the sixteen slots, takes a song JSON by drop or file picker, saves one back as J
 the pedal's MIDI channel. Its **From Guitar Pro, MIDI or JSON** card runs `tools/gp2song.py` itself in the browser (Python
 through Pyodide, loaded from the internet the first time; PyGuitarPro fetched for Guitar Pro files only) on a
 Guitar Pro file or a MIDI file, or opens a song JSON as it is (one saved from the
-editor, or from `songs/`); a file dropped on that card or on the editor opens too. Its **Play** card plays a song
+editor, or from `song_examples/`); a file dropped on that card or on the editor opens too. Its **Play** card plays a song
 with the kit's pads as the pedal would, on a view of the device's LIVE screen (the beat lights in the section's
 time signature, the section with its bar and a progress ticked per bar, the count-in, what comes next, the sections
 as tiles, all in time with what you hear): the tiles are the footswitches, with fills, the ending, stop, the song's
@@ -153,7 +153,9 @@ length (at most 64 steps, 4 bars at 1/16: a section is a groove that repeats, `d
 before the hit) and fill marks, the fill
 conditions, columns copied and pasted, undo and redo (Ctrl+Z / Ctrl+Y), keys for the pen (n h s g x, r for the
 ratchet, l for the flam, m for the mark, [ ] between sections), a lane's sound on a click of its name, "Play this section" to
-loop it, and, for a song read from Guitar Pro, the file's bars to pick as a section's pattern or its fill; then
+loop it, and, for a song read from Guitar Pro, the file's bars to pick as a section's pattern or its fill (with a song
+already in the editor, a Guitar Pro or MIDI file brings only its bars, and a song JSON opened keeps them: work from a
+saved JSON and the file side by side, "keep the song in the editor" on the import card); then
 Play, Send or Save JSON. The
 Drum kit page opens with the Muldjord Kit on its pads (served from `web/kit/`, CC BY 4.0, see `docs/kits.md`), and
 the player plays the device's layered kit MULDJORD (`web/realkit/`, its layers and takes as the device picks them),
@@ -168,8 +170,8 @@ pattern its bars repeat and the bar that deviates as the fill; a file without ma
 drums alone; edit the JSON afterwards:
 
 ```
-python3 tools/gp2song.py "song.gp4" --out songs/song.json
-python3 tools/gp2song.py "song.mid" --out songs/song.json
+python3 tools/gp2song.py "song.gp4" --out song.json
+python3 tools/gp2song.py "song.mid" --out song.json
 ```
 
 Then PC 0 from the pedal loads it and CC 20 picks its sections (0 = the first). Hear it on the computer
@@ -188,7 +190,7 @@ flash image as loaded; with no songs given your slots are empty and it plays the
 
 ```
 python3 tools/fm1_emu.py                                                             # the demo on the factory grooves
-python3 tools/fm1_emu.py songs/a.json songs/b.json --wav build/emu/run.wav         # your songs in slots 1 and 2
+python3 tools/fm1_emu.py song_examples/first-light.json my.json --wav build/emu/run.wav   # songs in slots 1 and 2
 ```
 
 **Factory grooves.** The firmware carries the sixteen grooves of `grooves/` (`tools/gen_songs.py`, in the order of
@@ -310,9 +312,9 @@ firmware ([BUILDING.md](BUILDING.md)): at your own risk.
 | `firmware/src/ui_menu.c` | SETUP: the pedal, MIDI, tempo, drums, master, texture, screen and system settings |
 | `firmware/src/ui_studio.c`, `ui_input.c` | EDIT (SLOOP's drum grid and kit pages); the buttons, the layers and SAVE's hold on the grid |
 | `tools/fm1_emu.py` | the firmware on the fm1-emu emulator, songs imported into its flash: a script of keys, knobs and pedal MIDI, screens and sound saved |
-| `tools/fm1_song.py`, `songs/` | songs from JSON: check, pack, send, read back; `songs/` holds your songs (sent to the device or played from the setlist; the factory songs are the grooves) |
+| `tools/fm1_song.py`, `song_examples/` | songs from JSON: check, pack, send, read back; `song_examples/` holds three original demo songs that show the features, each with its pedal plan in `docs/demos.md` (the factory songs are the grooves) |
 | `grooves/`, `docs/grooves.md` | generic grooves, not songs (two sections, verse and chorus, 4-bar phrases, a fill at each phrase's end; each one's tempo, meter, verse, chorus and fill in `docs/grooves.md`): classic rock, blues, rock ballad, slow rock, punk, half-time shuffle, train beat, one drop, four on the floor, metal gallop, a 6/8 ballad, and some to spark ideas (7/8, a tom groove, linear funk, three over four, ride and kick only); the firmware's factory songs, slots 1..16 in `grooves/factory.txt`'s order |
-| `web/editor.html` | the web editor (SLOOP's, drums only, protocol v11) with a Song tab (no FM-1 needed but to send and set the pedal): the pedal channel, Guitar Pro and MIDI file import (Pyodide), the section editor, a player; a Setlist tab: the device's sixteen slots; `web/test_web.mjs` tests it against the simulated FM-1 |
+| `web/editor.html` | the web editor (SLOOP's, drums only, protocol v11) with a Song editor tab (no FM-1 needed but to send and set the pedal): the pedal channel, Guitar Pro and MIDI file import (Pyodide), the section editor, a player; a Setlist tab: the device's sixteen slots; `web/test_web.mjs` tests it against the simulated FM-1 |
 | `web/kit/` | the kit the editor serves (the Muldjord Kit with two velocity layers), the files `tools/mkkit.py` makes the device image from |
 | `tools/gen_realkit.py`, `tools/realkit.json`, `assets/realkit/` | the built-in layered kit MULDJORD: the recipe, rendered once from the source kits into WAVs (layers, takes, levels, fitted to 290 KB); `tools/gen_samples.py` builds them in as set REAL, the editor's player plays them (`web/realkit/`) |
 | `tools/fm1_render.py`, `tests/song_render.c` | a song played by the pedal, rendered to a WAV on the host |

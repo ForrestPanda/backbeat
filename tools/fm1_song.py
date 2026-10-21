@@ -72,7 +72,7 @@ def song_obj(slot):
     return OBJ_SONG0 + slot if slot < 8 else OBJ_SONG8 + slot - 8
 SNG_MAGIC = b"SNG2"
 SWING_GRIDS = ["1/16", "1/8"]                   # the header's flags byte, bit 0 (sng.c SNG_H_SWING8)
-HDR, SEC_HDR = 32, 18
+SNG_HDR, SEC_HDR = 32, 18
 SNG_MAX = 3800
 KIT_DEFAULT = 0                                      # drums.c DRUM_REAL: MULDJORD, the layered kit, first (46 until 2026-10-15)
 SNG_SECTIONS = 16                                    # seq.c SNG_SECTIONS (8 until 2026-10-14)
@@ -309,7 +309,7 @@ def pack(spec):
 def sections(blob):
     """the packed song's sections: (name, steps, div, flags, meter, offset of the steps, size), as sng.c walks them"""
     nsec = blob[22]
-    pos = HDR
+    pos = SNG_HDR
     out = []
     for _ in range(nsec):
         steps, div, flags, meter = blob[pos + 12:pos + 16]

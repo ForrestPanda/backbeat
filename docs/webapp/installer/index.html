@@ -131,7 +131,7 @@
   </details>
   <p class="small">BackBeat is a fork of SLOOP, based on Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>.
     Hold OCT− alone while switching on for USB rescue.<br>
-    Font: Terminus (Dimitar Toshkov Zhekov, SIL OFL 1.1). The MULDJORD kit: MuldjordKit and the DRSKit's snare by DrumGizmo (CC BY 4.0), hi-hats and ride from AVL Drumkits by Glen MacArthur (CC BY-SA 3.0), clap and cowbell from Versilian Studios (CC0). Other samples: Versilian Studios VSCO-2 Community Edition and VCSL (CC0 1.0), and the Hügelton Sample Pack (© Hügelton Instruments, not CC0).<br>
+    Font: Terminus (Dimitar Toshkov Zhekov, SIL OFL 1.1). The MULDJORD kit: MuldjordKit and the DRSKit's snare by DrumGizmo (CC BY 4.0), hi-hats and ride from AVL Drumkits by Glen MacArthur (CC BY-SA 3.0), clap, cowbell and shaker from Versilian Studios (CC0). Other samples: Versilian Studios VSCO-2 Community Edition and VCSL (CC0 1.0), and the Hügelton Sample Pack (© Hügelton Instruments, not CC0).<br>
     M-VAVE and FM-1 are trademarks of their respective owners; BackBeat is not affiliated with them.<br>
     <span data-t="license"></span> <a href="https://github.com/hugelton/Felucca" target="_blank" rel="noopener">github.com/hugelton/Felucca</a></p>
 </main>
@@ -535,7 +535,7 @@ const sayK = (k, arg = "") => { lastKey = k; lastArg = arg; $("status").textCont
 const say = (txt) => { lastKey = null; $("status").textContent = txt; };
 const log = (t) => { $("log").textContent += t + "\n"; };
 let image = null;
-const meta = {"version": "1.0", "product": "FM-1_900", "pkg": "../../firmware/backbeat-1.0.fwsc", "sha256": "adc2fcee5eb4861d3eb550656c7a039df6ff5671f28f21d55321572daf0616fd"};
+const meta = {"version": "1.0", "product": "FM-1_900", "pkg": "../../firmware/backbeat-1.0.fwsc", "sha256": "f5b370036c01e9adf3eb1e32d532b94d6e27fca086528388e8c1c17345c671f2"};
 
 let writing = false, stock = null;
 const lockAll = (on) => {

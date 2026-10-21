@@ -253,12 +253,12 @@ async function editorSongs() {
   ok(rows.length === 16 && rows.every((r) => r === null), "songs: a new device has 16 empty slots");
   {   /* the Song tab works without an FM-1: only the pedal settings and Send are the device's; the slots are the Setlist tab's */
     const panel = (/<section class="panel" id="p-songs"[^>]*>/.exec(html) || [""])[0];
-    const songs = html.slice(html.indexOf('id="p-songs"'), html.indexOf('id="p-setlist"'));
+    const songs = html.slice(html.indexOf('id="p-songs"'), html.indexOf('id="p-kits"'));
     ok(!/data-dev\b/.test(panel) && (songs.match(/ data-devonly>/g) || []).length === 3 && /\$\("songs-offline"\)\.hidden = ready/.test(html)
       && /<span data-devonly><label><span data-t="gpiSlot"><\/span> <select id="gpi-slot">/.test(html) && /<span data-devonly><label><span data-t="gpiSlot"><\/span> <select id="sed-slot">/.test(html)
       && /<section class="panel" id="p-setlist" data-tab="setlist" hidden>/.test(html) && !songs.includes('id="songslots"')
-      && /tabSong: "Jam"/.test(html) && /tabSongs: "Song"/.test(html) && /tabSetlist: "Setlist"/.test(html) && /songsOffline: "No FM-1 connected/.test(html),
-      "songs: the Song tab without an FM-1 (import, editor, player), the pedal and Send with one; the slots in Setlist; Jam, Song, Setlist");
+      && /tabSong: "Jam"/.test(html) && /tabSongs: "Song editor"/.test(html) && /tabSetlist: "Setlist"/.test(html) && /songsOffline: "No FM-1 connected/.test(html),
+      "songs: the Song editor tab without an FM-1 (import, editor, player), the pedal and Send with one; the slots in Setlist; Jam, Song editor, Setlist");
     ok(/`\$\{k \+ 1\}: \$\{x\.name\}/.test(html) && /`\$\{SONGED\.sel \+ 1\}: \$\{sedSec\(\)\.name\}/.test(html) && /sp\.swing \?\? 0;/.test(html),
       "sed: the sections numbered 1..16 as on the device; a song without swing shows 0");
   }
@@ -282,7 +282,7 @@ async function editorSongs() {
       "songs: the count-in read (0) and set (2 bars) with the channel; 3 bars is not a setting");
   }
   const L = E.parse[C.BK_LIST](await rq(E.req.bkList(), { timeout: 5000, retries: 0 }));
-  ok(!L.items.some((it) => it.id >= 16 && it.id <= 24), "songs: not in BK_LIST (a SLOOP backup stays restorable)");
+  ok([16, 23, 24, 40, 47].every((id) => L.items.some((it) => it.id === id)) && !L.items.some((it) => it.id >= 48), "songs: the songs and the pedal settings in BK_LIST (since 2026-10-21), not the factory grooves");
   done();
 }
 
@@ -738,8 +738,20 @@ function editorFillBar() {
     const parts = D.split(e, 1), back = D.merge(parts[0], parts[1]);
     ok(!("fillbar" in parts[0]) && parts[1].fillbar.lanes.CRASH === "...............X" && back.fillbar.lanes.CRASH === "...............X" && !("fillbar" in D.merge(parts[1], parts[0])),
       "sed: the fill bar goes with the last bar through split, the last part's through merge");
-    ok(/id="sed-fillbar"/.test(html) && /sedFbAdd: "Add a fill bar"/.test(html) && /cls: "fb", what: "fill"/.test(html) && /cls = `c \$\{b\.cls\}`/.test(html) && /\.sedgrid \.sep\.fb::before/.test(html) && /SED\.fbSetHit\(sec, l, i, h, r, f\)/.test(html),
-      "sed: the page has the fill bar button, its columns after the gap, its cells on the pen");
+    {   /* a fill of several bars (2026-10-20, as sng.c fb_bars plays it): added from the pattern's last bars, resized
+           as the entry and the break are (cut, rests), removed with 0; from selected bars of the file */
+      const two = D.fbAdd(m, false, 2), long = D.fbSet(m, 4), cut = D.fbSet(two, 1), wide = D.fbSet(a, 3);
+      ok(two.fillbar.steps === 32 && two.fillbar.lanes.HITOM === ".".repeat(28) + "x.x." && two.fillbar.lanes.KICK === "........x.......x.......x......." && D.fbBars(two) === 2
+        && long.fillbar.steps === 64 && long.fillbar.lanes.HITOM.slice(32) === ".".repeat(28) + "x.x." && /^\.{32}/.test(long.fillbar.lanes.HITOM) && D.fbBars(long) === 4
+        && cut.fillbar.steps === 16 && wide.fillbar.steps === 48 && wide.fillbar.lanes.HITOM === "............x.x." + ".".repeat(32) && D.fbBars(m) === 0 && !("fillbar" in D.fbSet(two, 0))
+        && D.ebMax(m) === 4,
+        "sed: a fill of 2 or 4 bars from the pattern's last bars (rests before its start), cut to 1, a 1-bar one made 3 (rests after), removed");
+      const wf2 = D.withFill(m, [{ lanes: { SNARE: "x..............." } }, { lanes: { HITOM: "............xxxx" }, ratchets: { HITOM: "...............2" } }]);
+      ok(wf2.sec.fillbar.steps === 32 && wf2.sec.fillbar.lanes.SNARE === "x" + ".".repeat(31) && wf2.sec.fillbar.ratchets.HITOM[31] === "2" && D.fbBars(wf2.sec) === 2,
+        "sed: two bars of the file as a 2-bar fill");
+    }
+    ok(/<select id="sed-fillbar">/.test(html) && /sedFill: "Fill"/.test(html) && /SED\.fbSet\(sec, \+\$\("sed-fillbar"\)\.value\)/.test(html) && /cls: "fb", what: "fill"/.test(html) && /cls = `c \$\{b\.cls\}`/.test(html) && /\.sedgrid \.sep\.fb::before/.test(html) && /SED\.fbSetHit\(sec, l, i, h, r, f\)/.test(html),
+      "sed: the page has the fill's bars select, its columns after the gap, its cells on the pen");
   }
   /* the player: a fill plays the fill bar instead of the bar it is in, from the press, its step i at the bar's own
      step i; over at the bar line, the pattern again from its top; asked in the bar's last beat: the whole next bar */
@@ -787,14 +799,38 @@ function editorFillBar() {
     const two = { ...sec, fillbar: { steps: 32, lanes: { KICK: "x...............x...............", CRASH: "...............................X" } } };
     ok(P.fbSteps(two) === 32 && P.fbBar(two) === 16 && P.fbBars(two) === 2 && P.fbBar(sec) === 16 && P.fbBars(sec) === 1 && P.fbBars(spec.sections[1]) === 1
       && P.fbBar({ ...sec, fillbar: { steps: 8, lanes: {} } }) === 8, "fill bar: its steps a bar (a bar of the meter when whole and it fits, else all of it) and its bars");
+    /* (2026-10-20: a fill of several bars ends on the section's last bar line; this one's 2 bars) asked in its last bar:
+       the phrase's last bar from now; asked in its first: both, from now; a 3-bar one in it: the first section end it
+       reaches whole (bar 4), so it waits a bar; a 2-bar one in a 4-bar section: it waits for its last 2 bars */
     const q = P.create({ ...spec, sections: [two] });
     P.request(q, 0); for (let i = 0; i < 20; i++) P.tick(q);          /* bar 1, step 4 */
     P.fillNext(q);
-    ok(q.fill && q.fillBars === 2, "fill bar (two bars): the fill lasts two bars");
-    const e = []; for (let i = 20; i < 52; i++) e.push(P.tick(q));
-    ok(e[0].fb && e[0].step === 20 && e[0].hits.length === 0 && e[12].fb && e[12].step === 0 && e[12].bar === 2 && e[12].hits.map((x) => x.lane).join() === "0"
-      && e[27].fb && e[27].hits.some((x) => x.lane === crash) && !e[28].fill && e[28].step === 0 && e[28].bar === 0 && e[28].hits.length === 2,
-      "fill bar (two bars): the phrase's second half in the first bar (its step 16 kick when the cycle goes round), its last step the crash; then the pattern from its top");
+    ok(q.fill && q.fillBars === 1 && !q.fillWait, "fill bar (two bars): asked in the section's last bar: its last bar, from now");
+    const e = []; for (let i = 20; i < 36; i++) e.push(P.tick(q));
+    ok(e[0].fb && e[0].step === 20 && e[0].hits.length === 0 && e[11].fb && e[11].hits.some((x) => x.lane === crash) && !e[12].fill && e[12].step === 0 && e[12].bar === 0 && e[12].hits.length === 2,
+      "fill bar (two bars): ..the phrase's second half to the section's end, its last step the crash; then the pattern from its top");
+    const q2 = P.create({ ...spec, sections: [two] });
+    P.request(q2, 0); for (let i = 0; i < 4; i++) P.tick(q2);         /* bar 0, step 4 */
+    P.fillNext(q2);
+    const e2 = []; for (let i = 4; i < 36; i++) e2.push(P.tick(q2));
+    ok(e2[0].fb && e2[12].fb && e2[12].step === 16 && e2[12].hits.map((x) => x.lane).join() === "0" && e2[27].hits.some((x) => x.lane === crash) && !e2[28].fill && e2[28].step === 0,
+      "fill bar (two bars): asked in the section's first bar: both bars from now (its step 16 kick in bar 1), ending on the section's end");
+    const three = { ...sec, fillbar: { steps: 48, lanes: { KICK: "x" + ".".repeat(47), CRASH: ".".repeat(47) + "X" } } };
+    const q3 = P.create({ ...spec, sections: [three] });
+    P.request(q3, 0); for (let i = 0; i < 4; i++) P.tick(q3);
+    P.fillNext(q3);
+    ok(!q3.fill && q3.fillWait === 1 && P.fillSpan(three, 0) === 4 && P.fillWaitFrom(three, 0) === 1, "fill bar (three bars, a 2-bar pattern): it waits a bar");
+    const e3 = []; for (let i = 4; i < 68; i++) e3.push(P.tick(q3));
+    ok(!e3[11].fill && e3[12].fb && e3[12].hits.map((x) => x.lane).join() === "0" && q3.bar >= 0 && e3[59].hits.some((x) => x.lane === crash) && !e3[60].fill && e3[60].step === 0,
+      "fill bar (three bars): ..then plays whole, from bar 1 to the end of the cycle's second round (bar 4)");
+    const four = { name: "FOUR", steps: 64, div: "1/16", lanes: { HAT: "x...".repeat(16) }, fillbar: { steps: 32, lanes: { KICK: "x" + ".".repeat(31) } } };
+    const q4 = P.create({ ...spec, sections: [four] });
+    P.request(q4, 0); for (let i = 0; i < 4; i++) P.tick(q4);
+    P.fillNext(q4);
+    const w = q4.fillWait, e4 = []; for (let i = 4; i < 68; i++) e4.push(P.tick(q4));
+    ok(w === 2 && e4[0].wait === 2 && !e4[27].fill && e4[28].fill && e4[28].bar === 2 && e4[28].hits.some((x) => x.lane === 0) && e4[59].fill && !e4[60].fill && e4[60].step === 0,
+      "fill bar (two bars, a 4-bar section): asked in bar 0 it waits two bar lines, then plays bars 2 and 3; then the pattern");
+ 
   }
 }
 
@@ -1208,9 +1244,11 @@ async function editorBackup() {
   const { m, rq, done } = attachMock({});
   const info = E.parse[C.INFO](await rq(E.req.info()));
   const ec = fw("editor.c");
-  ok(/ED_BK_IDS\[\] = \{0, 1, 2, 3, 4, 5, 9, 10, 32, 33, 34, 35\}/.test(ec) && /if \(id >= 32u && SNG_SMP_TAKEN\(id - 32u\)\) \{/.test(ec)
-    && js(E.BK.RESTORE.concat(E.BK.SAMPLES).sort((a, b) => a - b)) === js([0, 1, 2, 3, 4, 5, 9, 10, 34, 35]) && js(E.BK.SKIP) === js([6, 7, 8, 32, 33]),
-    "backup: the object ids == editor.c ED_BK_IDS (no 6..8: drums only; USR1 and USR2 listed empty: the songs)");
+  const songIds = [16, 17, 18, 19, 20, 21, 22, 23, 40, 41, 42, 43, 44, 45, 46, 47];
+  ok(/ED_BK_IDS\[\] = \{0, 1, 2, 3, 4, 5, 9, 10, 32, 33, 34, 35,[^\n]*\n[^\n]*\n\s*16, 17, 18, 19, 20, 21, 22, 23, 40, 41, 42, 43, 44, 45, 46, 47, 24\};/.test(ec) && /if \(id >= 32u && SNG_SMP_TAKEN\(id - 32u\)\) \{/.test(ec)
+    && js(E.BK.RESTORE.concat(E.BK.SAMPLES).sort((a, b) => a - b)) === js([0, 1, 2, 3, 4, 5, 9, 10, 16, 17, 18, 19, 20, 21, 22, 23, 24, 34, 35, 40, 41, 42, 43, 44, 45, 46, 47]) && js(E.BK.SKIP) === js([6, 7, 8, 32, 33])
+    && js(E.BK.RESTORE.slice(-2)) === "[0,1]",
+    "backup: the object ids == editor.c ED_BK_IDS (no 6..8: drums only; USR1 and USR2 listed empty: the songs; the songs and the pedal settings since 2026-10-21)");
   await rq(E.req.project(1, 2), { timeout: 4000, retries: 0 });
   const s = Int16Array.from({ length: 3000 }, (_, i) => Math.round(8000 * Math.sin(i / 7)));
   const { hdr, data } = E.buildSlot("test", [{ s, root: 60 }]);
@@ -1219,9 +1257,10 @@ async function editorBackup() {
   await rq(E.req.smpEnd(2, hdr), { timeout: 2000, retries: 0 });
   const A = await E.backupCapture(rq, info);
   const obj = (id) => A.objects.find((o) => o.id === id);
-  ok(A.format === "sloop-backup" && A.objects.map((o) => o.id).join() === "0,1,2,3,4,5,9,32,33,34,35" && obj(9).len === 1464 && obj(34).len > 512 && obj(33).len === 0 && obj(35).len === 0
+  ok(A.format === "sloop-backup" && A.objects.map((o) => o.id).join() === "0,1,2,3,4,5,9,32,33,34,35," + songIds.join() + ",24" && obj(9).len === 1464
+    && songIds.every((id) => obj(id).len === 0) && obj(24).len === 16 && obj(34).len > 512 && obj(33).len === 0 && obj(35).len === 0
     && obj(4).len > 0 && obj(3).len === 0 && obj(32).len === 0 && E.bkProjFormat(E.b64dec(obj(0).data)) === "DRM1",
-    "backup: LIST + GET: 11 objects (project in C as DRM1, sample in USR3, B empty, the SYN kits, USR1 and USR2 empty)");
+    "backup: LIST + GET: 28 objects (project in C as DRM1, sample in USR3, B empty, the SYN kits, USR1 and USR2 empty, 16 empty song slots, the pedal settings)");
   await rq(E.req.smpErase(1), { timeout: 2500, retries: 0 });
   await rq(E.req.set(0, 50, 5));
   await rq(E.req.project(1, 1), { timeout: 4000, retries: 0 });
@@ -1262,6 +1301,29 @@ async function editorBackup() {
   let caught = "";
   try { E.backupObjects(bad); } catch (e) { caught = e.code; }
   ok(caught === "bkBad", "backup: a damaged file is refused before anything is written");
+  /* the songs (2026-10-21): a backup holds them and the pedal settings; a restore writes them back and erases the slots
+     it holds empty; a backup from before (no song objects) leaves the songs as they are */
+  {
+    const song = E.SNG.pack(JSON.parse(readFileSync(join(HERE, "../tests/example-song.json"), "utf8")));
+    ok((await E.SNG.put(rq, 0, song)) === 0 && (await E.SNG.put(rq, 9, song)) === 0 && (await E.SNG.setPedal(rq, 5, 1)) === 0, "backup: songs 1 and 10 written, the pedal on channel 5");
+    const H = await E.backupCapture(rq, info), ho = (id) => H.objects.find((o) => o.id === id);
+    ok(ho(16).len === song.length && ho(41).len === song.length && ho(17).len === 0 && js([...E.b64dec(ho(16).data)]) === js([...song]),
+      "backup: the songs in it (slot 1 as object 16, slot 10 as object 41), the empty slots empty");
+    await E.SNG.put(rq, 0, new Uint8Array(0));
+    await E.SNG.put(rq, 3, song);
+    await E.SNG.setPedal(rq, 16, 0);
+    await E.backupRestore(rq, JSON.parse(JSON.stringify(H)));
+    const sm = await E.SNG.summaries(rq);
+    ok(sm[0] && sm[9] && sm[3] === null && js(await E.SNG.getPedalSet(rq)) === js({ ch: 5, count: 1 }),
+      "backup: a restore puts the songs back (slot 1), erases the slot the backup held empty (slot 4) and the pedal settings");
+    const old = JSON.parse(JSON.stringify(H));
+    old.objects = old.objects.filter((o) => !songIds.includes(o.id) && o.id !== 24);
+    await E.SNG.put(rq, 3, song);
+    await E.backupRestore(rq, old);
+    const sm2 = await E.SNG.summaries(rq);
+    ok(sm2[0] && sm2[3] && sm2[9], "backup: one from before the songs were in it leaves them as they are");
+    for (const k of [0, 3, 9]) await E.SNG.put(rq, k, new Uint8Array(0));
+  }
   done();
 }
 
@@ -1628,16 +1690,17 @@ function editorTabs() {
   const tabs = [...html.matchAll(/<button role="tab" data-tab="(\w+)"/g)].map((x) => x[1]);
   const panels = [...html.matchAll(/<section class="panel" id="p-(\w+)" data-tab="(\w+)"/g)].map((x) => [x[1], x[2]]);
   const TABS = JSON.parse((/const TABS = (\[[^\]]*\]);/.exec(html) || [])[1] || "[]");
-  ok(tabs.length === 9 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b)
-    && js([...TABS].sort()) === js(["drumsynth", "kits", "projects", "samples", "sequencer", "setlist", "settings", "song", "songs"]),
+  ok(tabs.length === 8 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b)
+    && js([...TABS].sort()) === js(["drumsynth", "kits", "samples", "sequencer", "setlist", "settings", "song", "songs"])
+    && /id="p-settings"[\s\S]*id="bkgroup"[\s\S]*id="p-sequencer"/.test(html) && /id="p-song"[\s\S]*id="slots"/.test(html),
     `editor: ${tabs.length} tabs, one panel each (${tabs.join(" ")})`);
   /* drums only: SLOOP's Sound, Tracks and Library tabs, the synth step grid, piano roll, MIDI files, CHOP and FM6 are gone; a tab
      remembered from SLOOP's editor opens the first one; the side bar's headings */
   ok(!/id="p-(sound|tracks|library)"|id="(stepgrid|rollcv|midifile|chop|fm6panel|trackbar|engine|preset)"/.test(html)
     && !/\b(ROLL|SMF|FM6|CHOP|UP|LIB)\s*=|function (renderMixer|chopUI|renderLib|fm6Send|capturePatch)\b/.test(html)
-    && /return TABS\[0\];/.test(html) && TABS[0] === "sequencer"
-    && js([...html.matchAll(/<div class="navh" data-t="(\w+)">/g)].map((x) => x[1])) === js(["navDrums", "navSounds", "navDevice"]),
-    "editor: drums only (no Sound / Tracks / Library, synth grid, roll, MIDI files, CHOP, FM6); first tab the sequencer");
+    && /return TABS\[0\];/.test(html) && TABS[0] === "setlist" && js(TABS.slice(-2)) === js(["sequencer", "song"])
+    && js([...html.matchAll(/<div class="navh" data-t="(\w+)">/g)].map((x) => x[1])) === js(["navDrums", "navSounds", "navDevice", "navFuture"]),
+    "editor: drums only (no Sound / Tracks / Library, synth grid, roll, MIDI files, CHOP, FM6); first tab the setlist, the sequencer and the jam under \"future\"");
   /* the cards: the drum track's PATTERN and FX (FILTER, INSERT, INSERT 2), the globals (params.c's pages) */
   const lay = (/const LAYOUT = \[([\s\S]*?)\n\];/.exec(html) || [])[1] || "";
   const pages = [...lay.matchAll(/\["([A-Z0-9 ]+)", (\d), \[([\d, ]+)\]\]/g)].map((x) => `${x[1]}:${x[2]}:${x[3]}`);
@@ -1684,6 +1747,16 @@ function editorTabs() {
       && /def read_midi\(data, track=None, title=None\):/.test(readFileSync(join(HERE, "../tools/gp2song.py"), "utf8")) && /if data\[:4\] == b"MThd":/.test(readFileSync(join(HERE, "../tools/gp2song.py"), "utf8"))
       && /gpiTitle: "From Guitar Pro, MIDI or JSON"/.test(script) && /gpiTitle: "Guitar Pro \/ MIDI \/ JSON から"/.test(script),
       "editor: the import card takes a MIDI file (gp2song.py's SMF reader; PyGuitarPro only for Guitar Pro)");
+    /* the two kept (2026-10-21): a Guitar Pro or MIDI file with a song in the editor brings only its bars, a JSON keeps the bars there */
+    ok(/id="gpi-keep" checked/.test(html) && /keep = \$\("gpi-keep"\)\.checked && SONGED\.spec/.test(script)
+      && /if \(keep && !json\) \{/.test(script) && /Object\.assign\(SONGED, \{ bars: spec\.bars, ranges: spec\.ranges \|\| null, barA: -1, barB: -1 \}\)/.test(script)
+      && /keep && !spec\.bars \? \{ bars: SONGED\.bars, ranges: SONGED\.ranges \}/.test(script)
+      && /gpiKeep: "keep the song in the editor/.test(script) && /gpiKeep: "エディタのソングを残す/.test(script),
+      "editor: the import card keeps the song in the editor (a file's bars beside it, a JSON keeping the bars)");
+    /* the player's help as a cheat sheet (2026-10-21): the pedal's commands in a table that folds, the title "Play" */
+    ok(/<details class="cheat" id="play-cheat">/.test(html) && !/data-t="playHelp"/.test(html) && /playTitle: "Play", playCheat: /.test(script)
+      && ["C20", "C27", "C21", "C21n", "C28", "C22", "C23", "C24", "C26", "CPC"].every((k) => html.includes(`data-t="play${k}"`) && script.includes(`play${k}: "`) && (script.split(`play${k}: "`).length === 3)),
+      "editor: the player's commands as a cheat sheet (every row in English and Japanese)");
     /* the swing's grid next to the swing in the section editor (1/16 or 1/8), live into the song playing; the importer sets it from a triplet feel */
     ok(/<select id="sed-swgrid"><option value="1\/16">1\/16<\/option><option value="1\/8">1\/8<\/option><\/select>/.test(html) && /sedSwingOn: "on the"/.test(script) && /sedSwingOn: "単位"/.test(script)
       && /\$\("sed-swgrid"\)\.value = sp\.swing_grid === "1\/8" \? "1\/8" : "1\/16";/.test(script) && /function sedSwingLive\(\)/.test(script)

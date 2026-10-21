@@ -1,0 +1,113 @@
+{
+ "name": "SLOW TIDE",
+ "bpm": 66,
+ "kit": 0,
+ "swing": 0,
+ "drum_level": 100,
+ "drum_reverb": 20,
+ "sections": [
+  {
+   "name": "INTRO",
+   "steps": 24,
+   "div": "1/16",
+   "time": "6/8",
+   "lanes": {
+    "SHAKER": "x.s.s.x.s.s.x.s.s.x.s.s.",
+    "KICK": "x...........x.........x.",
+    "RIM": "......s...........s....."
+   }
+  },
+  {
+   "name": "VERSE",
+   "steps": 24,
+   "div": "1/16",
+   "time": "6/8",
+   "lanes": {
+    "HAT": "x.s.s.x.s.s.x.s.s.x.s.s.",
+    "KICK": "x.........x.x...x.......",
+    "RIM": "......x...........x.....",
+    "SNARE": "..................xx....",
+    "MIDTOM": "....................xx..",
+    "LOWTOM": "......................xx"
+   },
+   "fills": {
+    "HAT": "..................N.N.N.",
+    "RIM": "..................N.....",
+    "SNARE": "..................FF....",
+    "MIDTOM": "....................FF..",
+    "LOWTOM": "......................FF"
+   }
+  },
+  {
+   "name": "CHORUS",
+   "steps": 24,
+   "div": "1/16",
+   "time": "6/8",
+   "lanes": {
+    "RIDE": "x.s.s.x.s.s.x.s.s.x.s.s.",
+    "KICK": "x...x.....x.x...x.....x.",
+    "SNARE": "......X...........X....."
+   },
+   "flams": {
+    "SNARE": "......f...........f....."
+   },
+   "entry": {
+    "bars": 1,
+    "lanes": {
+     "CRASH": "X...........",
+     "KICK": "x...x.....x.",
+     "SNARE": "......X.....",
+     "RIDE": "......x.s.s."
+    },
+    "flams": {
+     "SNARE": "......f....."
+    }
+   },
+   "fillbar": {
+    "steps": 12,
+    "lanes": {
+     "RIDE": "x.s.s.......",
+     "KICK": "x...x.......",
+     "SNARE": "......Xsx...",
+     "HITOM": ".........x..",
+     "MIDTOM": "..........x.",
+     "LOWTOM": "...........X"
+    },
+    "flams": {
+     "SNARE": "......f.....",
+     "LOWTOM": "...........f"
+    }
+   }
+  },
+  {
+   "name": "BRIDGE",
+   "steps": 24,
+   "div": "1/16",
+   "time": "6/8",
+   "lanes": {
+    "LOWTOM": "x.s.s.x.s.s.x.s.s.x.s.s.",
+    "KICK": "x.....x.....x.....x.....",
+    "SNARE": "..................X.....",
+    "CRASH": "s......................."
+   },
+   "flams": {
+    "SNARE": "..................f....."
+   },
+   "break": {
+    "bars": 1,
+    "lanes": {}
+   }
+  },
+  {
+   "name": "OUTRO",
+   "steps": 12,
+   "div": "1/16",
+   "time": "6/8",
+   "outro": true,
+   "lanes": {
+    "CRASH": "x...........",
+    "KICK": "x..........."
+   }
+  }
+ ]
+}

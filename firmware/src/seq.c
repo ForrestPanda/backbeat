@@ -873,7 +873,9 @@ static void srec_stop(void)
  * pending for the fill's end; an ending plays the outro for its bars, then stops on the bar */
 static volatile uint8_t pedal_fill;                /* the pedal's fill plays, for pedal_fill_bars (this bar counted) */
 static volatile uint8_t pedal_at_end;              /* live_req (or the ending's stop) waits for the section's end */
-static volatile uint8_t pedal_fill_wait;           /* CC 21 in the bar's last beat: the fill is the next bar, whole */
+static volatile uint8_t pedal_fill_wait;           /* bar lines before the fill starts: 1, CC 21 in the bar's last beat
+                                                    * (the next bar, whole); more, a fill of several bars waiting to end
+                                                    * on the section's end (fill_wait_from) */
 static volatile uint8_t pedal_end_req;             /* bars of the outro asked for (taken when its section starts) */
 static volatile uint32_t pedal_end_bars;           /* stop when the section playing has played this many (0: none) */
 static volatile uint8_t live_req_brk;              /* live_req comes in through its break (CC 28), not its entry */
@@ -960,9 +962,34 @@ static uint32_t live_sec_bars(void)                /* the bars the section playi
 /* the bars a fill asked for in bar `bar` of the section lasts, this one counted: its fill bar of its own (fb_bars);
  * with none, to the section's end (asked 2026-10-17: before, one bar and the pattern from its top, which cut the
  * phrase of a section whose fill is in its marks, or has none) */
+static uint32_t fill_bars_from(uint32_t bar);
+/* a fill bar of its own of several bars ends on the section's last bar line (asked 2026-10-20; before, it ran its bars
+ * from the press, past the section's end): the bars from bar `bar` to the end it lands on, this one counted; with a
+ * pattern shorter than the fill, the first section end it reaches whole */
+static uint32_t fill_span_from(uint32_t bar)
+{
+    uint32_t n = live_sec_bars(), left;
+    if (bar == 0xFFFFFFFFu)
+        bar = 0;
+    left = n - bar % n;
+    while (left < fb_bars && n < fb_bars)
+        left += n;
+    return left;
+}
+/* the bar lines a fill asked for in bar `bar` waits before it starts: a fill of several bars with more bars than it
+ * has left to the section's end waits for its last ones (it then plays whole); none for the others */
+static uint32_t fill_wait_from(uint32_t bar)
+{
+    uint32_t left = fb_bars > 1u ? fill_span_from(bar) : 0u;
+    return left > fb_bars ? left - fb_bars : 0u;
+}
 static uint32_t fill_bars_from(uint32_t bar)
 {
     uint32_t n = live_sec_bars();
+    if (fb_bars > 1u) {                             /* fewer bars left than it has: its last ones, from now */
+        uint32_t left = fill_span_from(bar);
+        return left < fb_bars ? left : fb_bars;
+    }
     if (fb_bars)
         return fb_bars;
     if (bar == 0xFFFFFFFFu)
@@ -1007,9 +1034,9 @@ static __attribute__((noinline)) void live_block(void)   /* once a block while p
             pedal_fill_bars = 0;
             fill_over = 1;
         }
-    } else if (pedal_fill_wait) {                   /* asked in the last beat: this bar, whole (no fill bar of its own:
+    } else if (pedal_fill_wait && !--pedal_fill_wait) {   /* asked in the last beat, or a fill of several bars waiting
+                                                     * for the section's end: this bar, whole (no fill bar of its own:
                                                      * to the section's end; at its top, the whole cycle) */
-        pedal_fill_wait = 0;
         eb_len = 0;                                 /* (an entry or break playing: the fill cuts it) */
         eb_bars = 0;
         pedal_fill = 1;
@@ -1305,7 +1332,7 @@ static void seq_flam(track_t *t, uint32_t nabs, int32_t mu, uint32_t abs, uint32
         uint32_t u = div_units(trk_div(t)) / (BEAT_U / 48u), b = 12u * meter_b16(clk_meter);
         uint32_t bs = u && b % u == 0u ? b / u : 0u;
         if ((bs ? idx % bs == 0u : idx == 0u) &&
-            (live_req >= 0 || pedal_fill_wait || (pedal_fill && pedal_fill_bars <= 1u) || pedal_end_bars || chain_n))
+            (live_req >= 0 || pedal_fill_wait == 1u || (pedal_fill && pedal_fill_bars <= 1u) || pedal_end_bars || chain_n))
             return;
     }
     s = drum_src(t, nabs, idx, &fb);

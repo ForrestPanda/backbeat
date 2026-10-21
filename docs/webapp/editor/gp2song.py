@@ -3,17 +3,17 @@
 """fm1-drummer: a song (JSON for tools/fm1_song.py) from the drum track of a Guitar Pro file or a MIDI file.
 
     tools/gp2song.py "Pink Floyd - Comfortably Numb.gp3"               # print what it would make
-    tools/gp2song.py song.gp4 --out songs/song.json
-    tools/gp2song.py song.mid --out songs/song.json                     # a Standard MIDI File (type 0 or 1)
-    tools/gp2song.py song.gp4 --sections "Intro,Verse 1,Chorus,Outro" --out songs/song.json
+    tools/gp2song.py song.gp4 --out song.json
+    tools/gp2song.py song.mid --out song.json                     # a Standard MIDI File (type 0 or 1)
+    tools/gp2song.py song.gp4 --sections "Intro,Verse 1,Chorus,Outro" --out song.json
 
 Guitar Pro files (.gp3, .gp4, .gp5) need PyGuitarPro (pip install pyguitarpro); MIDI files need nothing, the
 reader is here (since 2026-10-19). The file's format is told from its first bytes, not its name.
 
 The score's section markers (Intro, Verse 1, Chorus...) bound the sections; the measures of a section give
 its drum pattern: the run of 1, 2 or 4 bars that most of the section repeats (at 1/16; at 1/32, and then
-at most 2 bars, when many hits sit between 16ths). The bar that deviates from the pattern at the end of
-the section, or most often at the end of a phrase, is the fill: the section's fill bar of its own ("fillbar" in
+at most 2 bars, when many hits sit between 16ths). The bars that deviate from the pattern at the end of
+the section (up to 4, 64 steps, since 2026-10-20), or the bar that does most often at the end of a phrase, is the fill: the section's fill bar of its own ("fillbar" in
 the JSON, since 2026-10-15: that bar as it is, levels, ratchets and flams, which a fill plays instead of the bar it is
 asked in; before, its hits were marks on the pattern's last bar, "fills", and a hit on a step the pattern also
 hit lost its own level). A grace note on a hit is a flam ("flams", since 2026-10-17); two notes a 32nd apart are a
@@ -64,6 +64,7 @@ OUTRO_NAMES = ("OUTRO", "ENDING", "END", "CODA")
 MATCH = 0.75                                  # a pattern: this share of the bars agree with it
 NEAR = 0.1                                    # a shorter pattern scoring this close to the best is taken
 SNG_MAX = 3800                                # the packed song (firmware/src/sng.c SNG_MAX)
+NSTEP = 64                                    # steps a pattern, a fill bar, an entry or a break holds (seq.c NSTEP)
 SNG_SECTIONS = 16                             # sections a song holds (seq.c SNG_SECTIONS; 8 until 2026-10-14)
 METER_DENS = (2, 4, 8, 16)                    # the meters a section can have (sng.c): n 1..16 over these
 OFFGRID_32 = 0.125                            # 1/32 when this share of the hits sit between 16ths
@@ -282,11 +283,13 @@ def read_midi(data, track=None, title=None):
 
 def bar_hits(bar, ticks_per_step):
     """one bar on a grid: {step: {lane: (level, ratchet, flam)}} (hashable: a sorted tuple), and its step count; a
-    flam is the file's grace note on the hit (two notes a 32nd apart are a ratchet, as before)"""
+    flam is the file's grace note on the hit (two notes a 32nd apart are a ratchet, as before). A step holds the
+    hits from its start to the next step's, so a ratchet's later hits stay on its step (rounding to the nearest
+    step put a 32nd pair on an odd 16th one step late, 2026-10-20); a hit up to a quarter step early is on time"""
     nsteps = max(1, round(bar.length / ticks_per_step))
     raw = {}
     for pos, lane, level, flam in bar.notes:
-        step = int(round(pos / ticks_per_step))
+        step = (pos + ticks_per_step // 4) // ticks_per_step
         if step >= nsteps:
             continue
         raw.setdefault((step, lane), []).append((pos - step * ticks_per_step, level, flam))
@@ -334,15 +337,22 @@ def make_section(name, bar_list, outro, max_bars=4):
     max_bars = min(max_bars, 2 if div == "1/32" else 4)
     bars = [bar_hits(b, tps) for b in bar_list]
     p, pattern, score = best_period(bars, max_bars)
-    # the fill: the last bar if it deviates; else the most common deviating bar at the end of a phrase
-    fill = None
-    if len(bars) > p and bars[-1] != pattern[(len(bars) - 1) % p]:
-        fill = bars[-1]
-    elif score >= MATCH:                           # (a section full of variations has no one fill)
-        c = collections.Counter(bars[i] for i in range(p - 1, len(bars), p) if bars[i] != pattern[i % p])
-        if c:
-            fill = c.most_common(1)[0][0]
+    # the fill: the bars at the end that deviate (several, up to 64 steps, since 2026-10-20: a 2-bar fill in the file
+    # was cut to its last bar), only in a section that keeps to its pattern and with a whole pattern before them;
+    # else the most common deviating bar at the end of a phrase
     steps_per_bar = pattern[0][0]
+    deviates = lambda i: bars[i] != pattern[i % p]
+    fill = []
+    if len(bars) > p and deviates(len(bars) - 1):
+        k = 1
+        while (score >= MATCH and k < max_bars and (k + 1) * steps_per_bar <= NSTEP and len(bars) - k - 1 >= p
+               and deviates(len(bars) - k - 1) and bars[len(bars) - k - 1][0] == steps_per_bar):
+            k += 1
+        fill = bars[len(bars) - k:]
+    elif score >= MATCH:                           # (a section full of variations has no one fill)
+        c = collections.Counter(bars[i] for i in range(p - 1, len(bars), p) if deviates(i))
+        if c:
+            fill = [c.most_common(1)[0][0]]
     steps = steps_per_bar * p
     lanes = {l: ["."] * steps for l in LANES}
     rats = {l: ["."] * steps for l in LANES}
@@ -357,20 +367,22 @@ def make_section(name, bar_list, outro, max_bars=4):
                     flams[lane][b * steps_per_bar + s] = "f"
     dropped = []
     fillbar = None
-    if fill:                                       # the fill bar of its own: that bar as it is (fill[0] is its steps)
-        fl = {l: ["."] * steps_per_bar for l in LANES}
-        fr = {l: ["."] * steps_per_bar for l in LANES}
-        ff = {l: ["."] * steps_per_bar for l in LANES}
-        for s, h in fill[1]:
-            if s >= steps_per_bar:
-                continue
-            for lane, (lvl, rat, flm) in h:
-                fl[lane][s] = LEVEL_CHAR[lvl]
-                if rat > 1:
-                    fr[lane][s] = str(rat)
-                if flm:
-                    ff[lane][s] = "f"
-        fillbar = {"steps": steps_per_bar, "lanes": {l: "".join(v) for l, v in fl.items() if set(v) != {"."}}}
+    if fill:                                       # the fill bar of its own: those bars as they are, a bar of the pattern's steps each
+        m = steps_per_bar * len(fill)
+        fl = {l: ["."] * m for l in LANES}
+        fr = {l: ["."] * m for l in LANES}
+        ff = {l: ["."] * m for l in LANES}
+        for b, (_, hits) in enumerate(fill):
+            for s, h in hits:
+                if s >= steps_per_bar:
+                    continue
+                for lane, (lvl, rat, flm) in h:
+                    fl[lane][b * steps_per_bar + s] = LEVEL_CHAR[lvl]
+                    if rat > 1:
+                        fr[lane][b * steps_per_bar + s] = str(rat)
+                    if flm:
+                        ff[lane][b * steps_per_bar + s] = "f"
+        fillbar = {"steps": m, "lanes": {l: "".join(v) for l, v in fl.items() if set(v) != {"."}}}
         r = {l: "".join(v) for l, v in fr.items() if set(v) != {"."}}
         if r:
             fillbar["ratchets"] = r
@@ -392,7 +404,7 @@ def make_section(name, bar_list, outro, max_bars=4):
         sec["flams"] = r
     if fillbar:
         sec["fillbar"] = fillbar
-    return sec, p, score, fill is not None, dropped
+    return sec, p, score, len(fill), dropped
 
 
 def body_key(sec):
@@ -558,7 +570,7 @@ def convert(source, sections=None, track=None, kit=KIT_DEFAULT, keep_duplicates=
         hits = sum(c != "." for v in sec["lanes"].values() for c in v)
         log(f"  {sname:12s} bars {first:3d}-{last:3d}: pattern {p} bar{'s' if p > 1 else ''} ({score:.0%} of {len(sbars)}), "
             f"{sec['steps']} steps {sec['div']}{' in ' + sec['time'] if 'time' in sec else ''}, {hits} hits"
-            f"{', a fill' if has_fill else ''}{', OUTRO' if outro else ''}")
+            f"{(', a fill' if has_fill == 1 else f', a {has_fill}-bar fill') if has_fill else ''}{', OUTRO' if outro else ''}")
         for step, lanes in dropped:
             log(f"    fill hit dropped at step {step + 1} ({', '.join(lanes)}): the pattern hits there too")
         out.append(sec)

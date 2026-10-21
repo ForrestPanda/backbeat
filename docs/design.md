@@ -207,7 +207,10 @@ next bar). No named sections, one song, no fill tied to a section change.
    every bar as strings at 1/16 and each section's range), 1 to 4 bars picked as the pattern, one as
    the fill by the importer's rule; Play, Send to a slot, Save JSON. The operations are a pure module
    (`SED`: norm, setHit, setCond, setSteps, split, merge, fromBars, withFill...) tested in
-   `web/test_web.mjs`; the page only draws and calls them. (2026-10-12) The import card opens a song JSON
+   `web/test_web.mjs`; the page only draws and calls them. (2026-10-21) "Keep the song in the editor" (the
+   import card, on by default): with a song in the editor a Guitar Pro or MIDI file brings only its bars and
+   ranges, a song JSON keeps the bars there, so a saved JSON and its file are worked on together (the saved
+   JSON carries no bars). (2026-10-12) The import card opens a song JSON
    too, by picker or by a drop on it or on the editor; undo / redo on a history of JSON states (`SED.hist`,
    `mark` after every render, so a redraw is told from a change), keys for the pen, ratchet, flam, mark and
    sections, Delete / Ctrl+C / Ctrl+V on the selected columns, a lane's sound on its name, "Play this
@@ -572,6 +575,48 @@ bar is 168"); 204-207 is a fill bar and a 3-bar break. So:
 
 Host-tested (`tests/pedal_test.c`, `tests/song_test.c`, `tests/ui_pages_test.c`, `web/test_web.mjs`); to verify on
 hardware with the rest.
+
+**Fills of several bars (asked 2026-10-20: "fill bars similar to entry and breaks, that can go up to 4 bars").** The
+firmware, the format and the browser player already played a fill bar of more than one bar (`fb_bars`, since
+2026-10-15: its first bar from the press, cut from the front, then its others whole, the phrase ending on a bar line,
+then the pattern from its top or the section asked for); only the editor and the importer made one bar. Now:
+- **The section editor**: the fill bar's button became a **Fill** select beside Entry and Break (none, 1 to 4 bars,
+  64 steps at most, `SED.fbSet`, `fbBars`): a new one as before from the pattern's last bars the way a fill played
+  them (`fbAdd(sec, empty, bars)`, rests before the pattern's start), shorter cut, longer rests; **Fill = selected
+  bars** takes 1 to 4 bars of the file (`withFill` through `fromBars`).
+- **The importer** (`gp2song.py make_section`): the bars that deviate at a section's end are its fill, up to 4 (the
+  pattern's limit, 64 steps), only in a section that keeps to its pattern (`MATCH`) with a whole pattern before them;
+  else one bar as before. The user's files: Back In Black's chorus and solo, Sweet Child's solo, Eye of the Tiger's
+  last part got 2-bar fills.
+- **It ends on the section's last bar line** (asked the same day: "make the long fill end on the section's last bar
+  line"; before, it ran its bars from the press, past the section's end). A fill bar of several bars asked for with
+  more bars left than it has waits (`pedal_fill_wait` is now the bar lines to its start: 1 the last beat's next bar
+  as before, more a long fill waiting; `fill_wait_from`), then plays whole; with fewer left, its last bars from now,
+  the first cut from the front (`fill_bars_from`); a pattern shorter than the fill (a 1-bar groove, a 2-bar fill):
+  the first section end it reaches whole (`fill_span_from`). The last beat and CC 21 value 1 count from the next
+  bar. A 1-bar fill is unchanged (the rest of this bar), and so is a section without a fill bar. The screen says
+  FILL AT THE END while one waits (FILL NEXT BAR for one bar). A chained press in a fill's last beat still plays the
+  next one straight on. The browser player mirrors it (`PLAY.fillSpan`, `fillWaitFrom`, `st.fillWait` a count).
+Tests: test_web.mjs (the select, fbSet, a 2-bar withFill; the player: a 2-bar fill asked in a 2-bar section's last
+bar and first, a 3-bar one waiting a bar, a 2-bar one in a 4-bar section waiting two), song_test.c (the device, the
+same first three), gp2song_test.py. To verify on hardware.
+
+## The backup holds the songs; the editor's Projects tab gone (2026-10-21)
+
+Asked: "I don't see a purpose for projects in this tool". The project slots are SLOOP's (the device's JAM
+PROJECTS: the Jam's sections A..D), so their card moved onto the Jam page, under the side bar's "future: not
+supported yet" with the Sequencer; the Backup card moved to Settings, and the Projects tab went. The backup itself
+missed what matters most: `ED_BK_IDS` (editor.c) listed SLOOP's objects only, the songs and the pedal settings were
+readable and writable through `BK_GET` / `BK_PUT` (fm1_song.py, the Setlist tab) but not listed, so "everything on
+the FM-1" left them out. Now `BK_LIST` lists 16..23, 40..47 (an empty slot with length 0: a restore erases it) and
+24, after the samples; the editor writes them back before the working project and the settings (`BK.RESTORE`) and
+reads the slots again after. A backup from before has none and leaves the songs alone. Tests: test_web.mjs (the ids
+against editor.c, a backup with two songs and the pedal set, a restore that brings one back and erases another, an
+old backup that leaves them). On the unit (2026-10-21, FM-1_900 installed over the bridge): `BK_LIST` lists 28
+objects, the six songs there (slots 2..7) and the pedal settings among them, kept across the install, and every
+object read back by `BK_GET` matches its CRC; the editor's Save backup and Restore on the unit work (the user, the same day). (Found on the way: tools/fm1_song.py
+named the song header's size `HDR` too, over the SysEx header, so its link to the FM-1 had failed since SNG2,
+2026-10-13; renamed `SNG_HDR`.)
 
 ## Review notes (2026-10-11)
 
@@ -1032,7 +1077,11 @@ hazard; what it found and what was done:
   `docs/demos.md`, and in the Setlist tab like the grooves; (3) a short video or audio clip of the user playing Back
   in Black from the Ampero (playing over a record is not publishing its transcription). Also noticed:
   `songs/seven-nation(wip).json` holds a copy of Shine On (named SHINE ON YOU, sections P2/P3), not Seven Nation
-  Army. Not started.
+  Army. (2) done the same day: `songs/` emptied by the user and renamed `song_examples/`, which holds three original
+  demo songs (FIRST LIGHT, rock 4/4; BACK PORCH, a blues shuffle on 8T; SLOW TIDE, a 6/8 ballad) covering several
+  sections, triplets, fill marks, fill bars, entries, breaks (a stop, the blues stop, a silent bar), flams, ratchets
+  and outros, each rendered through the firmware's engine with its plan; the pedal plans are `docs/demos.md`. Not
+  in the Setlist tab yet; (3) not started.
 - **A crash after a fill** (asked 2026-10-20: "often times a fill is followed by a crash on beat 1 of the next bar").
   Today nothing adds hits to the bar after a fill: `live_block` restarts the pattern from its top when a pedal fill
   ends, but an entry plays only when a section comes in from another one (never on the same section looping, and it

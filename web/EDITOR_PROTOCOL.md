@@ -44,7 +44,10 @@ BackBeat firmware).
   commit). A project object is "DRM1" (the globals and the drum track); a restore also takes SLOOP 2.x's "FUN4".."FUN6"
   (their drum track), not SLOOP 1.x's. The editor restores a SLOOP backup without its objects 6..8 and its USR1
   sample, says which it left out, and refuses (before writing anything) a backup whose projects the firmware cannot
-  read. The songs, the pedal settings and the factory grooves (16..24, 40..63, below) are still outside `BK_LIST`.
+  read. Since 2026-10-21 `BK_LIST` also lists the songs (16..23, 40..47: an empty slot with length 0, which a restore
+  erases) and the pedal settings (24), after the sample slots: a backup holds the whole BackBeat. A backup from before
+  has none of them and its restore leaves the songs as they are. The factory grooves (48..63, below) stay outside
+  `BK_LIST` (GET only). An editor from before 2026-10-21 refuses a newer backup file (objects it does not know).
 - **Pages** the editor shows (params.c's page table): the Sequencer has the drum track's PATTERN (LEN DIV SWG GATE)
   and FX (FILTER `P_TFLT`, INSERT `P_ITYPE P_IA P_IB P_IC`, INSERT 2 `P_IMIX`); the Settings GLOBAL, MASTER, DRUMS,
   DLY, REV (SIZE DAMP: the chorus bus is gone, G_CRATE / G_CDEPTH unused), MIDI (CH = G_DRCH, the drums' channel, and

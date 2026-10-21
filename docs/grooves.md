@@ -1,6 +1,6 @@
 # Grooves
 
-`grooves/` holds sixteen generic grooves (2026-10-15), apart from the user's songs in `songs/`: drums to jam,
+`grooves/` holds sixteen generic grooves (2026-10-15), apart from the demo songs in `song_examples/` (`docs/demos.md`): drums to jam,
 rehearse or write over, not arrangements of particular songs. They are ordinary song JSON (the format
 `tools/fm1_song.py` describes), on kit 0 (MULDJORD), so they load into the web editor's Setlist tab (sixteen fill
 the set), go into an FM-1 slot (`python3 tools/fm1_song.py grooves/seven.json --put 3`), or render on the computer
@@ -10,7 +10,7 @@ the set), go into an FM-1 slot (`python3 tools/fm1_song.py grooves/seven.json --
 user slots. Groove n is the one on line n of `grooves/factory.txt` (the "Slot" column below): row n of the SONGS
 screen's FACTORY page, the pedal's PC 15+n (PC 16..31). Songs sent to the device go in the user slots (the web
 editor's Setlist tab, `fm1_song.py --put`) and never touch the grooves. The web editor's Setlist tab lists the grooves
-too (the site carries a copy of `grooves/`): play one, open it in the Song tab's editor, or add it to the set to edit
+too (the site carries a copy of `grooves/`): play one, open it in the Song editor tab, or add it to the set to edit
 it and send it to a user slot.
 
 ## How every groove is built
@@ -69,5 +69,5 @@ Written for BackBeat on 2026-10-15 (by the assistant, from the user's brief: "me
 non-standard ones to inspire, then directions without the toms in front, then four on the floor, a metal gallop and
 a 6/8 ballad). Written first as 4-bar phrases with the fill as marks on the last bar, converted on 2026-10-15 to a
 fill bar of its own (the last bar as a fill played it) with the repeated bars dropped. Tempo, kit, levels and fills
-are edited like any song (the Song tab's section editor). They are not transcriptions; any likeness to a record is
+are edited like any song (the Song editor tab's section editor). They are not transcriptions; any likeness to a record is
 the style's.

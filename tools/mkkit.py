@@ -200,7 +200,8 @@ def sfz_layer(regions, want):
 def mic_gain(path, nregs):
     """a multi-mic hit (DrumGizmo ports: '<n>-<Instrument>-<Mic>.flac'): the instrument's own mics full, the overheads
     -3 dB, the ambience -6 dB, the other drums' mics (bleed) -14 dB, a trigger track left out; None = leave out"""
-    m = re.match(r"\d+-([A-Za-z0-9]+)-([A-Za-z0-9]+)\.\w+$", os.path.basename(path))
+    m = re.match(r"\d+-([^-]+)-([A-Za-z0-9]+)\.\w+$", os.path.basename(path))   # (the instrument may hold an
+                                                     # underscore, DRSKit's "Snare_rim": all its mics were full, 2026-10-21)
     if not m or nregs < 4:
         return 0.0
     instr, mic = m.group(1).lower(), m.group(2).lower()

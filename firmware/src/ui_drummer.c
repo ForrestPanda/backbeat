@@ -297,8 +297,9 @@ static void live_state(uint32_t playing, const char *next)
     } else if (next[0]) {
         str_cpy(b, "NEXT: ", 7);
         str_cpy(b + 6, next, 13);
-    } else if (pedal_fill_wait) {                 /* asked in the bar's last beat: the next bar, whole */
-        str_cpy(b, "FILL NEXT BAR", sizeof b);
+    } else if (pedal_fill_wait) {                 /* asked in the bar's last beat: the next bar, whole; a fill of
+                                                   * several bars waiting for the section's end */
+        str_cpy(b, pedal_fill_wait > 1u ? "FILL AT THE END" : "FILL NEXT BAR", sizeof b);
         c = TE_DRUM;
     } else if (fill) {
         str_cpy(b, "FILL", sizeof b);

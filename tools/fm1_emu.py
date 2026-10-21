@@ -5,8 +5,8 @@ firmware run with a script of keys, knobs and pedal MIDI into the TRS jack, the 
 for, and the sound.
 
     tools/fm1_emu.py                                                # the demo script on the factory grooves
-    tools/fm1_emu.py "songs/back-in-blac(wip).json"                 # the demo script, that song in slot 1
-    tools/fm1_emu.py songs/black.json songs/time.json --wav out.wav   # slots 1 and 2, and what it played
+    tools/fm1_emu.py song_examples/back-porch.json                 # the demo script, that song in slot 1
+    tools/fm1_emu.py song_examples/first-light.json song_examples/slow-tide.json --wav out.wav   # slots 1 and 2, and what it played
     tools/fm1_emu.py song.json --keys "3000:SAVE,3800:n0,4600:PLAY,5600:midi:bf1401" --snap 3600,6000 --ms 7000
 
 The emulator has no USB, so songs cannot be sent to it as to a device. Instead they are written into the flash

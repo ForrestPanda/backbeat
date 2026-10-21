@@ -443,8 +443,12 @@ static const uint8_t *ed_bk_obj(uint32_t id, uint32_t *len)   /* 0 = no such obj
     }
     return 0;
 }
-static const uint8_t ED_BK_IDS[] = {0, 1, 2, 3, 4, 5, 9, 10, 32, 33, 34, 35};   /* 35: USR4 (2.4), 9: SYN kits (2.5),
+static const uint8_t ED_BK_IDS[] = {0, 1, 2, 3, 4, 5, 9, 10, 32, 33, 34, 35,   /* 35: USR4 (2.4), 9: SYN kits (2.5),
                                                                                       * 10: MIDI LEARN (2.6) */
+                                     16, 17, 18, 19, 20, 21, 22, 23, 40, 41, 42, 43, 44, 45, 46, 47, 24};   /* fm1-drummer
+                                                         * (2026-10-21): the songs (an empty slot: length 0, so a restore
+                                                         * erases it) and the pedal settings; the reply 29 x 11 bytes */
+_Static_assert(8u + 11u * sizeof ED_BK_IDS < sizeof ed_out, "BK_LIST fits a reply");
 
 /* a flash erase silences the audio for ~50 ms and stalls USB: only while stopped (as the panel) */
 static uint32_t ed_flash_busy(void) { return song.playing || transport_req; }

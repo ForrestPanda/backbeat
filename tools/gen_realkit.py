@@ -7,7 +7,8 @@
 
 The recipe is tools/realkit.json: per lane its source (a key of an SFZ kit, or a WAV), how many velocity layers
 (1..4; spread over the source's layers, the hardest first: as the steps' levels hard, normal, soft, ghost), how
-many round-robin takes (the source's first ones), its length, its floor and its sample rate. Every hit is the
+many round-robin takes (the source's first ones), its length, its floor and its sample rate; "mics", the
+microphones to keep (the RIM: its close mic only, 2026-10-21: the others, the wires and the room, made a click a roll). Every hit is the
 sum of its microphones (tools/mkkit.py's mic_gain: the drum's own mics full, overheads -3 dB, room -6 dB, the
 other drums' -14 dB, triggers left out), resampled by sox, cut at its onset, its tail below -54 dB dropped, then
 cut at the lane's length with a fade. A lane keeps its layers' natural levels: one gain for the whole lane, set
@@ -82,10 +83,13 @@ def decode(path, rate, tmp):
     return sio.read_any_wav(Path(dst))[1]
 
 
-def mix(regs, rate, tmp):
+def mix(regs, rate, tmp, mics=None):
+    """mics: only the microphones whose names hold one of these (a lane's "mics"; none: all of them)"""
     tracks = []
     for r in regs:
         if not os.path.exists(r["_path"]):
+            continue
+        if mics and not any(m.lower() in os.path.basename(r["_path"]).lower().rsplit("-", 1)[-1] for m in mics):
             continue
         mg = mkkit.mic_gain(r["_path"], len(regs))
         if mg is None:
@@ -144,9 +148,9 @@ def render(recipe, tmp):
         out[lane] = {"rate": rate, "hits": [[None] * len(t) for t in hits]}
         for li, takes in enumerate(hits):
             for ti, regs in enumerate(takes):
-                jobs.append((lane, li, ti, regs, rate))
+                jobs.append((lane, li, ti, regs, rate, spec.get("mics")))
     with ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as ex:
-        res = list(ex.map(lambda j: (j[:3], trim(mix(j[3], j[4], tmp), j[4])), jobs))
+        res = list(ex.map(lambda j: (j[:3], trim(mix(j[3], j[4], tmp, j[5]), j[4])), jobs))
     for (lane, li, ti), x in res:
         out[lane]["hits"][li][ti] = x
     return out

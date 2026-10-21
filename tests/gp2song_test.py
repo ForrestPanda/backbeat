@@ -270,6 +270,35 @@ def main():
     assert len(fm1_song.pack(spec)) <= 3800
     print("gp2song: eighteen parts: sixteen kept (dropped from the end, the outro stays), packed PASS")
 
+    # a 32nd pair on an odd 16th stays on its step (2026-10-20, Hotel California's tom run: rounding to the nearest
+    # step put the pair's second hit on the next step); a hit a 64th early is on time
+    import gp2song
+    t16 = gp2song.QUARTER // 4
+    bar = gp2song.Bar(4 * gp2song.QUARTER, (4, 4))
+    bar.notes += [(p * t16 // 2, "MIDTOM", 0, False) for p in (22, 23, 24, 25)]     # 16ths 11, 11.5, 12, 12.5
+    bar.notes += [(4 * t16 - t16 // 4, "SNARE", 0, False), (9 * t16, "SNARE", 0, False), (9 * t16 + t16 // 2, "SNARE", 0, False)]
+    s = gp2song.bar_strings(bar)
+    assert s["lanes"]["MIDTOM"] == "...........xx...", s["lanes"]
+    assert s["ratchets"]["MIDTOM"] == "...........22...", s.get("ratchets")
+    assert s["lanes"]["SNARE"] == "....x....x......" and s["ratchets"]["SNARE"] == ".........2......", s
+    print("gp2song: a 32nd pair on an odd 16th is that step's ratchet; a hit a 64th early is on its step PASS")
+
+    # the bars that deviate at a section's end are its fill, several of them (2026-10-20: a 2-bar fill was cut to its
+    # last bar); a section of variations keeps a 1-bar fill
+    def bar_of(hits):
+        b = gp2song.Bar(4 * gp2song.QUARTER, (4, 4))
+        b.notes += [(s * t16, lane, 0, False) for lane, steps in hits.items() for s in steps]
+        return b
+    groove = {"KICK": (0, 8), "SNARE": (4, 12), "HAT": range(0, 16, 2)}
+    lead, roll = {"KICK": (0, 8, 10, 14), "SNARE": (4, 12)}, {"SNARE": range(16), "CRASH": (0,)}
+    sec, p, score, nfill, _ = gp2song.make_section("VERSE", [bar_of(groove)] * 6 + [bar_of(lead), bar_of(roll)], False)
+    assert p == 1 and nfill == 2 and sec["fillbar"]["steps"] == 32, (p, nfill, sec.get("fillbar"))
+    assert sec["fillbar"]["lanes"]["KICK"] == "x.......x.x...x." + "." * 16 and sec["fillbar"]["lanes"]["SNARE"] == "....x.......x..." + "x" * 16, sec["fillbar"]
+    varied = [bar_of(groove), bar_of(lead), bar_of({"KICK": (0,)}), bar_of({"KICK": (0, 4)}), bar_of({"SNARE": (4,)}), bar_of(roll)]
+    sec, p, score, nfill, _ = gp2song.make_section("JAM", varied, False)
+    assert score < gp2song.MATCH and nfill == 1 and sec["fillbar"]["steps"] == 16, (p, score, nfill)
+    print("gp2song: the deviating bars at a section's end as a 2-bar fill; a section of variations keeps one bar PASS")
+
 
 def make_many_song():
     """eighteen sections of a bar each, every one its own pattern (the kick on a 16th of its own, the snare on 4 or

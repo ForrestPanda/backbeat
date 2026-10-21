@@ -38,11 +38,12 @@ kits' 86 KB went to the crash), so the user slots USR3+4 stay yours.
 | SNARE | DRS Kit 38 (chosen by ear from six, 2026-10-14) | 4 x 3 | 0.6 s | 22050 |
 | HAT | Black Pearl 42 | 4 x 1 | 0.3 s | 32000 |
 | OPENHAT, PEDAL | Black Pearl 46, 44 | 2 x 1 | 0.8, 0.3 s | 32000 |
-| RIM | DRS Kit 37 (the same snare's rim) | 2 x 1 | 0.4 s | 32000 |
+| RIM | DRS Kit 37 (the same snare's rim; its close mic only since 2026-10-21: the wires and the room made it a roll) | 2 x 1 | 0.4 s | 32000 |
 | LOWTOM, MIDTOM, HITOM | Muldjord 41, 47, 48 (Tom4 the floor 69 Hz, Tom2 98 Hz, Tom1 127 Hz: a 5-piece's) | 2 x 1 | 1.0, 0.95, 0.9 s | 22050 |
 | CRASH | Muldjord 49 | 1 x 2 | 3.2 s (one take of 2.0 s until 2026-10-15) | 32000 |
 | RIDE | Red Zeppelin 51 | 2 x 1 | 1.5 s | 32000 |
-| KICK2, SHAKER | Muldjord 35, 55 | 1 | 0.4..0.45 s | 22050 |
+| KICK2 | Muldjord 35 | 1 | 0.45 s | 22050 |
+| SHAKER | CC0, VSCO-2 CE's shaker (a ride bell until 2026-10-21) | 1 | 0.3 s | 22050 |
 | SNARE2 | DRS Kit 38 (layer 3, another take) | 1 | 0.5 s | 22050 |
 | CLAP, COWBELL | CC0 | 1 | 0.35 s | 22050 |
 

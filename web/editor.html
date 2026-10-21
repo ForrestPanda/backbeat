@@ -82,6 +82,9 @@
   button:disabled .ic { opacity: .5; }
   label { white-space: nowrap; }
   table { border-collapse: collapse; }
+  details.cheat { margin: 0 0 12px; } details.cheat summary { cursor: pointer; color: var(--dim); }
+  table.cheat { margin-top: 8px; } table.cheat td, table.cheat th { padding: 2px 12px 2px 0; text-align: left; vertical-align: top; }
+  table.cheat td:first-child, table.cheat td:last-child { white-space: nowrap; } table.cheat kbd { font: inherit; } table.cheat th { color: var(--dim); font-weight: normal; }
   th { font-weight: 400; color: var(--dim); text-align: left; padding: 0 12px 4px 0; text-transform: lowercase; }
   td { padding: 2px 12px 2px 0; }
   td.i { color: var(--dim); text-align: right; }
@@ -508,17 +511,17 @@
     </a>
     <nav class="tabs" id="tabs" role="tablist" aria-orientation="vertical">
       <div class="navh" data-t="navDrums"></div>
-      <button role="tab" data-tab="sequencer" data-t="tabSeq" data-ic="symbol_grid"></button>
-      <button role="tab" data-tab="song" data-t="tabSong" data-ic="control_arrow_loop"></button>
-      <button role="tab" data-tab="songs" data-t="tabSongs" data-ic="note_eight"></button>
       <button role="tab" data-tab="setlist" data-t="tabSetlist" data-ic="port_disk"></button>
+      <button role="tab" data-tab="songs" data-t="tabSongs" data-ic="note_eight"></button>
       <div class="navh" data-t="navSounds"></div>
       <button role="tab" data-tab="kits" data-t="tabKits" data-ic="symbol_drum"></button>
       <button role="tab" data-tab="drumsynth" data-t="tabDrumSynth" data-ic="symbol_waves"></button>
       <button role="tab" data-tab="samples" data-t="samples" data-ic="symbol_waves"></button>
       <div class="navh" data-t="navDevice"></div>
-      <button role="tab" data-tab="projects" data-t="projects" data-ic="symbol_folder"></button>
       <button role="tab" data-tab="settings" data-t="tabSettings" data-ic="symbol_cog"></button>
+      <div class="navh" data-t="navFuture"></div>   <!-- SLOOP's pages BackBeat does not support yet (the drummer plays songs) -->
+      <button role="tab" data-tab="sequencer" data-t="tabSeq" data-ic="symbol_grid"></button>
+      <button role="tab" data-tab="song" data-t="tabSong" data-ic="control_arrow_loop"></button>
     </nav>
     <div class="devcard">
       <div class="devline"><span class="led" id="led"></span><span data-t="fm1"></span></div>
@@ -538,35 +541,37 @@
     </header>
     <p class="hint" id="hint" hidden></p>
 
-    <section class="panel" id="p-sequencer" data-tab="sequencer" data-dev hidden>
-      <div class="groups" id="seqgroups"></div>
-      <div class="card" id="steps">
-        <h2><span data-t="steps" data-ic="note_eight"></span><span class="sub" id="steplen"></span></h2>
-        <p class="bar"><button id="reloadsteps" data-t="reload" data-ic="control_arrow_loop"></button>
-          <button id="clearseq" class="warn" data-t="clearSeq" data-ic="symbol_trash"></button>
-          <span class="dim" id="noteshelp"></span></p>
-        <p class="bar seqtools"><span data-t="lenLabel"></span>
-          <button type="button" id="lenminus" class="sq">&minus;</button><input id="lenval" type="number" min="1" max="64"><button type="button" id="lenplus" class="sq">+</button></p>
-        <div class="bar" id="drumbar"></div>
-        <div class="dgrid" id="drumgrid"></div>
-        <div class="stepdetail" id="stepdetail" hidden></div>
+    <section class="panel" id="p-setlist" data-tab="setlist" hidden>   <!-- the set (the browser's, no FM-1 needed); the FM-1's slots -->
+      <div class="card" id="setcard">
+        <h2 data-t="setTitle" data-ic="note_eight"></h2>
+        <p class="dim" data-t="setHelp"></p>
+        <div class="setrows" id="setlist"></div>
+        <p class="bar"><button id="set-add" class="pri" data-t="setAdd" data-ic="symbol_upload"></button>
+          <input id="set-file" type="file" accept=".json,application/json" multiple hidden>
+          <button id="set-add-edited" data-t="setAddEdited"></button>
+          <button id="set-export" data-t="setExport" data-ic="symbol_download"></button>
+          <button id="set-clear" class="warn" data-t="setClear" data-ic="symbol_trash"></button></p>
+        <p class="bar" data-devonly><button id="set-send" class="pri" data-t="setSend" data-ic="port_usb_c"></button>
+          <button id="set-from-dev" data-t="setFromDev"></button></p>
+        <progress id="set-prog" max="1" value="0" hidden></progress>
+        <p class="dim" id="set-msg" hidden></p>
       </div>
-    </section>
-
-    <section class="panel" id="p-song" data-tab="song" data-dev hidden>
-      <div class="card">
-        <h2 data-t="songTitle" data-ic="control_arrow_loop"></h2>
-        <p class="dim" data-t="songHelp"></p>
-        <p class="bad" id="songerr" hidden></p>
-        <div id="songbody" hidden>
-          <table class="song"><thead><tr><th>#</th><th data-t="songSection"></th><th data-t="songBars"></th><th data-t="songTimes"></th><th></th></tr></thead>
-            <tbody id="songrows"></tbody></table>
-          <p class="bad" id="songempty" data-t="songEmpty" hidden></p>
-          <p class="bar"><button type="button" id="songadd" data-t="songAdd"></button> <span class="dim" id="songsum"></span></p>
-          <p class="bar"><span data-t="songLoop"></span> <span class="seg" id="songloop"><button type="button" data-v="0" data-t="songLoopOff"></button><button type="button" data-v="1" data-t="songLoopOn"></button></span></p>
-          <p class="bar"><button type="button" id="songread" data-t="songRead" data-ic="control_arrow_loop"></button>
-            <button type="button" id="songsend" data-t="songSend" data-ic="symbol_upload"></button></p>
-        </div>
+      <p class="bar setnav" id="set-nav"><button id="set-prev" data-t="setPrev"></button> <b id="set-now"></b>
+        <button id="set-next" data-t="setNext"></button> <button id="set-live" class="pri" data-t="setLive"></button></p>
+      <div id="set-player"></div>
+      <div class="card" data-devonly>
+        <h2 data-t="setDevTitle" data-ic="port_disk"></h2>
+        <p class="dim" data-t="songsHelp"></p>
+        <div class="slots" id="songslots"></div>
+        <p class="bar"><button id="songs-refresh" data-t="songsRefresh"></button>
+          <input id="songs-file" type="file" accept=".json,application/json" hidden></p>
+        <progress id="songs-prog" max="1" value="0" hidden></progress>
+        <p class="dim" id="songs-err" hidden></p>
+      </div>
+      <div class="card" id="grvcard">   <!-- the FM-1's factory grooves (grooves/ in the site), read-only -->
+        <h2 data-t="grvTitle" data-ic="symbol_drum"></h2>
+        <p class="dim" data-t="grvHelp"></p>
+        <div class="setrows" id="grvlist"></div>
       </div>
     </section>
 
@@ -578,6 +583,7 @@
         <p class="bar"><button id="gpi-open" class="pri" data-t="gpiOpen"></button>
           <input id="gpi-file" type="file" accept=".gp3,.gp4,.gp5,.mid,.midi,audio/midi,audio/x-midi,.json,application/json" hidden>
           <label><input type="checkbox" id="gpi-auto"> <span data-t="gpiAuto"></span></label>
+          <label><input type="checkbox" id="gpi-keep" checked> <span data-t="gpiKeep"></span></label>
           <label><span data-t="gpiSections"></span> <input id="gpi-sections" type="text" size="28" placeholder="Intro, Verse 1, Chorus, Outro"></label></p>
         <p class="dim" id="gpi-status" hidden></p>
         <pre id="gpi-log" class="dim" hidden style="white-space: pre-wrap; font-size: 12px; max-height: 240px; overflow: auto;"></pre>
@@ -613,8 +619,8 @@
           <p class="bar"><label><span data-t="sedSplit"></span> <select id="sed-splitbar"></select></label>
             <button id="sed-split" data-t="sedSplitBtn"></button>
             <button id="sed-merge" data-t="sedMerge"></button>
-            <button id="sed-fillbar"></button>
             <label><span data-t="sedEntry"></span> <select id="sed-entry"></select></label>
+            <label><span data-t="sedFill"></span> <select id="sed-fillbar"></select></label>
             <label><span data-t="sedBreak"></span> <select id="sed-break"></select></label>
             <span class="dim" id="sed-info"></span>
             <span class="warn-t" id="sed-barwarn" hidden></span> <button id="sed-barfix" hidden></button></p>
@@ -633,8 +639,8 @@
           <div id="sed-barsbox" hidden>
             <p class="dim" data-t="sedBarsHelp"></p>
             <div id="sed-bars" class="sedbars"></div>
-            <p class="bar"><button id="sed-usebars" data-t="sedUseBars"></button> <button id="sed-usefill" data-t="sedUseFill"></button>
-              <button id="sed-useentry" data-t="sedUseEntry"></button> <button id="sed-usebreak" data-t="sedUseBreak"></button>
+            <p class="bar"><button id="sed-useentry" data-t="sedUseEntry"></button> <button id="sed-usebars" data-t="sedUseBars"></button>
+              <button id="sed-usefill" data-t="sedUseFill"></button> <button id="sed-usebreak" data-t="sedUseBreak"></button>
               <span id="sed-barsel" class="dim"></span></p>
           </div>
           <p class="bar"><button id="sed-play" class="pri" data-t="playBtn"></button>
@@ -646,7 +652,22 @@
       </div>
       <div id="splay-home"><div class="card" id="splay">
         <h2 data-t="playTitle" data-ic="symbol_audio"></h2>
-        <p class="dim" data-t="playHelp"></p>
+        <details class="cheat" id="play-cheat">   <!-- the pedal's commands at a glance (pedal.c), the keys that do the same here -->
+          <summary data-t="playCheat"></summary>
+          <table class="cheat"><tr><th data-t="playCheatCmd"></th><th data-t="playCheatWhat"></th><th data-t="playCheatKey"></th></tr>
+            <tr><td>CC 20 n</td><td data-t="playC20"></td><td><kbd>1–8</kbd></td></tr>
+            <tr><td>CC 27 n</td><td data-t="playC27"></td><td><kbd>shift 1–8</kbd></td></tr>
+            <tr><td>CC 21 0</td><td data-t="playC21"></td><td><kbd>f</kbd></td></tr>
+            <tr><td>CC 21 1</td><td data-t="playC21n"></td><td><kbd>F</kbd></td></tr>
+            <tr><td>CC 28 n</td><td data-t="playC28"></td><td><kbd>b</kbd></td></tr>
+            <tr><td>CC 22 n</td><td data-t="playC22"></td><td><kbd>e</kbd></td></tr>
+            <tr><td>CC 23</td><td data-t="playC23"></td><td><kbd>space</kbd></td></tr>
+            <tr><td>CC 24 / 25</td><td data-t="playC24"></td><td><kbd>. ,</kbd></td></tr>
+            <tr><td>CC 26</td><td data-t="playC26"></td><td><kbd>t</kbd></td></tr>
+            <tr><td>PC n</td><td data-t="playCPC"></td><td></td></tr>
+          </table>
+          <p class="dim" data-t="playCheatNote"></p>
+        </details>
         <div class="plive" id="play-live">   <!-- the device's LIVE screen, for the player: as you hear it -->
           <div class="plive-head"><span id="play-song"></span>
             <span class="plive-tempo"><button id="pl-bpm-dn" title="-1 BPM">&minus;</button><input id="pl-bpm" type="number" min="40" max="240" inputmode="numeric" disabled><span id="pl-bpm-unit">BPM</span><button id="pl-bpm-up" title="+1 BPM">+</button><button id="pl-tap" data-t="playTap"></button></span></div>
@@ -680,40 +701,6 @@
           <button id="pedal-set" class="pri" data-t="pedalSet"></button> <span class="dim" id="pedal-now"></span></p>
         <p class="bar"><label><span data-t="pedalClock"></span> <select id="pedal-clock"></select></label>
           <span class="dim" data-t="pedalClockHelp"></span></p>
-      </div>
-    </section>
-
-    <section class="panel" id="p-setlist" data-tab="setlist" hidden>   <!-- the set (the browser's, no FM-1 needed); the FM-1's slots -->
-      <div class="card" id="setcard">
-        <h2 data-t="setTitle" data-ic="note_eight"></h2>
-        <p class="dim" data-t="setHelp"></p>
-        <div class="setrows" id="setlist"></div>
-        <p class="bar"><button id="set-add" class="pri" data-t="setAdd" data-ic="symbol_upload"></button>
-          <input id="set-file" type="file" accept=".json,application/json" multiple hidden>
-          <button id="set-add-edited" data-t="setAddEdited"></button>
-          <button id="set-export" data-t="setExport" data-ic="symbol_download"></button>
-          <button id="set-clear" class="warn" data-t="setClear" data-ic="symbol_trash"></button></p>
-        <p class="bar" data-devonly><button id="set-send" class="pri" data-t="setSend" data-ic="port_usb_c"></button>
-          <button id="set-from-dev" data-t="setFromDev"></button></p>
-        <progress id="set-prog" max="1" value="0" hidden></progress>
-        <p class="dim" id="set-msg" hidden></p>
-      </div>
-      <p class="bar setnav" id="set-nav"><button id="set-prev" data-t="setPrev"></button> <b id="set-now"></b>
-        <button id="set-next" data-t="setNext"></button> <button id="set-live" class="pri" data-t="setLive"></button></p>
-      <div id="set-player"></div>
-      <div class="card" data-devonly>
-        <h2 data-t="setDevTitle" data-ic="port_disk"></h2>
-        <p class="dim" data-t="songsHelp"></p>
-        <div class="slots" id="songslots"></div>
-        <p class="bar"><button id="songs-refresh" data-t="songsRefresh"></button>
-          <input id="songs-file" type="file" accept=".json,application/json" hidden></p>
-        <progress id="songs-prog" max="1" value="0" hidden></progress>
-        <p class="dim" id="songs-err" hidden></p>
-      </div>
-      <div class="card" id="grvcard">   <!-- the FM-1's factory grooves (grooves/ in the site), read-only -->
-        <h2 data-t="grvTitle" data-ic="symbol_drum"></h2>
-        <p class="dim" data-t="grvHelp"></p>
-        <div class="setrows" id="grvlist"></div>
       </div>
     </section>
 
@@ -752,11 +739,11 @@
       <div id="smpslots"></div>
     </section>
 
-    <section class="panel" id="p-projects" data-tab="projects" data-dev hidden>
+    <section class="panel" id="p-settings" data-tab="settings" data-dev hidden>
+      <div class="groups" id="setgroups"></div>
       <div class="card">
-        <h2 data-t="projects" data-ic="symbol_folder"></h2>
-        <p class="dim" data-t="projHelp"></p>
-        <div class="slots" id="slots"></div>
+        <h2 data-t="system" data-ic="symbol_cog"></h2>
+        <table id="sysinfo"></table>
       </div>
       <div class="card" id="bkgroup">
         <h2 data-t="bkTitle" data-ic="port_disk"></h2>
@@ -767,11 +754,40 @@
       </div>
     </section>
 
-    <section class="panel" id="p-settings" data-tab="settings" data-dev hidden>
-      <div class="groups" id="setgroups"></div>
+    <section class="panel" id="p-sequencer" data-tab="sequencer" data-dev hidden>
+      <div class="groups" id="seqgroups"></div>
+      <div class="card" id="steps">
+        <h2><span data-t="steps" data-ic="note_eight"></span><span class="sub" id="steplen"></span></h2>
+        <p class="bar"><button id="reloadsteps" data-t="reload" data-ic="control_arrow_loop"></button>
+          <button id="clearseq" class="warn" data-t="clearSeq" data-ic="symbol_trash"></button>
+          <span class="dim" id="noteshelp"></span></p>
+        <p class="bar seqtools"><span data-t="lenLabel"></span>
+          <button type="button" id="lenminus" class="sq">&minus;</button><input id="lenval" type="number" min="1" max="64"><button type="button" id="lenplus" class="sq">+</button></p>
+        <div class="bar" id="drumbar"></div>
+        <div class="dgrid" id="drumgrid"></div>
+        <div class="stepdetail" id="stepdetail" hidden></div>
+      </div>
+    </section>
+
+    <section class="panel" id="p-song" data-tab="song" data-dev hidden>
       <div class="card">
-        <h2 data-t="system" data-ic="symbol_cog"></h2>
-        <table id="sysinfo"></table>
+        <h2 data-t="songTitle" data-ic="control_arrow_loop"></h2>
+        <p class="dim" data-t="songHelp"></p>
+        <p class="bad" id="songerr" hidden></p>
+        <div id="songbody" hidden>
+          <table class="song"><thead><tr><th>#</th><th data-t="songSection"></th><th data-t="songBars"></th><th data-t="songTimes"></th><th></th></tr></thead>
+            <tbody id="songrows"></tbody></table>
+          <p class="bad" id="songempty" data-t="songEmpty" hidden></p>
+          <p class="bar"><button type="button" id="songadd" data-t="songAdd"></button> <span class="dim" id="songsum"></span></p>
+          <p class="bar"><span data-t="songLoop"></span> <span class="seg" id="songloop"><button type="button" data-v="0" data-t="songLoopOff"></button><button type="button" data-v="1" data-t="songLoopOn"></button></span></p>
+          <p class="bar"><button type="button" id="songread" data-t="songRead" data-ic="control_arrow_loop"></button>
+            <button type="button" id="songsend" data-t="songSend" data-ic="symbol_upload"></button></p>
+        </div>
+      </div>
+      <div class="card">   <!-- the Jam's project slots (the device's JAM PROJECTS: sections A..D) -->
+        <h2 data-t="projects" data-ic="symbol_folder"></h2>
+        <p class="dim" data-t="projHelp"></p>
+        <div class="slots" id="slots"></div>
       </div>
     </section>
 
@@ -1376,12 +1392,14 @@ function b64dec(s) {
   return out.subarray(0, o);
 }
 /* object ids (firmware editor.c ED_BK_IDS): 0 the working project, 1 the settings, 2..5 projects A..D, 9 the SYN drum
-   kits, 10 the MIDI part (MIDI LEARN, GLO > MIDI; listed only when not at its defaults), 32..35 the sample slots USR1..4.
+   kits, 10 the MIDI part (MIDI LEARN, GLO > MIDI; listed only when not at its defaults), 32..35 the sample slots USR1..4,
+   16..23 and 40..47 the songs 1..16 (an empty slot: length 0, erased by a restore) and 24 the pedal settings (listed
+   since 2026-10-21; a backup from before has none, and a restore leaves the songs as they are).
    RESTORE: the objects in the order they are written back; SAMPLES: the slots written after them (USR2..4).
    SKIP: what a backup of SLOOP may hold that this firmware has no more: 6..7 the user preset banks, 8 the FM6 patch
    bank, and USR1 (32), whose flash holds the songs here (sng.c: listed empty, never written); a restore leaves them out
    and says so (an empty USR1, as every backup of this firmware has it, silently) */
-const BK = { FORMAT: "sloop-backup", VERSION: 1, SAMPLES: [34, 35], RESTORE: [9, 10, 2, 3, 4, 5, 0, 1], SKIP: [6, 7, 8, ...SMP.SONGS.map((k) => 32 + k)] };
+const BK = { FORMAT: "sloop-backup", VERSION: 1, SAMPLES: [34, 35], RESTORE: [9, 10, 2, 3, 4, 5, 24, ...Array.from({ length: 16 }, (_, k) => (k < 8 ? 16 : 32) + k), 0, 1], SKIP: [6, 7, 8, ...SMP.SONGS.map((k) => 32 + k)] };
 class BackupError extends Error { constructor(code, msg) { super(msg); this.code = code; } }
 /* read everything; progress(done, total bytes) */
 async function backupCapture(rq, info, progress = () => {}) {
@@ -1779,10 +1797,10 @@ function makeMockDevice(opt = {}) {
                                                                            * default (editor.c, project.c midi_part_default) */
           ...st.smp.map((_, k) => [32 + k, !SMP.taken(k) && st.smp[k].zones ? st.smp[k].flash.slice(0, SMP.DATA_OFF + st.smp[k].len) : new Uint8Array(0)]),
           ...st.songs.map((d, k) => [SNG.obj(k), d || new Uint8Array(0)]), [SNG.OBJ_ARRSET, st.arrset.slice()]]);   /* (fm1-drummer:
-                                                        * readable by GET, not listed: editor.c ED_BK_IDS) */
+                                                        * the songs and the pedal settings listed too: editor.c ED_BK_IDS) */
         st.bkPut = null;
-        b(0); b([...st.bkSnap.keys()].filter((id) => !SNG.isObj(id)).length);
-        for (const [id, d] of st.bkSnap) { if (SNG.isObj(id)) continue; b(id); out.push(...u35enc(d.length), ...u35enc(crc32(d))); }
+        b(0); b(st.bkSnap.size);
+        for (const [id, d] of st.bkSnap) { b(id); out.push(...u35enc(d.length), ...u35enc(crc32(d))); }
         break;
       }
       case CMD.BK_GET: {
@@ -2619,7 +2637,7 @@ const PLAY = {
   rkLayer(vels, vel) { let l = 0; while (l + 1 < vels.length && vel * 2 < vels[l] + vels[l + 1]) l++; return l; },
   rkTake(last, nt, r) { return nt <= 1 ? 0 : ((last < 0 ? 0 : last) + 1 + Math.floor(r * (nt - 1))) % nt; },
   create(spec, countIn = 0) {                        /* countIn: bars of clicks before a start from stopped (the device's setting) */
-    return { spec, sec: -1, cur: null, step: 0, pos: 0, bar: 0, req: -1, brk: false, eb: null, ebN: 0, ebB: 0, atEnd: false, fill: false, fillBars: 0, fillWait: false,
+    return { spec, sec: -1, cur: null, step: 0, pos: 0, bar: 0, req: -1, brk: false, eb: null, ebN: 0, ebB: 0, atEnd: false, fill: false, fillBars: 0, fillWait: 0,
              endReq: 0, endBars: 0, playing: false, stopped: false, countIn, counting: 0, ciNum: 4, ciDen: 4, bpm: spec.bpm,
              swing: +spec.swing || 0, swing8: spec.swing_grid === "1/8" };
   },
@@ -2641,7 +2659,16 @@ const PLAY = {
   fbBars(s) { const n = PLAY.fbSteps(s); return n ? Math.ceil(n / PLAY.fbBar(s)) : 1; },
   /* the bars a fill asked for in bar `bar` lasts, this one counted (seq.c fill_bars_from): the fill bar of its own;
      without one, to the section's end (2026-10-17: the marks sit where the writer put them; no restart after) */
-  fillBars(s, bar) { if (s.fillbar) return PLAY.fbBars(s); const n = PLAY.secBars(s); return n - (bar % n); },
+  fillBars(s, bar) {
+    if (s.fillbar && PLAY.fbBars(s) > 1) return Math.min(PLAY.fillSpan(s, bar), PLAY.fbBars(s));   /* (fewer left: its last ones) */
+    if (s.fillbar) return PLAY.fbBars(s);
+    const n = PLAY.secBars(s); return n - (bar % n);
+  },
+  /* a fill bar of several bars ends on the section's last bar line (seq.c fill_span_from, fill_wait_from; 2026-10-20):
+     the bars from `bar` to the end it lands on (a pattern shorter than the fill: the first end it reaches whole), and
+     the bar lines it waits before it starts */
+  fillSpan(s, bar) { const n = PLAY.secBars(s), f = PLAY.fbBars(s); let left = n - (bar % n); while (left < f && n < f) left += n; return left; },
+  fillWaitFrom(s, bar) { const f = s.fillbar ? PLAY.fbBars(s) : 0, left = f > 1 ? PLAY.fillSpan(s, bar) : 0; return left > f ? left - f : 0; },
   /* the entry or the break a section comes in through (sng.c sng_eb, 2026-10-18): the break (brk) where written, else
      the entry, else a bar of rest; the entry alone without brk; null none. {eb, n, bars}: its steps and bars, played
      before the pattern, which starts from its top after them (bar) */
@@ -2686,13 +2713,16 @@ const PLAY = {
                                                        its last bar: another fill, straight on.
                                                        next (CC 21 value 1, the key F): as asked in the last beat, from
                                                        anywhere in the bar: the whole next bar (a fill bar whose hits lead
-                                                       off the bar) */
+                                                       off the bar). A fill bar of several bars ends on the section's
+                                                       last bar line: asked earlier it waits, then plays whole (fillWait
+                                                       counts the bar lines to its start; 2026-10-20) */
     if (!st.playing || st.counting || st.sec < 0) return;
     const s = PLAY.playing(st), barU = PLAY.barU(s), beat = 192 / SNG.meter(s.time).den, at = next ? barU - 1 : st.pos % barU;
     if (!st.fill && !st.fillWait) {
-      if (at + beat >= barU) st.fillWait = true;
+      const late = at + beat >= barU ? 1 : 0, wait = late + PLAY.fillWaitFrom(s, st.bar + late);
+      if (wait) st.fillWait = wait;
       else { st.eb = null; st.ebB = 0; st.fill = true; st.fillBars = PLAY.fillBars(s, st.bar); }   /* (an entry or break playing: cut) */
-    } else if (st.fill && st.fillBars <= 1 && at + beat >= barU) st.fillWait = true;
+    } else if (st.fill && st.fillBars <= 1 && at + beat >= barU) st.fillWait = 1;
     if (st.req >= 0) st.atEnd = false;             /* a section cued: on the bar after the fill */
   },
   /* CC 28: section k through its break, as CC 20; k not a section: the section playing's (stopped: the one cued, else
@@ -2737,7 +2767,7 @@ const PLAY = {
     st.spec = spec;
     st.req = -1; st.atEnd = false; st.endReq = 0; st.endBars = 0;
   },
-  stop(st) { st.playing = false; st.stopped = true; st.req = -1; st.brk = false; st.eb = null; st.ebB = 0; st.fill = st.atEnd = st.fillWait = false; st.fillBars = 0; st.endReq = st.endBars = 0; st.counting = 0; },
+  stop(st) { st.playing = false; st.stopped = true; st.req = -1; st.brk = false; st.eb = null; st.ebB = 0; st.fill = st.atEnd = false; st.fillWait = 0; st.fillBars = 0; st.endReq = st.endBars = 0; st.counting = 0; },
   /* a new bar: the fill over at its bar line (a fill bar of its own: the pattern from its top; or the section cued, or
      the ending's stop), the one asked for in the last beat on, the request at the section's end (live_block) */
   bar(st) {
@@ -2745,9 +2775,9 @@ const PLAY = {
     const ebOver = !!st.eb && st.bar >= st.ebB;      /* the entry or break played: the pattern from its top (below) */
     if (st.fill) {
       if (st.fillBars > 1) st.fillBars--;
-      else if (st.fillWait) { st.fillWait = false; st.fillBars = PLAY.fillBars(PLAY.playing(st), st.bar); }   /* (another one, straight on) */
+      else if (st.fillWait) { st.fillWait = 0; st.fillBars = PLAY.fillBars(PLAY.playing(st), st.bar); }   /* (another one, straight on) */
       else { st.fill = false; st.fillBars = 0; over = true; }
-    } else if (st.fillWait) { st.fillWait = false; st.eb = null; st.ebB = 0; st.fill = true; st.fillBars = PLAY.fillBars(PLAY.playing(st), ebOver ? 0 : st.bar); }   /* (right
+    } else if (st.fillWait && !--st.fillWait) { st.eb = null; st.ebB = 0; st.fill = true; st.fillBars = PLAY.fillBars(PLAY.playing(st), ebOver ? 0 : st.bar); }   /* (right
                                                         after an entry or break: from the pattern's top, restarted below) */
     if (st.atEnd && st.bar % PLAY.curBars(st) === 0) st.atEnd = false;   /* waiting for the section's end */
     if (st.endBars && st.req < 0 && (st.bar >= st.endBars || over)) { PLAY.stop(st); return; }
@@ -2757,7 +2787,7 @@ const PLAY = {
                                                         and swing with its first section, sng.c sng_globals) */
       const enter = st.brk || st.sec !== st.req || st.sec < 0 || entering;   /* (its entry: from another section, from stopped,
                                                         a song just loaded; never the section playing asked for again) */
-      st.sec = st.req; st.req = -1; st.step = 0; st.pos = 0; st.bar = 0; st.fill = false; st.fillBars = 0; st.fillWait = false; st.endBars = st.endReq; st.endReq = 0;
+      st.sec = st.req; st.req = -1; st.step = 0; st.pos = 0; st.bar = 0; st.fill = false; st.fillBars = 0; st.fillWait = 0; st.endBars = st.endReq; st.endReq = 0;
       const e = enter ? PLAY.ebOf(st.spec.sections[st.sec], st.brk) : null;
       st.eb = e && e.eb; st.ebN = e ? e.n : 0; st.ebB = e ? e.bars : 0; st.brk = false;
     } else if ((over && st.req < 0 && PLAY.playing(st).fillbar) || ebOver) { st.step = 0; st.pos = 0; st.bar = 0; st.eb = null; st.ebB = 0; }   /* a fill bar of its
@@ -2817,7 +2847,7 @@ const PLAY = {
     const swung = ["1/4", "1/8", "1/16", "1/32"].includes(s.div) ? (gu * Math.max(0, Math.min(100, sw))) / 200 : 0;
     const len = on8 ? (Math.floor(st.pos / gu) % 2 ? gu - swung : gu + swung) / (gu / su) : Math.round(st.pos / su) % 2 ? su - swung : su + swung;
     const out = { hits, sec: st.sec, step: i, bar: st.bar, fill: fillNow, fb: !eb && !!(fb && fi >= 0 && fi < fbn), eb, brk: st.brk, secs: ((60 / st.bpm) * len) / 48, u: len, newBar: false,
-                  pos: st.pos, req: st.req, wait: !!st.fillWait, end: !!(st.endReq || st.endBars) };   /* (the view: where in the
+                  pos: st.pos, req: st.req, wait: st.fillWait, end: !!(st.endReq || st.endBars) };   /* (the view: where in the
                                                         bar and the pattern, what comes, at this step) */
     st.step++;
     st.pos += su;
@@ -3088,18 +3118,27 @@ const SED = {
     });
     return SED.norm({ name, steps: Math.min(n, SNG.NSTEP), div, time: use[0] && use[0].time, lanes, ratchets: rats, flams });
   },
-  /* a bar of the file as the section's fill bar of its own (since 2026-10-15; before, its hits became marks on the
-     pattern's last bar): the bar as it is, levels and ratchets */
-  withFill(sec, fillBar) {
-    return { sec: SED.norm({ ...sec, fillbar: { steps: fillBar.steps || 16, lanes: { ...(fillBar.lanes || {}) }, ratchets: { ...(fillBar.ratchets || {}) }, flams: { ...(fillBar.flams || {}) } } }), dropped: [] };
+  /* bars of the file (as fromBars) as the section's pattern, the rest kept: its name, outro, fill bar, entry and break
+     (the pattern's marks and fill conditions go with the old pattern) */
+  withPattern(sec, bars) {
+    const p = SED.fromBars(bars, sec.name, "1/16");
+    return SED.norm({ ...sec, steps: p.steps, div: p.div, time: p.time, lanes: p.lanes, ratchets: p.ratchets, flams: p.flams, fills: {}, fill: "" });
   },
-  /* ---- the fill bar of its own (sng.c SNG_F_FILLBAR): one bar after the pattern that a fill plays instead of the
-     pattern's last bar; edited as the pattern is (no marks there) */
+  /* bars of the file (one, or up to 4 as fromBars, 2026-10-20) as the section's fill bar of its own (since 2026-10-15;
+     before, its hits became marks on the pattern's last bar): the bars as they are, levels and ratchets */
+  withFill(sec, bars) {
+    const f = SED.fromBars([].concat(bars), sec.name, "1/16");
+    return { sec: SED.norm({ ...sec, fillbar: { steps: f.steps, lanes: f.lanes, ratchets: f.ratchets, flams: f.flams } }), dropped: [] };
+  },
+  /* ---- the fill bar of its own (sng.c SNG_F_FILLBAR): bars after the pattern that a fill plays instead of the bar
+     it is in, 1 to 4 (64 steps; several since 2026-10-20, as sng.c fb_bars plays them: the first from the press, then
+     the others, the phrase ending on a bar line); edited as the pattern is (no marks there) */
   fbSteps(sec) { return SNG.fillbarSteps(sec) || Math.min(sec.steps, SNG.NSTEP); },   /* one bar; not whole steps: the pattern's */
-  /* a fill bar added: what a fill played until now, from the pattern's last bar (its F hits in, its N hits out), and
-     the pattern's last bar as it plays outside a fill (its F hits out), those marks gone; empty: only rests */
-  fbAdd(sec, empty = false) {
-    const m = SED.fbSteps(sec), n = sec.steps, last = n - m, lanes = {}, rats = {}, marks = {}, flams = {}, fl = {}, fr = {}, ff = {};
+  /* a fill bar added: what a fill played until now, from the pattern's last bars (its F hits in, its N hits out), and
+     the pattern's last bars as they play outside a fill (its F hits out), those marks gone; empty: only rests; bars
+     past the pattern's start: rests */
+  fbAdd(sec, empty = false, bars = 1) {
+    const m = Math.min(SNG.NSTEP, bars * SED.fbSteps(sec)), n = sec.steps, last = n - m, lanes = {}, rats = {}, marks = {}, flams = {}, fl = {}, fr = {}, ff = {};
     for (const l of Object.keys(sec.lanes)) {
       const v = SED.pad(sec.lanes[l], n).split(""), r = SED.pad((sec.ratchets || {})[l], n).split(""), k = SED.pad((sec.fills || {})[l], n).split("");
       const f = SED.pad((sec.flams || {})[l], n).split("");
@@ -3116,6 +3155,12 @@ const SED = {
     return SED.norm({ ...sec, lanes, ratchets: rats, fills: marks, flams, fillbar: { steps: m, lanes: fl, ratchets: fr, flams: ff } });
   },
   fbRemove(sec) { return SED.norm({ ...sec, fillbar: null }); },
+  fbBars(sec) { return sec.fillbar ? Math.max(1, Math.round(sec.fillbar.steps / SED.ebBar(sec))) : 0; },
+  fbSet(sec, bars) {                               /* its bars (0: none); a new one as fbAdd; shorter: cut, longer: rests */
+    if (!bars) return SED.fbRemove(sec);
+    if (!sec.fillbar) return SED.fbAdd(sec, false, bars);
+    return SED.norm({ ...sec, fillbar: { ...sec.fillbar, steps: Math.min(SNG.NSTEP, bars * SED.ebBar(sec)) } });
+  },
   fbCell(sec, lane, i) {
     const fb = sec.fillbar || { lanes: {} }, h = (fb.lanes[lane] || "")[i] || ".", r = ((fb.ratchets || {})[lane] || "")[i] || ".";
     return { hit: h === "." ? "" : h, rat: "234".includes(r) ? +r : 1, flam: ((fb.flams || {})[lane] || "")[i] === "f" };
@@ -3321,7 +3366,7 @@ const TEXT = {
     install: "アプリとしてインストール（オフラインで使える・Android も）",
     tabSeq: "シーケンサー", tabSettings: "設定",
     sideHide: "サイドバーを隠す", sideShow: "サイドバーを表示",
-    navDrums: "ドラム", navSounds: "サウンド", navDevice: "本体", tabKits: "ドラムキット", fm1: "FM-1",
+    navDrums: "ドラム", navSounds: "サウンド", navDevice: "本体", navFuture: "今後：まだ未対応", tabKits: "ドラムキット", fm1: "FM-1",
     stepsOf: "{n} ステップ", fontCredit: "フォント: Terminus（SIL OFL 1.1）",
     kitTitle: "ドラムキット", kitHelp: "ドラムトラック用に 16 の音を作ります（白鍵 1 つに 1 音）。3 ステップ: 音を入れる → 置き場所を選ぶ → FM-1 に送る。",
     kitName: "名前", kitAdd: "ファイルを選ぶ", kitClear: "全部消す", kitFit: "スロットに収める",
@@ -3341,7 +3386,7 @@ const TEXT = {
     lockHelp: "ナッジ：ステップの長さの 1/64 単位で早め（−）／遅め（＋）。ロック：そのステップだけパラメータの値を変え、次のステップで元に戻ります。フィル：「フィル時のみ」のステップはフィルの間（ペダルの CC 21、LIVE 画面の黒鍵または SEL）だけ鳴り、「フィル時は休み」はその間だけ休みます（グリッドの F と ×）。本体では SEQ ＋ ステップ長押し ＋ KNOB 4（ナッジ）／PRESETS（ロック、ALGORITHM でパラメータ）／OCT+（フィル）。",
     level: "レベル",
     projHelp: "プロジェクト（ソングのセクション A〜D）はドラムトラック（キット、パターン、ロック、ナッジ、フィル条件）とグローバル設定をまとめて保存します。",
-    bkTitle: "バックアップ", bkHelp: "FM-1 の中身をすべて 1 つのファイルに保存します: 今の曲、プロジェクト 1〜4（ソングのセクション A〜D）、SYN キット、サンプル USR3〜4、設定（色、キャリブレーション、ソング、ライト、MIDI）。復元すると、本体はファイルの状態に戻ります（今の内容は上書きされます）。SLOOP のバックアップも復元できます（ユーザープリセット、FM6 の音色バンク、USR1、USR2 は除きます）。",
+    bkTitle: "バックアップ", bkHelp: "FM-1 の中身をすべて 1 つのファイルに保存します: ソング 1〜16 とペダルの設定、設定（色、キャリブレーション、ライト、MIDI）、SYN キット、サンプル USR3〜4、ジャムのパターンとプロジェクト 1〜4。復元すると、本体はファイルの状態に戻ります（今の内容は上書きされます。2026-10-21 より前のバックアップにはソングがなく、ソングはそのまま残ります）。先に FM-1 を停止してください。SLOOP のバックアップも復元できます（ユーザープリセット、FM6 の音色バンク、USR1、USR2 は除きます）。",
     bkSave: "バックアップを保存", bkLoad: "ファイルから復元", bkSaving: "バックアップ中 ", bkSaved: "バックアップを保存しました",
     bkRestoring: "復元中 ", bkRestored: "復元しました", bkConfirm: "FM-1 の今の内容をすべてこのバックアップで置き換えます。続けますか？",
     bkBad: "BackBeat のバックアップファイルではないか、壊れています: ", bkStop: "FM-1 の再生を止めてから、もう一度復元してください。",
@@ -3403,7 +3448,7 @@ const TEXT = {
     songLoopOff: "止まる", songLoopOn: "最初に戻る", songRead: "FM-1 から読む", songSend: "FM-1 に送る",
     songUp: "上へ", songDown: "下へ", songDel: "削除",
     songOld: "この FM-1 のファームウェアではソングを読めません（SLOOP 2.5 以降）。",
-    tabSongs: "ソング", tabSetlist: "セットリスト", setTitle: "セット", setDevTitle: "FM-1 のスロット",
+    tabSongs: "ソングエディタ", tabSetlist: "セットリスト", setTitle: "セット", setDevTitle: "FM-1 のスロット",
     grvTitle: "FM-1 のファクトリー・グルーヴ", grvHelp: "ファームウェアに内蔵、読み取り専用：FM-1 の FACTORY ページ（SONGS から LFO）、ペダルの PC 16〜31。ここで再生、ソングタブのエディタで開く、またはセットに追加（追加すると自分の曲として編集し、スロットに送れます）。",
     grvAdd: "セットに追加", grvReading: "グルーヴを読み込み中…", grvNone: "グルーヴはサイトに含まれています：ダウンロードしたファイルではなく、ウェブのアドレスからエディタを開いてください。",
     setHelp: "ライブの曲順。このブラウザに保存されます（インストールしたアプリならオフラインでも）。ここで再生でき、ペダルも本体と同じ（PC n でセットの n 曲目）。JSON ファイル（セットのファイルなら全曲）か、ソングタブのエディタで開いている曲を追加します。FM-1 のスロットと同じく 16 曲まで。このタブでは ↑ ↓（または Page Up / Down：譜めくりペダル）で前 / 次の曲。",
@@ -3418,18 +3463,22 @@ const TEXT = {
     songsConfirm: "スロット {n} のソングを置き換えますか？", songsEraseConfirm: "スロット {n} のソングを消去しますか？", songsSent: "送りました", songsErased: "消去しました",
     songsBad: "ソングではありません: ", songsFail: "拒否: ", songsStop: "FM-1 を停止してください", songsFlash: "フラッシュへの書き込みに失敗しました", songsReading: "読み込み中…",
     gpiTitle: "Guitar Pro / MIDI / JSON から", gpiHelp: "ソングの JSON（ここで保存したもの、songs/ のもの）はそのままセクションエディタに開きます。このカードかエディタにファイルを落としても開きます。Guitar Pro ファイル（.gp3 / .gp4 / .gp5）または MIDI ファイル（.mid：チャンネル 10、マーカー、拍子）のドラムトラックをソングにします。tools/gp2song.py がブラウザ内の Python（Pyodide、初回に約 10 MB を読み込み、ネット接続が必要。PyGuitarPro は Guitar Pro ファイルのときだけ取得）で動きます。セクションはマーカーから（なければドラムから）。",
-    gpiOpen: "ファイルを開く（Guitar Pro / MIDI / JSON）", gpiAuto: "マーカーを無視してドラムから", gpiSections: "セクション", gpiSlot: "スロット", gpiLoading: "Python を読み込み中…", gpiInstalling: "PyGuitarPro を準備中…", gpiConverting: "変換中…", gpiFail: "変換できません: ", gpiNoSrc: "gp2song.py が見つかりません（エディタの隣か ../tools/ に置いてください）",
+    gpiOpen: "ファイルを開く（Guitar Pro / MIDI / JSON）", gpiAuto: "マーカーを無視してドラムから", gpiKeep: "エディタのソングを残す：Guitar Pro / MIDI ファイルは小節だけを加え、JSON は今の小節を残す", gpiKept: "{file}：{n} 小節を {song} の横に（エディタのソングはそのまま）", gpiSections: "セクション", gpiSlot: "スロット", gpiLoading: "Python を読み込み中…", gpiInstalling: "PyGuitarPro を準備中…", gpiConverting: "変換中…", gpiFail: "変換できません: ", gpiNoSrc: "gp2song.py が見つかりません（エディタの隣か ../tools/ に置いてください）",
     sedTitle: "セクションエディタ", sedHelp: "ソングのセクションを手で直します：名前、順序、長さ、アウトロ、分割と結合、グリッドの打点（レベルとラチェット）、フィル条件（上の行：F = フィル時のみ、N = フィル時は休み）。Guitar Pro から読んだソングでは、ファイルの小節を選んでパターンやフィルにできます。",
     sedOpen: "JSON を開く", sedBlank: "新しいソング", sedNone: "Guitar Pro か MIDI を開くか、JSON を開くか、スロットの「編集」を押してください。", sedName: "名前", sedKit: "キット", sedSwing: "スウィング", sedSwingOn: "単位",
     sedSteps: "ステップ", sedTime: "拍子", sedOutro: "アウトロ", sedDup: "複製", sedNew: "新規セクション", sedDel: "削除", sedSplit: "分割（小節）", sedSplitBtn: "分割", sedMerge: "次と結合",
     sedBarWarn: "拍子の小節に揃っていません：切り替えは小節線まで待ちます。", sedBarFix: "拍子を {sig} に",
     sedPen: "ペン:", sedRat: "ラチェット", sedFlam: "フラム", sedMark: "フィル:", sedMarkAlways: "常に", sedMarkF: "フィル時のみ", sedMarkN: "フィル時は休み", sedGridHelp: "クリックでペンのレベル・ラチェット・フィル印の打点、同じ打点をもう一度で消す。フィル印が「フィル時のみ」「フィル時は休み」のとき、既にある打点をクリックするとその印を変えます（黄の枠: フィル時のみ、赤の枠: フィル時は休み）。上の行はステップ全体の印。", sedBarsHelp: "ファイルの小節（このセクションの範囲に印）：1〜4 小節を選んでパターンに、1 小節をフィルに。",
-    sedHear: "クリックで音を聞く", sedKey: "キー: ", sedUndo: "元に戻す", sedRedo: "やり直す", sedPlaySec: "このセクションを試聴", sedKeys: "キー: n 通常、h 強、s 弱、g ゴースト、x 消去、r ラチェット、l フラム、m フィル印、[ ] 前後のセクション、Delete 選択ステップを消去、Ctrl+C / Ctrl+V ステップのコピーと貼り付け、Ctrl+Z / Ctrl+Y 元に戻す / やり直す、p このセクションを試聴。レーン名をクリックすると音が鳴ります。", sedCols: "ステップ（番号をクリック、Shift+クリックで範囲。フィル小節・エントリー・ブレイクの番号も：そこへコピーと貼り付け）:", sedCopy: "コピー", sedPaste: "貼り付け（選択位置に）", sedClear: "消去", sedCopied: "コピーしました: ", sedUseBars: "選んだ小節をパターンに", sedUseFill: "選んだ小節をフィルに", sedEntry: "エントリー", sedBreak: "ブレイク", sedEbNone: "なし", sedEbBar: "小節", sedEbBars: "小節", sedUseEntry: "選んだ小節をエントリーに", sedUseBreak: "選んだ小節をブレイクに", sedEbHelp: "エントリーとブレイク：セクションのパターンの前に鳴る小節（無音でも可）。終わるとパターンは頭から始まり、その間に押したセクションはその終わりで切り替わります。エントリーは別のセクションや停止から入るとき、ブレイクは CC 28（再生中のセクションにも）で鳴ります。グリッドでは青い隙間の右。", sedFbAdd: "フィル小節を追加", sedFbDel: "フィル小節を外す", sedFbInfo: " + フィル小節 {n} ステップ", sedFbHelp: "隙間の右はこのセクション専用のフィル小節：フィルはいま鳴っている小節の代わりにこれを演奏します（印なし。押した所から小節の終わりまで、同じ位置のステップを）。追加すると、パターンの最後の小節（フィル時に鳴る形）が写されます。", sedEdit: "編集", sedDropped: "パターンと重なるフィルの打点は捨てました: ", sedTooMany: "16 セクションまで", sedNoMerge: "結合できません（分割数が違うか 64 ステップ超）",
-    playTitle: "試聴（ペダルを模して）", playHelp: "ブラウザでソングを鳴らします：セクションのボタンがペダルです（再生中のセクションがパターンを弾き終えてから切り替え、フィルは付きません。Shift+クリックは待たずに次の小節で。フィルはこの小節の残り（アレンジャーのフィルインと同じ。小節の最後の拍で押すと次の小節が丸ごとフィル）、その後パターンは頭から、またはセクションの切り替えが次の小節に。切り替えの前にフィルを押せば、フィルから次のセクションへ（ペダルでは CC 21 と CC 20 を同じスイッチに）。「前 / 次のセクション」は CC 25 / 24。ブレイクは CC 28：再生中のセクションが終わったら、そのセクションをブレイク（パターンの前に鳴る小節、なければエントリー、なければ 1 小節の休み）から。エントリーは別のセクションや停止から入るときに鳴ります。キーはタイルの下）。上の表示は本体の LIVE 画面で、音と同時に動きます。スウィングは本体と同じに鳴ります。カウントイン（本体の設定と同じ）：停止中にセクションを押すと先にクリックが鳴ります。音はドラムキットページのパッド、または tools/mkkit.py --wavs の WAV（KICK_C2.wav…）。本体のエンジン（tools/fm1_render.py）が基準です。",
-    playKitDefault: "キット: エディタの隣のもの ", kitPreloaded: "ドラムキット: Muldjord (DrumGizmo, CC BY) をパッドに: ", playPrev: "前のセクション", playNext: "次のセクション", playFill: "フィル", playFillNext: "次の小節にフィル", playEnd: "エンディング", playBreak: "ブレイク", playPlay: "再生", playTap: "タップ", playStop: "停止", playKitFiles: "キットの WAV を選ぶ", playNoSong: "ソングを開くか、スロットの「試聴」を押してください", playNoKit: "キット: なし（ドラムキットページのパッド、または WAV）", playKitPads: "キット: ドラムキットページのパッド", playKitWavs: "キット: WAV ", playBtn: "試聴", playBar: "小節 ", playCued: "待機中",
+    sedHear: "クリックで音を聞く", sedKey: "キー: ", sedUndo: "元に戻す", sedRedo: "やり直す", sedPlaySec: "このセクションを試聴", sedKeys: "キー: n 通常、h 強、s 弱、g ゴースト、x 消去、r ラチェット、l フラム、m フィル印、[ ] 前後のセクション、Delete 選択ステップを消去、Ctrl+C / Ctrl+V ステップのコピーと貼り付け、Ctrl+Z / Ctrl+Y 元に戻す / やり直す、p このセクションを試聴。レーン名をクリックすると音が鳴ります。", sedCols: "ステップ（番号をクリック、Shift+クリックで範囲。フィル小節・エントリー・ブレイクの番号も：そこへコピーと貼り付け）:", sedCopy: "コピー", sedPaste: "貼り付け（選択位置に）", sedClear: "消去", sedCopied: "コピーしました: ", sedUseBars: "選んだ小節をパターンに", sedUseFill: "選んだ小節をフィルに", sedEntry: "エントリー", sedBreak: "ブレイク", sedEbNone: "なし", sedEbBar: "小節", sedEbBars: "小節", sedUseEntry: "選んだ小節をエントリーに", sedUseBreak: "選んだ小節をブレイクに", sedEbHelp: "エントリーとブレイク：セクションのパターンの前に鳴る小節（無音でも可）。終わるとパターンは頭から始まり、その間に押したセクションはその終わりで切り替わります。エントリーは別のセクションや停止から入るとき、ブレイクは CC 28（再生中のセクションにも）で鳴ります。グリッドではエントリーはパターンの左、ブレイクは右（どちらも青い隙間の向こう）。", sedFill: "フィル", sedFbInfo: " + フィル {n} ステップ", sedFbHelp: "隙間の右はこのセクション専用のフィル（1〜4小節）：フィルはいま鳴っている小節の代わりにこれを演奏します（印なし。最初の小節は押した所から小節の終わりまで同じ位置のステップを、続く小節はそのまま）。その後パターンは頭から、または押したセクションへ。追加すると、パターンの最後の小節（フィル時に鳴る形）が写されます。", sedEdit: "編集", sedDropped: "パターンと重なるフィルの打点は捨てました: ", sedTooMany: "16 セクションまで", sedNoMerge: "結合できません（分割数が違うか 64 ステップ超）",
+    playTitle: "試聴", playCheat: "ペダルのコマンド（ペダルのチャンネルの MIDI CC）", playCheatCmd: "ペダル", playCheatWhat: "動作", playCheatKey: "キー",
+    playC20: "再生中のセクションが終わったらセクション n（0 が最初）。停止中はそれで開始", playC27: "次の小節でセクション n",
+    playC21: "フィル：この小節の残り（最後の拍なら次の小節を丸ごと）", playC21n: "フィル：次の小節を丸ごと",
+    playC28: "セクション n をブレイクから（127 は再生中のもの）", playC22: "エンディング：アウトロ n を 1 回、そして停止（127 はソングのアウトロ）",
+    playC23: "すぐに停止", playC24: "次 / 前のセクション", playC26: "タップテンポ", playCPC: "ソング：0〜15 スロット、16〜31 ファクトリー・グルーヴ",
+    playCheatNote: "セクションへのフィル：CC 21 と CC 20 を同じスイッチに。タイルを Shift+クリック：次の小節で。停止中、カウントインが設定されていれば先にクリック。",     playKitDefault: "キット: エディタの隣のもの ", kitPreloaded: "ドラムキット: Muldjord (DrumGizmo, CC BY) をパッドに: ", playPrev: "前のセクション", playNext: "次のセクション", playFill: "フィル", playFillNext: "次の小節にフィル", playEnd: "エンディング", playBreak: "ブレイク", playPlay: "再生", playTap: "タップ", playStop: "停止", playKitFiles: "キットの WAV を選ぶ", playNoSong: "ソングを開くか、スロットの「試聴」を押してください", playNoKit: "キット: なし（ドラムキットページのパッド、または WAV）", playKitPads: "キット: ドラムキットページのパッド", playKitWavs: "キット: WAV ", playBtn: "試聴", playBar: "小節 ", playCued: "待機中",
     playKeys: "キー: 1〜8 セクション（0: 9〜16 と切り替え、Shift: 次の小節で）・ f フィル（F: 次の小節を丸ごと）・ , . 前 / 次 ・ e エンディング ・ b ブレイク ・ スペース 停止 ・ - / + テンポ ・ t タップ",
     playHum: "ヒューマナイズ", humOff: "オフ", humLight: "軽め", humMore: "強め",
-    pinFrom: "MIDI 入力", pinClock: "MIDI クロックに合わせる", pinListen: "ペダルを聴く", pinStop: "聴くのをやめる", pinNone: "（FM-1 以外の MIDI 入力なし）", pinOn: "チャンネル {ch} を聴いています", pinNoMidi: "このブラウザには Web MIDI がありません", bleConnect: "Bluetooth で接続", bleOff: "{name} を切断", bleOffLog: "Bluetooth を切断しました", bleOn: "Bluetooth: {name} に接続、チャンネル {ch} を聴いています", bleNo: "このブラウザには Web Bluetooth がありません。Android・Windows・macOS の Chrome か Edge で開いてください（Linux の Chrome は chrome://flags の Web Bluetooth を有効に。Firefox と Safari にはありません）", bleCtx: "Web Bluetooth は https か http://localhost のページでしか使えません。このページは ", bleNone: "デバイスが選ばれませんでした", bleLost: "Bluetooth が切れました。再接続します", bleGone: "Bluetooth が切れました。もう一度「Bluetooth で接続」を押してください", pinNoSong: "ソングがありません（スロットの「試聴」か、ソングを開いてください）", pinHelp: "本物のペダル（Ampero、または間の USB MIDI インターフェース）でブラウザのプレーヤーを動かします。FM-1 と同じ CC 20..28 と PC を、ペダルカードのチャンネルで受けます。PC n はセット（セットリストタブ）の n 曲目、なければ接続中の FM-1（または模擬 FM-1）のスロット n のソングを開きます。PC 16〜31 はファクトリー・グルーヴ。音を出すため、最初に「ペダルを聴く」を押してください。「MIDI クロックに合わせる」で、その入力のテンポと START / STOP に従います（FM-1 の SETUP > SYNC と同じ。カウントインはなし）。「Bluetooth で接続」は代わりに BLE MIDI でペダルを受けます（Bluetooth MIDI のペダル、または MIDI ブリッジを入れた FM-1）。Android・Windows・macOS の Chrome か Edge で、https か localhost のページから（Linux の Chrome はフラグが必要）。Firefox と iPhone の Safari には Web Bluetooth がありません。", pedalTitle: "ペダル", pedalHelp: "ペダルボードの MIDI チャンネル（CC 20..28 と PC）と、停止中にセクションを押したときのカウントイン（クリック 1〜2 小節）。電源を切っても保持されます。", pedalCh: "チャンネル", pedalSet: "設定", pedalClock: "MIDI クロック入力", clockTrs: "TRS ジャック", clockUsb: "USB",
+    pinFrom: "MIDI 入力", pinClock: "MIDI クロックに合わせる", pinListen: "ペダルを聴く", pinStop: "聴くのをやめる", pinNone: "（使える MIDI 機器なし）", pinOn: "チャンネル {ch} を聴いています", pinNoMidi: "このブラウザには Web MIDI がありません", bleConnect: "Bluetooth で接続", bleOff: "{name} を切断", bleOffLog: "Bluetooth を切断しました", bleOn: "Bluetooth: {name} に接続、チャンネル {ch} を聴いています", bleNo: "このブラウザには Web Bluetooth がありません。Android・Windows・macOS の Chrome か Edge で開いてください（Linux の Chrome は chrome://flags の Web Bluetooth を有効に。Firefox と Safari にはありません）", bleCtx: "Web Bluetooth は https か http://localhost のページでしか使えません。このページは ", bleNone: "デバイスが選ばれませんでした", bleLost: "Bluetooth が切れました。再接続します", bleGone: "Bluetooth が切れました。もう一度「Bluetooth で接続」を押してください", pinNoSong: "ソングがありません（スロットの「試聴」か、ソングを開いてください）", pinHelp: "本物のペダル（Ampero、または間の USB MIDI インターフェース）でブラウザのプレーヤーを動かします。FM-1 と同じ CC 20..28 と PC を、ペダルカードのチャンネルで受けます。PC n はセット（セットリストタブ）の n 曲目、なければ接続中の FM-1（または模擬 FM-1）のスロット n のソングを開きます。PC 16〜31 はファクトリー・グルーヴ。音を出すため、最初に「ペダルを聴く」を押してください。「MIDI クロックに合わせる」で、その入力のテンポと START / STOP に従います（FM-1 の SETUP > SYNC と同じ。カウントインはなし）。「Bluetooth で接続」は代わりに BLE MIDI でペダルを受けます（Bluetooth MIDI のペダル、または MIDI ブリッジを入れた FM-1）。Android・Windows・macOS の Chrome か Edge で、https か localhost のページから（Linux の Chrome はフラグが必要）。Firefox と iPhone の Safari には Web Bluetooth がありません。", pedalTitle: "ペダル", pedalHelp: "ペダルボードの MIDI チャンネル（CC 20..28 と PC）と、停止中にセクションを押したときのカウントイン（クリック 1〜2 小節）。電源を切っても保持されます。", pedalCh: "チャンネル", pedalSet: "設定", pedalClock: "MIDI クロック入力", clockTrs: "TRS ジャック", clockUsb: "USB",
     pedalClockHelp: "ペダルボードのクロックのテンポと START / STOP に従います（Ampero: CLOCK OUT (TRS) をオン）。すぐに設定されます", pedalNow: "今: ", pedalOff: "オフ", pedalAny: "すべて", pedalCount: "カウントイン", pedalBar: "1 小節", pedalBars: "2 小節",
     songBad: "このソングは送れません（16 項目、1〜64 小節まで）", songRefused: "ソングを止めてから送ってください",
     songSent: "ソングを FM-1 に送りました",
@@ -3469,7 +3518,7 @@ const TEXT = {
     install: "Install the app (works offline, Android too)",
     tabSeq: "Sequencer", tabSettings: "Settings",
     sideHide: "Hide the side bar", sideShow: "Show the side bar",
-    navDrums: "Drums", navSounds: "Sounds", navDevice: "Device", tabKits: "Drum kit", fm1: "FM-1",
+    navDrums: "Drums", navSounds: "Sounds", navDevice: "Device", navFuture: "future: not supported yet", tabKits: "Drum kit", fm1: "FM-1",
     stepsOf: "{n} steps", fontCredit: "Font: Terminus (SIL OFL 1.1)",
     kitTitle: "Drum kit", kitHelp: "Build 16 sounds for the drum track, one per white key. Three steps: put your sounds on the pads, choose where the kit goes, send it to the FM-1.",
     kitName: "Name", kitAdd: "Choose files", kitClear: "Clear all", kitFit: "Fit the slot",
@@ -3489,7 +3538,7 @@ const TEXT = {
     lockHelp: "Nudge: the step early (-) or late (+), in 1/64 of a step. A lock gives a parameter another value for this step only; the base comes back at the next one. Fill: a \"fill only\" step plays only during a fill (the pedal's CC 21, a black key or SEL on the LIVE screen), a \"no fill\" step is silent then (F and \u00d7 on the grid). On the device: SEQ + a step held + KNOB 4 (nudge) / PRESETS (the lock; ALGORITHM picks its parameter) / OCT+ (the fill condition).",
     level: "Level",
     projHelp: "A project (a song section A–D) keeps the drum track (its kit, pattern, locks, nudges and fill conditions) and the global settings.",
-    bkTitle: "Backup", bkHelp: "Everything on the FM-1 in one file: the music you are working on, the projects 1–4 (the song sections A–D), the SYN kits, the samples USR3–USR4 and the settings (colours, calibration, the song, the lights, MIDI). Restoring puts the FM-1 back as it was in the file (what is on it now is replaced). A backup of SLOOP restores too, without its user presets, FM6 patch bank, USR1 and USR2.",
+    bkTitle: "Backup", bkHelp: "Everything on the FM-1 in one file: the songs 1–16 and the pedal settings, the settings (colours, calibration, the lights, MIDI), the SYN kits, the samples USR3–USR4, and the Jam's pattern and projects 1–4. Restoring puts the FM-1 back as it was in the file (what is on it now is replaced; a backup from before 2026-10-21 holds no songs and leaves them as they are). Stop the FM-1 first. A backup of SLOOP restores too, without its user presets, FM6 patch bank, USR1 and USR2.",
     bkSave: "Save a backup", bkLoad: "Restore from a file", bkSaving: "Backing up ", bkSaved: "Backup saved",
     bkRestoring: "Restoring ", bkRestored: "Restored", bkConfirm: "Replace everything on the FM-1 with this backup?",
     bkBad: "Not a BackBeat backup, or damaged: ", bkStop: "Stop the FM-1 (PLAY), then restore again.",
@@ -3551,7 +3600,7 @@ const TEXT = {
     songLoopOff: "stop", songLoopOn: "start again", songRead: "Read from the FM-1", songSend: "Send to the FM-1",
     songUp: "Up", songDown: "Down", songDel: "Remove",
     songOld: "This FM-1's firmware cannot share its song (SLOOP 2.5 or later).",
-    tabSongs: "Song", tabSetlist: "Setlist", setTitle: "The set", setDevTitle: "The FM-1's slots",
+    tabSongs: "Song editor", tabSetlist: "Setlist", setTitle: "The set", setDevTitle: "The FM-1's slots",
     grvTitle: "The FM-1's factory grooves", grvHelp: "Built into the firmware and read-only: the FM-1's FACTORY page (SONGS, then LFO), the pedal's PC 16 to 31. Play one here, open it in the Song tab's editor, or add it to the set: there it is a song of yours, to edit and send to a slot.",
     grvAdd: "Add to the set", grvReading: "Reading the grooves...", grvNone: "The grooves come with the site: open the editor from its web address (not the downloaded file) to see them.",
     setHelp: "The songs of your gig, in order, kept in this browser (the installed app has them offline too). Play one here, with the pedal as on the device: its PC n picks song n of the set. Add songs from JSON files (a set file adds all its songs), or the song open in the Song tab's editor. Up to 16, as the FM-1's slots. On this tab ↑ ↓ (or Page Up / Down: a page-turner pedal) pick the previous / next song.",
@@ -3566,18 +3615,22 @@ const TEXT = {
     songsConfirm: "Replace the song in slot {n}?", songsEraseConfirm: "Erase the song in slot {n}?", songsSent: "Sent", songsErased: "Erased",
     songsBad: "not a song: ", songsFail: "Refused: ", songsStop: "Stop the FM-1 first", songsFlash: "the flash write failed", songsReading: "Reading…",
     gpiTitle: "From Guitar Pro, MIDI or JSON", gpiHelp: "A song JSON (saved from here, or from songs/) opens straight into the section editor; drop a file on this card or on the editor. The drum track of a Guitar Pro file (.gp3 / .gp4 / .gp5) or of a MIDI file (.mid: channel 10, the markers, the time signatures) into a song: tools/gp2song.py itself, run in the browser by Python (Pyodide: about 10 MB loaded the first time, the internet needed; PyGuitarPro fetched for Guitar Pro files only). The sections come from the markers, else from the drums. The result stays in the page: Send puts it on the FM-1, Save JSON downloads it (edit it, keep it in songs/), Play plays it below.",
-    gpiOpen: "Open a file (Guitar Pro, MIDI or JSON)", gpiAuto: "sections from the drums, ignoring the markers", gpiSections: "sections", gpiSlot: "slot", gpiLoading: "Loading Python…", gpiInstalling: "Preparing PyGuitarPro…", gpiConverting: "Converting…", gpiFail: "Cannot convert: ", gpiNoSrc: "gp2song.py not found (next to the editor, or in ../tools/)",
+    gpiOpen: "Open a file (Guitar Pro, MIDI or JSON)", gpiAuto: "sections from the drums, ignoring the markers", gpiKeep: "keep the song in the editor: a Guitar Pro or MIDI file adds only its bars, a JSON keeps the bars already there", gpiKept: "{file}: its {n} bars beside {song} (the song in the editor kept)", gpiSections: "sections", gpiSlot: "slot", gpiLoading: "Loading Python…", gpiInstalling: "Preparing PyGuitarPro…", gpiConverting: "Converting…", gpiFail: "Cannot convert: ", gpiNoSrc: "gp2song.py not found (next to the editor, or in ../tools/)",
     sedTitle: "Section editor", sedHelp: "The song's sections by hand: names, order, length, the outro, split and merge, the hits on the grid (a level and a ratchet each), the fill conditions (the top row: F plays only during a fill, N rests then). For a song read from Guitar Pro, the file's bars can be picked as a section's pattern or its fill.",
     sedOpen: "Open JSON", sedBlank: "New song", sedNone: "Open a Guitar Pro or MIDI file, open a JSON, or press Edit on a slot.", sedName: "name", sedKit: "kit", sedSwing: "swing", sedSwingOn: "on the",
     sedSteps: "steps", sedTime: "time", sedOutro: "outro", sedDup: "Duplicate", sedNew: "New section", sedDel: "Delete", sedSplit: "split at bar", sedSplitBtn: "Split", sedMerge: "Merge with next",
     sedBarWarn: "Not whole bars of its time: a change waits for the bar line.", sedBarFix: "Set time to {sig}",
     sedPen: "pen:", sedRat: "ratchet", sedFlam: "flam", sedMark: "fill:", sedMarkAlways: "always", sedMarkF: "only in a fill", sedMarkN: "not in a fill", sedGridHelp: "Click a cell to set a hit with the pen's level, ratchet and fill mark; click the same hit again to clear it. With the fill mark on 'only in a fill' or 'not in a fill', clicking a hit that is there changes its mark instead (amber ring: only in a fill, red ring: not in a fill). The top row marks a whole step at once.", sedBarsHelp: "The file's bars (this section's own range marked): pick 1 to 4 as the pattern, or one as the fill.",
-    sedHear: "click: hear this lane", sedKey: "key: ", sedUndo: "Undo", sedRedo: "Redo", sedPlaySec: "Play this section", sedKeys: "Keys: n normal, h hard, s soft, g ghost, x erase, r ratchet, l flam (a grace note before the hit), m fill mark, [ ] previous / next section, Delete clears the selected steps, Ctrl+C / Ctrl+V copy and paste them, Ctrl+Z / Ctrl+Y undo / redo, p plays this section. Click a lane's name to hear its sound.", sedCols: "steps (click a number, shift-click another for a range; the fill bar's, entry's and break's numbers too, to copy and paste there):", sedCopy: "Copy", sedPaste: "Paste at the selection", sedClear: "Clear", sedCopied: "copied: ", sedUseBars: "Pattern = selected bars", sedUseFill: "Fill = selected bar", sedEntry: "Entry", sedBreak: "Break", sedEbNone: "none", sedEbBar: "bar", sedEbBars: "bars", sedUseEntry: "Entry = selected bars", sedUseBreak: "Break = selected bars", sedEbHelp: "Entry and break: bars played before the section's pattern (silence too); after them the pattern starts from its top, and a section asked for meanwhile comes in at their end. The entry plays when the section comes in from another one or from stopped, the break on CC 28 (the section playing too). In the grid: right of a blue gap.", sedFbAdd: "Add a fill bar", sedFbDel: "Remove the fill bar", sedFbInfo: " + a fill bar of {n} steps", sedFbHelp: "Right of the gap: the section's fill bar of its own, which a fill plays instead of the bar it is in, as it is (no marks there): from the press to the bar's end, its step i at the bar's step i. Added, it starts as the pattern's last bar the way a fill played it.", sedEdit: "Edit", sedDropped: "fill hits dropped where the pattern hits too: ", sedTooMany: "at most 16 sections", sedNoMerge: "cannot merge (different division, or over 64 steps)",
-    playTitle: "Play (as the pedal would)", playHelp: "The song in the browser: the section buttons are the pedal (a section starts when the one playing has played its pattern out, with no fill of its own; shift-click: on the next bar; Fill: with a fill bar of its own, the rest of this bar is the fill, as an arranger's fill-in (pressed in the bar's last beat: the whole next bar; pressed again in a fill's last beat: the next bar too), then the pattern from its top, or the section asked for, so Fill then a section is a fill into it on the next bar, as the pedal's CC 21 and CC 20 on one switch; without a fill bar, fill mode to the section's end: its fill marks are heard where they sit, nothing restarts, and a section asked for lands at that end; Previous / Next step through the sections, as CC 25 / 24; Break, CC 28: the section playing comes in again through its break, bars played before its pattern, when it ends (no break: its entry; neither: a bar of rest), and a section's entry plays when it comes in from another one or from stopped; the keys under the tiles). The view above is the device's LIVE screen, in time with the sound; the song's swing plays as on the device. Count-in as the device's setting: a section pressed while stopped first clicks one or two bars. Sounds: the Drum kit page's pads (the Muldjord Kit is put there when they are empty), or WAVs of tools/mkkit.py --wavs. A preview: the device's own engine (tools/fm1_render.py) is the reference.",
-    playKitDefault: "kit: the device's kit served next to the editor ", kitPreloaded: "Drum kit: Muldjord (DrumGizmo, CC BY) on the pads: ", playPrev: "Previous section", playNext: "Next section", playFill: "Fill", playFillNext: "Fill next bar", playEnd: "Ending", playBreak: "Break", playPlay: "Play", playTap: "Tap", playStop: "Stop", playKitFiles: "Choose the kit's WAVs", playNoSong: "Open a Guitar Pro file, or press Play on a slot", playNoKit: "kit: none (the Drum kit page's pads, or WAVs)", playKitPads: "kit: the Drum kit page's pads", playKitWavs: "kit: WAVs ", playBtn: "Play", playBar: "bar ", playCued: "cued",
+    sedHear: "click: hear this lane", sedKey: "key: ", sedUndo: "Undo", sedRedo: "Redo", sedPlaySec: "Play this section", sedKeys: "Keys: n normal, h hard, s soft, g ghost, x erase, r ratchet, l flam (a grace note before the hit), m fill mark, [ ] previous / next section, Delete clears the selected steps, Ctrl+C / Ctrl+V copy and paste them, Ctrl+Z / Ctrl+Y undo / redo, p plays this section. Click a lane's name to hear its sound.", sedCols: "steps (click a number, shift-click another for a range; the fill bar's, entry's and break's numbers too, to copy and paste there):", sedCopy: "Copy", sedPaste: "Paste at the selection", sedClear: "Clear", sedCopied: "copied: ", sedUseBars: "Pattern = selected bars", sedUseFill: "Fill = selected bars", sedEntry: "Entry", sedBreak: "Break", sedEbNone: "none", sedEbBar: "bar", sedEbBars: "bars", sedUseEntry: "Entry = selected bars", sedUseBreak: "Break = selected bars", sedEbHelp: "Entry and break: bars played before the section's pattern (silence too); after them the pattern starts from its top, and a section asked for meanwhile comes in at their end. The entry plays when the section comes in from another one or from stopped, the break on CC 28 (the section playing too). In the grid: the entry left of the pattern, the break at the right, each past a blue gap.", sedFill: "Fill", sedFbInfo: " + a fill of {n} steps", sedFbHelp: "Right of the gap: the section's fill of its own, 1 to 4 bars, which a fill plays instead of the bar it is in, as it is (no marks there): its first bar from the press to the bar's end, its step i at the bar's step i, then its other bars whole; then the pattern from its top, or the section asked for. Added, it starts as the pattern's last bars the way a fill played them.", sedEdit: "Edit", sedDropped: "fill hits dropped where the pattern hits too: ", sedTooMany: "at most 16 sections", sedNoMerge: "cannot merge (different division, or over 64 steps)",
+    playTitle: "Play", playCheat: "Pedal commands (MIDI CC on the pedal channel)", playCheatCmd: "pedal", playCheatWhat: "does", playCheatKey: "key",
+    playC20: "section n (0 = the first) when the one playing ends; stopped: starts with it", playC27: "section n on the next bar",
+    playC21: "fill: the rest of this bar (in its last beat: the whole next bar)", playC21n: "fill: the whole next bar",
+    playC28: "section n through its break (127: the one playing)", playC22: "ending: outro n once, then stop (127: the song's outro)",
+    playC23: "stop now", playC24: "next / previous section", playC26: "tap tempo", playCPC: "song: 0–15 the slots, 16–31 the factory grooves",
+    playCheatNote: "A fill into a section: CC 21 and CC 20 on one switch. Shift-click a tile: on the next bar. Stopped, a section counts in first if Count-in is set.",     playKitDefault: "kit: the device's kit served next to the editor ", kitPreloaded: "Drum kit: Muldjord (DrumGizmo, CC BY) on the pads: ", playPrev: "Previous section", playNext: "Next section", playFill: "Fill", playFillNext: "Fill next bar", playEnd: "Ending", playBreak: "Break", playPlay: "Play", playTap: "Tap", playStop: "Stop", playKitFiles: "Choose the kit's WAVs", playNoSong: "Open a Guitar Pro file, or press Play on a slot", playNoKit: "kit: none (the Drum kit page's pads, or WAVs)", playKitPads: "kit: the Drum kit page's pads", playKitWavs: "kit: WAVs ", playBtn: "Play", playBar: "bar ", playCued: "cued",
     playKeys: "keys: 1–8 a section (0: switches to 9–16 and back; shift: on the next bar) · f fill (F: the whole next bar) · , . previous / next · e ending · b break · space stop · - / + tempo · t tap",
     playHum: "humanize", humOff: "off", humLight: "light", humMore: "more",
-    pinFrom: "MIDI in from", pinClock: "Follow its MIDI clock", pinListen: "Listen to the pedal", pinStop: "Stop listening", pinNone: "(no MIDI input but the FM-1)", pinOn: "listening on channel {ch}", pinNoMidi: "this browser has no Web MIDI", bleConnect: "Connect Bluetooth", bleOff: "Disconnect {name}", bleOffLog: "Bluetooth disconnected", bleOn: "Bluetooth: {name} connected, listening on channel {ch}", bleNo: "this browser has no Web Bluetooth: open the page in Chrome or Edge on Android, Windows or macOS (on Linux, Chrome keeps it behind its Web Bluetooth flag in chrome://flags; Firefox and Safari have none)", bleCtx: "Web Bluetooth works only on https or http://localhost pages: this page is ", bleNone: "no device chosen", bleLost: "Bluetooth connection lost, reconnecting", bleGone: "Bluetooth connection lost: press Connect Bluetooth again", pinNoSong: "no song (press Play on a slot, or open one)", pinHelp: "The real pedal (the Ampero, or a USB MIDI interface between them) drives the player in the browser: the same CC 20..28 and PC as the FM-1, on the Pedal card's channel. PC n opens song n of the set (the Setlist tab), else the song in slot n of the FM-1 connected (or the simulated one); PC 16 to 31 the factory grooves. Press Listen first: the browser plays sound only after a click. With Follow its MIDI clock the player takes that input's tempo and START / STOP, as the FM-1 with SETUP > SYNC (no count-in: the master counts). Connect Bluetooth takes the pedal over BLE MIDI instead (a Bluetooth MIDI pedal, or an FM-1 running the MIDI bridge): Chrome or Edge on Android, Windows or macOS, from https or localhost (Chrome on Linux needs its Web Bluetooth flag); Firefox and Safari on the iPhone have no Web Bluetooth.", pedalTitle: "Pedal", pedalHelp: "The pedalboard's MIDI channel (its CC 20..28 and PC), and the count-in: a section pressed while stopped first clicks one or two bars at the tempo. Kept through power-off.", pedalCh: "channel", pedalSet: "Set", pedalClock: "MIDI clock in", clockTrs: "TRS jack", clockUsb: "USB",
+    pinFrom: "MIDI in from", pinClock: "Follow its MIDI clock", pinListen: "Listen to the pedal", pinStop: "Stop listening", pinNone: "(no MIDI device available)", pinOn: "listening on channel {ch}", pinNoMidi: "this browser has no Web MIDI", bleConnect: "Connect Bluetooth", bleOff: "Disconnect {name}", bleOffLog: "Bluetooth disconnected", bleOn: "Bluetooth: {name} connected, listening on channel {ch}", bleNo: "this browser has no Web Bluetooth: open the page in Chrome or Edge on Android, Windows or macOS (on Linux, Chrome keeps it behind its Web Bluetooth flag in chrome://flags; Firefox and Safari have none)", bleCtx: "Web Bluetooth works only on https or http://localhost pages: this page is ", bleNone: "no device chosen", bleLost: "Bluetooth connection lost, reconnecting", bleGone: "Bluetooth connection lost: press Connect Bluetooth again", pinNoSong: "no song (press Play on a slot, or open one)", pinHelp: "The real pedal (the Ampero, or a USB MIDI interface between them) drives the player in the browser: the same CC 20..28 and PC as the FM-1, on the Pedal card's channel. PC n opens song n of the set (the Setlist tab), else the song in slot n of the FM-1 connected (or the simulated one); PC 16 to 31 the factory grooves. Press Listen first: the browser plays sound only after a click. With Follow its MIDI clock the player takes that input's tempo and START / STOP, as the FM-1 with SETUP > SYNC (no count-in: the master counts). Connect Bluetooth takes the pedal over BLE MIDI instead (a Bluetooth MIDI pedal, or an FM-1 running the MIDI bridge): Chrome or Edge on Android, Windows or macOS, from https or localhost (Chrome on Linux needs its Web Bluetooth flag); Firefox and Safari on the iPhone have no Web Bluetooth.", pedalTitle: "Pedal", pedalHelp: "The pedalboard's MIDI channel (its CC 20..28 and PC), and the count-in: a section pressed while stopped first clicks one or two bars at the tempo. Kept through power-off.", pedalCh: "channel", pedalSet: "Set", pedalClock: "MIDI clock in", clockTrs: "TRS jack", clockUsb: "USB",
     pedalClockHelp: "the tempo and START / STOP from the pedalboard's clock (on the Ampero: CLOCK OUT (TRS) on); set at once", pedalNow: "now: ", pedalOff: "off", pedalAny: "any", pedalCount: "count-in", pedalBar: "1 bar", pedalBars: "2 bars",
     songBad: "This song cannot be sent (16 entries, 1–64 bars each)", songRefused: "Stop the song first, then send",
     songSent: "Song sent to the FM-1",
@@ -3630,9 +3683,10 @@ $("sidetog").addEventListener("click", () => {
 });
 
 /* ---------------------------------------------------------------- tabs --- */
-/* one panel at a time; the last one is remembered (localStorage) and in the URL hash (#sequencer ...). A tab of
-   SLOOP's editor remembered from before (sound, tracks, library) opens the sequencer */
-const TABS = ["sequencer", "song", "songs", "setlist", "kits", "drumsynth", "samples", "projects", "settings"];
+/* one panel at a time; the last one is remembered (localStorage) and in the URL hash (#setlist ...). A tab of
+   SLOOP's editor remembered from before (sound, tracks, library) opens the first one, the setlist; the sequencer and the
+   jam last, under "future" (not supported yet, 2026-10-21) */
+const TABS = ["setlist", "songs", "kits", "drumsynth", "samples", "settings", "sequencer", "song"];   /* (the projects: in the Jam, the backup in Settings, 2026-10-21) */
 const TAB_KEY = "felucca-editor-tab";
 let tab = (() => {
   const h = location.hash.slice(1);
@@ -4409,17 +4463,29 @@ async function gpiTake(f) {                               /* a Guitar Pro or MID
   gpiRender();
   try {
     let spec, log;
-    if (/\.json$/i.test(f.name) || f.type === "application/json") {
+    const json = /\.json$/i.test(f.name) || f.type === "application/json", keep = $("gpi-keep").checked && SONGED.spec;   /* keep: the
+                                                        editor's song stays, the file brings its bars (a JSON: the bars stay) */
+    if (json) {
       spec = JSON.parse(await f.text());
       SNG.pack(spec);                                      /* (a song: checked as the device would) */
       log = [`${f.name}: ${spec.name}, ${spec.bpm} BPM, ${(spec.sections || []).length} ${t("songsSections")}`];
     } else {
       ({ spec, log } = await gpiConvert(f));
     }
+    $("gpi-log").hidden = false;
+    if (keep && !json) {                                   /* the bars beside the song being worked on; the card's Send, Save
+                                                        and Play would be the file's song: not offered */
+      if (!spec.bars) throw new Error("no bars");
+      Object.assign(SONGED, { bars: spec.bars, ranges: spec.ranges || null, barA: -1, barB: -1 });
+      sedRender();
+      $("sed").scrollIntoView({ block: "start", behavior: "smooth" });
+      $("gpi-log").textContent = [t("gpiKept").replace("{file}", f.name).replace("{n}", spec.bars.length).replace("{song}", SONGED.spec.name), ...log].join("\n");
+      gpiRender();
+      return;
+    }
     GPI.spec = spec;
     GPI.name = f.name;
-    sedLoad(spec, f.name.replace(/\.[^.]+$/, ""), { bars: spec.bars, ranges: spec.ranges });
-    $("gpi-log").hidden = false;
+    sedLoad(spec, f.name.replace(/\.[^.]+$/, ""), keep && !spec.bars ? { bars: SONGED.bars, ranges: SONGED.ranges } : { bars: spec.bars, ranges: spec.ranges });
     $("gpi-log").textContent = log.join("\n");
     try { SNG.pack(spec); } catch (e) { $("gpi-log").textContent += "\n" + t("songsBad") + e.message; }
   } catch (e) {
@@ -4544,13 +4610,11 @@ function sedRender() {
   $("sed-split").disabled = nb < 2;
   $("sed-merge").disabled = SONGED.sel + 1 >= sp.sections.length;
   $("sed-info").textContent = `${SED.hits(sec)} hits, ${nb} bar${nb > 1 ? "s" : ""}` + (sec.fillbar ? t("sedFbInfo").replace("{n}", sec.fillbar.steps) : "");
-  setLabel($("sed-fillbar"), t(sec.fillbar ? "sedFbDel" : "sedFbAdd"));
-  $("sed-fillbar").title = t("sedFbHelp");
-  for (const key of ["entry", "break"]) {          /* its entry and break: none, or 1.. bars (64 steps at most) */
+  for (const key of ["entry", "fillbar", "break"]) {   /* its entry, fill bar and break: none, or 1.. bars (64 steps at most) */
     const s = $("sed-" + key), max = SED.ebMax(sec);
     if (s.options.length !== max + 1) s.replaceChildren(el("option", { value: "0", text: t("sedEbNone") }), ...Array.from({ length: max }, (_, i) => el("option", { value: String(i + 1), text: `${i + 1} ${t(i ? "sedEbBars" : "sedEbBar")}` })));
-    s.value = String(SED.ebBars(sec, key));
-    s.title = t("sedEbHelp");
+    s.value = String(key === "fillbar" ? SED.fbBars(sec) : SED.ebBars(sec, key));
+    s.title = t(key === "fillbar" ? "sedFbHelp" : "sedEbHelp");
   }
   {   /* not whole bars of its time: say so, and offer the signature that fits */
     const fit = SED.barFit(sec);
@@ -4581,18 +4645,21 @@ function sedRender() {
   const g = $("sed-grid");
   const barAt = (i) => Math.floor(i / spb + 1e-9) !== Math.floor((i - 1) / spb + 1e-9);   /* (a bar line inside a triplet step: after it) */
   const sepAt = (i) => (i > 0 && barAt(i) ? "bar" : i > 0 && beat && i % beat === 0 ? "beat" : "");   /* a line in a gap before step i */
-  /* the blocks after the pattern, each after a wide gap: the fill bar of its own (amber), the entry and the break (blue);
-     edited with the pen's level, ratchet and flam, no mark */
-  const blocks = [];
-  if (sec.fillbar) blocks.push({ key: "fillbar", n: sec.fillbar.steps, label: "FILL", cls: "fb", what: "fill", cell: (l, i) => SED.fbCell(sec, l, i), set: (l, i, h, r, f) => SED.fbSetHit(sec, l, i, h, r, f) });
-  for (const [key, label] of [["entry", "ENTRY"], ["break", "BREAK"]])
-    if (sec[key]) blocks.push({ key, n: SED.ebSteps(sec, key), label, cls: "eb", what: key, cell: (l, i) => SED.ebCell(sec, key, l, i), set: (l, i, h, r, f) => SED.ebSetHit(sec, key, l, i, h, r, f) });
-  const blkSepAt = (b, i) => (i === 0 ? b.cls : Number.isInteger(spb) && i % spb === 0 ? "bar" : beat && i % beat === 0 ? "beat" : "");
+  /* the blocks around the pattern, a wide gap between: the entry before it (blue), the fill bar of its own (amber) and
+     the break (blue) after it; edited with the pen's level, ratchet and flam, no mark */
+  const eb = (key, label) => ({ key, n: SED.ebSteps(sec, key), label, cls: "eb", what: key, cell: (l, i) => SED.ebCell(sec, key, l, i), set: (l, i, h, r, f) => SED.ebSetHit(sec, key, l, i, h, r, f) });
+  const pre = sec.entry ? [{ ...eb("entry", "ENTRY"), lead: true }] : [], post = [];
+  if (sec.fillbar) post.push({ key: "fillbar", n: sec.fillbar.steps, label: "FILL", cls: "fb", what: "fill", cell: (l, i) => SED.fbCell(sec, l, i), set: (l, i, h, r, f) => SED.fbSetHit(sec, l, i, h, r, f) });
+  if (sec.break) post.push(eb("break", "BREAK"));
+  const blkSepAt = (b, i) => (i === 0 ? (b.lead ? "" : b.cls) : Number.isInteger(spb) && i % spb === 0 ? "bar" : beat && i % beat === 0 ? "beat" : "");
+  const patSepAt = (i) => (i === 0 && pre.length ? "eb" : sepAt(i));   /* (the pattern after the entry: its gap) */
+  const colW = (k) => (k === "bar" ? "10px" : k === "beat" ? "6px" : "14px");
   const cols = ["80px"];
-  for (let i = 0; i < sec.steps; i++) { if (sepAt(i)) cols.push(sepAt(i) === "bar" ? "10px" : "6px"); cols.push("var(--cell, 18px)"); }
-  for (const b of blocks) for (let i = 0; i < b.n; i++) { const k = blkSepAt(b, i); if (k) cols.push(k === "bar" ? "10px" : k === "beat" ? "6px" : "14px"); cols.push("var(--cell, 18px)"); }
+  for (const b of pre) for (let i = 0; i < b.n; i++) { const k = blkSepAt(b, i); if (k) cols.push(colW(k)); cols.push("var(--cell, 18px)"); }
+  for (let i = 0; i < sec.steps; i++) { if (patSepAt(i)) cols.push(colW(patSepAt(i))); cols.push("var(--cell, 18px)"); }
+  for (const b of post) for (let i = 0; i < b.n; i++) { const k = blkSepAt(b, i); if (k) cols.push(colW(k)); cols.push("var(--cell, 18px)"); }
   g.style.gridTemplateColumns = cols.join(" ");
-  const sep = (i) => (sepAt(i) ? [el("span", { class: "sep " + sepAt(i) })] : []);
+  const sep = (i) => (patSepAt(i) ? [el("span", { class: "sep " + patSepAt(i) })] : []);
   const bsep = (b, i) => (blkSepAt(b, i) ? [el("span", { class: "sep " + blkSepAt(b, i) })] : []);
   if (SONGED.colKey && !sec[SONGED.colKey]) SONGED.colA = SONGED.colB = -1;   /* (that block gone) */
   /* the step numbers select steps, the pattern's or a block's (click; shift-click another in the same: a range) */
@@ -4602,26 +4669,42 @@ function sedRender() {
     sedRender();
   };
   const cells = [el("span", { class: "lane", text: "" })];
+  const blkNums = (list) => { for (const b of list) for (let i = 0; i < b.n; i++) cells.push(...bsep(b, i), el("button", { class: "c n " + b.cls + (colSel(b.key, i) ? " sel" : ""), title: `${b.what}, step ${i + 1}`, onclick: (e) => colPick(b.key, i, e) }, String(i + 1))); };
+  blkNums(pre);
   for (let i = 0; i < sec.steps; i++) {                 /* the step numbers: the column selection */
     cells.push(...sep(i), el("button", { class: "c n" + (colSel(null, i) ? " sel" : ""), title: `step ${i + 1}`, onclick: (e) => colPick(null, i, e) }, String(i + 1)));
   }
-  for (const b of blocks) for (let i = 0; i < b.n; i++) cells.push(...bsep(b, i), el("button", { class: "c n " + b.cls + (colSel(b.key, i) ? " sel" : ""), title: `${b.what}, step ${i + 1}`, onclick: (e) => colPick(b.key, i, e) }, String(i + 1)));
+  blkNums(post);
   cells.push(el("span", { class: "lane", text: "fill" }));
+  const blkLabels = (list) => {
+    for (const b of list) {   /* the condition row under a block: its label over its first cells (up to a beat line), the rest empty */
+      const span = Math.max(1, Math.min(b.n, beat || 4, 4));
+      for (let i = 0; i < b.n; i++) {
+        cells.push(...bsep(b, i));
+        if (i === 0) cells.push(el("span", { class: `lane ${b.cls}l`, style: `grid-column: span ${span}; text-align: left; padding-left: 2px`, text: b.label }));
+        else if (i >= span) cells.push(el("span"));
+      }
+    }
+  };
+  blkLabels(pre);
   for (let i = 0; i < sec.steps; i++) {
     const c = SED.cell(sec, "KICK", i).cond, cls = "c" + (c ? " c" + c : "");
     cells.push(...sep(i), el("button", { class: cls, title: `step ${i + 1}`, onclick: () => sedSet(SED.setCond(sec, i, c === "" ? "F" : c === "F" ? "N" : "")) }, c || "·"));
   }
-  for (const b of blocks) {   /* the condition row under a block: its label over its first cells (up to a beat line), the rest empty */
-    const span = Math.max(1, Math.min(b.n, beat || 4, 4));
-    for (let i = 0; i < b.n; i++) {
-      cells.push(...bsep(b, i));
-      if (i === 0) cells.push(el("span", { class: `lane ${b.cls}l`, style: `grid-column: span ${span}; text-align: left; padding-left: 2px`, text: b.label }));
-      else if (i >= span) cells.push(el("span"));
-    }
-  }
+  blkLabels(post);
   for (const lane of SNG.LANES) {
     const on = lane in sec.lanes || ["fillbar", "entry", "break"].some((k) => sec[k] && lane in sec[k].lanes);
     cells.push(el("span", { class: "lane" + (on ? " on" : ""), text: lane, title: t("sedHear"), onclick: () => sedAudition(lane) }));
+    const blkCells = (list) => {
+      for (const b of list) for (let i = 0; i < b.n; i++) {   /* a block's cells: the pen's level, ratchet and flam, no mark */
+        const cell = b.cell(lane, i), cls = `c ${b.cls}` + (cell.hit ? " h" + cell.hit : "") + (cell.flam ? " fl" : "");
+        cells.push(...bsep(b, i), el("button", { class: cls, title: `${lane} ${b.what} ${i + 1}${cell.rat > 1 ? " x" + cell.rat : ""}${cell.flam ? " (flam)" : ""}`, onclick: () => {
+          const same = cell.hit === SONGED.pen && cell.rat === SONGED.rat && cell.flam === SONGED.flam;
+          sedSet(b.set(lane, i, same || !SONGED.pen ? "" : SONGED.pen, SONGED.rat, SONGED.flam));
+        } }, cell.hit ? (cell.rat > 1 ? String(cell.rat) : SED_GLYPH[cell.hit]) : ""));
+      }
+    };
+    blkCells(pre);
     for (let i = 0; i < sec.steps; i++) {
       const cell = SED.cell(sec, lane, i), cls = "c" + (cell.hit ? " h" + cell.hit : "") + (cell.mark ? " m" + cell.mark : "") + (cell.flam ? " fl" : "");
       cells.push(...sep(i), el("button", { class: cls, title: `${lane} ${i + 1}${cell.rat > 1 ? " x" + cell.rat : ""}${cell.flam ? " (flam)" : ""}${cell.mark === "F" ? " (only in a fill)" : cell.mark === "N" ? " (not in a fill)" : ""}`, onclick: () => {
@@ -4633,13 +4716,7 @@ function sedRender() {
         sedSet(SED.setHit(sec, lane, i, same || !SONGED.pen ? "" : SONGED.pen, SONGED.rat, SONGED.mark, SONGED.flam));
       } }, cell.hit ? (cell.rat > 1 ? String(cell.rat) : SED_GLYPH[cell.hit]) : ""));
     }
-    for (const b of blocks) for (let i = 0; i < b.n; i++) {   /* a block's cells: the pen's level, ratchet and flam, no mark */
-      const cell = b.cell(lane, i), cls = `c ${b.cls}` + (cell.hit ? " h" + cell.hit : "") + (cell.flam ? " fl" : "");
-      cells.push(...bsep(b, i), el("button", { class: cls, title: `${lane} ${b.what} ${i + 1}${cell.rat > 1 ? " x" + cell.rat : ""}${cell.flam ? " (flam)" : ""}`, onclick: () => {
-        const same = cell.hit === SONGED.pen && cell.rat === SONGED.rat && cell.flam === SONGED.flam;
-        sedSet(b.set(lane, i, same || !SONGED.pen ? "" : SONGED.pen, SONGED.rat, SONGED.flam));
-      } }, cell.hit ? (cell.rat > 1 ? String(cell.rat) : SED_GLYPH[cell.hit]) : ""));
-    }
+    blkCells(post);
   }
   g.replaceChildren(...cells);
   {
@@ -4663,8 +4740,7 @@ function sedRender() {
       } }, String(n));
     }));
     const have = SONGED.barA >= 0;
-    $("sed-usebars").disabled = !have;
-    $("sed-usefill").disabled = !have || SONGED.barB !== SONGED.barA;
+    $("sed-usebars").disabled = $("sed-usefill").disabled = !have;   /* a fill of 1 to 4 bars, as the selection */
     $("sed-useentry").disabled = $("sed-usebreak").disabled = !have;
     $("sed-barsel").textContent = have ? (SONGED.barA === SONGED.barB ? `bar ${SONGED.barA}` : `bars ${SONGED.barA}-${SONGED.barB}`) + (r ? `  (${sec.name}: ${r.first}-${r.last})` : "") : (r ? `${sec.name}: bars ${r.first}-${r.last}` : "");
   }
@@ -4728,13 +4804,13 @@ function sedClearCols() { const sec = sedSec(); if (sec && SONGED.colA >= 0) sed
 $("sed-copy").addEventListener("click", sedCopy);
 $("sed-paste").addEventListener("click", sedPaste);
 $("sed-clear").addEventListener("click", sedClearCols);
-$("sed-usebars").addEventListener("click", () => { const sec = sedSec(); if (!sec || SONGED.barA < 0) return; const nb = SED.fromBars(SONGED.bars.slice(SONGED.barA - 1, SONGED.barB), sec.name, "1/16"); sedSet(SED.outro(nb, !!sec.outro)); });
-$("sed-usefill").addEventListener("click", () => { const sec = sedSec(); if (!sec || SONGED.barA < 0) return; sedSet(SED.withFill(sec, SONGED.bars[SONGED.barA - 1]).sec); });
+$("sed-usebars").addEventListener("click", () => { const sec = sedSec(); if (!sec || SONGED.barA < 0) return; sedSet(SED.withPattern(sec, SONGED.bars.slice(SONGED.barA - 1, SONGED.barB))); });
+$("sed-usefill").addEventListener("click", () => { const sec = sedSec(); if (!sec || SONGED.barA < 0) return; sedSet(SED.withFill(sec, SONGED.bars.slice(SONGED.barA - 1, SONGED.barB)).sec); });
 for (const key of ["entry", "break"]) {
   $("sed-" + key).addEventListener("change", () => { const sec = sedSec(); if (sec) sedSet(SED.ebSet(sec, key, +$("sed-" + key).value)); });
   $(key === "entry" ? "sed-useentry" : "sed-usebreak").addEventListener("click", () => { const sec = sedSec(); if (!sec || SONGED.barA < 0) return; sedSet(SED.withBlock(sec, key, SONGED.bars.slice(SONGED.barA - 1, SONGED.barB))); });
 }
-$("sed-fillbar").addEventListener("click", () => { const sec = sedSec(); if (sec) sedSet(sec.fillbar ? SED.fbRemove(sec) : SED.fbAdd(sec)); });
+$("sed-fillbar").addEventListener("change", () => { const sec = sedSec(); if (sec) sedSet(SED.fbSet(sec, +$("sed-fillbar").value)); });
 $("sed-play").addEventListener("click", () => { if (SONGED.spec) playSetSong(sedSpecOut(), SONGED.name); });
 $("sed-send").addEventListener("click", async () => {
   if (!SONGED.spec || !dev) return;
@@ -4753,6 +4829,7 @@ function playSetSong(spec, name) {
   playStop();
   SPLAY.spec = spec; SPLAY.name = name;
   SPLAY.st = spec ? PLAY.create(spec, SPLAY.count) : null;
+  if (spec && navigator.userActivation && navigator.userActivation.isActive) playWake();   /* (picked by a click: the audio ready) */
   playRender();
 }
 function playCountSet(bars) {                              /* the count-in: the device's setting mirrored, or picked here */
@@ -4770,6 +4847,12 @@ function playClick(at, accent) {                           /* the count-in's cli
   osc.stop(at + 0.06);
 }
 function playCtx() { if (!SPLAY.ctx) SPLAY.ctx = new (window.AudioContext || window.webkitAudioContext)(); return SPLAY.ctx; }
+function playWake() {                                      /* the audio running before the first Play: a context made or
+                                                              resumed on the Play press itself starts late (the sound device
+                                                              opening), and a running one keeps the device from idling */
+  const ctx = playCtx();
+  if (ctx.state === "suspended") ctx.resume();
+}
 function playBufFrom(int16, rate) {
   const ctx = playCtx(), b = ctx.createBuffer(1, int16.length, rate), ch = b.getChannelData(0);
   for (let i = 0; i < int16.length; i++) ch[i] = int16[i] / 32768;
@@ -4876,7 +4959,7 @@ function playStart(at) {                                  /* at: the audio time 
                                                         next beat starts it (pinClock) */
   const ctx = playCtx();
   if (ctx.state === "suspended") ctx.resume();
-  SPLAY.next = Math.max(ctx.currentTime + 0.005, at ?? ctx.currentTime + 0.05);
+  SPLAY.next = Math.max(ctx.currentTime + 0.005, at ?? ctx.currentTime + 0.01);   /* (10 ms: playPump schedules it at once) */
   SPLAY.u = 0; SPLAY.marks = [];
   SPLAY.timer = setInterval(playPump, 25);
   playPump();
@@ -4957,7 +5040,7 @@ function playLiveDraw() {
     else if (ev.req >= 0 && ev.sec >= 0 && (ev.wait || ev.fill)) { say = `FILL > ${sp.sections[ev.req].name}`; cls += " fill"; }   /* (a fill into the change) */
     else if (ev.req >= 0 && ev.sec >= 0 && ev.brk) say = `BREAK: ${sp.sections[ev.req].name}`;   /* (CC 28: through its break) */
     else if (ev.req >= 0 && ev.sec >= 0) say = `NEXT: ${sp.sections[ev.req].name}`;
-    else if (ev.wait) { say = "FILL NEXT BAR"; cls += " fill"; }
+    else if (ev.wait) { say = ev.wait > 1 ? "FILL AT THE END" : "FILL NEXT BAR"; cls += " fill"; }
     else if (ev.fill) { say = "FILL"; cls += " fill"; }
   }
   stEl.textContent = say;
@@ -5019,6 +5102,24 @@ $("play-next").addEventListener("click", () => { if (SPLAY.st) { PLAY.step(SPLAY
 $("play-fill").addEventListener("click", () => { if (SPLAY.st) { PLAY.fillNext(SPLAY.st); playRender(true); } });
 $("play-fillnext").addEventListener("click", () => { if (SPLAY.st) { PLAY.fillNext(SPLAY.st, true); playRender(true); } });
 $("play-play").addEventListener("click", () => playPlay());
+/* the player's buttons act on the mouse's press, not its release (a click comes 50 to 150 ms after the press): the
+   press clicks the button at once and the click of the release is dropped; keys (Enter, space) and touch, which may be a
+   scroll, keep the click. Any press or key with a song in the player wakes the audio (playWake) */
+const PRESS = { btn: null };
+const pressBtn = (t) => t instanceof Element ? t.closest("#play-play, #play-stop, #play-break, #play-end, #play-prev, #play-next, #play-fill, #play-fillnext, #play-secs button") : null;
+document.addEventListener("pointerdown", (e) => {
+  PRESS.btn = null;
+  if (SPLAY.st) playWake();
+  const b = pressBtn(e.target);
+  if (!b || b.disabled || e.button !== 0 || e.pointerType === "touch") return;
+  PRESS.btn = b;
+  b.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0, shiftKey: e.shiftKey }));
+}, true);
+document.addEventListener("click", (e) => {
+  if (e.detail > 0 && PRESS.btn && pressBtn(e.target) === PRESS.btn) { e.stopImmediatePropagation(); e.preventDefault(); }
+  if (e.detail > 0) PRESS.btn = null;
+}, true);
+document.addEventListener("keydown", () => { if (SPLAY.st) playWake(); }, true);
 /* the tempo (KNOB 1 on the device): from the next step; not under a MIDI clock (the master's); the song's own stays */
 function playBpm(v) {
   const st = SPLAY.st;
@@ -6605,6 +6706,7 @@ $("bk-file").addEventListener("change", async () => {
       renderSlots();
       try { await smpInfo(); renderSamples(); } catch (e) { /* shown by the next action */ }
       await reloadAll("bkRestored");
+      try { await readSongs(); } catch (e) { /* shown by the next action */ }   /* (the songs too, written back) */
       if (skipped.length) sayK("bkSkipped", bkSkipNames(skipped));
     } catch (e) { bkReport(e); } finally { $("bk-prog").hidden = true; }
   });
