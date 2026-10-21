@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
-"""Download the CC0 samples of the FLUTE set and the GM kit's hand percussion into
-assets/samples-cc0/ (the other built-in sets: tools/gen_builtin_hiphop.py).
+"""Download the CC0 drum and percussion recordings (KIT) into assets/samples-cc0/.
 
 The files are already in the tree; this re-creates them from the source:
-  https://github.com/sgossner/VSCO-2-CE  (CC0 1.0)
   https://github.com/sgossner/VCSL       (CC0 1.0)
 Only the first RANGE bytes of each WAV are downloaded.
 """
@@ -20,10 +18,8 @@ DEST = Path(__file__).resolve().parents[1] / "assets" / "samples-cc0"
 RANGE = 420_000
 
 VCSL = "VCSL"
-VSCO = "VSCO-2-CE"
 # set: (repo, directory, [filename regexes, one file per regex, first match wins])
 PICK = {
-    "FLUTE": (VSCO, "Woodwinds/Flute/susvib", [r"_C4_v1_1", r"_C5_v1_1", r"_C6_v1_1"]),
     "KIT": (VCSL, None, [
         ("Idiophones/Struck Idiophones/Tambourine 1", r"Tamb1_Hit_v2"),
         ("Idiophones/Struck Idiophones/Shaker, Small", r"ShakerDouble_Down_rr1"),
@@ -84,16 +80,15 @@ def main():
             print(f"  {name:8s} {dest.name}  {n // 1024} KiB")
     import datetime
     (DEST / "ATTRIBUTION.txt").write_text(
-        "Felucca SAMPLE engine - source material\n"
+        "BackBeat (SLOOP's) drum recordings: source material\n"
         f"Retrieved: {datetime.date.today().isoformat()} (first ~400 KB of each file)\n"
         "Licence: CC0 1.0 Universal (public domain dedication)\n"
         "  https://creativecommons.org/publicdomain/zero/1.0/\n"
-        "Sources: Versilian Studios (Sam Gossner)\n"
-        "  VSCO-2 Community Edition  https://github.com/sgossner/VSCO-2-CE  (repository licence: CC0-1.0)\n"
-        "  VCSL                      https://github.com/sgossner/VCSL       (repository licence: CC0-1.0)\n\n"
+        "Source: VCSL (Versilian Community Sample Library, Versilian Studios / Sam Gossner)\n"
+        "  https://github.com/sgossner/VCSL  (repository licence: CC0-1.0)\n\n"
         + "\n".join(credits) + "\n")
     (DEST / "CREDITS.txt").write_text(
-        "Samples from Versilian Studios' VSCO-2 Community Edition and VCSL, both released\n"
+        "Samples from Versilian Studios' VCSL, released\n"
         "under CC0 1.0 (public domain). Thanks to Versilian Studios / Sam Gossner.\n"
         "Only the first ~1 s of each file is used.\n\n" + "\n".join(credits) + "\n")
     print(f"fetched {total / 1e6:.1f} MB into {DEST}")

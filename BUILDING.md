@@ -64,7 +64,7 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 
 ## Samples
 
-The CC0 samples are in `assets/samples-cc0/` (Versilian Studios, see `ATTRIBUTION.txt` there);
+The CC0 samples are in `assets/samples-cc0/` (the drum kit `KIT`, Versilian Studios' VCSL, see `ATTRIBUTION.txt` there);
 fm1-drummer builds only the drum kit (`KIT`, the GM kit) into the firmware (`tools/gen_samples.py`).
 `tools/fetch_cc0.py` downloads them again from the source repositories. Without that folder the build
 still works and the GM kit has only the generated drum sounds.

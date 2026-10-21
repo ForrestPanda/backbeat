@@ -8,9 +8,8 @@ from the WAV 'smpl' chunk; the ADPCM state at the loop start is stored so loops
 restart exactly.
 
 Sources:
-  assets/samples-cc0/   CC0 samples (CREDITS.txt there): PIANO (a grand), BASS, VIBES, HORNS, STRGS, FLUTE,
-                        SCRCH (tools/gen_builtin_hiphop.py makes them; FLUTE and the KIT:
-                        tools/fetch_cc0.py), and the acoustic drum kit of the GM map (KIT)
+  assets/samples-cc0/   CC0 samples (CREDITS.txt there): the acoustic drum kit of the GM map (KIT,
+                        tools/fetch_cc0.py)
   gen_waves.py          Felucca's own drum sounds (the Hügelton Sample Pack): a GM kit role the CC0 kit lacks
 A file named ..._m<n>.wav has its root given (MIDI note n); else it comes from the note in the name.
 
@@ -39,7 +38,7 @@ TR = 22050                                   # stored sample rate
 # envelope fades, "kit" one sample per key).
 # The other slots are user sets loaded from the web editor.
 # fm1-drummer (drums only, docs/drums-only.md): the instrument sets (PIANO, BASS, VIBES, HORNS, STRGS, FLUTE,
-# SCRCH: ~212 KB of flash) are no longer built; the KIT feeds the GM kit (PERC), the acoustic drum kit
+# SCRCH: ~212 KB of flash) are no longer built, and out of the tree; the KIT feeds the GM kit (PERC), the acoustic drum kit
 CC0_SETS = [("KIT", "kit")]
 MEASURED_TUNING = ()                         # sets recorded off A440 (measured near the named note)
 
