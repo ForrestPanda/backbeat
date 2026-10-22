@@ -382,6 +382,8 @@ next bar). No named sections, one song, no fill tied to a section change.
    thru: no pedal, song, clock or note from the jack); LIVE's state line says BRIDGE: PEDAL TO USB. Measured on the
    tablet (wireless adb, DevTools): the FM-1 to the page 1.6 ms, the clock even (sd 1.5 ms), the player locked to it
    within about 1 ms as heard; what was left was the screen's delay (the editor's Screen ahead, 50 ms by default).
+   Installed the same day, BackBeat over BackBeat (`fm1_safe_install.sh --no-dump`): written to 100 %, `FM-1_900`
+   (the loader drop of 2026-10-19 not seen again: `../fm1-midi-bridge/docs/recovery.md`).
 
 The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log
