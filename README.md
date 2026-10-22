@@ -23,10 +23,11 @@ Installed on an FM-1 on 2026-10-19, over stock V15 with `tools/fm1_install.py`: 
 answers as `FM-1_900` (the record, and the recovery steps verified that day, are in
 `../fm1-midi-bridge/docs/recovery.md`). Played the same afternoon from an Ampero II Stage over a plain stereo
 3.5 mm cable (the FM-1's jack is Type A): two whole songs cued from the footswitches, fills and section
-changes, heard on the speaker and from the audio out (`docs/design.md`, milestone 7). The firmware is 541 KB of its 581 KB slot, 290 KB of it the built-in layered
+changes, heard on the speaker and from the audio out (`docs/design.md`, milestone 7). The firmware is 567 KB of its 581 KB slot, 399 KB of it the built-in layered
 kit **MULDJORD**, the power-on kit and new songs' default (`"kit": 0`): up to four velocity layers a drum (hard,
 normal, soft, ghost: the steps' levels), round-robin takes of the kick and snare (never the same twice running),
-twelve voices so cymbals and toms ring on (`docs/kits.md`).
+twelve voices so cymbals and toms ring on (at most four of one drum at once; with none free, the quietest gives way:
+`docs/kits.md`).
 
 ## Getting started
 
@@ -65,7 +66,9 @@ Everything else (breaks, next / previous, tap tempo, entries, the count-in) is i
 
 **Known limits.** No MIDI out: the FM-1 has no MIDI out jack. JAM, on the SONGS screen, is SLOOP's own A..D
 sections, left as SLOOP had it and not supported. Next / previous section from the pedal (CC 24 / 25) has
-not yet been tried on a unit.
+not yet been tried on a unit. How much of its time the audio takes on your unit is on SETUP > LOAD (the
+average, the worst block since OCT+, blocks rendered too late, which you would hear as a click, and the drum voices):
+play your busiest song, then look.
 
 ## The pedal
 

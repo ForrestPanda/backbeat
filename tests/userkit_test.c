@@ -238,6 +238,38 @@ int main(void)
             ok += drums.v[k].active && drums.v[k].note == LANE_NOTE[12];
         check(NDRUM == 12u && ok == 1u, "MULDJORD: 12 voices: the crash still rings after eleven more hits");
         quiet();
+        {   /* the voices a hit takes (drums.c drum_voice, 2026-10-22): at most DRUM_SAME of one note, its oldest cut;
+             * with none free, the quietest (velocity by the part of the sample left), not the oldest */
+            uint32_t a2 = 0, n = 0, amin = 0xFFFFFFFFu, zc = z0 + RK_LANE[12].z[0], zn = SMP_ZONES[zc].n;
+            drums.vpeak = 0; drums.full = 0;
+            for (k = 0; k < 6u; k++) {             /* six rides on 8ths: the four newest ring */
+                drum_on(LANE_NOTE[rd], 127);
+                if (k == 1u)
+                    a2 = drums.age;                /* (the second's age: it and the first are cut) */
+                run_peak(2);
+            }
+            for (k = 0; k < NDRUM; k++)
+                if (drums.v[k].active && drums.v[k].note == LANE_NOTE[rd]) {
+                    n++;
+                    amin = drums.v[k].age < amin ? drums.v[k].age : amin;
+                }
+            check(n == DRUM_SAME && amin > a2 && drums.full == 0u && drums.vpeak == DRUM_SAME,
+                  "voices: six rides running, the four newest ring (the oldest cut for them; not counted as full)");
+            quiet();
+            for (k = 0; k < NDRUM; k++) {          /* every voice busy: a crash each, all hard, all well before their end */
+                drums.v[k].active = 1; drums.v[k].note = (uint8_t)(60u + k); drums.v[k].vel = 127; drums.synth[k] = 0;
+                drums.v[k].s[4] = (int32_t)zc; drums.v[k].ph[0] = zn / 4u; drums.v[k].age = 100u + k;
+            }
+            drums.v[5].ph[0] = zn - zn / 20u;      /* 5 % left, hard: 127 x 12 */
+            drums.v[7].vel = 20; drums.v[7].ph[0] = zn / 2u;   /* soft, half way: 20 x 128, louder */
+            ok = drum_voice(99) == &drums.v[5] && drums.full == 1u && drums.vpeak == NDRUM;
+            drums.v[5].ph[0] = zn - zn * 3u / 10u; /* now 30 % left: 127 x 76, louder than the soft one */
+            ok &= drum_voice(99) == &drums.v[7] && drums.full == 2u;
+            drums.v[3].active = 0;
+            ok &= drum_voice(99) == &drums.v[3] && drums.full == 2u;
+            check(ok, "voices: none free, the quietest is cut (a hard hit near its end before a soft one half way), not the oldest");
+            quiet();
+        }
     }
     printf("userkit: %s\n", fails ? "FAILED" : "KIT USR1..USR4, USR3+4 PASS");
     return fails != 0;

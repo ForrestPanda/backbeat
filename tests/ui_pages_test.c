@@ -45,7 +45,8 @@ static uint32_t fm1_input_note_edges(void) { uint32_t e = fm1_in.notes & ~notes_
 static uint32_t wdt_tick_ms;                       /* (stress_test: 1, the blocking PANEL setup's clock runs out) */
 static void fm1_wdt_feed(void) { fm1_ms += wdt_tick_ms; }
 static int32_t fm1_adc_read(int c) { (void)c; return -1; }
-static struct { uint32_t magic, stage, page, home, ui_frames; } felucca_dbg;
+static struct { uint32_t magic, stage, page, home, ui_frames, late; } felucca_dbg;
+static volatile uint32_t audio_max_us;                /* (audio.c's: SETUP > LOAD reads them) */
 #define FELUCCA_ICONS 1
 #include "../firmware/src/panel.c"
 #include "../firmware/src/ui.c"
@@ -778,6 +779,28 @@ int main(int argc, char **argv)
         check(ui.menu_sel == mi_find(MI_LIGHTS), "menu: PRESETS moves the cursor round the section's rows");
         encs[panel.enc[EN_SELECT]] = 1; frame(); ui.force = 1; frame(); ppm("menu-audio");
         check(mi_sec(ui.menu_sel) == MS_AUDIO, "menu: SELECT right: AUDIO (LOWCUT, USB AUDIO, USB SERIAL)");
+        encs[panel.enc[EN_SELECT]] = 1; frame();
+        check(mi_sec(ui.menu_sel) == MS_LOAD && ui.menu_sel == mi_find(MI_LOAD), "menu: SELECT right: LOAD (2026-10-22)");
+        {   /* LOAD: the audio interrupt's average and worst half buffer, the late ones, the drum voices; OCT+ resets */
+            uint16_t c;
+            song.cpu_q8 = 64; audio_max_us = 2902; felucca_dbg.late = 3; drums.vpeak = NDRUM; drums.full = 37;
+            meter.t = 0; ui.force = 1; frame(); ppm("menu-load");
+            check(!strcmp(mi_value(mi_find(MI_LOAD), &c), "25%") && c == C_HI &&
+                  !strcmp(mi_value(mi_find(MI_WORST), &c), "50%") && c == C_HI &&
+                  !strcmp(mi_value(mi_find(MI_LATE), &c), "3") && c == C_AMB &&
+                  !strcmp(mi_value(mi_find(MI_VOICES), &c), "12 OF 12, 37 FULL") && c == C_AMB,
+                  "menu LOAD: 25%, worst 50%, 3 late, 12 of 12 voices with 37 hits that found none free");
+            audio_max_us = 5400; meter.t = 0;
+            check(!strcmp(mi_value(mi_find(MI_WORST), &c), "93%") && c == C_AMB, "menu LOAD: a worst block of 80 % or more in amber");
+            fm1_ms += 100; audio_max_us = 100;
+            check(!strcmp(mi_value(mi_find(MI_WORST), &c), "93%"), "menu LOAD: read four times a second, not every frame");
+            tap(B_OCTUP);
+            check(ui.menu == 1 && !strcmp(mi_value(mi_find(MI_WORST), &c), "0%") &&
+                  !strcmp(mi_value(mi_find(MI_LATE), &c), "NONE") && c == C_DIM &&
+                  !strcmp(mi_value(mi_find(MI_VOICES), &c), "0 OF 12") && c == C_HI && felucca_dbg.late == 3u,
+                  "menu LOAD: OCT+ resets the worst, the late (from now) and the voices");
+            song.cpu_q8 = 0; felucca_dbg.late = 0; meter.late0 = 0;
+        }
         encs[panel.enc[EN_SELECT]] = 5; frame();
         sec = mi_sec(ui.menu_sel);
         check(sec == MS_SYSTEM, "menu: SELECT stops at the last section, SYSTEM");

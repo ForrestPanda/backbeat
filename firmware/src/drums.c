@@ -49,6 +49,8 @@ static struct {
     dsv_t ds[NDRUM];
     volatile uint16_t hits;      /* bit per lane hit since the UI last looked (pads, key LEDs) */
     volatile uint8_t kick;       /* a kick was hit (fx.c DUCK) */
+    volatile uint8_t vpeak;      /* the most voices sounding at once, and the hits that found none free (a quieter */
+    volatile uint32_t full;      /* one cut for them): SETUP > LOAD, reset there with OCT+ (ui_menu.c) */
     int32_t a0, a1;              /* the drum track's mute / solo attenuation over this block (fx.c), Q15, 0 = heard */
 } drums;
 
@@ -187,10 +189,61 @@ static void click_render(int32_t *ml, int32_t *mr, uint32_t n)
         click.env = 0;                                /* (-72 dB: done, about 100 ms) */
 }
 
-/* a synthesised voice: note on the 16 sounds snd (a factory kit, SYN1..4), the oldest voice stolen */
+/* the voice a hit on note takes (2026-10-22; the oldest until then, which with the crash ringing 3.2 s and the ride on
+ * 8ths was often a tail still loud): with DRUM_SAME of this note sounding already, the oldest of them (its own new hit
+ * covers that tail: a ride on 8ths would otherwise hold half the voices, and costs their time); else a free one; else
+ * the quietest, its velocity by the part of its sample left to play (decaying one-shots: a crash half way is louder
+ * than a hat near its end; a synthesised voice counts as half left). A voice cut fades (the declick tail) */
+#define DRUM_SAME 4u
+static voice_t *drum_voice(uint32_t note)
+{
+    voice_t *same = 0, *free_v = 0, *quiet = 0;
+    uint32_t i, n_same = 0, n_on = 0, qs = 0xFFFFFFFFu;
+    for (i = 0; i < NDRUM; i++) {
+        voice_t *v = &drums.v[i];
+        uint32_t s;
+        if (!v->active) {
+            if (!free_v)
+                free_v = v;
+            continue;
+        }
+        n_on++;
+        if (v->note == note) {
+            n_same++;
+            if (!same || v->age < same->age)
+                same = v;
+        }
+        if (drums.synth[i]) {
+            s = (uint32_t)v->vel * 128u;
+        } else {
+            const smp_zone_t *z = drum_zone_of(v);
+            uint32_t left = z->n > v->ph[0] ? z->n - v->ph[0] : 0u;
+            s = z->n ? (uint32_t)v->vel * ((left << 8) / z->n) : 0u;
+        }
+        if (s < qs || (s == qs && v->age < quiet->age)) {
+            qs = s;
+            quiet = v;
+        }
+    }
+    if (n_same >= DRUM_SAME) {
+        drums.tail += same->s[7];
+        return same;
+    }
+    if (free_v) {
+        if (n_on + 1u > drums.vpeak)
+            drums.vpeak = (uint8_t)(n_on + 1u);
+        return free_v;
+    }
+    drums.full++;
+    drums.vpeak = NDRUM;
+    drums.tail += quiet->s[7];                       /* stolen voice: fade its last value */
+    return quiet;
+}
+
+/* a synthesised voice: note on the 16 sounds snd (a factory kit, SYN1..4), drum_voice's */
 static void __attribute__((noinline)) drum_synth_on(uint32_t note, uint32_t vel, uint32_t kit, const dsnd_t *snd, uint32_t crush)
 {
-    voice_t *v = &drums.v[0];
+    voice_t *v;
     uint32_t i;
     if (note == 42u || note == 44u)                 /* hi-hat choke */
         for (i = 0; i < NDRUM; i++)
@@ -198,16 +251,7 @@ static void __attribute__((noinline)) drum_synth_on(uint32_t note, uint32_t vel,
                 drums.v[i].active = 0;
                 drums.tail += drums.v[i].s[7];
             }
-    for (i = 0; i < NDRUM; i++) {
-        if (!drums.v[i].active) {
-            v = &drums.v[i];
-            break;
-        }
-        if (drums.v[i].age < v->age)
-            v = &drums.v[i];
-    }
-    if (v->active)
-        drums.tail += v->s[7];
+    v = drum_voice(note);
     i = (uint32_t)(v - drums.v);
     v->note = (uint8_t)note;
     v->vel = (uint8_t)vel;
@@ -271,7 +315,7 @@ static uint32_t hum_vel(uint32_t vel, uint32_t g)
 static void drum_on(uint32_t note, uint32_t vel)
 {
     uint32_t hg = drum_hum_g ? drum_hum_g : 128u;
-    voice_t *v = &drums.v[0];
+    voice_t *v;
     uint32_t i, kit = drum_kit();
     int32_t zid = -1;
     drum_hum_g = 0;
@@ -328,16 +372,7 @@ static void drum_on(uint32_t note, uint32_t vel)
                 drums.v[i].active = 0;
                 drums.tail += drums.v[i].s[7];          /* fade what it was playing, not a step */
             }
-    for (i = 0; i < NDRUM; i++) {                   /* free voice, else the oldest */
-        if (!drums.v[i].active) {
-            v = &drums.v[i];
-            break;
-        }
-        if (drums.v[i].age < v->age)
-            v = &drums.v[i];
-    }
-    if (v->active)
-        drums.tail += v->s[7];                      /* stolen voice: fade its last value */
+    v = drum_voice(note);
     v->note = (uint8_t)note;
     v->vel = (uint8_t)hum_vel(vel, hg);
     v->active = 1;

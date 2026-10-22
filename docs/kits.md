@@ -29,8 +29,8 @@ Only the files of `--soft-lanes` (KICK, SNARE, SNARE2, HAT, OPENHAT, PEDAL) are 
 
 The device's power-on kit and new songs' default (KIT 0, `"kit": 0`, first in the list since the evening of 2026-10-15; 46 before, when the five GM-sampled kits ACOUSTIC..DUST still led the list): the same mix as above (Muldjord kick and toms, the DRS Kit's snare,
 Black Pearl's hats, Red Zeppelin's ride, CC0 clap and cowbell), now with velocity layers and round robins,
-built into the firmware (385 KB of the app's flash since the evening of 2026-10-15, 290 KB before: the five GM-sampled
-kits' 86 KB went to the crash), so the user slots USR3+4 stay yours.
+built into the firmware (399 KB of the app's flash since 2026-10-22, the ride 2.0 s; 385 KB from the evening of 2026-10-15,
+290 KB before: the five GM-sampled kits' 86 KB went to the crash), so the user slots USR3+4 stay yours.
 
 | Lane | Source | Layers x takes | Length | Rate |
 | --- | --- | --- | --- | --- |
@@ -41,14 +41,16 @@ kits' 86 KB went to the crash), so the user slots USR3+4 stay yours.
 | RIM | DRS Kit 37 (the same snare's rim; its close mic only since 2026-10-21: the wires and the room made it a roll) | 2 x 1 | 0.4 s | 32000 |
 | LOWTOM, MIDTOM, HITOM | Muldjord 41, 47, 48 (Tom4 the floor 69 Hz, Tom2 98 Hz, Tom1 127 Hz: a 5-piece's) | 2 x 1 | 1.0, 0.95, 0.9 s | 22050 |
 | CRASH | Muldjord 49 | 1 x 2 | 3.2 s (one take of 2.0 s until 2026-10-15) | 32000 |
-| RIDE | Red Zeppelin 51 | 2 x 1 | 1.5 s | 32000 |
+| RIDE | Red Zeppelin 51 | 2 x 1 | 2.0 s (1.5 s until 2026-10-22: cut while it still rang, 16 dB under the hit) | 32000 |
 | KICK2 | Muldjord 35 | 1 | 0.45 s | 22050 |
 | SHAKER | CC0, VSCO-2 CE's shaker (a ride bell until 2026-10-21) | 1 | 0.3 s | 22050 |
 | SNARE2 | DRS Kit 38 (layer 3, another take) | 1 | 0.5 s | 22050 |
 | CLAP, COWBELL | CC0 | 1 | 0.35 s | 22050 |
 
 A hit's level picks the layer (hard, normal, soft, ghost; a MIDI note's velocity the nearest layer), the take is
-another than the drum's last. The recipe is `tools/realkit.json`; `python3 tools/gen_realkit.py` renders it from the
+another than the drum's last. Twelve voices: at most four of one drum at once (its oldest gives way to its new hit: a
+ride on 8ths would otherwise hold half of them), and with none free the quietest gives way (its velocity by the part
+of its sample left), not the oldest (until 2026-10-22: often a crash or ride tail still loud). The recipe is `tools/realkit.json`; `python3 tools/gen_realkit.py` renders it from the
 source kits (in `fm1-mvave/kits`, decoded by sox) into `assets/realkit/` (a WAV a take, `kit.json`,
 `ATTRIBUTION.txt`), which the firmware build encodes and the editor's player plays. The layers are levelled on the
 velocity curve x 1.5 (`"dyn"`), the sources' own range being too wide on a small speaker; `"budget"` is the bytes of

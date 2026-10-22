@@ -175,6 +175,9 @@ static void con_status(void)
     con_kv("uptime_ms", (int32_t)fm1_ms);
     con_kv("cpu_pct", (int32_t)(song.cpu_q8 * 100u / 256u));
     con_kv("audio_max_us", (int32_t)felucca_dbg.max_us);
+    con_kv("late", (int32_t)felucca_dbg.late);
+    con_kv("drum_voices_peak", drums.vpeak);
+    con_kv("drum_voices_full", (int32_t)drums.full);
     con_kv("batt_raw", song.batt_raw);
     con_puts("kit ");
     con_puts(DRUM_KIT_NAMES[drum_kit()]);

@@ -402,6 +402,7 @@ the only big lever is `SMP_DATA`, and the acoustic kit is in it.
 | The five GM-sampled kits (ACOUSTIC, DEEP, TIGHT, BRIGHT, DUST: the CC0 kit as set PERC, 86144 B of ADPCM) gone, 2026-10-15 evening: nobody played them since the grooves went on MULDJORD; every kit number 5 lower (808 is 0, MULDJORD 41) | 471360 B: **110204 B left**, spent on MULDJORD's crash (below) |
 | MULDJORD's crash (two takes, 3.2 s) and the snare, open hat and ride at their recipe lengths, 2026-10-15 evening: 385288 B of ADPCM (`tools/realkit.json` budget 412000); round-robin hats from the Muldjord hi-hat tried and reverted (the user prefers Black Pearl's) | 549360 B: **32204 B left** |
 | With entries and breaks (CC 28, 2026-10-18; the flams and the fills to the section's end before it) | 550984 B: **30580 B left**; static RAM 61312 B |
+| The ride 2.0 s (399478 B of ADPCM), the voice pick (at most four of a note, the quietest given way) and SETUP > LOAD, 2026-10-22 | 566616 B: **14948 B left**; static RAM 61344 B |
 | Data region (0x93000..0xE0000): projects, the user sample slots of 80 KB (USR1 and USR2 now hold the songs: USR3 and USR4 are the user's; free: 0xC4000..0xC7FFF, the old user preset banks 0xDC000..0xDFFFF, the FM6 bank 0xE5000..0xE6FFF, 0xFB000) | about 308 KB |
 | Songs 1..8 (0xA0000..0xAFFFF, A/B) and the pedal settings (0xB0000 / 0xB1000); songs 9..16 (0xB4000..0xC3FFF, A/B, since 2026-10-14) | 72 KB of USR1's 80 KB, 64 KB of USR2's; the kit pair USR3+4 stays the user's |
 | ADPCM sample audio | about 11 KB per second (mono 22 kHz, 4 bit) |
@@ -720,6 +721,13 @@ hazard; what it found and what was done:
   two layers: RMS about -25 dB in a song), some 7 dB under the synthesised 808 (the power-on kit before). (4) The editor's player plays it from `realkit/` next to the editor with the same rules.
   (5) these notes, `docs/kits.md`. Black Pearl's hats have one take a layer (no round robin there). To do: listen
   (renders: `fm1_render.py song.json --kit 46`), adjust the recipe; on hardware the CPU with twelve voices.
+  **2026-10-22** (asked: the ride cut short, "I think it might be the voices"): a hit takes, with four of its note
+  sounding, the oldest of them; else a free voice; else the quietest (velocity x the part of its sample left; a
+  synthesised voice counts half), no longer the oldest (`drums.c drum_voice`, userkit_test). The ride 1.5 -> 2.0 s
+  (16 KB; at 1.5 s it rang 16 dB under the hit). The CPU on the unit: SETUP > LOAD (ui_menu.c) shows what audio.c
+  already measured (the average, the worst half buffer since OCT+, the late ones, the voices' peak and the hits
+  that found none free; the console's `status` too). To verify on hardware: the busiest song's worst block, and
+  whether 16 voices would fit (NDRUM; about 270 B of RAM a voice).
 - **The drummer without the device** (lower priority, asked 2026-10-13): the PC, phone or tablet as the
   drummer, driven by the pedal, when no FM-1 is at hand, with higher-fidelity samples than the device
   can hold (longer samples, more velocity layers, round robins). Two routes: (a) the web editor's player,

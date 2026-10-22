@@ -23,7 +23,7 @@
   "LOWTOM":  {"src": "mj", "key": 41, "layers": 2, "takes": 1, "len": 1.0, "min": 1.0, "rate": 22050, "gain": -2},
   "HITOM":   {"src": "mj", "key": 48, "layers": 2, "takes": 1, "len": 0.9, "min": 0.9, "rate": 22050, "gain": -2.5},
   "CRASH":   {"src": "mj", "key": 49, "layers": 1, "takes": 2, "len": 3.2, "min": 2.0, "rate": 32000, "gain": -6},
-  "RIDE":    {"src": "rz", "key": 51, "layers": 2, "takes": 1, "len": 1.5, "min": 1.35, "rate": 32000, "gain": -8},
+  "RIDE":    {"src": "rz", "key": 51, "layers": 2, "takes": 1, "len": 2.0, "min": 1.35, "rate": 32000, "gain": -8},
   "SHAKER":  {"src": "cc0", "file": "01_Mid_ShakerDouble_Down_rr1.wav", "len": 0.3, "min": 0.25, "rate": 22050, "gain": -12},
   "MIDTOM":  {"src": "mj", "key": 47, "layers": 2, "takes": 1, "len": 0.95, "min": 0.95, "rate": 22050, "gain": -2.25},
   "COWBELL": {"src": "cc0", "file": "20_cowbell_Cowbell1_Normal_v3.wav", "len": 0.35, "min": 0.25, "rate": 22050, "gain": -6}

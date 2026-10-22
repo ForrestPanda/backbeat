@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* SETUP (fm1-drummer: GLO tapped; SLOOP's menu, its GLO pages and its GLO layer in one place), in sections of up to
- * four rows: PEDAL, MIDI, LEARN, TEMPO, DRUMS, MASTER, TEXTURE (two), SCREEN, LIGHTS, AUDIO, SYSTEM. SELECT goes to
+ * four rows: PEDAL, MIDI, LEARN, TEMPO, DRUMS, MASTER, TEXTURE (two), SCREEN, LIGHTS, AUDIO, LOAD, SYSTEM. SELECT goes to
  * the section before / after (stopping at the ends), KNOB 1..4 set its rows in order (the knob's colour marks its
  * row), PRESETS moves the cursor; OCT+ steps the cursor's setting round or opens it (CALIBRATION, PROJECTS, ABOUT),
  * OCT-, GLO or HOME close (from ABOUT: back to the section). A row is a setting of its own (MI_*), a global
@@ -9,7 +9,8 @@
  * (sng.c arrset_save, once stopped: arrset_dirty), the others as before (settings_save, the project). */
 /* ------------------------------------------------------------ menu --- */
 enum { MI_PCH, MI_PCOUNT, MI_AUTO, MI_LEARN, MI_LCLEAR, MI_COLOR, MI_ZOOM, MI_LIGHTS, MI_KEYS, MI_NOTES, MI_LOWCUT,
-       MI_USB, MI_SERIAL, MI_PANEL, MI_PROJ, MI_ABOUT, MI_HUMAN, MI_CLOCK, MI_N };
+       MI_USB, MI_SERIAL, MI_PANEL, MI_PROJ, MI_ABOUT, MI_HUMAN, MI_CLOCK, MI_LOAD, MI_WORST, MI_LATE, MI_VOICES,
+       MI_N };
 enum { RK_MI, RK_G, RK_P };                        /* a row: a setting (MI_*), song.g[id], TDRUM->p[id] */
 typedef struct { const char *name; uint8_t kind, id; } mrow_t;
 static const mrow_t MROW[] = {
@@ -26,16 +27,20 @@ static const mrow_t MROW[] = {
     {"COLOR", RK_MI, MI_COLOR}, {"ZOOM", RK_MI, MI_ZOOM},
     {"LIGHTS", RK_MI, MI_LIGHTS}, {"KEYS", RK_MI, MI_KEYS}, {"NOTES", RK_MI, MI_NOTES},
     {"SPEAKER LOWCUT", RK_MI, MI_LOWCUT}, {"USB AUDIO", RK_MI, MI_USB}, {"USB SERIAL", RK_MI, MI_SERIAL},
+    {"AUDIO LOAD", RK_MI, MI_LOAD}, {"WORST BLOCK", RK_MI, MI_WORST}, {"LATE BLOCKS", RK_MI, MI_LATE},
+    {"DRUM VOICES", RK_MI, MI_VOICES},
     {"HARDWARE CALIBRATION", RK_MI, MI_PANEL}, {"JAM PROJECTS", RK_MI, MI_PROJ}, {"ABOUT", RK_MI, MI_ABOUT},
 };
 #define MI_COUNT (sizeof MROW / sizeof MROW[0])
 enum { MS_PEDAL, MS_MIDI, MS_LEARN, MS_TEMPO, MS_FEEL, MS_DRUMS, MS_MASTER, MS_TEX, MS_TEX2, MS_SCREEN, MS_LIGHTS,
-       MS_AUDIO, MS_SYSTEM, MS_COUNT };
+       MS_AUDIO, MS_LOAD, MS_SYSTEM, MS_COUNT };
 static const char *const MS_NAME[MS_COUNT] = {"PEDAL", "MIDI", "LEARN", "TEMPO", "FEEL", "DRUMS", "MASTER", "TEXTURE",
-                                              "TEXTURE 2", "SCREEN", "LIGHTS", "AUDIO", "SYSTEM"};
-static const uint8_t MS_FIRST[MS_COUNT + 1] = {0, 4, 8, 10, 13, 15, 19, 23, 27, 30, 32, 35, 38, MI_COUNT};   /* rows of
+                                              "TEXTURE 2", "SCREEN", "LIGHTS", "AUDIO", "LOAD",
+                                              "SYSTEM"};
+static const uint8_t MS_FIRST[MS_COUNT + 1] = {0, 4, 8, 10, 13, 15, 19, 23, 27, 30, 32, 35, 38, 42,
+                                                MI_COUNT};   /* rows of
                                                                                                           * each */
-_Static_assert(MI_COUNT == 41, "MS_FIRST follows MROW");
+_Static_assert(MI_COUNT == 45, "MS_FIRST follows MROW");
 static const char *const LIGHTS_NAME[LIGHTS_N] = {"OFF", "LOW", "MID", "HIGH"};   /* every button lit, the labels readable */
 static const char *const KEYS_NAME[KEYS_N] = {"OFF", "C KEYS", "WHITE KEYS", "ALL KEYS"};      /* keys lit too, at the LIGHTS level */
 #define MI_Y0 24                                   /* the first row, under the section line */
@@ -58,10 +63,37 @@ static uint32_t mi_find(uint32_t id)               /* the row of setting MI_* id
     return i;
 }
 
+/* LOAD (2026-10-22): what the audio interrupt takes of its time, on the device itself (audio.c measures each half
+ * buffer's render: HALF_FRAMES, 256 frames, 5.8 ms): the average (song.cpu_q8), the worst half since the reset, the halves the DMA
+ * had moved past before they were rendered (heard as a click), and the drum voices: the most at once, and the hits
+ * that found none free (drums.c drum_voice: a quieter one cut). OCT+ on any row resets them, to measure one song. Read
+ * four times a second, so the screen does not redraw every frame for the average's last digit */
+static struct { uint32_t t, load, worst, late, late0, peak, full; } meter;
+static void meter_read(void)
+{
+    if (meter.t && fm1_ms - meter.t < 250u)
+        return;
+    meter.t = fm1_ms ? fm1_ms : 1u;
+    meter.load = song.cpu_q8 * 100u / 256u;
+    meter.worst = audio_max_us * 100u / (HALF_FRAMES * 1000000u / FS);
+    meter.late = felucca_dbg.late - meter.late0;
+    meter.peak = drums.vpeak;
+    meter.full = drums.full;
+}
+static void meter_reset(void)
+{
+    audio_max_us = 0;
+    meter.late0 = felucca_dbg.late;
+    drums.vpeak = 0;
+    drums.full = 0;
+    meter.t = 0;
+    ui_message("LOAD RESET");
+}
+
 /* row i's value as shown, and its colour */
 static const char *mi_value(uint32_t i, uint16_t *c)
 {
-    static char b[16];
+    static char b[24];                               /* (the longest: "12 OF 12, 9999 FULL") */
     const mrow_t *r = &MROW[i % MI_COUNT];
     *c = C_HI;
     if (r->kind != RK_MI) {                           /* a global or the drum track's: as its page showed it */
@@ -101,6 +133,34 @@ static const char *mi_value(uint32_t i, uint16_t *c)
     case MI_LOWCUT: return settings.lowcut ? "ON" : "OFF";
     case MI_USB: return usb_full ? "FULL" : "MASTER";
     case MI_SERIAL: return usb_serial ? "ON" : "OFF";
+    case MI_LOAD:
+    case MI_WORST:
+        meter_read();
+        fmt_int(b, (int32_t)(r->id == MI_LOAD ? meter.load : meter.worst));
+        str_cpy(b + str_len(b), "%", 2);
+        *c = (r->id == MI_LOAD ? meter.load : meter.worst) >= 80u ? C_AMB : C_HI;   /* (100: a click) */
+        return b;
+    case MI_LATE:
+        meter_read();
+        if (!meter.late) {
+            *c = C_DIM;
+            return "NONE";
+        }
+        *c = C_AMB;
+        fmt_int(b, (int32_t)meter.late);
+        return b;
+    case MI_VOICES:                                   /* "9 OF 12", "12 OF 12, 37 FULL" */
+        meter_read();
+        fmt_int(b, (int32_t)meter.peak);
+        str_cpy(b + str_len(b), " OF ", 5);
+        fmt_int(b + str_len(b), NDRUM);
+        if (meter.full) {
+            *c = C_AMB;
+            str_cpy(b + str_len(b), ", ", 3);
+            fmt_int(b + str_len(b), (int32_t)(meter.full > 9999u ? 9999u : meter.full));
+            str_cpy(b + str_len(b), " FULL", 6);
+        }
+        return b;
     case MI_LCLEAR: {                                 /* (2.6) the CCs MIDI LEARN holds; OCT+ clears them */
         uint32_t n = ml_count();
         if (!n) {
@@ -336,6 +396,13 @@ static void mi_set(uint32_t i, int32_t s)
             ui.menu = 2;
             ui.force = 1;
         }
+        break;
+    case MI_LOAD:                                      /* LOAD: read only; OCT+ resets the worst, the late, the voices */
+    case MI_WORST:
+    case MI_LATE:
+    case MI_VOICES:
+        if (!s)
+            meter_reset();
         break;
     default:
         break;
