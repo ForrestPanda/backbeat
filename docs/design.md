@@ -1104,6 +1104,24 @@ hazard; what it found and what was done:
   (off, crash, crash + kick); `PLAY` in the web player mirrors `live_block`. Tests: `song_test.c` (a fill back into the
   same section, a fill into a change, no accent without a fill), `test_web.mjs`; the existing renders and
   `tests/golden.txt` do not change. Not started.
+- **Your sounds over MULDJORD, lane by lane; kit extras as packs** (asked 2026-10-22, after the ride went to 2.0 s:
+  the app slot has 15 KB left, so more of the kit cannot live in the firmware). The biggest reserve is USR3 + USR4,
+  160 KB of flash outside the package (the installer never writes them, an update keeps them), already read in place
+  by the voices (samples.c `smp_user_scan`: up to 16 zones a slot, a rate each). Today a song picks MULDJORD or
+  USR3+4, all or nothing. The plan: a kit **MULDJORD + USR** (a kit number of its own, appended so songs keep
+  theirs): a lane with a sound in USR3+4 plays it (USR3 the hard hits, USR4 the soft, as `DRUM_PAIR`), every other
+  lane MULDJORD's, its layers and takes. "Kit extras" are then not a mechanism of their own but ready-made packs the
+  editor's Drum kit page sends into those slots, the first **long cymbals** (the same Red Zeppelin ride at 4..5 s
+  and a longer crash, hard and soft); the page shows which lanes a pack or the user covers. The cost: a lane lookup
+  in `drums.c drum_on` and the kit's name (about 1 KB of code), the editor's player following the same rule, a
+  pack or two (`tools/gen_realkit.py` rendering into slot images; `sampleio.user_slot`). The limits: a slot sound
+  has two layers at most (USR3 / USR4) and no round robins (the slot format has neither: fine for cymbals, a step
+  down for a snare); 160 KB in all (a 5 s ride in two layers at 22 kHz is about 110 KB, so long cymbals or a few
+  short replacements, not both), shared with the user's own sounds; a fresh install has plain MULDJORD until a pack
+  is sent (a step in the setup docs), and a song on MULDJORD + USR sounds as the slots of the unit it plays on (the
+  editor warns). Not chosen: a slot format with layers and takes (the editor, the upload tool and the firmware all
+  change, for little gain on cymbals), and the installer writing the data region (a riskier update path; not before
+  the alpha). Not started.
 
 ## Open questions
 
