@@ -6,7 +6,7 @@
  * USB, as USB-MIDI packets (cable 0, CIN = status >> 4), so seq.c routes them by
  * channel as it does USB; clock and transport (F8 FA FB FC) are queued with cable 1 (seq.c: SYNC TRS);
  * other realtime, system common and SysEx are dropped. With SETUP > MIDI 2 > TRS TO USB on, the channel messages and
- * every realtime byte also go out over USB as they came (usb.c midi_thru_event).
+ * every realtime byte also go out over USB as they came (usb.c midi_thru_event); with BRIDGE ONLY they go out only.
  *
  * The ring is read by content, not by the DMA count: every slot the parser has
  * not yet been given holds UM_EMPTY, and the reader takes bytes until it meets
@@ -43,6 +43,8 @@ static void um_byte(uint32_t b)
     if (b >= 0xF8u) {                              /* realtime: the state is kept; clock and transport */
         if (b != UM_EMPTY)                         /* (line noise read as the ring's marker: not passed on) */
             midi_thru_event(0x0Fu | b << 8);       /* (CIN F: a single byte) */
+        if (midi_thru == THRU_ONLY)
+            return;                                /* BRIDGE ONLY: no clock or transport for the FM-1 */
         if ((b == 0xF8u || b == 0xFAu || b == 0xFBu || b == 0xFCu) && mi_w - mi_r < MQ) {
             midi_in_q[mi_w % MQ] = 0x1Fu | b << 8; /* (cable 1: from the TRS jack; seq.c mclk_event) */
             RING_PUBLISH();
@@ -69,6 +71,8 @@ static void um_byte(uint32_t b)
         uint32_t pkt = (um.st >> 4) | (uint32_t)um.st << 8 | d1 << 16 | d2 << 24;
         um.got = 0;
         midi_thru_event(pkt);
+        if (midi_thru == THRU_ONLY)
+            return;                                /* BRIDGE ONLY: the pedal, the songs and the notes not for the FM-1 */
         if (mi_w - mi_r < MQ) {
             midi_in_q[mi_w % MQ] = pkt;
             RING_PUBLISH();

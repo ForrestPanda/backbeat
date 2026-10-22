@@ -273,7 +273,8 @@ saves the project slot, as SLOOP did. A tap of SAVE opens SONGS.
 rows each on KNOB 1..4 (PRESETS moves the cursor, OCT+ acts): PEDAL (channel, count-in, load the last song at
 start, MIDI clock in: OFF, USB or TRS, the tempo and START / STOP from a clock master such as the Ampero), MIDI (the
 drums' channel, IN, other channels, OUT), MIDI 2 (MIDI LEARN, clear; TRS TO USB: what the TRS jack receives goes out
-over USB as well, the pedal and the clock for a tablet's editor to follow; off by default), TEMPO (tempo, click,
+over USB as well, the pedal and the clock for a tablet's editor to follow; off by default; BRIDGE ONLY: out over USB
+and nothing else, the FM-1 a TRS-to-USB MIDI interface that plays nothing, LIVE says BRIDGE: PEDAL TO USB), TEMPO (tempo, click,
 tune), FEEL (swing, humanize), DRUMS (level, reverb, delay, pan), MASTER, TEXTURE and TEXTURE 2, SCREEN, LIGHTS, AUDIO,
 LOAD (the audio's load and the drum voices), SYSTEM (calibration, the JAM project pages, ABOUT). The pedal settings are saved once the music stops.
 

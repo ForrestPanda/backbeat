@@ -170,9 +170,13 @@ static void midi_out_event(uint32_t pkt)            /* from the audio ISR */
 /* SETUP > MIDI 2 > TRS TO USB (2026-10-22): what comes in on the TRS jack goes out over USB as well, as it came (the
  * channel messages and the realtime ones; SysEx and system common stay on the FM-1: the editor's SysEx shares the
  * cable), so a tablet on the FM-1's USB sees the pedal and the clock as the FM-1 does (the editor's player mirrors
- * it), with no MIDI interface of its own. A ring of its own: midi_uart.c fills it from the TIMER5 ISR, ep1_tx empties
+ * it), with no MIDI interface of its own. BRIDGE ONLY (asked the same day): passed on, and the FM-1 itself leaves
+ * them alone (midi_uart.c: no section, song, fill, clock or note from the jack): a TRS-to-USB MIDI interface. A ring of its own: midi_uart.c fills it from the TIMER5 ISR, ep1_tx empties
  * it in the same ISR (midi_out_q is filled from the audio ISR, which TIMER5 can preempt). Full or no host: dropped */
-static uint8_t midi_thru;                           /* kept with the settings (panel.c lights_word bit 28), off by default */
+#define THRU_ON 1u
+#define THRU_ONLY 2u                                /* BRIDGE ONLY */
+static uint8_t midi_thru;                           /* 0 off (the default), THRU_ON, THRU_ONLY: kept with the settings
+                                                     * (panel.c lights_word bits 28, 29) */
 static uint32_t midi_thru_q[MQ];
 static uint32_t tq_w, tq_r;
 static void midi_thru_event(uint32_t pkt)

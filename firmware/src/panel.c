@@ -97,7 +97,8 @@ static uint32_t lights_word(void)
            (uint32_t)(usb_serial != 0u) << 16 |   /* (17..20: the visualiser's style, gone) */
            (uint32_t)(lights_min >= 2u && lights_min <= 17u ? lights_min - 1u : 0u) << 21 |   /* 2.6: CH n (n 1..16; 0 none) */
            (uint32_t)(drum_hum < HUM_N ? drum_hum : 0u) << 26 |   /* fm1-drummer: HUMANIZE (a word saved before it: off) */
-           (uint32_t)(midi_thru != 0u) << 28;    /* TRS TO USB (2026-10-22; a bit no older firmware wrote: off) */
+           (uint32_t)(midi_thru != 0u) << 28 |   /* TRS TO USB (2026-10-22; bits no older firmware wrote: off) */
+           (uint32_t)(midi_thru == THRU_ONLY) << 29;   /* .. BRIDGE ONLY */
 }
 static void lights_from_word(uint32_t w)
 {
@@ -112,7 +113,7 @@ static void lights_from_word(uint32_t w)
         lights_min = (uint8_t)(((w >> 21) & 31u) + 1u);   /* 2.6: CH n (an older SLOOP reads NOTES) */
     usb_serial = (uint8_t)((w >> 16) & 1u);
     drum_hum = (uint8_t)(((w >> 26) & 3u) < HUM_N ? (w >> 26) & 3u : 0u);
-    midi_thru = (uint8_t)((w >> 28) & 1u);
+    midi_thru = (uint8_t)((w >> 28) & 1u ? ((w >> 29) & 1u ? THRU_ONLY : THRU_ON) : 0u);
 }
 
 static void settings_save(void);              /* project.c: flash copy (FELUCCA_FLASH) */

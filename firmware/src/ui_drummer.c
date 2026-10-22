@@ -277,7 +277,7 @@ static void live_state(uint32_t playing, const char *next)
     uint32_t fill = fill_now || pedal_fill, hold = pedal_fill_wait, end = pedal_end_req || pedal_end_bars;
     uint32_t oct = (fm1_in.buttons & dyn_bit[1]) != 0u;   /* OCT+ held: a white key now changes on the next bar */
     uint32_t sig = studio_hash(playing + fill * 3u + hold * 7u + end * 11u + fill_arm * 13u + oct * 17u + pedal_fill_wait * 19u +
-                               live_req_brk * 23u, next);
+                               live_req_brk * 23u + midi_thru * 29u, next);
     if (!ui.force && sig == cache)
         return;
     cache = sig;
@@ -307,6 +307,8 @@ static void live_state(uint32_t playing, const char *next)
     } else if (fill_arm) {
         str_cpy(b, "FILL NEXT BAR", sizeof b);
         c = TE_DRUM;
+    } else if (midi_thru == THRU_ONLY) {          /* SETUP > MIDI 2 > TRS TO USB: the pedal reaches only the USB */
+        str_cpy(b, "BRIDGE: PEDAL TO USB", sizeof b);
     }
     cv_begin(240, 20, C_BLACK);
     cv_text(4, 2, &FONT_S, b, c);

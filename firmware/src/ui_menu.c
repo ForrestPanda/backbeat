@@ -133,9 +133,10 @@ static const char *mi_value(uint32_t i, uint16_t *c)
     case MI_LOWCUT: return settings.lowcut ? "ON" : "OFF";
     case MI_USB: return usb_full ? "FULL" : "MASTER";
     case MI_SERIAL: return usb_serial ? "ON" : "OFF";
-    case MI_THRU:                                     /* the TRS jack's messages out over USB too (usb.c midi_thru) */
+    case MI_THRU:                                     /* the TRS jack's messages out over USB too (usb.c midi_thru); BRIDGE
+                                                       * ONLY: out over USB, and the FM-1 leaves them alone */
         *c = midi_thru ? C_HI : C_DIM;
-        return midi_thru ? "ON" : "OFF";
+        return midi_thru == THRU_ONLY ? "BRIDGE ONLY" : midi_thru ? "ON" : "OFF";
     case MI_LOAD:
     case MI_WORST:
         meter_read();
@@ -364,8 +365,9 @@ static void mi_set(uint32_t i, int32_t s)
     case MI_NOTES:
         lights_notes = (uint8_t)(s > 0 ? 1u : s < 0 ? 0u : !lights_notes);
         break;
-    case MI_THRU:                                      /* right ON, left OFF; OCT+ toggles (kept with the settings) */
-        midi_thru = (uint8_t)(s > 0 ? 1u : s < 0 ? 0u : !midi_thru);
+    case MI_THRU:                                      /* OFF, ON, BRIDGE ONLY: the knob along (stops at the ends), OCT+
+                                                        * round (kept with the settings) */
+        midi_thru = (uint8_t)(s ? clamp((int32_t)midi_thru + (s > 0 ? 1 : -1), 0, THRU_ONLY) : (midi_thru + 1u) % (THRU_ONLY + 1u));
         break;
     case MI_LIGHTS:
     case MI_KEYS: {                                    /* brighter / dimmer (stops at the ends); OCT+ steps round */

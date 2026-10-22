@@ -377,7 +377,11 @@ next bar). No named sections, one song, no fill tied to a section change.
    and emptied in the TIMER5 ISR; not SysEx, which would interleave with the editor's on the one cable, nor system
    common); the editor lists the FM-1's own port in MIDI in from (a listener, so its link keeps the port). On core 0:
    a few hundred bytes a second at most, not worth the second core (asked). 304 B of code. Tests: midi_uart_test,
-   ui_pages_test. To verify on hardware: the tablet's player following the Ampero through the FM-1.
+   ui_pages_test. To verify on hardware: the tablet's player following the Ampero through the FM-1. **BRIDGE ONLY**
+   (asked the same day): a third value (bits 28 and 29), passed on and not for the FM-1 (midi_uart.c returns after the
+   thru: no pedal, song, clock or note from the jack); LIVE's state line says BRIDGE: PEDAL TO USB. Measured on the
+   tablet (wireless adb, DevTools): the FM-1 to the page 1.6 ms, the clock even (sd 1.5 ms), the player locked to it
+   within about 1 ms as heard; what was left was the screen's delay (the editor's Screen ahead, 50 ms by default).
 
 The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log

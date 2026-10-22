@@ -136,7 +136,10 @@ TRS-to-MIDI adapter. Not tried yet: the Ampero's START / STOP starting and stopp
 **The tablet without an adapter** (2026-10-22): with the tablet on the FM-1's USB and SETUP > MIDI 2 > TRS TO USB on,
 the FM-1 passes what its TRS jack receives (the footswitches' CCs and PCs, the clock) on over USB; in the editor's
 Play card pick **FM-1: its TRS jack** in MIDI in from, and Listen to the pedal: the player follows the FM-1 as the
-FM-1 follows the Ampero. To try on the unit.
+FM-1 follows the Ampero. To try on the unit. **BRIDGE ONLY** (the setting's third value) makes the FM-1 a plain
+TRS-to-USB MIDI interface: everything goes to the tablet and the FM-1 itself plays nothing (LIVE says BRIDGE: PEDAL TO
+USB; its own keys still work). On the Play card, **Screen ahead** (ms) moves the LIVE view ahead of the sound by the
+screen's own delay: set it by eye against the FM-1.
 
 The Ampero's looper is free-length (you tap its length; it syncs only to the Ampero's own drum machine, by its
 manual), so the clock keeps the tempos together but a loop drifts against the drums by however far the tap was off.

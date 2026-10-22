@@ -269,6 +269,22 @@ int main(void)
             ok &= midi_thru_q[(w0 + i) % MQ] == want[i];
         bad += (uint32_t)check("uart thru: on, CC (running status), clock, PC out; no SysEx", ok);
         tq_r = tq_w;
+        {   /* BRIDGE ONLY: out over USB, and nothing for the FM-1 (the pedal, the songs, the clock, the notes) */
+            uint32_t m0 = mi_w;
+            midi_thru = THRU_ONLY;
+            um.st = 0;
+            for (i = 0; i < sizeof in; i++)
+                um_byte(in[i]);
+            ok = tq_w - tq_r == sizeof want / sizeof want[0] && mi_w == m0;
+            for (i = 0; ok && i < sizeof want / sizeof want[0]; i++)
+                ok &= midi_thru_q[(tq_r + i) % MQ] == want[i];
+            bad += (uint32_t)check("uart thru: BRIDGE ONLY, all out over USB, none for the FM-1", ok);
+            midi_thru = THRU_ON;
+            um_byte(0xBF); um_byte(20); um_byte(2);
+            bad += (uint32_t)check("uart thru: ON again, the FM-1 has the pedal too", mi_w == m0 + 1u);
+            tq_r = tq_w;
+            mi_r = mi_w;
+        }
         usb.config = 0;
         um_byte(0xF8);
         bad += (uint32_t)check("uart thru: no host, nothing queued", tq_w == tq_r);
