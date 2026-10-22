@@ -133,18 +133,19 @@ runs. MIDI CLOCK IN OFF: the drums keep their own tempo whatever comes in.
 TRS cable, and so did the web editor's player on a tablet (Follow its MIDI clock), fed the same clock through a
 TRS-to-MIDI adapter. Not tried yet: the Ampero's START / STOP starting and stopping the drums.
 
-**The tablet without an adapter** (2026-10-22): with the tablet on the FM-1's USB and SETUP > MIDI 2 > TRS TO USB on,
-the FM-1 passes what its TRS jack receives (the footswitches' CCs and PCs, the clock) on over USB; in the editor's
-Play card pick **FM-1: its TRS jack** in MIDI in from, and Listen to the pedal: the player follows the FM-1 as the
-FM-1 follows the Ampero. To try on the unit. **BRIDGE ONLY** (the setting's third value) makes the FM-1 a plain
-TRS-to-USB MIDI interface: everything goes to the tablet and the FM-1 itself plays nothing (LIVE says BRIDGE: PEDAL TO
-USB; its own keys still work). On the Play card, **Screen ahead** (ms) moves the LIVE view ahead of the sound by the
-screen's own delay: set it by eye against the FM-1.
-
 The Ampero's looper is free-length (you tap its length; it syncs only to the Ampero's own drum machine, by its
 manual), so the clock keeps the tempos together but a loop drifts against the drums by however far the tap was off.
 To try on the hardware: tight taps on short loops; or the Ampero's drum machine on at zero volume as the looper's
 reference (does the Ampero send START when its drum starts?).
+
+## A tablet on the FM-1's USB
+
+The FM-1 can pass the Ampero on to a tablet over its own USB cable, no TRS-to-MIDI adapter (verified 2026-10-22,
+Ampero firmware 1.6.5, an Android tablet): **SETUP > MIDI 2 > TRS TO USB** ON (the FM-1 plays and passes the
+footswitches and the clock on) or **BRIDGE ONLY** (it passes them on and plays nothing: LIVE says BRIDGE: PEDAL TO USB).
+On the tablet, the editor's Play card: MIDI in from **FM-1: its TRS jack**, Listen to the pedal, Follow its MIDI clock
+(with CLOCK OUT(TRS) on, above), and **Screen ahead** set by eye so the LIVE view moves with the FM-1. The README's "A
+tablet beside the FM-1" has the steps.
 
 ## Still to try on the unit
 

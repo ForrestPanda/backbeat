@@ -145,7 +145,7 @@ as tiles, all in time with what you hear): the tiles are the footswitches, with 
 swing and the count-in as the device has them; keys (shown under the tiles): 1..8 a section (0 switches them to 9..16 and back), shift + the key on the next
 bar, f a fill (F: the whole next bar), comma and period previous / next, e the ending, space stop; **MIDI in from** and **Listen to the pedal** let the real pedal (the
 Ampero, or a USB MIDI interface between it and the computer, or the FM-1 itself with SETUP > MIDI 2 > TRS TO USB on:
-what its TRS jack receives, over its USB) drive that player with the same CCs and PCs as the
+what its TRS jack receives, over its USB: "A tablet beside the FM-1" below) drive that player with the same CCs and PCs as the
 FM-1, on the Pedal card's channel (PC n opens song n of the FM-1 connected, or of the simulated one), so the
 live workflow can be rehearsed before the hardware; **Follow its MIDI clock** makes the player take that input's
 tempo and START / STOP, as the FM-1 does with SETUP > PEDAL > MIDI CLOCK IN; **Connect Bluetooth** takes the pedal over BLE MIDI instead
@@ -224,6 +224,31 @@ pattern: a hit marked "only in a fill" plays only during a fill (CC 21, a black 
 one marked "not in a fill" rests then, mark by mark in the editor's grid or lane by lane in the JSON (`"fills"`);
 SLOOP's own whole-step conditions still work on top. Built for the Hotone Ampero II Stage (each footswitch sends up to three CC / PC messages), but any
 pedalboard with a MIDI out does.
+
+## A tablet beside the FM-1
+
+The editor's player can follow the pedal along with the FM-1 on a tablet or phone: its LIVE view a big screen on the
+music stand, or its sound the drums. The FM-1 passes the pedal on over its own USB cable, so the tablet needs no MIDI
+interface (verified on the first unit, 2026-10-22, with the Ampero II Stage and an Android tablet).
+
+1. On the FM-1, **SETUP > MIDI 2 > TRS TO USB** (KNOB 3; kept through power-off):
+   - **ON**: the FM-1 plays as always, and what its TRS jack receives (the footswitches' CCs and PCs, the MIDI clock)
+     goes out over USB as well.
+   - **BRIDGE ONLY**: it goes out over USB and nowhere else; the FM-1 plays nothing from the pedal (no section, song,
+     fill, stop or clock), a plain TRS-to-USB MIDI interface. LIVE says **BRIDGE: PEDAL TO USB**; the FM-1's own keys
+     still work (PLAY stops a song that was playing when you switched).
+   - **OFF** (the default): nothing goes out.
+2. The tablet on the FM-1's USB (an OTG cable on Android; the tablet powers the FM-1), the editor open in Chrome or Edge.
+3. On the Play card: **MIDI in from** = **FM-1: its TRS jack**, **Listen to the pedal**, and **Follow its MIDI clock**
+   when the pedalboard sends one (the Ampero: Global > MIDI > CLOCK OUT(TRS) on), so the player keeps the FM-1's tempo.
+4. **Screen ahead** (ms, on the Play card, 50 by default, kept on the tablet): a screen shows a frame some tens of
+   milliseconds after it is drawn, so the LIVE view runs that much ahead of the sound; set it by eye until the beat
+   lights move with the FM-1.
+
+With ON, both play: turn the tablet down for a screen only, or use BRIDGE ONLY to make the tablet the drummer. Measured on
+the tablet: the FM-1 to the page in about 2 ms, the clock steady (within 1.5 ms), the player locked to it within about
+1 ms; the tablet's own audio delay is accounted for. SysEx and song position are not passed on (the editor's own SysEx
+shares the cable).
 
 ## On the device
 
