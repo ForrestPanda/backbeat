@@ -13,8 +13,8 @@ RIDE: AVL Drumkits "Red Zeppelin" (a Zildjian A 24" ride) and HAT, OPENHAT and P
 http://www.bandshed.net/avldrumkits/), licensed CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/),
 the same way (the hardest layer, trimmed, cut, levelled). These four files carry that licence.
 
-CLAP and COWBELL: SLOOP's CC0 studio recordings (assets/samples-cc0/KIT: Versilian Studios VSCO-2 CE
-and VCSL, Sonic Pi), the same way.
+CLAP and COWBELL: SLOOP's CC0 studio recordings (assets/samples-cc0/KIT: Versilian Studios'
+VCSL), the same way.
 
 Credit when sharing: "MuldjordKit by Lars Muldjord / DrumGizmo, CC BY 4.0; hi-hats from AVL Drumkits Black Pearl and the ride
 from Red Zeppelin, by Glen MacArthur, CC BY-SA 3.0; clap and cowbell from Versilian Studios / Sonic Pi, CC0".

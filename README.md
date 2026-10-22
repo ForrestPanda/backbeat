@@ -2,7 +2,7 @@
 
 # BackBeat
 
-BackBeat (this repository: fm1-drummer) is a guitarist's accompaniment device on the M-VAVE FM-1: songs
+BackBeat (this repository: fm1-backbeat; fm1-arranger, then fm1-drummer, until 2026-10-14) is a guitarist's accompaniment device on the M-VAVE FM-1: songs
 made of drum sections (intro, verse, chorus, bridge, solo, outro), switched live from a pedalboard over
 the TRS MIDI jack, with fills where you ask for them. No backing tracks: the song's structure and the length of every section are decided
 on stage.
@@ -76,10 +76,10 @@ Footswitches send MIDI on channel 16 (default) to the TRS jack or over USB:
 
 | Message | Meaning |
 | --- | --- |
-| CC 20, value 0..3 | section A..D when the section playing has played its pattern out (a 1-bar section: the next bar; a fill pending: the bar after it), no fill of its own; stopped: start with it. The section already playing: nothing. A section with an entry comes in through it (below) |
-| CC 27, value 0..3 | on the next bar, without waiting for the section's end, no fill of its own |
+| CC 20, value 0..15 | section 1..16 of the song (no song loaded: 0..3, SLOOP's A..D) when the section playing has played its pattern out (a 1-bar section: the next bar; a fill pending: the bar after it), no fill of its own; stopped: start with it. The section already playing: nothing. A section with an entry comes in through it (below) |
+| CC 27, value 0..15 | that section on the next bar, without waiting for the section's end, no fill of its own |
 | CC 21 | the fill. A section with a fill bar of its own, as an arranger's fill-in: the rest of this bar (pressed in its last beat: the whole next bar), then the pattern from its top. A fill of several bars (up to 4, the section editor's Fill select) ends on the section's last bar line: asked earlier, it waits (the screen says FILL AT THE END), then plays whole; asked with fewer bars left, its last bars from now. A section without one: fill mode to the section's end, its fill marks heard where they sit, the pattern on with no restart (nothing marked: nothing changes). Sent with a CC 20 / 22 / 24 / 25 / 27 (either order), the fill into that change, which lands on the bar after the fill. Value 1: the whole next bar from anywhere in this one, for a fill that leads off its bar |
-| CC 22, value 0..3 | ending: the section playing ends, that section once as the outro, stop on the bar (other values: the song's flagged outro, or the section ends, then stop; the outro playing already: it plays to its end, then stop) |
+| CC 22, value 0..15 | ending: the section playing ends, that section once as the outro, stop on the bar (other values: the song's flagged outro, or the section ends, then stop; the outro playing already: it plays to its end, then stop) |
 | CC 28, value n | the break: section n through its break, when the section playing ends (as CC 20; with CC 21 on the switch: the fill, then the break); the section playing too. Value 127 (not a section): the section playing's, so one switch serves every song. No break written: its entry; neither: a bar of rest. Stopped: start with it |
 | CC 23 | stop now |
 | CC 24 / CC 25 | next / previous section (empty ones skipped, wrapping), as CC 20; stopped: the first / the last |

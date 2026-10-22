@@ -14,7 +14,7 @@ HAT, OPENHAT, PEDAL: AVL Drumkits "Black Pearl"; RIDE: AVL Drumkits "Red Zeppeli
 Glen MacArthur (Bandshed / AV Linux, http://www.bandshed.net/avldrumkits/), licensed CC BY-SA 3.0
 (https://creativecommons.org/licenses/by-sa/3.0/). These files carry that licence.
 
-CLAP, COWBELL, SHAKER: SLOOP's CC0 studio recordings (assets/samples-cc0/KIT: Versilian Studios VSCO-2 CE and VCSL).
+CLAP, COWBELL, SHAKER: SLOOP's CC0 studio recordings (assets/samples-cc0/KIT: Versilian Studios' VCSL).
 
 Credit when sharing: "MuldjordKit by Lars Muldjord / DrumGizmo and the DRSKit's snare by DrumGizmo / DRS Drums, CC BY 4.0; hi-hats from AVL Drumkits Black Pearl and
 the ride from Red Zeppelin, by Glen MacArthur, CC BY-SA 3.0; clap, cowbell and shaker from Versilian Studios, CC0".

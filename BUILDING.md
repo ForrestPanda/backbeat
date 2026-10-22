@@ -64,10 +64,14 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 
 ## Samples
 
-The CC0 samples are in `assets/samples-cc0/` (the drum kit `KIT`, Versilian Studios' VCSL, see `ATTRIBUTION.txt` there);
-fm1-drummer builds only the drum kit (`KIT`, the GM kit) into the firmware (`tools/gen_samples.py`).
-`tools/fetch_cc0.py` downloads them again from the source repositories. Without that folder the build
-still works and the GM kit has only the generated drum sounds.
+The firmware's only samples are the built-in kit MULDJORD: the WAVs in `assets/realkit/`, which
+`tools/gen_samples.py` encodes at build time (set REAL). `tools/gen_realkit.py` renders them once from
+`tools/realkit.json` and the source kits (`../../kits`, several GB, credits in `assets/realkit/ATTRIBUTION.txt`);
+the build never needs the source kits. `docs/kits.md` has the recipe and the flash budget.
+
+`assets/samples-cc0/KIT` (CC0 recordings from Versilian Studios' VCSL, `ATTRIBUTION.txt` there) is a source of
+MULDJORD's CLAP, COWBELL and SHAKER and an example kit for `tools/mkkit.py`; `tools/fetch_cc0.py` downloads it
+again. The build does not read it.
 
 ## Tests
 

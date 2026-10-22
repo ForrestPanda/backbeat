@@ -1,4 +1,4 @@
-# Setting up the Ampero II Stage for fm1-drummer
+# Setting up the Ampero II Stage for BackBeat
 
 What to put into each footswitch's MIDI settings (Stomp mode; the switch's own function Effect Slot,
 Scene or OFF; "FS MIDI settings" on the switch). Channel 16 is the drummer's default pedal channel

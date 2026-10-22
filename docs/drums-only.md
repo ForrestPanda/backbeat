@@ -1,4 +1,4 @@
-# fm1-drummer: the drums-only device (plan, 2026-10-13)
+# BackBeat: the drums-only device (plan, 2026-10-13, as fm1-drummer; done 2026-10-14)
 
 The user's decision (2026-10-13): the FM-1 becomes a drummer only. SLOOP's synth side goes: the three synth
 tracks, the twelve engines, voices, the FM6 bank, user presets, arp, chords, scales, the SLICER insert, the

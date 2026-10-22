@@ -740,7 +740,7 @@ hazard; what it found and what was done:
   latency checked on each platform; (b) the firmware's own engine as a desktop program (see "Related
   programs"), faithful but bound to the device's sample limits. Route (a) is the natural one: the pieces
   exist and the phone is already the editor's home.
-- **MIDI file import** (asked 2026-10-16, done 2026-10-19: see the end of this item). The plan: a Standard MIDI File (.mid, type 0 or 1) into a song, as tools/gp2song.py
+- (done 2026-10-19) **MIDI file import** (asked 2026-10-16; see the end of this item). The plan: a Standard MIDI File (.mid, type 0 or 1) into a song, as tools/gp2song.py
   does for Guitar Pro: the drums are channel 10 (and any track whose notes are all in the GM drum range), the same
   GM note table to the 16 lanes (`GM` in gp2song.py: kick 35 36, snare 38 40, side stick 37, clap 39, hats 42 44
   46, toms, crash, ride, the rest dropped), velocities to the four levels where Guitar Pro gave accents and ghosts
@@ -804,7 +804,7 @@ hazard; what it found and what was done:
   (a flam on the chorus's first snare, the packers' round trip, the renders: golden updated), gp2song_test (a
   grace note), test_web (the packers, the section editor, the player). To hear on the device: whether 25 ms reads
   as a flam on MULDJORD's snare through the limiter, or wants 20 or 30 (one constant).
-- **A responsive site, usable on a smartphone** (asked 2026-10-16). The editor is laid out for a desktop and a
+- (first stage done 2026-10-16) **A responsive site, usable on a smartphone** (asked 2026-10-16). The editor is laid out for a desktop and a
   tablet (the transport, the tiles in rows of four, the section editor's grid; the Setlist's 16 rows fit a tablet):
   on a phone it needs a layout of its own, not a scaled one. What that means: the tabs and cards stacking in one
   column at phone width, the Play card's transport and the LIVE view first (the phone on the floor or the mic stand
@@ -1125,7 +1125,7 @@ hazard; what it found and what was done:
 
 ## Open questions
 
-- The FM-1's TRS MIDI type (A or B).
+- (answered 2026-10-19) The FM-1's TRS MIDI type: Type A (the Ampero over a plain stereo cable, milestone 7).
 - The Ampero's toggle and patch-change MIDI behaviour (above).
 - Tempo sync with the Ampero's own drum machine or its tempo: not needed, noted.
 

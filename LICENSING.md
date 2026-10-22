@@ -1,4 +1,7 @@
-# Felucca licensing
+# Licensing
+
+BackBeat is Felucca's code through SLOOP (both GPL-3.0-only): Felucca's terms below are BackBeat's, with its own
+additions at the end (the kit's sounds).
 
 Felucca is free software. Its **code** is licensed under the GNU General Public License,
 version 3 only (`GPL-3.0-only`, full text in `LICENSE`). Its **assets** are not part of
@@ -47,7 +50,7 @@ assets, is entirely governed by the GPL.
 | Fukiai icon font (Hügelton Instruments), web editor only | MIT | `web/fukiai.ttf`, `web/FUKIAI-LICENSE.txt` |
 | JieLi AC79 SDK: `uboot.boot`, `cfg_tool.bin`, `eq_cfg_hw.bin` are read from your SDK checkout at build time and placed in the package; no SDK files are in this tree | Apache-2.0 | <https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK> |
 
-fm1-drummer is drums only (since 2026-10-14, `docs/drums-only.md`): SLOOP's synth engines are not in this tree any
+BackBeat is drums only (since 2026-10-14, `docs/drums-only.md`): SLOOP's synth engines are not in this tree any
 more, and with them the material only they used: CrispyZebra (the PHASE engine, GPL-3.0), klattsch (a design
 reference for the VOICE engine), msfa from Dexed (the FM6 engine, Apache-2.0) and DaisySP / Rings (the PHYS engine,
 MIT). SLOOP upstream credits them where its engines are.
@@ -69,7 +72,7 @@ by those owners.
 
 Felucca never enables the Bluetooth / Wi-Fi radio of the hardware.
 
-## BackBeat (fm1-drummer)
+## BackBeat
 
 `web/kit/`: the MuldjordKit by Lars Muldjord and the DrumGizmo team (drumgizmo.org; the SFZ port by kinwie),
 CC BY 4.0, one sound a lane as `tools/mkkit.py` makes them; the three hi-hat lanes from AVL Drumkits "Black Pearl"

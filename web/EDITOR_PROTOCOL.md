@@ -1,16 +1,16 @@
 # SLOOP editor protocol (SysEx over USB-MIDI)
 
 The firmware side is `firmware/src/editor.c` (SLOOP is based on Felucca: the frames keep its "FL"
-header). This fork, fm1-drummer, speaks **v11** (drums only, below); the sections after it are SLOOP's
+header). This fork, BackBeat (fm1-drummer until 2026-10-14), speaks **v11** (drums only, below); the sections after it are SLOOP's
 history (v1..v10), which v11 keeps byte for byte where it did not take something away.
 
-Where the history names a place on the device, it is SLOOP's: on fm1-drummer (2026-10-14, README "On the device")
+Where the history names a place on the device, it is SLOOP's: on BackBeat (since 2026-10-14, README "On the device")
 the GLO pages and the menu are SETUP (GLO tapped: "GLO > DRUMS" is SETUP > DRUMS, "GLO > MIDI" SETUP > MIDI,
-"GLO > TEXTURE" SETUP > TEXTURE, "GLO > SYSTEM > SYNC" SETUP > LEARN > SYNC), the TRACKS screen and the GLO layer
+"GLO > TEXTURE" SETUP > TEXTURE, "GLO > SYSTEM > SYNC" SETUP > PEDAL > MIDI CLOCK IN since 2026-10-15), the TRACKS screen and the GLO layer
 (mute, solo, fill keys) are gone, and a fill is the pedal's CC 21 or the LIVE screen's black keys and SEL. The
 protocol does not change with them.
 
-## v11: fm1-drummer, drums only
+## v11: BackBeat, drums only
 
 The device has one track, the drum track (track 0); SLOOP's synth side (three synth tracks, the twelve
 engines, presets, user presets, FM6) is gone from the firmware. The frames, the command numbers and the

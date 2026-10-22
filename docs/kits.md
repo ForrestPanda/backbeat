@@ -43,7 +43,7 @@ built into the firmware (399 KB of the app's flash since 2026-10-22, the ride 2.
 | CRASH | Muldjord 49 | 1 x 2 | 3.2 s (one take of 2.0 s until 2026-10-15) | 32000 |
 | RIDE | Red Zeppelin 51 | 2 x 1 | 2.0 s (1.5 s until 2026-10-22: cut while it still rang, 16 dB under the hit) | 32000 |
 | KICK2 | Muldjord 35 | 1 | 0.45 s | 22050 |
-| SHAKER | CC0, VSCO-2 CE's shaker (a ride bell until 2026-10-21) | 1 | 0.3 s | 22050 |
+| SHAKER | CC0, VCSL's small shaker (a ride bell until 2026-10-21) | 1 | 0.3 s | 22050 |
 | SNARE2 | DRS Kit 38 (layer 3, another take) | 1 | 0.5 s | 22050 |
 | CLAP, COWBELL | CC0 | 1 | 0.35 s | 22050 |
 
@@ -120,7 +120,7 @@ kit) and Gogodze Phu Vol II (CC0, 133 MB). The sfzinstruments drums index lists 
 
 ## The studio kit (CC0)
 
-`assets/samples-cc0/KIT`, SLOOP's own recordings (Versilian Studios VSCO-2 CE and VCSL, CC0):
+`assets/samples-cc0/KIT`, SLOOP's own recordings (Versilian Studios' VCSL, CC0):
 `python3 tools/mkkit.py STUDIO assets/samples-cc0/KIT --image build/host/studio-kit.img`. Thirteen
 lanes; no second kick, no pedal hat, no ride.
 
