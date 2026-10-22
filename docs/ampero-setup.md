@@ -129,6 +129,10 @@ The FM-1 then plays at the Ampero's tempo (LIVE shows `ext`), and its START / ST
 (Global > Controls), so give each song's patch the song's tempo: the song's own tempo is not used while the clock
 runs. MIDI CLOCK IN OFF: the drums keep their own tempo whatever comes in.
 
+**Tried 2026-10-22** (the user, Ampero firmware 1.6.5): BackBeat on the FM-1 followed the Ampero's tempo over the
+TRS cable, and so did the web editor's player on a tablet (Follow its MIDI clock), fed the same clock through a
+TRS-to-MIDI adapter. Not tried yet: the Ampero's START / STOP starting and stopping the drums.
+
 The Ampero's looper is free-length (you tap its length; it syncs only to the Ampero's own drum machine, by its
 manual), so the clock keeps the tempos together but a loop drifts against the drums by however far the tap was off.
 To try on the hardware: tight taps on short loops; or the Ampero's drum machine on at zero volume as the looper's
@@ -137,7 +141,7 @@ reference (does the Ampero send START when its drum starts?).
 ## Still to try on the unit
 
 - The patch change: the song it loads (above).
-- The MIDI clock from the Ampero (above).
+- The MIDI clock's START / STOP, and a loop against the drums (above).
 
 The LIVE screen's footer says what the FM-1 received: "NEXT: CHORUS", "SONG: FIRST LIGHT", "ENDING: OUTRO",
 "STOP", "NO SONG 3". The LIVE screen shows the section playing, the one coming and the fill.

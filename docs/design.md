@@ -369,7 +369,8 @@ next bar). No named sections, one song, no fill tied to a section change.
    hardware" note above. **2026-10-22** (the user, Ampero firmware 1.6.5): CC 24 / 25 (next / previous) work; the
    Ampero sends a footswitch's messages on its release, the same on every press (an effect slot's switch too), CCs
    only (a PC from a patch change, up to six messages), a channel per message; holding a switch sends nothing, a
-   scene change sends no MIDI (`docs/ampero-setup.md`).
+   scene change sends no MIDI (`docs/ampero-setup.md`). The FM-1 (SETUP > PEDAL > MIDI CLOCK IN TRS) and the web player on
+   a tablet (through a TRS-to-MIDI adapter) both followed the Ampero's MIDI clock; its START / STOP not tried yet.
 
 The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log
