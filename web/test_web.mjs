@@ -336,8 +336,9 @@ function editorPlay() {
   ok(ev.pos === 11 * 12 && ev.req === -1 && !ev.wait && !ev.end && Math.floor((ev.pos % P.barU(spec.sections[0])) / 48) === 2,
     "play: each step carries what the LIVE view shows: its place (step 11 = beat 3), nothing cued, no fill, no ending");
   ok(/id="play-live"/.test(html) && /id="pl-beats"/.test(html) && /id="pl-prog"/.test(html) && /function playLive\(\)/.test(html)
-    && /const now = PCLK\.heard\(ctx, performance\.now\(\), performance\.now\(\)\);[^\n]*\n\s*while \(q\.length && q\[0\]\.at <= now\)/.test(html),
-    "play: the LIVE view (beats, bar, progress, what comes, tiles) follows the audio clock, as heard (2026-10-22: not as scheduled)");
+    && /const now = PCLK\.heard\(ctx, performance\.now\(\), performance\.now\(\)\) \+ LIVE_LEAD\.ms \/ 1000;[^\n]*\n[^\n]*\n\s*while \(q\.length && q\[0\]\.at <= now\)/.test(html)
+    && /const LIVE_LEAD = \{ key: "backbeat-live-lead", ms: 50 \};/.test(html) && /id="live-lead"/.test(html),
+    "play: the LIVE view (beats, bar, progress, what comes, tiles) follows the audio clock as heard, ahead by the screen's delay (Screen ahead, 50 ms)");
   ok(/const PLAY_AHEAD = 0\.05, PLAY_PUMP_MS = 10;/.test(html) && /SPLAY\.next < ctx\.currentTime \+ PLAY_AHEAD/.test(html) &&
      /for \(const s of SPLAY\.srcs \|\| \[\]\) if \(s\.t0 > SPLAY\.ctx\.currentTime\)/.test(html),
     "play: steps scheduled 50 ms ahead (150 until 2026-10-22: a pedal message that late), a stop cancels the hits not yet heard");
