@@ -47,6 +47,21 @@ static int play_led(void)
     p = p >= lat ? p - lat : p + BEAT_U - lat;
     return p < BEAT_U / 4u;
 }
+/* the tap tempo key's light (the last black key, F#5, on the song screen: ui_drummer.c KEY_TAP): the tempo, a flash on
+ * each beat (2026-10-22, asked): playing, PLAY's flash (the beat as heard); the count-in, its clicks; stopped, free at
+ * the tempo, so a tap, a MIDI clock or a song loaded shows at once */
+static int tempo_led(void)
+{
+    uint32_t bpm = (uint32_t)song.g[G_BPM], per;
+    if (ci_on)
+        return ci_u % BEAT_U < BEAT_U / 4u;
+    if (song.playing)
+        return play_led();
+    if (!bpm)
+        return 0;
+    per = 60000u / bpm;
+    return fm1_ms % per < per / 4u;
+}
 
 /* the keys' lights: what the layer held does, else the keys down and the drum hits */
 /* what sounds on the drum track, as keys: the drum hits (each lights its key a few frames). Shown at once with
@@ -104,7 +119,7 @@ static uint32_t keys_lit(void)
         for (i = 0; i < SNG_SECTIONS; i++)
             if ((song.playing && (int32_t)i == live_sec) || ((int32_t)i == live_req && blink))
                 m |= 1u << key_of_white(i);
-        return m;
+        return m | (tempo_led() ? 1u << KEY_TAP : 0u);   /* the tap tempo key: the tempo */
     }
     if (kb_grid) {                                 /* the DRUMS grid page: the sound's steps of this page */
         uint32_t len = trk_len(TDRUM), b0 = drum_cursor / 16u * 16u;

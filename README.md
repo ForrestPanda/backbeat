@@ -82,7 +82,7 @@ Footswitches send MIDI on channel 16 (default) to the TRS jack or over USB:
 | CC 28, value n | the break: section n through its break, when the section playing ends (as CC 20; with CC 21 on the switch: the fill, then the break); the section playing too. Value 127 (not a section): the section playing's, so one switch serves every song. No break written: its entry; neither: a bar of rest. Stopped: start with it |
 | CC 23 | stop now |
 | CC 24 / CC 25 | next / previous section (empty ones skipped, wrapping), as CC 20; stopped: the first / the last |
-| CC 26 | tap tempo |
+| CC 26 | tap tempo (on the device: the last black key, F#5, on LIVE) |
 | PC 0..15 | load your song in slot 1..16: stopped, its tempo and kit now and its first section cued; playing, with the next section |
 | PC 16..31 | load factory groove 1..16 (the same way) |
 | PC 32..127 | no song: SLOOP's sections A..D again |
@@ -274,7 +274,9 @@ playing lit, the one cued framed and blinking, the outro and any meter but 4/4 m
 messages ("SONG: BLACK", "NEXT: SOLO") show in the footer. The white keys 1..16 change section when the one
 playing ends, with OCT+ held on the next bar (the state line says KEY: ON THE NEXT BAR), with no fill of their own; the first black key (F#3) asks for a fill (as CC 21:
 the rest of the bar with a fill bar of its own, else to the section's end; with OCT+ held the whole next bar), the second (G#3) the fill on the whole next bar,
-the fourth (C#4) the break (as CC 28: the section playing comes in again through its break when it ends); the other black keys as the first. So a plain change is one press, and a fill into the change is a black key then a white one,
+the fourth (C#4) the break (as CC 28: the section playing comes in again through its break when it ends); the last (F#5) the
+**tap tempo** (as CC 26, song loaded or not), its light flashing the tempo (with PLAY while playing; stopped, at the
+tempo, so a tap or a MIDI clock shows at once); the other black keys as the first. So a plain change is one press, and a fill into the change is a black key then a white one,
 as the pedal's CC 21 sent with its CC 20. SEL is a fill too, ENV and LFO the previous and next section
 (without a fill). KNOB 1 (and SELECT) the tempo, KNOB 2 (and PRESETS) the kit, KNOB 3 the drums' level, KNOB 4 the
 swing. With no song loaded it says PICK A SONG and shows the 16 songs of the SONGS page shown (USER or FACTORY;

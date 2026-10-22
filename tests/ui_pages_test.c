@@ -564,7 +564,7 @@ int main(int argc, char **argv)
             static const uint8_t BLACK[11] = {1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25};
             uint32_t b, all = 1;
             for (b = 0; b < 11u; b++) {
-                if (b == 1u || b == 3u)
+                if (b == 1u || b == 3u || b == 10u)       /* (the last, F#5: the tap tempo since 2026-10-22, below) */
                     continue;
                 pedal_fill = 0; pedal_fill_wait = 0;
                 key(BLACK[b]); frames(2);
@@ -586,6 +586,25 @@ int main(int argc, char **argv)
             check(live_req == 2 && !pedal_at_end && (pedal_fill || pedal_fill_wait), "LIVE: a black key, then white key 3: the fill, CHORUS on the bar after it");
             ui.force = 1; frame(); ppm("live-fill-next");     /* "FILL > CHORUS" */
             live_req = -1; pedal_at_end = 0; pedal_fill = 0; pedal_fill_wait = 0;
+        }
+        {   /* the last black key, F#5 (2026-10-22): the tap tempo (as CC 26), no fill; its light the tempo, PLAY's flash
+             * while playing, free at the tempo stopped (ui_input.c tempo_led, in keys_lit on the song screen) */
+            int16_t bpm = song.g[G_BPM];
+            uint32_t k, bad = 0, on = 0;
+            pedal.tap_n = 0; pedal_fill = 0; pedal_fill_wait = 0;
+            for (k = 0; k < 4u; k++) {                    /* four taps half a second apart on the sample clock: 120 BPM */
+                pedal.clock = 2000000u + k * (FS / 2u);
+                drummer_key(25u, 0u);
+            }
+            check(song.g[G_BPM] == 120 && !pedal_fill && !pedal_fill_wait && song.playing,
+                  "LIVE: the last black key (F#5): the tap tempo (four taps 500 ms apart: 120 BPM), no fill");
+            for (k = 0; k < 48u; k++) {
+                clk_pos = k * (BEAT_U / 24u);
+                bad += (uint32_t)((keys_lit() >> 25 & 1u) != (uint32_t)play_led());
+                on += keys_lit() >> 25 & 1u;
+            }
+            check(kb_grid == 2u && bad == 0u && on > 0u, "LIVE: the tap tempo key's light flashes with PLAY (the beat as heard)");
+            song.g[G_BPM] = bpm; pedal.tap_n = 0;
         }
         tap(B_PLAY); frames(3);
         check(!song.playing, "LIVE: PLAY: stop");

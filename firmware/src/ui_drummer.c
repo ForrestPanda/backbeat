@@ -17,7 +17,8 @@
  *                     the next bar); with OCT+ held, the whole next bar (CC 21 value 1: the same hold as the white
  *                     keys' "next bar"). G#3, the second: the whole next bar always (CC 21 value 1). C#4, the
  *                     fourth: the break (CC 28 value 127: the section playing comes in again through its break
- *                     when it ends; stopped, the one cued starts through it). The other black keys as the first
+ *                     when it ends; stopped, the one cued starts through it). F#5, the last: the tap tempo (as CC 26;
+ *                     its light flashes the tempo; 2026-10-22, asked), a song loaded or not. The other black keys as the first
  *   SEL ENV LFO       fill (CC 21; with OCT+ held, the next bar); previous, next (as CC 25, 24, without their fill)
  *   PLAY              stopped: the section cued (the count-in first); playing: stop
  *   KNOB 1..4         tempo, kit, drums level, swing (SELECT: tempo; PRESETS: kit)
@@ -73,10 +74,17 @@ static int32_t key_black(uint32_t k)             /* a key (0..26, from F3) -> it
     return i < 0 ? -1 : (int32_t)(k / 12u) * 5 + i;
 }
 
+#define KEY_TAP 25u                                 /* the last black key (F#5): the tap tempo */
 static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.c: seq.c's KB_GRID events; nextbar:
                                                      * OCT+ was held) */
 {
     int32_t w = key_white(k), b = key_black(k);
+    if (k == KEY_TAP) {                             /* the tap tempo (the pedal's CC 26), with a song or without */
+        fm1_irq_off();
+        pedal_tap();
+        fm1_irq_on();
+        return;
+    }
     if (sng_cur < 0 || sng_view == DV_LIB) {
         if (w >= 0 && w < (int32_t)SNG_SLOTS)
             lib_load((uint32_t)w);
