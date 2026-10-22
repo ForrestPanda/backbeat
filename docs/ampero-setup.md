@@ -8,8 +8,8 @@ a scene change and a section change share one press.
 How the Ampero sends them (tried with BackBeat on the first unit, Ampero firmware 1.6.5, 2026-10-22):
 
 - **On the release.** A footswitch sends its messages when it comes up, not when it goes down, so the FM-1
-  acts on your foot leaving the switch: for a fill in a bar's last beat or a change on the next bar line,
-  press early and release on time.
+  acts on your foot leaving the switch. Tap it, quick and in time, as you would any switch: holding it down to
+  time the release does not work, a held switch (1..5) sends nothing (below).
 - **The same messages on every press**, an effect slot's switch too (it does not alternate between an on and
   an off set): next, previous and tap count once a press on any switch.
 - **CCs only** on a footswitch (up to three); a Program Change can be sent only by a patch change (below).
