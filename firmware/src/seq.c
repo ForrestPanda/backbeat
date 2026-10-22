@@ -1491,7 +1491,7 @@ static void __attribute__((noinline)) midi_cc(track_t *t, uint32_t cc, uint32_t 
     }
 }
 
-/* MIDI clock in (SETUP > LEARN > SYNC = USB or TRS; after Felucca 1.0's midi_clock.c, from contributions by
+/* MIDI clock in (SETUP > PEDAL > MIDI CLOCK IN = USB or TRS; after Felucca 1.0's midi_clock.c, from contributions by
  * ChanceTheMaker and keremimo): 24 pulses a beat. While the clock runs, the sequencer advances by the
  * pulses (a pulse = BEAT_U / 24 units), interpolated up to the next one from the last interval but never
  * past it, so it follows the master's tempo changes and cannot drift; BPM shows the master's tempo

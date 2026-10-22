@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* SETUP (fm1-drummer: GLO tapped; SLOOP's menu, its GLO pages and its GLO layer in one place), in sections of up to
- * four rows: PEDAL, MIDI, LEARN, TEMPO, DRUMS, MASTER, TEXTURE (two), SCREEN, LIGHTS, AUDIO, LOAD, SYSTEM. SELECT goes to
+ * four rows: PEDAL, MIDI, MIDI 2 (LEARN until 2026-10-22), TEMPO, DRUMS, MASTER, TEXTURE (two), SCREEN, LIGHTS, AUDIO, LOAD, SYSTEM. SELECT goes to
  * the section before / after (stopping at the ends), KNOB 1..4 set its rows in order (the knob's colour marks its
  * row), PRESETS moves the cursor; OCT+ steps the cursor's setting round or opens it (CALIBRATION, PROJECTS, ABOUT),
  * OCT-, GLO or HOME close (from ABOUT: back to the section). A row is a setting of its own (MI_*), a global
@@ -10,14 +10,14 @@
 /* ------------------------------------------------------------ menu --- */
 enum { MI_PCH, MI_PCOUNT, MI_AUTO, MI_LEARN, MI_LCLEAR, MI_COLOR, MI_ZOOM, MI_LIGHTS, MI_KEYS, MI_NOTES, MI_LOWCUT,
        MI_USB, MI_SERIAL, MI_PANEL, MI_PROJ, MI_ABOUT, MI_HUMAN, MI_CLOCK, MI_LOAD, MI_WORST, MI_LATE, MI_VOICES,
-       MI_N };
+       MI_THRU, MI_N };
 enum { RK_MI, RK_G, RK_P };                        /* a row: a setting (MI_*), song.g[id], TDRUM->p[id] */
 typedef struct { const char *name; uint8_t kind, id; } mrow_t;
 static const mrow_t MROW[] = {
     {"PEDAL CHANNEL", RK_MI, MI_PCH}, {"COUNT-IN", RK_MI, MI_PCOUNT}, {"LOAD LAST SONG AT START", RK_MI, MI_AUTO},
     {"MIDI CLOCK IN", RK_MI, MI_CLOCK},          /* (G_SYNC: was LEARN's SYNC, INT USB TRS) */
     {"DRUMS CHANNEL", RK_G, G_DRCH}, {"IN", RK_G, G_ROUTE}, {"OTHER CHANNELS", RK_G, G_CHOTH}, {"OUT", RK_G, G_MIDI},
-    {"MIDI LEARN", RK_MI, MI_LEARN}, {"MIDI LEARN CLEAR", RK_MI, MI_LCLEAR},
+    {"MIDI LEARN", RK_MI, MI_LEARN}, {"MIDI LEARN CLEAR", RK_MI, MI_LCLEAR}, {"TRS TO USB", RK_MI, MI_THRU},
     {"TEMPO", RK_G, G_BPM}, {"CLICK", RK_G, G_CLOCK}, {"TUNE", RK_G, G_TUNE},
     {"SWING", RK_G, G_SWING}, {"HUMANIZE", RK_MI, MI_HUMAN},
     {"LEVEL", RK_G, G_DRLVL}, {"REVERB", RK_G, G_DRREV}, {"DELAY", RK_G, G_DRDLY}, {"PAN", RK_P, P_PAN},
@@ -34,13 +34,13 @@ static const mrow_t MROW[] = {
 #define MI_COUNT (sizeof MROW / sizeof MROW[0])
 enum { MS_PEDAL, MS_MIDI, MS_LEARN, MS_TEMPO, MS_FEEL, MS_DRUMS, MS_MASTER, MS_TEX, MS_TEX2, MS_SCREEN, MS_LIGHTS,
        MS_AUDIO, MS_LOAD, MS_SYSTEM, MS_COUNT };
-static const char *const MS_NAME[MS_COUNT] = {"PEDAL", "MIDI", "LEARN", "TEMPO", "FEEL", "DRUMS", "MASTER", "TEXTURE",
+static const char *const MS_NAME[MS_COUNT] = {"PEDAL", "MIDI", "MIDI 2", "TEMPO", "FEEL", "DRUMS", "MASTER", "TEXTURE",
                                               "TEXTURE 2", "SCREEN", "LIGHTS", "AUDIO", "LOAD",
                                               "SYSTEM"};
-static const uint8_t MS_FIRST[MS_COUNT + 1] = {0, 4, 8, 10, 13, 15, 19, 23, 27, 30, 32, 35, 38, 42,
+static const uint8_t MS_FIRST[MS_COUNT + 1] = {0, 4, 8, 11, 14, 16, 20, 24, 28, 31, 33, 36, 39, 43,
                                                 MI_COUNT};   /* rows of
                                                                                                           * each */
-_Static_assert(MI_COUNT == 45, "MS_FIRST follows MROW");
+_Static_assert(MI_COUNT == 46, "MS_FIRST follows MROW");
 static const char *const LIGHTS_NAME[LIGHTS_N] = {"OFF", "LOW", "MID", "HIGH"};   /* every button lit, the labels readable */
 static const char *const KEYS_NAME[KEYS_N] = {"OFF", "C KEYS", "WHITE KEYS", "ALL KEYS"};      /* keys lit too, at the LIGHTS level */
 #define MI_Y0 24                                   /* the first row, under the section line */
@@ -133,6 +133,9 @@ static const char *mi_value(uint32_t i, uint16_t *c)
     case MI_LOWCUT: return settings.lowcut ? "ON" : "OFF";
     case MI_USB: return usb_full ? "FULL" : "MASTER";
     case MI_SERIAL: return usb_serial ? "ON" : "OFF";
+    case MI_THRU:                                     /* the TRS jack's messages out over USB too (usb.c midi_thru) */
+        *c = midi_thru ? C_HI : C_DIM;
+        return midi_thru ? "ON" : "OFF";
     case MI_LOAD:
     case MI_WORST:
         meter_read();
@@ -360,6 +363,9 @@ static void mi_set(uint32_t i, int32_t s)
         break;
     case MI_NOTES:
         lights_notes = (uint8_t)(s > 0 ? 1u : s < 0 ? 0u : !lights_notes);
+        break;
+    case MI_THRU:                                      /* right ON, left OFF; OCT+ toggles (kept with the settings) */
+        midi_thru = (uint8_t)(s > 0 ? 1u : s < 0 ? 0u : !midi_thru);
         break;
     case MI_LIGHTS:
     case MI_KEYS: {                                    /* brighter / dimmer (stops at the ends); OCT+ steps round */

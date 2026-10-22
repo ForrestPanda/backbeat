@@ -167,6 +167,19 @@ static void midi_out_event(uint32_t pkt)            /* from the audio ISR */
         mo_w++;
     }
 }
+/* SETUP > MIDI 2 > TRS TO USB (2026-10-22): what comes in on the TRS jack goes out over USB as well, as it came (the
+ * channel messages and the realtime ones; SysEx and system common stay on the FM-1: the editor's SysEx shares the
+ * cable), so a tablet on the FM-1's USB sees the pedal and the clock as the FM-1 does (the editor's player mirrors
+ * it), with no MIDI interface of its own. A ring of its own: midi_uart.c fills it from the TIMER5 ISR, ep1_tx empties
+ * it in the same ISR (midi_out_q is filled from the audio ISR, which TIMER5 can preempt). Full or no host: dropped */
+static uint8_t midi_thru;                           /* kept with the settings (panel.c lights_word bit 28), off by default */
+static uint32_t midi_thru_q[MQ];
+static uint32_t tq_w, tq_r;
+static void midi_thru_event(uint32_t pkt)
+{
+    if (midi_thru && usb.config && tq_w - tq_r < MQ)
+        midi_thru_q[tq_w++ % MQ] = pkt;
+}
 
 /* ------------------------------------------------------- descriptors --- */
 /* interfaces: 0 audio control, 1 MIDI streaming, 2 audio streaming (FELUCCA_UAC), then CDC's two.
@@ -856,10 +869,10 @@ static void ep1_tx(void)
 {
     uint32_t csr, n = 0;
 #if FELUCCA_OTA
-    if (mo_w == mo_r && so_w == so_r)
+    if (mo_w == mo_r && so_w == so_r && tq_w == tq_r)
         return;
 #else
-    if (mo_w == mo_r)
+    if (mo_w == mo_r && tq_w == tq_r)
         return;
 #endif
     sie_wr(S_INDEX, 1);
@@ -892,6 +905,18 @@ static void ep1_tx(void)
         n += 4u;
         RING_PUBLISH();
         mo_r++;
+    }
+#if FELUCCA_OTA
+    while (!sx_busy && so_r == so_w && tq_r != tq_w && n < 64u) {   /* TRS TO USB: after the FM-1's own */
+#else
+    while (tq_r != tq_w && n < 64u) {
+#endif
+        uint32_t pkt = midi_thru_q[tq_r++ % MQ];
+        ep1tx[n] = (uint8_t)pkt;
+        ep1tx[n + 1] = (uint8_t)(pkt >> 8);
+        ep1tx[n + 2] = (uint8_t)(pkt >> 16);
+        ep1tx[n + 3] = (uint8_t)(pkt >> 24);
+        n += 4u;
     }
     if (!n)
         return;
@@ -1205,6 +1230,7 @@ static void usb_poll(void)                              /* TIMER5 ISR, 2 kHz */
         usb.config = 0;
         usb.suspended = 0;
         mo_r = mo_w;                                    /* nothing stale for the next host */
+        tq_r = tq_w;
         usb.sx_on = 0;
 #if FELUCCA_OTA
         so_r = so_w;

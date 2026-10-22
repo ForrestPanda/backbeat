@@ -899,7 +899,7 @@ static void sections_flush(void)                        /* main loop */
         }
         srec_done = 0;
     }
-    if ((uint32_t)song.g[G_SYNC] != lights_sync) {      /* SETUP > LEARN > SYNC: kept with the settings */
+    if ((uint32_t)song.g[G_SYNC] != lights_sync) {      /* SETUP > PEDAL > MIDI CLOCK IN: kept with the settings */
         lights_sync = (uint8_t)song.g[G_SYNC];
         settings_later = 1;
     }

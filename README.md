@@ -144,10 +144,11 @@ time signature, the section with its bar and a progress ticked per bar, the coun
 as tiles, all in time with what you hear): the tiles are the footswitches, with fills, the ending, stop, the song's
 swing and the count-in as the device has them; keys (shown under the tiles): 1..8 a section (0 switches them to 9..16 and back), shift + the key on the next
 bar, f a fill (F: the whole next bar), comma and period previous / next, e the ending, space stop; **MIDI in from** and **Listen to the pedal** let the real pedal (the
-Ampero, or a USB MIDI interface between it and the computer) drive that player with the same CCs and PCs as the
+Ampero, or a USB MIDI interface between it and the computer, or the FM-1 itself with SETUP > MIDI 2 > TRS TO USB on:
+what its TRS jack receives, over its USB) drive that player with the same CCs and PCs as the
 FM-1, on the Pedal card's channel (PC n opens song n of the FM-1 connected, or of the simulated one), so the
 live workflow can be rehearsed before the hardware; **Follow its MIDI clock** makes the player take that input's
-tempo and START / STOP, as the FM-1 does with SETUP > SYNC; **Connect Bluetooth** takes the pedal over BLE MIDI instead
+tempo and START / STOP, as the FM-1 does with SETUP > PEDAL > MIDI CLOCK IN; **Connect Bluetooth** takes the pedal over BLE MIDI instead
 (a Bluetooth MIDI pedal, or an FM-1 running the MIDI bridge next door, which turns its TRS input into BLE), so a phone
 with nothing installed can be the player: Chrome or Edge on Android, Windows or macOS, from https or
 localhost (Chrome on Linux keeps Web Bluetooth behind a flag; Firefox and Safari on the iPhone have none). Its **Section editor** card edits a song by hand: names, order,
@@ -271,9 +272,10 @@ saves the project slot, as SLOOP did. A tap of SAVE opens SONGS.
 **SETUP.** SLOOP's menu, its GLO pages and its mix layer in one place, a section at a time (SELECT), up to four
 rows each on KNOB 1..4 (PRESETS moves the cursor, OCT+ acts): PEDAL (channel, count-in, load the last song at
 start, MIDI clock in: OFF, USB or TRS, the tempo and START / STOP from a clock master such as the Ampero), MIDI (the
-drums' channel, IN, other channels, OUT), LEARN (MIDI LEARN, clear), TEMPO (tempo, click,
+drums' channel, IN, other channels, OUT), MIDI 2 (MIDI LEARN, clear; TRS TO USB: what the TRS jack receives goes out
+over USB as well, the pedal and the clock for a tablet's editor to follow; off by default), TEMPO (tempo, click,
 tune), FEEL (swing, humanize), DRUMS (level, reverb, delay, pan), MASTER, TEXTURE and TEXTURE 2, SCREEN, LIGHTS, AUDIO,
-SYSTEM (calibration, the JAM project pages, ABOUT). The pedal settings are saved once the music stops.
+LOAD (the audio's load and the drum voices), SYSTEM (calibration, the JAM project pages, ABOUT). The pedal settings are saved once the music stops.
 
 **Humanize** (SETUP > FEEL: OFF, LIGHT, MORE; LIGHT out of the box): the sequencer plays each step a little early
 or late (LIGHT up to 3 ms, MORE 6 ms; all the drums of a step together, so no flams) and each hit a little louder or
@@ -281,7 +283,7 @@ softer (up to about 1 and 2 dB), as a drummer does. The level moves after the hi
 or a soft hit keeps its own sound. It varies from bar to bar but is the same every time the song plays, so a render
 is repeatable. The web editor's player does the same (its Humanize menu), and `tools/fm1_render.py --humanize`.
 
-What else is on it, from SLOOP: one track, the drums (the kits: the sampled GM kit and its treatments, the
+What else is on it, from SLOOP: one track, the drums (the kits: the
 synthesised kits, SYN1..SYN4 from the editor's Drum synth, your own sampled kits on the user slots; and this fork's
 MULDJORD), a pattern of
 up to 64 steps over 16 lanes with levels, ratchets, nudges, parameter locks and fill conditions, rolls, erase and

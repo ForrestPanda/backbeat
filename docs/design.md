@@ -371,6 +371,13 @@ next bar). No named sections, one song, no fill tied to a section change.
    only (a PC from a patch change, up to six messages), a channel per message; holding a switch sends nothing, a
    scene change sends no MIDI (`docs/ampero-setup.md`). The FM-1 (SETUP > PEDAL > MIDI CLOCK IN TRS) and the web player on
    a tablet (through a TRS-to-MIDI adapter) both followed the Ampero's MIDI clock; its START / STOP not tried yet.
+   **TRS to USB** (asked 2026-10-22, to replace a DIY TRS-to-USB MIDI bridge for the tablet that mirrors the FM-1):
+   SETUP > MIDI 2 (LEARN until then) > TRS TO USB, off by default (the settings word's bit 28). On, midi_uart.c also
+   queues every channel message and realtime byte from the jack for USB (usb.c `midi_thru_q`: its own ring, filled
+   and emptied in the TIMER5 ISR; not SysEx, which would interleave with the editor's on the one cable, nor system
+   common); the editor lists the FM-1's own port in MIDI in from (a listener, so its link keeps the port). On core 0:
+   a few hundred bytes a second at most, not worth the second core (asked). 304 B of code. Tests: midi_uart_test,
+   ui_pages_test. To verify on hardware: the tablet's player following the Ampero through the FM-1.
 
 The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log

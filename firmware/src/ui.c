@@ -271,10 +271,10 @@ static const param_desc_t *home_param(uint32_t k, int16_t **vp)
 }
 
 /* ------------------------------------------------------- MIDI LEARN --- */
-/* MIDI LEARN (SLOOP 2.6, after Felucca 1.5 by Leo Kuroshita, Discussion #170; the map: seq.c ml_tab). SETUP > LEARN
+/* MIDI LEARN (SLOOP 2.6, after Felucca 1.5 by Leo Kuroshita, Discussion #170; the map: seq.c ml_tab). SETUP > MIDI 2
  * > MIDI LEARN turns it on and off (SLOOP: GLO + F#3). On: a knob turned on a track's page (the sound's pages, HOME, LEVEL
  * and PAN) picks its parameter on the selected track as it edits it; the next CC that comes (any channel IN hears) is
- * set to it, and stays until something else is learned on it or SETUP > LEARN > MIDI LEARN CLEAR. Then turn the next knob.
+ * set to it, and stays until something else is learned on it or SETUP > MIDI 2 > MIDI LEARN CLEAR. Then turn the next knob.
  * One CC sets one parameter, a parameter has one CC: learning one again replaces both. The settings keep the map */
 static struct { uint8_t on, pick, trk, id; } mlu;
 static uint32_t ml_code(uint32_t id) { return id >= P_E0 ? ML_E0 + id - P_E0 : id + 1u; }
@@ -307,7 +307,7 @@ static uint32_t ml_learn(uint32_t cc, uint32_t k, uint32_t id)
         }
     return 0;
 }
-static int ml_clear_all(void)                    /* SETUP > LEARN > MIDI LEARN CLEAR; 1 = there were */
+static int ml_clear_all(void)                    /* SETUP > MIDI 2 > MIDI LEARN CLEAR; 1 = there were */
 {
     uint32_t i, n = ml_count();
     for (i = 0; i < ML_N; i++)
@@ -316,7 +316,7 @@ static int ml_clear_all(void)                    /* SETUP > LEARN > MIDI LEARN C
         settings_later = 1;                      /* (saved when quiet) */
     return n != 0u;
 }
-static void ml_toggle(void)                      /* SETUP > LEARN > MIDI LEARN */
+static void ml_toggle(void)                      /* SETUP > MIDI 2 > MIDI LEARN */
 {
     mlu.on = (uint8_t)!mlu.on;
     mlu.pick = 0;

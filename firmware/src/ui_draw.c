@@ -62,7 +62,7 @@ static void draw_head(void)
         x += 14;
     }
     x = cv_text(x, 1, &FONT_S, b, ui.bpm_t ? C_WHITE : C_HI);   /* white while SELECT turns it */
-    if (mlu.on) {                                     /* MIDI LEARN on (2.6, SETUP > LEARN): in the octave's place */
+    if (mlu.on) {                                     /* MIDI LEARN on (2.6, SETUP > MIDI 2): in the octave's place */
         cv_text(x + 12, 1, &FONT_S, "LEARN", C_AMB);
 #if FELUCCA_DRUMMER
     } else if (sng_ui_name[0] && live_sec >= 0) {     /* fm1-drummer: the section playing and its bar, in the

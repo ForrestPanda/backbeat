@@ -712,6 +712,15 @@ int main(int argc, char **argv)
         check(usb_serial == 1u, "menu USB SERIAL: read back");
         tap(B_OCTUP);
         check(usb_serial == 0u && ui.menu == 1, "menu USB SERIAL: OCT+ toggles back to OFF");
+        ui.menu_sel = (uint8_t)mi_find(MI_THRU); ui.force = 1; frame();
+        check(mi_sec(ui.menu_sel) == MS_LEARN && !strcmp(MS_NAME[MS_LEARN], "MIDI 2") && midi_thru == 0u &&
+              !(lights_word() >> 28 & 1u), "menu TRS TO USB (2026-10-22): on MIDI 2, OFF by default (an older word reads so)");
+        encs[panel.enc[EN_K1 + mi_row(ui.menu_sel)]] = 1; frame();
+        ui.force = 1; frame(); ppm("menu-midi2");
+        lights_from_word(lights_word());
+        check(midi_thru == 1u && (lights_word() >> 28 & 1u), "menu TRS TO USB: its knob (KNOB 3) -> ON, saved with the settings, read back");
+        tap(B_OCTUP);
+        check(midi_thru == 0u && ui.menu == 1, "menu TRS TO USB: OCT+ toggles back to OFF");
         ui.menu = 0; ui.force = 1; go_home(); frame();
         ui.menu = 1; ui.menu_sel = (uint8_t)mi_find(MI_NOTES); ui.force = 1; frame();
         tap(B_OCTUP);

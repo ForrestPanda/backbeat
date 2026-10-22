@@ -241,6 +241,45 @@ int main(void)
         }
         bad += (uint32_t)check("uart: channels 1, 2, 3, 10, 16 -> USB-MIDI packets", ok);
     }
+    {   /* SETUP > MIDI 2 > TRS TO USB (2026-10-22): the channel messages and the realtime bytes also into usb.c's
+         * thru ring, as USB-MIDI packets; SysEx, system common and the ring's marker byte not; nothing when off or
+         * with no host (ep1_tx, which empties the ring, touches the SIE: not run here) */
+        static const uint8_t in[] = {0xBF, 20, 1,             /* CC 20 1 on channel 16 (the pedal) */
+                                     21, 0,                   /* running status: CC 21 0 */
+                                     0xF8, 0xFA, 0xFE,        /* clock, start, active sensing */
+                                     UM_EMPTY,                /* line noise read as the marker */
+                                     0xF0, 0x7D, 1, 2, 0xF7,  /* SysEx */
+                                     0xF2, 0, 0,              /* system common (song position) */
+                                     0xCF, 5};                /* PC 5 on channel 16 */
+        static const uint32_t want[] = {0x0114BF0Bu, 0x0015BF0Bu, 0xF80Fu, 0xFA0Fu, 0xFE0Fu, 0x0005CF0Cu};
+        uint32_t ok = 1, w0;
+        usb.config = 1;
+        midi_thru = 0;
+        w0 = tq_w;
+        for (i = 0; i < sizeof in; i++)
+            um_byte(in[i]);
+        ok &= tq_w == w0;
+        bad += (uint32_t)check("uart thru: off, nothing out over USB", ok);
+        midi_thru = 1;
+        um.st = 0;
+        for (i = 0; i < sizeof in; i++)
+            um_byte(in[i]);
+        ok = tq_w - w0 == sizeof want / sizeof want[0];
+        for (i = 0; ok && i < sizeof want / sizeof want[0]; i++)
+            ok &= midi_thru_q[(w0 + i) % MQ] == want[i];
+        bad += (uint32_t)check("uart thru: on, CC (running status), clock, PC out; no SysEx", ok);
+        tq_r = tq_w;
+        usb.config = 0;
+        um_byte(0xF8);
+        bad += (uint32_t)check("uart thru: no host, nothing queued", tq_w == tq_r);
+        for (usb.config = 1, i = 0; i < 2u * MQ; i++)
+            um_byte(0xF8);
+        bad += (uint32_t)check("uart thru: a host not reading, the ring stops full", tq_w - tq_r == MQ);
+        tq_r = tq_w;
+        midi_thru = 0;
+        usb.config = 0;
+        mi_r = mi_w;
+    }
     bad += (uint32_t)test_uart_ring();
     bad += (uint32_t)test_usb_ep1();
     bad += (uint32_t)test_usb_sysex();
