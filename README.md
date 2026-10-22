@@ -65,8 +65,7 @@ song in one of the FM-1's 16 slots.
 Everything else (breaks, next / previous, tap tempo, entries, the count-in) is in the full table below.
 
 **Known limits.** No MIDI out: the FM-1 has no MIDI out jack. JAM, on the SONGS screen, is SLOOP's own A..D
-sections, left as SLOOP had it and not supported. Next / previous section from the pedal (CC 24 / 25) has
-not yet been tried on a unit. How much of its time the audio takes on your unit is on SETUP > LOAD (the
+sections, left as SLOOP had it and not supported. How much of its time the audio takes on your unit is on SETUP > LOAD (the
 average, the worst block since OCT+, blocks rendered too late, which you would hear as a click, and the drum voices):
 play your busiest song, then look.
 

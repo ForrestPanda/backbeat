@@ -5,6 +5,18 @@ Scene or OFF; "FS MIDI settings" on the switch). Channel 16 is the drummer's def
 (`tools/fm1_song.py --pedal-channel` changes it). Every footswitch can send up to three messages, so
 a scene change and a section change share one press.
 
+How the Ampero sends them (tried with BackBeat on the first unit, Ampero firmware 1.6.5, 2026-10-22):
+
+- **On the release.** A footswitch sends its messages when it comes up, not when it goes down, so the FM-1
+  acts on your foot leaving the switch: for a fill in a bar's last beat or a change on the next bar line,
+  press early and release on time.
+- **The same messages on every press**, an effect slot's switch too (it does not alternate between an on and
+  an off set): next, previous and tap count once a press on any switch.
+- **CCs only** on a footswitch (up to three); a Program Change can be sent only by a patch change (below).
+- **A channel per message**: set each one to the FM-1's pedal channel (16 by default).
+- **Hold a switch (1..5) to send nothing**: the Ampero's own hold function, the FM-1 hears no message.
+- **A scene change sends no MIDI** by itself: what the FM-1 hears is the switch's own messages.
+
 ## The cable
 
 The Ampero's MIDI OUT is a 3.5 mm TRS jack, Type A, and so is the FM-1's MIDI IN: a plain stereo
@@ -17,7 +29,7 @@ Make one Ampero patch per song. Its footswitches:
 
 | Switch                                       | Channel | Command | Data                                           | What the FM-1 does                                                                                                                     |
 | -------------------------------------------- | ------- | ------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| (on patch select, if the Ampero can send it) | 16      | PC      | the song: 0..15 a slot, 16..31 a groove        | loads the song: tempo, kit, the intro cued                                                                                             |
+| (the patch change)                           | 16      | PC      | the song: 0..15 a slot, 16..31 a groove        | loads the song: tempo, kit, the intro cued                                                                                             |
 | 1                                            | 16      | CC 20   | 0                                              | INTRO (or whatever section 0 is): starts the song from stopped (after the count-in's clicks, if that setting is on); playing: when the section playing ends |
 | 2                                            | 16      | CC 20   | 1                                              | VERSE when the section playing has played its pattern out (no fill: add CC 21 to the switch for one)                                  |
 | 3                                            | 16      | CC 20   | 2                                              | CHORUS                                                                                                                                 |
@@ -97,6 +109,11 @@ With one patch per song and the patch change sending PC n, stepping through the 
 through the set; the drummer loads each song as its patch comes up (stopped: at once, with the intro
 cued; playing: with the next section). Songs live in slots 0..15 (`tools/fm1_song.py song.json --put n`): a set of 16.
 
+A patch change can send up to six messages, each on its own channel, a PC among them: the PC n on channel 16
+loads the song, and a CC 20 after it can cue a section other than the first. Not tried yet on the unit: the
+song loaded by the patch change (stopped and while playing), the messages' order, and whether they go out when
+the Ampero powers up on that patch.
+
 ## The Ampero's tempo: MIDI clock (for loops in time with the drums)
 
 The Ampero can be the clock master over the same TRS cable (its manual, firmware V1.4.1, Global > MIDI):
@@ -117,12 +134,10 @@ manual), so the clock keeps the tempos together but a loop drifts against the dr
 To try on the hardware: tight taps on short loops; or the Ampero's drum machine on at zero volume as the looper's
 reference (does the Ampero send START when its drum starts?).
 
-## Things to check once, with the FM-1 on the desk
+## Still to try on the unit
 
-- A toggle-type switch (an effect slot) may send its messages on both the on-press and the off-press:
-  section, ending and stop commands do not mind, next / previous / tap would count twice. If it does,
-  use scene switches or OFF-function switches for next / previous / tap.
-- Whether a patch change sends a Program Change on a global channel: if it is channel 16, it selects a
-  song; if not, add a PC to a footswitch, or send it from the patch's first switch.
-- The LIVE screen's footer says what the FM-1 received: "NEXT: CHORUS", "SONG: BLACK", "ENDING: OUTRO",
-  "STOP", "NO SONG 3". The LIVE screen shows the section playing, the one coming and the fill.
+- The patch change: the song it loads (above).
+- The MIDI clock from the Ampero (above).
+
+The LIVE screen's footer says what the FM-1 received: "NEXT: CHORUS", "SONG: FIRST LIGHT", "ENDING: OUTRO",
+"STOP", "NO SONG 3". The LIVE screen shows the section playing, the one coming and the fill.

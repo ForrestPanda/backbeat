@@ -365,8 +365,11 @@ next bar). No named sections, one song, no fill tied to a section change.
    the Ampero's MIDI OUT into the TRS jack over a plain stereo 3.5 mm cable (so Type A), Another Brick in the
    Wall and Back in Black start to end, cued from the footswitches with fills and section changes, heard on the
    speaker and from the audio out into the Ampero. So the TRS jack, the cable type, the UART driver and the
-   speaker are facts. Not yet tried on the unit: CC 24 / 25 (next / previous), and every other "verify on
-   hardware" note above.
+   speaker are facts. Not yet tried on the unit: every other "verify on
+   hardware" note above. **2026-10-22** (the user, Ampero firmware 1.6.5): CC 24 / 25 (next / previous) work; the
+   Ampero sends a footswitch's messages on its release, the same on every press (an effect slot's switch too), CCs
+   only (a PC from a patch change, up to six messages), a channel per message; holding a switch sends nothing, a
+   scene change sends no MIDI (`docs/ampero-setup.md`).
 
 The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log
@@ -1126,7 +1129,8 @@ hazard; what it found and what was done:
 ## Open questions
 
 - (answered 2026-10-19) The FM-1's TRS MIDI type: Type A (the Ampero over a plain stereo cable, milestone 7).
-- The Ampero's toggle and patch-change MIDI behaviour (above).
+- (answered 2026-10-22, but for the patch change's own test) The Ampero's toggle and patch-change MIDI behaviour:
+  `docs/ampero-setup.md`.
 - Tempo sync with the Ampero's own drum machine or its tempo: not needed, noted.
 
 ## Related programs (noted 2026-10-12)
