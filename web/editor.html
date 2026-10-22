@@ -2953,6 +2953,15 @@ const PCLK = {
   },
   nudge(err) { return Math.abs(err) > 0.05 ? err : Math.max(-0.02, Math.min(0.02, err / 2)); },   /* s the steps to come move: half
                                                      the error, 20 ms at most; over 50 ms (the start, a jump): all of it */
+  /* the audio clock's time heard at performance time perf (2026-10-22): currentTime is what is being scheduled, and the
+     speaker plays it the output's latency later (tens of ms on Android: a tablet behind the FM-1 by that much, more with
+     the clock, which locked the beats to currentTime). getOutputTimestamp says which sample is coming out and when;
+     without it, the latency the context reports. now: performance.now() */
+  heard(ctx, perf, now) {
+    const ts = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
+    if (ts && ts.performanceTime > 0 && ts.contextTime > 0) return ts.contextTime + (perf - ts.performanceTime) / 1000;
+    return ctx.currentTime + (perf - now) / 1000 - (ctx.outputLatency || ctx.baseLatency || 0);
+  },
 };
 
 /* the section editor's operations on a song (the JSON form), pure: SED.* return new objects; the page draws them */
@@ -4996,7 +5005,8 @@ function playLive() {
   SPLAY.raf = 0;
   const ctx = SPLAY.ctx, q = SPLAY.queue;
   if (!ctx) return;
-  while (q.length && q[0].at <= ctx.currentTime) SPLAY.heard = q.shift().ev;
+  const now = PCLK.heard(ctx, performance.now(), performance.now());   /* (as heard, not as scheduled: the output's latency) */
+  while (q.length && q[0].at <= now) SPLAY.heard = q.shift().ev;
   playLiveDraw();
   if (SPLAY.timer || q.length) SPLAY.raf = requestAnimationFrame(playLive);
 }
@@ -5260,7 +5270,8 @@ function pinClock(b, stamp) {
   if (bpm && st.bpm !== bpm) { st.bpm = bpm; playRender(); }
   const ctx = SPLAY.ctx;
   if (!ctx) return;
-  const at = ctx.currentTime + (stamp - performance.now()) / 1000;   /* the pulse's time on the audio clock */
+  const at = PCLK.heard(ctx, stamp, performance.now());   /* the pulse's time on the audio clock, as heard: a beat scheduled
+                                                             there sounds with it */
   if (PIN.wait && (a.first || a.beat) && st.playing) {
     PIN.wait = false;
     if (st.counting) { st.counting = 0; PLAY.bar(st); }    /* (no count-in: the master counts) */

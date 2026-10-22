@@ -336,7 +336,8 @@ function editorPlay() {
   ok(ev.pos === 11 * 12 && ev.req === -1 && !ev.wait && !ev.end && Math.floor((ev.pos % P.barU(spec.sections[0])) / 48) === 2,
     "play: each step carries what the LIVE view shows: its place (step 11 = beat 3), nothing cued, no fill, no ending");
   ok(/id="play-live"/.test(html) && /id="pl-beats"/.test(html) && /id="pl-prog"/.test(html) && /function playLive\(\)/.test(html)
-    && /q\[0\]\.at <= ctx\.currentTime/.test(html), "play: the LIVE view (beats, bar, progress, what comes, tiles) follows the audio clock");
+    && /const now = PCLK\.heard\(ctx, performance\.now\(\), performance\.now\(\)\);[^\n]*\n\s*while \(q\.length && q\[0\]\.at <= now\)/.test(html),
+    "play: the LIVE view (beats, bar, progress, what comes, tiles) follows the audio clock, as heard (2026-10-22: not as scheduled)");
   ok(/const pen = \{ n: "x", h: "X", s: "s", g: "g", x: "" \}/.test(html) && /\["s", "soft", "s"\]/.test(html) && /sedKeys: "Keys: n normal, h hard, s soft,/.test(html)
     && E.SNG.LEVELS.s === 2 && !("o" in E.SNG.LEVELS) && E.SNG.LEVEL_CHAR === "xgsX" && /\.sedgrid button\.c\.hs \{/.test(html),
     "section editor: the pen's keys are their first letters (n normal, h hard, s soft, g ghost; x erase); soft is 's' in a song (no 'o')");
@@ -1200,6 +1201,17 @@ async function editorPedalIn() {
     && Math.abs(C.timeOf(marks, 144, u, at, 120) - 1.5) < 1e-9 && C.timeOf(marks.slice(4), 0, u, at, 120) === null,
     "clock in: the player's steps in units (swing kept inside the beat): beat 1 at 0.5 s, 2 at 1 s, 3 after them at the tempo");
   ok(C.nudge(0.01) === 0.005 && C.nudge(0.04) === 0.02 && C.nudge(-0.04) === -0.02 && C.nudge(0.3) === 0.3, "clock in: the steps to come move half the error, 20 ms at most a beat; over 50 ms all of it");
+  {   /* the heard time (2026-10-22): a pulse at perf 5100 ms is heard at audio time 10.1 s when the speaker played 10.0 s
+         at 5000 ms, whatever currentTime (here 80 ms ahead, Android's output latency); without getOutputTimestamp
+         (or before it runs: zeros), currentTime less the latency the context reports */
+    const near = (a, b) => Math.abs(a - b) < 1e-9;
+    const out = { currentTime: 10.08, outputLatency: 0.08, getOutputTimestamp: () => ({ contextTime: 10.0, performanceTime: 5000 }) };
+    const none = { currentTime: 10.0, outputLatency: 0.05 }, base = { currentTime: 10.0, baseLatency: 0.02 };
+    const zero = { currentTime: 10.0, outputLatency: 0.05, getOutputTimestamp: () => ({ contextTime: 0, performanceTime: 0 }) };
+    ok(near(C.heard(out, 5100, 5100), 10.1) && near(C.heard(out, 5000, 5100), 10.0) && near(C.heard(none, 5000, 5000), 9.95) &&
+       near(C.heard(none, 4900, 5000), 9.85) && near(C.heard(base, 5000, 5000), 9.98) && near(C.heard(zero, 5000, 5000), 9.95),
+       "clock in: a pulse's time as heard (the output's timestamp; else currentTime less the latency), not as scheduled");
+  }
   const clk = html.slice(html.indexOf("function pinClock("), html.indexOf("function pinMsg("));
   ok(/if \(PIN\.clock\) pinClock\(data\[0\], stamp\)/.test(html) && /pinMsg\(e\.data, e\.timeStamp/.test(html) && /st\.counting = 0; PLAY\.bar\(st\)/.test(clk)
     && /playStart\(at\)/.test(clk) && /pinClock: "Follow its MIDI clock"/.test(html) && /id="pin-clock"/.test(html),
