@@ -4961,6 +4961,8 @@ function playHit(h, at) {
     g.gain.value = gain * (k ? 0.8 : 1);
     src.connect(g).connect(ctx.destination);
     src.start(t0);
+    SPLAY.srcs = (SPLAY.srcs || []).filter((s) => s.t0 > ctx.currentTime);   /* the hits not sounding yet: a stop cancels them */
+    SPLAY.srcs.push({ src, t0 });
     if (h.lane === PLAY_HAT || h.lane === PLAY_PEDAL) {
       for (const o of SPLAY.open || []) { o.g.gain.setTargetAtTime(0, t0, 0.004); try { o.src.stop(t0 + 0.04); } catch (e) { /* ended */ } }
       SPLAY.open = [];
@@ -4976,12 +4978,16 @@ function playStart(at) {                                  /* at: the audio time 
   if (ctx.state === "suspended") ctx.resume();
   SPLAY.next = Math.max(ctx.currentTime + 0.005, at ?? ctx.currentTime + 0.01);   /* (10 ms: playPump schedules it at once) */
   SPLAY.u = 0; SPLAY.marks = [];
-  SPLAY.timer = setInterval(playPump, 25);
+  SPLAY.timer = setInterval(playPump, PLAY_PUMP_MS);
   playPump();
 }
+/* how far ahead the steps are scheduled (2026-10-22: 150 ms, every 25 ms, until then): a pedal message or a clock's
+   correction reaches only the steps not scheduled yet, so this is how late they can come (the tablet following the FM-1
+   was up to 150 ms behind it, the output's latency on top); 50 ms, topped up every 10 ms, still leaves a busy page room */
+const PLAY_AHEAD = 0.05, PLAY_PUMP_MS = 10;
 function playPump() {
   const ctx = playCtx(), st = SPLAY.st;
-  while (st && st.playing && SPLAY.next < ctx.currentTime + 0.15) {
+  while (st && st.playing && SPLAY.next < ctx.currentTime + PLAY_AHEAD) {
     const ev = PLAY.tick(st);
     if (!ev) break;
     SPLAY.stepSecs = ev.secs;
@@ -5001,6 +5007,8 @@ function playPump() {
 }
 function playStop() {
   if (SPLAY.timer) { clearInterval(SPLAY.timer); SPLAY.timer = 0; }
+  if (SPLAY.ctx) for (const s of SPLAY.srcs || []) if (s.t0 > SPLAY.ctx.currentTime) try { s.src.stop(); } catch (e) { /* ended */ }
+  SPLAY.srcs = [];                                        /* (scheduled, not yet heard: stop means stop, as on the FM-1) */
   PIN.wait = false;
   if (SPLAY.st) PLAY.stop(SPLAY.st);
   SPLAY.queue = []; SPLAY.heard = null;
