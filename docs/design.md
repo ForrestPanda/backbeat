@@ -54,7 +54,7 @@ repeats its message does no harm; next / previous / tap count presses.
 | CC 23 | stop now | done |
 | CC 24 / CC 25 | next / previous section, empty ones skipped, wrapping, as CC 20; stopped (nothing cued): the first / the last | done |
 | CC 26 | tap tempo | done |
-| PC n | load song n: 0..15 the user's slots (0..7 until 2026-10-14), 16..31 the factory grooves (since 2026-10-15); 32..127: no song, A..D again | done |
+| PC n | load song n: 0..15 the user's slots (0..7 until 2026-10-14), 16..31 the factory grooves (since 2026-10-15); 32..127: no song, A..D again | done (verified on the unit 2026-10-24, from an Ampero patch change) |
 | (setting) count-in 0, 1, 2 bars | a section from stopped: that many bars of clicks at the tempo first (the metronome's voice, accents on the bar), then the loop starts with it; CC 23 cancels, another section meanwhile only changes what starts; playing: unchanged | done 2026-10-12 |
 
 The count-in rides on SLOOP's REC count-in (`ci_on`, `events_block`): `ci_pedal` holds its beats, so a
@@ -371,7 +371,7 @@ next bar). No named sections, one song, no fill tied to a section change.
    only (a PC from a patch change, up to six messages), a channel per message, a scene change sends no MIDI
    (`docs/ampero-setup.md`). **Corrected 2026-10-24** (the user; first written as "on the release, a held switch
    sends nothing"): switches 1..5 send on the press (foot down), 6 and 7 on the release (foot up), and 6 and 7 held
-   longer than about 2 s send nothing. The FM-1 (SETUP > PEDAL > MIDI CLOCK IN TRS) and the web player on
+   longer than about 2 s send nothing. **2026-10-24** (the user): a patch change's PC loads the song on the unit. The FM-1 (SETUP > PEDAL > MIDI CLOCK IN TRS) and the web player on
    a tablet (through a TRS-to-MIDI adapter) both followed the Ampero's MIDI clock; its START / STOP not tried yet.
    **TRS to USB** (asked 2026-10-22, to replace a DIY TRS-to-USB MIDI bridge for the tablet that mirrors the FM-1):
    SETUP > MIDI 2 (LEARN until then) > TRS TO USB, off by default (the settings word's bit 28). On, midi_uart.c also

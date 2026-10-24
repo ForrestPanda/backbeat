@@ -112,9 +112,9 @@ through the set; the drummer loads each song as its patch comes up (stopped: at 
 cued; playing: with the next section). Songs live in slots 0..15 (`tools/fm1_song.py song.json --put n`): a set of 16.
 
 A patch change can send up to six messages, each on its own channel, a PC among them: the PC n on channel 16
-loads the song, and a CC 20 after it can cue a section other than the first. Not tried yet on the unit: the
-song loaded by the patch change (stopped and while playing), the messages' order, and whether they go out when
-the Ampero powers up on that patch.
+loads the song, and a CC 20 after it can cue a section other than the first. **Verified on the unit 2026-10-24**
+(the user): the patch change's PC loads the song. Not tried yet: the messages' order (a CC 20 after the PC), and
+whether they go out when the Ampero powers up on that patch.
 
 ## The Ampero's tempo: MIDI clock (for loops in time with the drums)
 
