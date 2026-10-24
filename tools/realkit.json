@@ -1,5 +1,5 @@
 {
- "_doc": "The built-in layered kit (budget: 2026-10-15 evening, the five GM-sampled kits gone from the image: 100 KB more for the cymbals and hats; the older lanes keep their lengths as floors, so the fit only trims the new material) (tools/gen_realkit.py): per lane its source (an SFZ kit's key, or a WAV), the velocity layers (1..4: hard, normal, soft, ghost as the steps' levels), the round-robin takes, its length in seconds (the floor: how short the fit may cut it) and its sample rate. Sources relative to my_fw/../kits (fm1-mvave/kits) or to the repository.",
+ "_doc": "The built-in layered kit (budget: 2026-10-15 evening, the five GM-sampled kits gone from the image: 100 KB more for the cymbals and hats; the older lanes keep their lengths as floors, so the fit only trims the new material) (tools/gen_realkit.py): per lane its source (an SFZ kit's key, or a WAV), the velocity layers (1..4: hard, normal, soft, ghost as the steps' levels), the round-robin takes, its length in seconds (the floor: how short the fit may cut it) and its sample rate. Sources relative to the kits/ folder two levels above this repository, or to the repository.",
  "name": "MULDJORD",
  "budget": 412000,
  "dyn": 1.5,

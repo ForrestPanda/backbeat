@@ -1443,7 +1443,7 @@ const bkProjFormat = (d) => (d && d.length >= 4 ? String.fromCharCode(d[3], d[2]
    track); an empty object is an empty slot */
 const BK_PROJ = ["DRM1", "FUN6", "FUN5", "FUN4"];
 const bkProjOk = (d) => !d.length || BK_PROJ.includes(bkProjFormat(d));
-/* "SLOOP 2.6" -> true when at least maj.min.patch; BackBeat (its own numbers, from 1.0) is newer than every SLOOP */
+/* "SLOOP 2.6" -> true when at least maj.min.patch; BackBeat (its own numbers, from 0.9) is newer than every SLOOP */
 const bkFwAtLeast = (v, want) => {
   if (/BACKBEAT/i.test(String(v || ""))) return true;
   const m = /(\d+)\.(\d+)(?:\.(\d+))?/.exec(String(v || ""));
@@ -1654,7 +1654,7 @@ function makeMockDevice(opt = {}) {
           ENGINES.forEach(s); b(4); b(proto);
           break;
         }
-        s("FELUCCA BACKBEAT 1.0 (MOCK)"); b(0); b(P_COUNT); b(G_COUNT); b(NSTEP); b(P_E0); b(1); b(PROTO);
+        s("FELUCCA BACKBEAT 0.9 (MOCK)"); b(0); b(P_COUNT); b(G_COUNT); b(NSTEP); b(P_E0); b(1); b(PROTO);
         break;
       case CMD.GET: case CMD.SET: {
         if (a.length < 2) return null;
@@ -3249,7 +3249,7 @@ const SED = {
     return SED.pasteCols(sec, a, { n: b - a + 1, lanes: {}, ratchets: {}, flams: {}, fills: {}, fill: "" }, key);
   },
 };
-/* BLE MIDI 1.0 into MIDI messages (the MIDI Association's spec, ../fm1-midi-bridge/docs/ble-midi.md). A notification of
+/* BLE MIDI 1.0 into MIDI messages (the MIDI Association's spec). A notification of
    the MIDI I/O characteristic is one packet: a header byte 10tttttt (bits 12..7 of the sender's 13-bit millisecond clock),
    then messages, each a timestamp byte 1ttttttt (bits 6..0) and a status byte with its data bytes; data bytes with no
    timestamp continue the last status (running status, at the same time); a real-time byte F8..FF has a timestamp of its
@@ -3895,7 +3895,7 @@ async function load(d) {
   try {
     /* the first frame after opening the port can be lost: a few tries */
     d.info = parse[CMD.INFO](await d.link.request(req.info(), { timeout: 500, retries: 3 }));
-    $("version").textContent = d.info.version.replace(/^FELUCCA /, "");   /* "BACKBEAT 1.0" */
+    $("version").textContent = d.info.version.replace(/^FELUCCA /, "");   /* "BACKBEAT 0.9" */
     if (!(d.info.proto >= PROTO))                    /* SLOOP (protocol 10 and before): another editor's device */
       throw Object.assign(new Error("protocol " + d.info.proto), { refused: `${d.info.version}, ${t("protoN")} ${d.info.proto}` });
     const total = d.info.pcount + d.info.gcount;

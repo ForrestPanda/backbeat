@@ -19,7 +19,7 @@ synth side are unused, their `DESC` still answers). `web/editor.html` speaks v11
 ends with less than 11 (SLOOP) is refused right after `INFO` (the status line says this editor is for the
 BackBeat firmware).
 
-- **INFO** keeps its layout: version string (`FELUCCA BACKBEAT 1.0`: the `FELUCCA ` prefix kept; the editor
+- **INFO** keeps its layout: version string (`FELUCCA BACKBEAT 0.9`: the `FELUCCA ` prefix kept; the editor
   shows what follows it), NENGINES = **0** (no engine names follow), P_COUNT 71, G_COUNT 45,
   NSTEP 64, P_E0 63, NTRK **1**, protocol **11**.
 - **The engine byte** of `DUMP`, `RELOAD`, `TRACK` and `TRACK_DUMP` is 0, which equals NENGINES: v10's "no engine =

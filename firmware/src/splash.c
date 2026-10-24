@@ -27,7 +27,7 @@ static void logo_splash(void)
     logo_draw(10);
     const char *v = FELUCCA_VERSION;
     if (str_len(v) > 9u && v[0] == 'B' && v[8] == ' ')
-        v += 9;                                         /* "BACKBEAT 1.0" -> "1.0" under the wordmark */
+        v += 9;                                         /* "BACKBEAT 0.9" -> "0.9" under the wordmark */
     cv_begin(240, 36, C_BLACK);
     cv_text(120 - text_w(&FONT_S, v) / 2, 0, &FONT_S, v, RGB(196, 196, 204));
     cv_text(120 - text_w(&FONT_S, "based on SLOOP, Felucca") / 2, 18, &FONT_S, "based on SLOOP, Felucca", RGB(96, 96, 104));
