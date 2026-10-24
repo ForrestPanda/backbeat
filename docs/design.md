@@ -411,8 +411,11 @@ next bar). No named sections, one song, no fill tied to a section change.
    catalogue; 985 was claimed by none (the catalogue's `ident` patterns, the catch-all `FM-1_\d{3,8}` aside), and
    92x (SLOOP 2.x release builds) and 96x (Shine On's 963x) were left alone. build.py's PRODUCT, also the loader's
    (`ota-FM-1_985`, passed in); `--release` no longer maps X.Y to `FM-1_9XY`. The USB names stay "Felucca": every
-   installer (the hub's, the editors', M-VAVE's way back) finds the FM-1 under them. To verify on hardware: the
-   install over 0.9 (`FM-1_900` to `FM-1_985`), `--info`, and leaving it for another firmware.
+   installer (the hub's, the editors', M-VAVE's way back) finds the FM-1 under them. **Installed on the unit
+   2026-10-24** over 0.9 (`fm1_safe_install.sh --no-dump`): written to 100 %, `--info` reports `FM-1_985`, the port
+   still "Felucca MIDI 1". **Left and back the same day**: V15 (M-VAVE's `FM-1.fwsc`) installed from 985, `FM-1_015`;
+   then the site's `backbeat-0.9.fwsc` (the 985 package) from V15, `FM-1_985` again, both written to 100 %. To verify
+   on hardware: an install unplugged while writing and resumed (the hub's last check).
 
 The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log
