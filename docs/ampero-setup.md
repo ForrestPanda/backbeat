@@ -135,10 +135,9 @@ runs. MIDI CLOCK IN OFF: the drums keep their own tempo whatever comes in.
 TRS cable, and so did the web editor's player on a tablet (Follow its MIDI clock), fed the same clock through a
 TRS-to-MIDI adapter. Not tried yet: the Ampero's START / STOP starting and stopping the drums.
 
-The Ampero's looper is free-length (you tap its length; it syncs only to the Ampero's own drum machine, by its
-manual), so the clock keeps the tempos together but a loop drifts against the drums by however far the tap was off.
-To try on the hardware: tight taps on short loops; or the Ampero's drum machine on at zero volume as the looper's
-reference (does the Ampero send START when its drum starts?).
+**The looper in time with the drums** (the user, 2026-10-24): with the clock on as above, the Ampero's looper and
+BackBeat's drums stay in sync, so loops can be layered over the drummer. (First written from the manual, which says
+the looper syncs only to the Ampero's own drum machine, as a free-length loop that would drift against the drums.)
 
 ## A tablet on the FM-1's USB
 

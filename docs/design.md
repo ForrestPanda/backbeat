@@ -1097,7 +1097,9 @@ hazard; what it found and what was done:
   through a USB MIDI interface.
 - (asked 2026-10-14; not started) **MIDI clock out over USB.** The device follows a clock (SETUP > SYNC = USB /
   TRS, seq.c `mclk_event`) but sends none: MIDI OUT (SETUP > MIDI > OUT: KEYS / SEQ) has no F8 / FA / FB / FC, so
-  BackBeat cannot be the master of a DAW, a looper or the Ampero (whose USB port takes a clock in: MIDI IN SOURCE).
+  BackBeat cannot be the master of a DAW, a looper or the Ampero (whose USB port takes a clock in: MIDI IN SOURCE);
+  the other way round works: with the Ampero as the clock master, its looper stays in sync with BackBeat's drums
+  (the user, 2026-10-24; docs/ampero-setup.md).
   Wanted: with SYNC = INT, 24 pulses a beat from the transport clock (seq.c, sample-accurate: a pulse every
   BEAT_U / 24 units, in the block that crosses it), START when the pedal or PLAY starts (after the count-in, on the
   downbeat), STOP on stop and at an ending's end, on the USB port (usb.c's MIDI IN endpoint: the packets as the

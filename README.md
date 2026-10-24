@@ -232,7 +232,9 @@ pedal plays SLOOP's own sections A..D (the four project slots). **Fills** are ma
 pattern: a hit marked "only in a fill" plays only during a fill (CC 21, a black key or SEL on the LIVE screen),
 one marked "not in a fill" rests then, mark by mark in the editor's grid or lane by lane in the JSON (`"fills"`);
 SLOOP's own whole-step conditions still work on top. Built for the Hotone Ampero II Stage (each footswitch sends up to three CC / PC messages), but any
-pedalboard with a MIDI out does.
+pedalboard with a MIDI out does. With the Ampero as the MIDI clock master (CLOCK OUT(TRS) on, the FM-1's SETUP > PEDAL >
+MIDI CLOCK IN on TRS) the drums play at the patch's tempo, and the Ampero's **looper stays in time with the drums**
+(`docs/ampero-setup.md`).
 
 ## A tablet beside the FM-1
 
