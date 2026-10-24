@@ -5,16 +5,18 @@ Scene or OFF; "FS MIDI settings" on the switch). Channel 16 is the drummer's def
 (`tools/fm1_song.py --pedal-channel` changes it). Every footswitch can send up to three messages, so
 a scene change and a section change share one press.
 
-How the Ampero sends them (tried with BackBeat on the first unit, Ampero firmware 1.6.5, 2026-10-22):
+How the Ampero sends them (tried with BackBeat on the first unit, Ampero firmware 1.6.5, 2026-10-22; when
+each switch sends, corrected 2026-10-24):
 
-- **On the release.** A footswitch sends its messages when it comes up, not when it goes down, so the FM-1
-  acts on your foot leaving the switch. Tap it, quick and in time, as you would any switch: holding it down to
-  time the release does not work, a held switch (1..5) sends nothing (below).
+- **Switches 1..5 send on the press**, when your foot goes down: the FM-1 hears them at once, so put the
+  switches you time to the beat (sections, fills) here.
+- **Switches 6 and 7 send on the release**, when your foot comes up, and only after a short press: **held
+  longer than about 2 s, they send nothing** (the Ampero's own hold function takes over). Tap them quickly:
+  the FM-1 acts when your foot leaves the switch.
 - **The same messages on every press**, an effect slot's switch too (it does not alternate between an on and
   an off set): next, previous and tap count once a press on any switch.
 - **CCs only** on a footswitch (up to three); a Program Change can be sent only by a patch change (below).
 - **A channel per message**: set each one to the FM-1's pedal channel (16 by default).
-- **Hold a switch (1..5) to send nothing**: the Ampero's own hold function, the FM-1 hears no message.
 - **A scene change sends no MIDI** by itself: what the FM-1 hears is the switch's own messages.
 
 ## The cable
