@@ -213,6 +213,7 @@ static void fm1_main(void)
 #if FELUCCA_DRUMMER
                 persist_flush_now();                    /* (live sections, song, project: RAM-only so far) */
 #endif
+                scr_wake_now();
                 lcd_fill(0, 0, 240, 240, C_BLACK);
                 draw_text_box(0, 110, 240, &FONT_S, "UBOOT", RGB(80, 120, 255), 1);
                 usb_detach();
@@ -229,6 +230,7 @@ static void fm1_main(void)
 #if FELUCCA_DRUMMER
             persist_flush_now();                        /* an update ends in a reset: RAM-only work first */
 #endif
+            scr_wake_now();
             if (flash_ok)
                 ota_session();                          /* returns only if nothing was committed */
             lcd_fill(0, 0, 240, 240, C_BLACK);
@@ -240,6 +242,7 @@ static void fm1_main(void)
 #if FELUCCA_DRUMMER
             persist_flush_now();                    /* (live sections, song, project: RAM-only so far) */
 #endif
+            scr_wake_now();
             lcd_fill(0, 0, 240, 240, C_BLACK);
             draw_text_box(0, 110, 240, &FONT_S, "UBOOT (USB)", C_WHITE, 1);
             fm1_delay_ms(20);
@@ -255,10 +258,11 @@ static void fm1_main(void)
         felucca_dbg.page = ui.page;
         felucca_dbg.home = ui.home;
         felucca_dbg.stage = 1;
-        ui_input();
+        scr_input();
         felucca_dbg.stage = 2;
         ui_leds();
         ui_draw();
+        scr_poll();
         felucca_dbg.stage = 8;
         autosave_tick();                                /* the working project into flash, when quiet */
 #if FELUCCA_DRUMMER
@@ -266,7 +270,7 @@ static void fm1_main(void)
 #endif
         felucca_dbg.stage = 9;
         while (fm1_ms - m < 15u) {                               /* ~60 UI frames/s at most */
-            ui_input();
+            scr_input();
 #if FELUCCA_OTA
             ed_service();                       /* editor replies without waiting for the next frame */
 #endif

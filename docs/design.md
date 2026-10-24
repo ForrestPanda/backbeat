@@ -390,6 +390,18 @@ next bar). No named sections, one song, no fill tied to a section change.
    (ui_input.c tempo_led: PLAY's flash while playing, the count-in's clicks, free at G_BPM stopped). The other black
    keys keep their fills and the break. Tests: ui_pages_test. **Verified on the unit 2026-10-22** (the user): the taps
    and the light.
+   **Screen off** (asked 2026-10-24, after the bridge's was verified on the unit the same day): SETUP > SCREEN > SCREEN
+   OFF, NEVER (the default), 1, 5 or 15 MIN, the settings word's bits 30 and 31 (no older firmware wrote them). Stopped
+   and untouched that long, the panel sleeps (DISPOFF, SLPIN) and the backlight goes dark too: PA2 is the backlight
+   and the key matrix 595s' /OE, so the scan (fm1_input.h `fm1_dark`) drives it low only for its read, a 4 us settle,
+   and high again; the LEDs go dark with it, but for that window. A song playing, a message, a button or key held
+   keep it on; a button, key, knob or the pedal's channel wakes it, and the panel's press or turn that wakes it does
+   nothing else until everything is let go (screen.c `scr_input`; Program Change and MIDI LEARN go on in the dark).
+   Wakes a frame at a time: SLPOUT 120 ms after the SLPIN, a full redraw 120 ms later, DISPON. UBOOT and an update
+   wake it at once. Image 568052 B. Tests: ui_pages_test (the row, the settings word; asleep after the time, woken by a
+   button, a knob, the pedal, the waking press eaten; every UI test runs through scr_input / scr_poll). The target cost check's
+   mix_block line re-based (tests/target_budget.txt says why: layout, no audio code). **Verify on the unit:** the
+   backlight dark, every button, key and knob wakes it, a pedal cue wakes it and still plays.
 
 The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log

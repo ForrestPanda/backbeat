@@ -41,6 +41,11 @@
  * (~1/24 of a lit LED); fm1_led_bg[col]: the backlight (menu LIGHTS), fm1_led_bg_ns, shorter. TIMER4
  * times the pulses bit by bit; only a pulse longer than the whole shift waits for the rest. An LED in
  * several layers takes the brightest. fm1_led_key/btn helpers address them by id.
+ * Screen off (fm1_dark, src/screen.c): PA2 is the panel's backlight and the 595s' /OE, both active low; high,
+ * the columns float and nothing reads. So while dark fm1_input_tick holds PA2 low only for its own few
+ * microseconds: the column latched last tick driven again, FM1_DARK_SETTLE_US for the rows, the read, the
+ * shift, PA2 high. The backlight and the LEDs (no dim layers then) are lit a few % of the time. As
+ * fm1-midi-bridge does it (verified there on the first unit, 2026-10-24).
  */
 #pragma once
 #include <stdint.h>
@@ -57,6 +62,9 @@
 #define FM1_DEB_PRESS 2u          /* frames closed in a row: a press (a frame = 11 ticks, ~1.1 ms) */
 #define FM1_DEB_RELEASE 8u        /* frames open in a row: a release (~9 ms) */
 #define FM1_SETTLE_US 10u
+#ifndef FM1_DARK_SETTLE_US
+#define FM1_DARK_SETTLE_US 4u     /* screen off: the rows of a column driven again (a closed key: nanoseconds) */
+#endif
 #define FM1_REST_FRAMES 900u      /* ~1 s still off the detent state: that is the detent (power-on) */
 #define FM1_NCOL 11u
 #define FM1_NKEY 41u              /* ids: 0..13 buttons, 14..40 note keys */
@@ -103,6 +111,8 @@ static uint8_t fm1_led[FM1_NCOL];
 static uint8_t fm1_led_dim[FM1_NCOL];   /* same layout as fm1_led: the glow */
 static uint8_t fm1_led_bg[FM1_NCOL];    /* same layout: the backlight (labels readable in the dark) */
 static volatile uint16_t fm1_led_bg_ns; /* the backlight pulse a frame (ns), 0 = off (menu LIGHTS) */
+static volatile uint8_t fm1_dark;       /* screen off: PA2 high but for the read (see top) */
+#define FM1__PA2 (1u << 2)
 
 static void fm1__led_lines(uint32_t rowmask)
 {
@@ -287,10 +297,16 @@ static void fm1_input_tick(void)
 {
     uint32_t p = fm1__tick_col, n = p + 1u == FM1_NCOL ? 0u : p + 1u, i;
     uint32_t w = 0xFFFFu ^ (1u << n) ^ (n < 2u ? 1u << (11u + n) : 0u);
-    uint32_t lit = fm1_led[p], a = fm1_led_dim[p] & ~lit, b = fm1_led_bg[p] & ~lit & ~a;
+    uint32_t dark = fm1_dark, lit = fm1_led[p], a = dark ? 0u : fm1_led_dim[p] & ~lit, b = dark ? 0u : fm1_led_bg[p] & ~lit & ~a;
     uint32_t ta = a ? FM1__NS_T(FM1_GLOW_NS) : 0u, tb = b ? FM1__NS_T(fm1_led_bg_ns) : 0u;
     uint32_t tmax = ta > tb ? ta : tb;
     fm1__led_lines(0);
+    if (dark) {                                    /* the columns driven again, the rows settle (bounded) */
+        uint32_t t0 = fm1_ticks(), k = 0;
+        FM1_PR(FM1_PA, FM1_OUT) &= ~FM1__PA2;
+        while ((uint32_t)(fm1_ticks() - t0) < FM1_DARK_SETTLE_US * FM1_TICKS_PER_US && ++k < 4000u)
+            ;
+    }
     fm1_in.raw[p] = (uint8_t)fm1__rows();          /* column p has been latched one tick (the lines dark) */
     if (tmax) {
         uint32_t t0 = fm1_ticks(), cur = lit | a | (tb ? b : 0u), on, d;
@@ -310,6 +326,10 @@ static void fm1_input_tick(void)
         fm1__sr_word(w);
     }
     fm1__led_lines(fm1_led[n]);
+    if (dark)
+        FM1_PR(FM1_PA, FM1_OUT) |= FM1__PA2;       /* backlight and columns off until the next read */
+    else
+        FM1_PR(FM1_PA, FM1_OUT) &= ~FM1__PA2;
     fm1__tick_col = (uint8_t)n;
     fm1__keys(p);                                  /* its keys now: no wait for the frame's end */
     if (n == 0u)

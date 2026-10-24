@@ -89,6 +89,8 @@ static uint8_t midi_set[6] = MIDI_SET_DEF;
 static const uint16_t LIGHTS_NS[LIGHTS_N] = {0u, 500u, 1000u, 2000u};   /* the backlight pulse a frame (ns): a lit
                                                 * LED ~95 us, the glow (landmarks) 4 us (fm1_input.h) */
 static uint8_t usb_serial;                      /* menu USB SERIAL: 1 = the serial console presented (usb.c) */
+enum { SCR_NEVER, SCR_1MIN, SCR_5MIN, SCR_15MIN, SCR_N };
+static uint8_t scr_off;                         /* SETUP > SCREEN > SCREEN OFF (screen.c) */
 static uint32_t lights_word(void)
 {
     return (uint32_t)lights_lvl | (uint32_t)lights_keys << 4 | (uint32_t)(lights_notes != 0u) << 8 |
@@ -98,7 +100,8 @@ static uint32_t lights_word(void)
            (uint32_t)(lights_min >= 2u && lights_min <= 17u ? lights_min - 1u : 0u) << 21 |   /* 2.6: CH n (n 1..16; 0 none) */
            (uint32_t)(drum_hum < HUM_N ? drum_hum : 0u) << 26 |   /* fm1-drummer: HUMANIZE (a word saved before it: off) */
            (uint32_t)(midi_thru != 0u) << 28 |   /* TRS TO USB (2026-10-22; bits no older firmware wrote: off) */
-           (uint32_t)(midi_thru == THRU_ONLY) << 29;   /* .. BRIDGE ONLY */
+           (uint32_t)(midi_thru == THRU_ONLY) << 29 |   /* .. BRIDGE ONLY */
+           (uint32_t)(scr_off % SCR_N) << 30;   /* SCREEN OFF (2026-10-24; bits no older firmware wrote: NEVER) */
 }
 static void lights_from_word(uint32_t w)
 {
@@ -114,6 +117,7 @@ static void lights_from_word(uint32_t w)
     usb_serial = (uint8_t)((w >> 16) & 1u);
     drum_hum = (uint8_t)(((w >> 26) & 3u) < HUM_N ? (w >> 26) & 3u : 0u);
     midi_thru = (uint8_t)((w >> 28) & 1u ? ((w >> 29) & 1u ? THRU_ONLY : THRU_ON) : 0u);
+    scr_off = (uint8_t)(w >> 30);
 }
 
 static void settings_save(void);              /* project.c: flash copy (FELUCCA_FLASH) */

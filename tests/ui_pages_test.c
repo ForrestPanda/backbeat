@@ -116,6 +116,12 @@ static void sng_lib_refresh(void)                  /* (sng.c's reads the flash: 
 #include "../firmware/src/ui_menu.c"
 #include "../firmware/src/ui_input.c"
 #include "../firmware/src/splash.c"
+static volatile uint8_t fm1_dark;                  /* (fm1_input.h's: the scan's PA2) */
+static uint8_t lcd_log[16];                        /* the panel commands screen.c sent, the last 16 */
+static uint32_t lcd_n;
+static void lcd_cmd(uint8_t c) { lcd_log[lcd_n++ % 16u] = c; }
+#define FM1_NENC 7u
+#include "../firmware/src/screen.c"
 static const char *outdir;
 static void ppm(const char *name) {
     char path[512]; snprintf(path,sizeof path,"%s/%s.ppm",outdir,name);
@@ -123,7 +129,7 @@ static void ppm(const char *name) {
     for(unsigned i=0;i<240*240;i++) { uint16_t p=swap16(screen[i]); uint8_t rgb[3]={(p>>11)*255/31,((p>>5)&63)*255/63,(p&31)*255/31}; fwrite(rgb,1,3,f); }
     fclose(f);
 }
-/* one UI frame (~16 ms): the audio between (as the ISR does), then input, LEDs, draw */
+/* one UI frame (~16 ms): the audio between (as the ISR does), then input, LEDs, draw, the screen off (as main.c) */
 static void frame(void)
 {
     uint32_t q;
@@ -132,7 +138,7 @@ static void frame(void)
         uint32_t i;
         mix_block(o, CTL);
     }
-    ui_input(); ui_leds(); ui_draw(); fm1_ms += 16;
+    scr_input(); ui_leds(); ui_draw(); scr_poll(); fm1_ms += 16;
 }
 static void frames(uint32_t n) { while (n--) frame(); }
 static uint32_t BT(uint32_t b) { return 1u << panel.btn[b]; }
@@ -793,7 +799,50 @@ int main(int argc, char **argv)
         lights_lvl = LIGHTS_OFF; frame();
         check(lights_keys_mask() == 0u && fm1_led_bg_ns == 0u, "KEYS: nothing lit while LIGHTS is OFF");
         lights_keys = KEYS_OFF;
+        ui.menu_sel = (uint8_t)mi_find(MI_SCROFF); ui.force = 1; frame();
+        check(mi_sec(ui.menu_sel) == MS_SCREEN && scr_off == SCR_NEVER, "SCREEN OFF: in SCREEN, NEVER by default");
+        encs[panel.enc[EN_K1 + mi_row(ui.menu_sel)]] = 1; frame();
+        check(scr_off == SCR_1MIN, "SCREEN OFF: KNOB 3 right: 1 MIN");
+        for (m = 0; m < 3u; m++) {
+            encs[panel.enc[EN_K1 + mi_row(ui.menu_sel)]] = 1; frame();
+        }
+        ui.force = 1; frame(); ppm("page-menu-screen-off");
+        check(scr_off == SCR_15MIN, "SCREEN OFF: 15 MIN, and it stops there");
+        tap(B_OCTUP);
+        check(scr_off == SCR_NEVER, "SCREEN OFF: OCT+ steps round to NEVER");
+        scr_off = SCR_5MIN;
+        lights_from_word(lights_word());
+        check(scr_off == SCR_5MIN && lights_word() >> 30 == SCR_5MIN, "SCREEN OFF: kept in the settings word (bits 30, 31) and read back");
+        lights_from_word(lights_word() & 0x3FFFFFFFu);
+        check(scr_off == SCR_NEVER, "SCREEN OFF: a word saved before it reads NEVER");
         ui.menu = 0; ui.force = 1; go_home(); frame();
+        /* the screen off itself (screen.c: scr_input / scr_poll, in frame() as in main.c) */
+        scr_off = SCR_1MIN; frame();
+        frames(50000u / 16u);
+        check(scr_state == SCR_ON && !fm1_dark, "SCREEN OFF: 1 MIN, 50 s untouched: still on");
+        frames(12000u / 16u);
+        check(scr_state == SCR_ASLEEP && fm1_dark && lcd_log[(lcd_n - 2u) % 16u] == 0x28 && lcd_log[(lcd_n - 1u) % 16u] == 0x10,
+              "SCREEN OFF: after 1 MIN the panel asleep (DISPOFF, SLPIN), the backlight dark");
+        tap(B_GLO); frames(20);
+        check(scr_state == SCR_ON && !fm1_dark && lcd_log[(lcd_n - 2u) % 16u] == 0x11 && lcd_log[(lcd_n - 1u) % 16u] == 0x29,
+              "SCREEN OFF: a button wakes it (SLPOUT, DISPON), the light back");
+        check(ui.menu == 0, "SCREEN OFF: ... and the press that woke it did nothing else (GLO: no SETUP)");
+        tap(B_GLO);
+        check(ui.menu == 1, "SCREEN OFF: the next GLO opens SETUP");
+        ui.menu = 0; ui.force = 1; go_home(); frame();
+        frames(62000u / 16u);
+        check(scr_state == SCR_ASLEEP, "SCREEN OFF: asleep again");
+        encs[panel.enc[EN_K1]] = 1; frames(20);
+        check(scr_state == SCR_ON && encs[panel.enc[EN_K1]] == 0, "SCREEN OFF: a knob turned wakes it, its turn taken");
+        frames(62000u / 16u);
+        pedal_seen_ms = fm1_ms; frames(20);
+        check(scr_state == SCR_ON && !scr_eat, "SCREEN OFF: a message on the pedal's channel wakes it (and the panel stays the page's)");
+        ui_message("HELLO");
+        for (m = 0; m < 62000u / 16u && scr_state == SCR_ON; m++)
+            frame();
+        check(m * 16u >= 60000u, "SCREEN OFF: the minute counts from the last thing that kept it on");
+        scr_off = SCR_NEVER; frames(20);
+        check(scr_state == SCR_ON && !fm1_dark, "SCREEN OFF: NEVER wakes it and keeps it on");
     }
 
     {   /* the menu in sections (2.4): SELECT the section, KNOB 1..3 its rows, PRESETS the cursor, OCT+ opens */

@@ -30,5 +30,9 @@ drums_mix 6492
 # inlining micro_units and lays seq_tick's block code out differently, inside a span closed by a backward branch.
 # Measured on the host (regress.c, callgrind) with HUMANIZE at MORE: drums/busy 2426 -> 2428 instructions a sample,
 # drums/busy_real 1631 -> 1633 (+0.1 %); drums_mix, the voices' per-sample loop, unchanged.
-mix_block 22833
+# Screen off (2026-10-24): mix_block 22833 -> 33988 (+49 %). No audio code changed (the input scan, the menu and the
+# main loop did); the compiler stops inlining texture_reset and puts a case of TEXTURE's source jump table after the
+# texture code with a goto back into it: a span of 1137 instructions closed by a backward branch, counted as a loop.
+# The host CPU check (regress.c, callgrind) unchanged, every entry in budget.
+mix_block 33988
 fm1_alnk0_irq 30

@@ -62,6 +62,7 @@
 #include "ui_layers.c"       /* hold a function button: what the keys and knobs do (TE style) */
 #include "ui_menu.c"
 #include "ui_input.c"
+#include "screen.c"          /* SETUP > SCREEN OFF: the panel asleep, the backlight dark */
 #ifndef FELUCCA_FLASH
 #define FELUCCA_FLASH 1          /* flash driver + storage.c */
 #endif
