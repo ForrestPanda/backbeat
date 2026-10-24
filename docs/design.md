@@ -1094,7 +1094,10 @@ hazard; what it found and what was done:
   and "copy the FM-1's songs into the set". Checked: the web tests (the set, the send on the simulated FM-1) and in
   Chrome driven headless (the set stored and reloaded, a song played from the list, live mode at 1180 x 820 with a
   14-section song, the send on ?mock=1). To check on a real tablet: the wake lock, full screen, latency, the pedal
-  through a USB MIDI interface.
+  through a USB MIDI interface. **Latency, by ear** (the user, 2026-10-24): the browser's player, driven by the
+  pedal, is quite late, too late to play live with; it stays for authoring, trying and rehearsing, and the FM-1
+  plays on stage (README, "Latency"). Not measured yet: where it comes from (the input, the page's scheduling, the
+  output's buffer) and how it differs between USB and Bluetooth MIDI and between platforms.
 - (asked 2026-10-14; not started) **MIDI clock out over USB.** The device follows a clock (SETUP > SYNC = USB /
   TRS, seq.c `mclk_event`) but sends none: MIDI OUT (SETUP > MIDI > OUT: KEYS / SEQ) has no F8 / FA / FB / FC, so
   BackBeat cannot be the master of a DAW, a looper or the Ampero (whose USB port takes a clock in: MIDI IN SOURCE);

@@ -166,6 +166,10 @@ or those pads once you edit them, or WAVs you pick. The page must be served, not
 root `python3 -m http.server 8000`, then `http://localhost:8000/web/editor.html?mock=1` for the simulated
 FM-1 (serving `web/` itself works too: the importer is linked there).
 
+**Latency.** Played from the pedal, the browser's player answers noticeably later than the FM-1: in the author's
+tests its latency is quite high. It is fine for building songs, trying BackBeat out and rehearsing; on stage, play
+the drums from the FM-1 (a tablet beside it can still show the LIVE view, below).
+
 <p align="center"><img src="assets/screens/backbeat-editor-setlist.png" alt="The web editor's setlist: three songs, the first playing in the Play card, its sections as tiles" width="840"></p>
 
 <p align="center"><img src="assets/screens/backbeat-editor-song.png" alt="The web editor's section editor: a song's sections, the chorus open on the grid with its entry and fill bars" width="840"></p>
