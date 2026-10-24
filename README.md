@@ -2,32 +2,38 @@
 
 # BackBeat
 
-BackBeat (this repository: fm1-backbeat; fm1-arranger, then fm1-drummer, until 2026-10-14) is a guitarist's accompaniment device on the M-VAVE FM-1: songs
-made of drum sections (intro, verse, chorus, bridge, solo, outro), switched live from a pedalboard over
-the TRS MIDI jack, with fills where you ask for them. No backing tracks: the song's structure and the length of every section are decided
-on stage.
+**A pedal-cued drummer for guitarists, on the M-VAVE FM-1.**
+
+BackBeat is a replacement firmware for the FM-1 that turns it into a drummer you lead from your
+pedalboard. A song is a set of drum sections (intro, verse, chorus, bridge, solo, outro); you switch
+between them live from your footswitches over the FM-1's TRS MIDI jack, with fills where you ask for
+them. No backing tracks: how long each section lasts is decided on stage.
+
+<p align="center"><img src="assets/screens/backbeat-live.png" alt="The LIVE screen: a fill into the chorus, a song of eleven sections, the count-in" width="720"></p>
+
+- **Songs from your pedal:** load a song, go to any section on the next bar line, ask for a fill, a
+  break, the ending or a stop, tap the tempo, all with plain MIDI CC and PC messages.
+- **A real kit on board:** MULDJORD, a layered acoustic kit (up to four velocity layers a drum,
+  round-robin kicks and snares, twelve voices), plus a humanize setting so it never sounds quantized.
+- **Songs from Guitar Pro or MIDI:** the web editor imports the drum track, finds the sections, and
+  lets you fix them on a grid, hear them, and send them to one of 16 slots. 16 factory grooves to
+  start with.
+- **A screen you can read from the floor:** the section playing in large letters, the bar count,
+  what comes next, the sections as tiles.
+- **Works with a tablet:** the FM-1 can pass the pedal on over USB, so the editor's player on a
+  tablet follows along as a big screen on the music stand.
+
+**Status.** It runs on a real FM-1 and has been played live from a Hotone Ampero II Stage. It has
+been tested on one unit so far, so treat it as early: back up your unit first
+([docs/recovery.md](docs/recovery.md)), and [open an issue](https://github.com/ForrestPanda/backbeat/issues) to say how it went.
 
 A fork of [SLOOP](https://github.com/isod89/sloop-fm1) 2.6 (GPL-3.0, itself from
 [Felucca](https://github.com/hugelton/Felucca)), **drums only**: SLOOP's synth side (the synth engines and
 presets, the sampled instruments, the punch FX, the SLICER, live recording, the arpeggiator, scales and chords,
 three of its four tracks) is gone, see [docs/drums-only.md](docs/drums-only.md). What is left of SLOOP is its
 drum track, sequencer and sections (SLOOP's own manual is upstream). What this fork adds is in
-[docs/design.md](docs/design.md). The firmware reports itself as BACKBEAT 1.0 (the editor's INFO keeps its
+[docs/design.md](docs/design.md). The firmware reports itself as BACKBEAT 0.9 (the editor's INFO keeps its
 `FELUCCA ` prefix, and the USB port names and the backup format stay SLOOP's, so the tools keep working).
-
-Status: **on an FM-1 since 2026-10-19, played from the pedalboard over TRS**. The pedal control, songs in flash (compact, with a
-time signature per section), the fills, the renderer, the Guitar Pro importer, the kit tool, the web editor's
-Song editor tab with its section editor and a player the real pedal can drive, the device's own screens (LIVE, SONGS,
-EDIT, SETUP) are done and pass the host tests; the firmware builds and packages, and runs on the fm1-emu emulator.
-Installed on an FM-1 on 2026-10-19, over stock V15 with `tools/fm1_install.py`: it starts, enumerates and
-answers as `FM-1_900` (the record, and the recovery steps verified that day, are in
-`../fm1-midi-bridge/docs/recovery.md`). Played the same afternoon from an Ampero II Stage over a plain stereo
-3.5 mm cable (the FM-1's jack is Type A): two whole songs cued from the footswitches, fills and section
-changes, heard on the speaker and from the audio out (`docs/design.md`, milestone 7). The firmware is 567 KB of its 581 KB slot, 399 KB of it the built-in layered
-kit **MULDJORD**, the power-on kit and new songs' default (`"kit": 0`): up to four velocity layers a drum (hard,
-normal, soft, ghost: the steps' levels), round-robin takes of the kick and snare (never the same twice running),
-twelve voices so cymbals and toms ring on (at most four of one drum at once; with none free, the quietest gives way:
-`docs/kits.md`).
 
 ## Getting started
 
@@ -35,20 +41,23 @@ twelve voices so cymbals and toms ring on (at most four of one drum at once; wit
 FM-1's jack; the Hotone Ampero II Stage is the one it was built with, see [docs/ampero-setup.md](docs/ampero-setup.md))
 or one that sends MIDI over USB; a plain stereo 3.5 mm cable; Chrome or Edge on a computer for the install.
 
-**Before you install.** This is a replacement firmware, installed at your own risk. It has run on one FM-1 so far.
-The FM-1 updates over its USB cable; if a firmware ever fails to start, getting it back needs the chip's ROM mode
-and [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter). The way back to the official firmware is
-the installer itself, with M-VAVE's FM-1 V15 file (m-vave.com, Downloads, PC Firmware).
+**Before you install.** This is a replacement firmware, installed at your own risk. The FM-1 is hard to
+brick (the installer never touches its boot code, and BackBeat has a rescue screen), and the way back to the
+official firmware is the same installer with M-VAVE's FM-1 V15 file (m-vave.com, Downloads, PC Firmware).
+[docs/recovery.md](docs/recovery.md) has a one-minute backup of your unit to take first (Linux), and every way back.
 
-**Install.** Serve the site in [docs/](docs/) (`cd docs && python3 -m http.server 8000`), open
-`http://localhost:8000/webapp/installer/` in Chrome or Edge, plug in the FM-1 and follow the page; the package
-is `docs/firmware/backbeat-1.0.fwsc`. If BackBeat stops starting after an install, hold **OCT-** alone while
-switching on: the BACKBEAT USB RESCUE screen takes the package again.
+**Install.** Open the installer at <https://forrestpanda.github.io/backbeat/> in Chrome or Edge, plug in the
+FM-1 and follow the page. The package is also on the
+[releases page](https://github.com/ForrestPanda/backbeat/releases) and in [docs/firmware/](docs/firmware/), for
+the command line (`python3 tools/fm1_install.py backbeat-0.9.fwsc`) or a local copy of the site
+(`cd docs && python3 -m http.server 8000`, then `http://localhost:8000/webapp/installer/`). If BackBeat
+stops starting after an install, hold **OCT-** alone while switching on: the BACKBEAT USB RESCUE screen
+takes the package again.
 
 **Play something.** BackBeat starts on its LIVE screen with sixteen factory grooves on board (the SONGS screen,
 the pedal's PC 16..31). PLAY starts, SEL fills, ENV / LFO go to the previous / next section.
 
-**Your songs.** Open the editor (`http://localhost:8000/webapp/editor/` from the same server): its Song editor tab
+**Your songs.** Open the editor (<https://forrestpanda.github.io/backbeat/webapp/editor/>, or `webapp/editor/` on a local copy): its Song editor tab
 imports a Guitar Pro or MIDI file, finds the sections, lets you fix them on a grid and play them; Send puts the
 song in one of the FM-1's 16 slots.
 
@@ -149,7 +158,7 @@ what its TRS jack receives, over its USB: "A tablet beside the FM-1" below) driv
 FM-1, on the Pedal card's channel (PC n opens song n of the FM-1 connected, or of the simulated one), so the
 live workflow can be rehearsed before the hardware; **Follow its MIDI clock** makes the player take that input's
 tempo and START / STOP, as the FM-1 does with SETUP > PEDAL > MIDI CLOCK IN; **Connect Bluetooth** takes the pedal over BLE MIDI instead
-(a Bluetooth MIDI pedal, or an FM-1 running the MIDI bridge next door, which turns its TRS input into BLE), so a phone
+(a Bluetooth MIDI pedal or interface), so a phone
 with nothing installed can be the player: Chrome or Edge on Android, Windows or macOS, from https or
 localhost (Chrome on Linux keeps Web Bluetooth behind a flag; Firefox and Safari on the iPhone have none). Its **Section editor** card edits a song by hand: names, order,
 length (at most 64 steps, 4 bars at 1/16: a section is a groove that repeats, `docs/design.md` says why), the time signature, the outro, split and merge, the hits on a grid with levels, ratchets, flams (a grace note
@@ -184,8 +193,8 @@ first, played by the pedal through the firmware's own drum engine (after a `./bu
 python3 tools/fm1_render.py tests/example-song.json --play "INTRO:2 VERSE:8 CHORUS:8 SOLO:8 OUTRO" --listen
 ```
 
-Or see the device itself on the [fm1-emu](https://github.com/joakimeriksson/fm1-emu) emulator (checked out next to
-`my_fw`): your songs imported into its flash (as `fm1_song.py --put` would put them on a device), the firmware
+Or see the device itself on the [fm1-emu](https://github.com/joakimeriksson/fm1-emu) emulator (built with
+`cargo build --release -p fm1-emu`; `--emu PATH` points at its batch runner): your songs imported into its flash (as `fm1_song.py --put` would put them on a device), the firmware
 run with a script of keys, knobs and pedal messages into the TRS jack, the screen saved at the times you ask
 (`build/emu/lcd_<ms>.png`) and the sound with `--wav`. The emulator runs about 30 times slower than the device
 on a PC. (With songs given, a song saved on the device in that run does not read back: the emulator shows the
@@ -338,6 +347,7 @@ firmware ([BUILDING.md](BUILDING.md)): at your own risk.
 | --- | --- |
 | `docs/design.md` | the model, the pedal command map, milestones, flash budget, review notes, open questions |
 | `docs/drums-only.md` | how SLOOP's synth side was taken out, stage by stage, and what each stage kept |
+| `docs/recovery.md`, `tools/fm1_recover.py`, `tools/fm1_flash.sh` | installing safely: a backup of the unit first, the rescue screen, the ROM's download mode, the way back to stock |
 | `docs/ampero-setup.md` | what to put into the Ampero II Stage's footswitches, the cable, what to check with the FM-1 |
 | `docs/kits.md` | the drum kits: the chosen Muldjord Kit (CC BY 4.0, with Black Pearl's hats and Red Zeppelin's ride), the others tried, the recipes, the slot budget |
 | `firmware/src/pedal.c` | the pedal: CC / PC from the MIDI in queue to section, song and transport requests |

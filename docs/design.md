@@ -267,7 +267,7 @@ next bar). No named sections, one song, no fill tied to a section change.
    service `03B80E5A-EDE8-4B33-A751-6CE34EC4C700`, notifications of the MIDI I/O characteristic
    `7772E5DB-3868-4112-A1A9-F2669D106BF3` decoded by `BLEMIDI.parse` (the header and timestamp bytes, running
    status, real-time bytes anywhere, a SysEx across packets, the 13-bit clock's low bits wrapping; the rules are
-   `../fm1-midi-bridge/docs/ble-midi.md`) and fed to `pinMsg` as a Web MIDI port's messages are, each stamped with
+   the BLE MIDI 1.0 spec) and fed to `pinMsg` as a Web MIDI port's messages are, each stamped with
    the receiver's time less the packet's spacing (the clock follower keeps working). The device connected is listed
    first in **MIDI in from** and chosen ("Bluetooth: FM-1 MIDI"; another input chosen there makes the Bluetooth one
    wait), and the box says what it holds from the start instead of staying empty until Listen. A connection lost is
@@ -360,8 +360,7 @@ next bar). No named sections, one song, no fill tied to a section change.
    build/felucca.fwsc` from stock V15 in one go; the FM-1 enumerates as "Felucca MIDI 1" plus USB audio
    and answers `FM-1_900`. A reinstall of the same package started the loader from BackBeat (step 1 works)
    but the loader dropped off USB a quarter of the way in; nothing was written (equal sectors are skipped)
-   and BackBeat started again: cause open, see `../fm1-midi-bridge/docs/recovery.md`, "The first unit".
-   The procedure is `../fm1-midi-bridge/tools/fm1_safe_install.sh`. **Played 2026-10-19 afternoon** (the user):
+   and BackBeat started again: cause open. The procedure, and every way back: `docs/recovery.md`. **Played 2026-10-19 afternoon** (the user):
    the Ampero's MIDI OUT into the TRS jack over a plain stereo 3.5 mm cable (so Type A), Another Brick in the
    Wall and Back in Black start to end, cued from the footswitches with fills and section changes, heard on the
    speaker and from the audio out into the Ampero. So the TRS jack, the cable type, the UART driver and the
@@ -383,8 +382,8 @@ next bar). No named sections, one song, no fill tied to a section change.
    thru: no pedal, song, clock or note from the jack); LIVE's state line says BRIDGE: PEDAL TO USB. Measured on the
    tablet (wireless adb, DevTools): the FM-1 to the page 1.6 ms, the clock even (sd 1.5 ms), the player locked to it
    within about 1 ms as heard; what was left was the screen's delay (the editor's Screen ahead, 50 ms by default).
-   Installed the same day, BackBeat over BackBeat (`fm1_safe_install.sh --no-dump`): written to 100 %, `FM-1_900`
-   (the loader drop of 2026-10-19 not seen again: `../fm1-midi-bridge/docs/recovery.md`).
+   Installed the same day, BackBeat over BackBeat (`fm1_install.py`, no new dump): written to 100 %, `FM-1_900`
+   (the loader drop of 2026-10-19 not seen again).
    **Tap tempo on the device** (asked 2026-10-22; GLO, then REC, considered first): the last black key, F#5, on the
    song screen taps the tempo (pedal.c pedal_tap, the pedal's CC 26), song loaded or not; its light flashes the tempo
    (ui_input.c tempo_led: PLAY's flash while playing, the count-in's clicks, free at G_BPM stopped). The other black
@@ -400,8 +399,12 @@ next bar). No named sections, one song, no fill tied to a section change.
    Wakes a frame at a time: SLPOUT 120 ms after the SLPIN, a full redraw 120 ms later, DISPON. UBOOT and an update
    wake it at once. Image 568052 B. Tests: ui_pages_test (the row, the settings word; asleep after the time, woken by a
    button, a knob, the pedal, the waking press eaten; every UI test runs through scr_input / scr_poll). The target cost check's
-   mix_block line re-based (tests/target_budget.txt says why: layout, no audio code). **Verify on the unit:** the
-   backlight dark, every button, key and knob wakes it, a pedal cue wakes it and still plays.
+   mix_block line re-based (tests/target_budget.txt says why: layout, no audio code). **Verified on the unit
+   2026-10-24** (the user): it goes dark after the time set and wakes again.
+   **Published 2026-10-24 as 0.9** (github.com/ForrestPanda/backbeat, the site on GitHub Pages): version
+   `BACKBEAT 0.9` (1.0 once the rest is cleaned up), identity still `FM-1_900`. The docs made standalone for it:
+   `docs/recovery.md` (the backup, the rescue screen, the ROM's download mode, the way back), with
+   `tools/fm1_recover.py` and `tools/fm1_flash.sh` from the bridge project (MIT); the README opens with the tagline.
 
 The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log
@@ -485,8 +488,8 @@ reference groove, kit 0, is now the 808: the per-mille numbers moved with it), t
 lists and defaults, the grooves and the example on kit 41. A song from before with `"kit": 46` plays MULDJORD still
 (the device clamps the number; the editor shows the number); `"kit": 0` would now be the 808. Then, the same evening,
 the user asked for MULDJORD as kit 0: it leads the list (`DRUM_REAL` 0, the synthesised kits from 1, `DRUM_DS0`), so
-a song's default is 0 and the knob starts on it; the grooves, the example and the user's songs (songs/, backed up to
-`../fm1-drummer-songs-backup-2026-10-15/`) say 0; the golden and CPU lists renumbered (no render changed).
+a song's default is 0 and the knob starts on it; the grooves, the example and the user's songs (songs/, backed up first)
+say 0; the golden and CPU lists renumbered (no render changed).
 
 The flash went to the crash (two takes, 3.2 s), and the snare, open hat and ride got the recipe's full lengths back.
 Round-robin hats were tried the same evening: Black Pearl's hats have one hit a layer (no round robins), so the closed

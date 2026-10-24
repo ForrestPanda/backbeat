@@ -78,7 +78,7 @@ The repository is not part of this project; the kit image is built locally:
 ```
 mkdir -p ../../kits && git clone --depth 1 https://github.com/studiorack/avl-drumkits.git ../../kits/avl-drumkits
 python3 tools/mkkit.py REDZEP --sfz ../../kits/avl-drumkits/Red_Zeppelin_5pc.sfz --image build/host/redzep.img
-python3 tools/fm1_render.py songs/black.json --usrkit build/host/redzep.img --listen
+python3 tools/fm1_render.py song_examples/first-light.json --usrkit build/host/redzep.img --listen
 python3 tools/mkkit.py REDZEP --sfz ../../kits/avl-drumkits/Red_Zeppelin_5pc.sfz --load      # into the FM-1
 ```
 

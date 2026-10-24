@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-only
-# 16 sections a song on the FM-1 emulator (fm1-emu next to my_fw; ./build.sh first): the firmware image itself, with
+# 16 sections a song on the FM-1 emulator (fm1-emu two folders above this repository; ./build.sh first): the firmware image itself, with
 # tests/data/sixteen.json in slot 1. SAVE, white key 1 (the song, LIVE: four rows of tiles), white key 10 (stopped:
 # section 10 starts), white key 16 (cued for its end), OCT+ held + white key 3 (CHORUS on the next bar; the state
 # line says so), the pedal's CC 20 15 (OUTRO at the end) and CC 27 12 (HALF TIME on the next bar), the ending.

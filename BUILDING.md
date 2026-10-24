@@ -66,7 +66,8 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 
 The firmware's only samples are the built-in kit MULDJORD: the WAVs in `assets/realkit/`, which
 `tools/gen_samples.py` encodes at build time (set REAL). `tools/gen_realkit.py` renders them once from
-`tools/realkit.json` and the source kits (`../../kits`, several GB, credits in `assets/realkit/ATTRIBUTION.txt`);
+`tools/realkit.json` and the source kits (several GB, in a `kits/` folder two levels above this repository; how to get
+them is in `docs/kits.md`, credits in `assets/realkit/ATTRIBUTION.txt`);
 the build never needs the source kits. `docs/kits.md` has the recipe and the flash budget.
 
 `assets/samples-cc0/KIT` (CC0 recordings from Versilian Studios' VCSL, `ATTRIBUTION.txt` there) is a source of
@@ -95,7 +96,7 @@ the hashes; `BUDGET_UPDATE=1` does the same for the cost files.
 ## Install
 
 On Windows, `INSTALL-BACKBEAT.bat` builds and opens the web installer (Chrome or Edge). The
-`.fwsc` of each release is on the GitHub releases page.
+`.fwsc` of each release is on the [releases page](https://github.com/ForrestPanda/backbeat/releases).
 
 From the command line (needs `pip3 install mido python-rtmidi`):
 
@@ -104,14 +105,9 @@ python3 tools/fm1_install.py build/felucca.fwsc
 python3 tools/fm1_install.py --info          # identity of the connected FM-1
 ```
 
-The first install on a unit, with a full backup of its flash first (the chip's ROM download mode
-over the same cable, kagaimiq's jl-uboot-tool) and a check of what the backup holds:
-
-```
-sh ../fm1-midi-bridge/tools/fm1_safe_install.sh build/felucca.fwsc     # --no-dump once the unit has its dump
-```
-
-The steps, what they need and what the first unit did on 2026-10-19: `../fm1-midi-bridge/docs/recovery.md`.
+Before the first install on a unit, take a full backup of its flash (Linux, a minute, through the chip's ROM
+download mode and kagaimiq's jl-uboot-tool): `tools/fm1_recover.py --softkey`, then `tools/fm1_flash.sh dump`.
+[docs/recovery.md](docs/recovery.md) has the steps, and every way back.
 
 Or, to install your own build from the web installer, make a local copy of the site and open it from `localhost`
 (Web MIDI needs a secure context):
@@ -122,5 +118,5 @@ cd /tmp/felucca-site && python3 -m http.server 8000
 # open http://localhost:8000/webapp/installer/
 ```
 
-Installing firmware is at your own risk. If an install fails and the FM-1 no longer
-starts, recovery needs [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter).
+Installing firmware is at your own risk. If an install fails and the FM-1 no longer starts:
+[docs/recovery.md](docs/recovery.md).

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""fm1-drummer on the FM-1 emulator (fm1-emu, checked out next to my_fw): songs imported into its flash, the
+"""fm1-drummer on the FM-1 emulator (fm1-emu, two folders above this repository by default, or --emu): songs imported into its flash, the
 firmware run with a script of keys, knobs and pedal MIDI into the TRS jack, the screen saved at the times asked
 for, and the sound.
 
