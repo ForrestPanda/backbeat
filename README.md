@@ -177,6 +177,11 @@ python3 tools/gp2song.py "song.gp4" --out song.json
 python3 tools/gp2song.py "song.mid" --out song.json
 ```
 
+**In practice** (the author's workflow): the sections the importer finds, from the file's markers or from the drums
+alone, are a draft, not a finished song. Import the Guitar Pro or MIDI file in the editor, open the same file in
+TuxGuitar beside it, and fix the sections against the score: where each one starts and ends, which bar is its fill,
+the outro. Pick the bars in the section editor's strip, play the result on the Play card, then send it to a slot.
+
 Then PC 0 from the pedal loads it and CC 20 picks its sections (0 = the first). Hear it on the computer
 first, played by the pedal through the firmware's own drum engine (after a `./build.sh`):
 

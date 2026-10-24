@@ -236,7 +236,9 @@ next bar). No named sections, one song, no fill tied to a section change.
    (Shine On You Crazy Diamond, 348 bars): the sections are found from the drums alone, as the runs of
    bars that repeat a pattern of 1 to 4 bars with fills allowed; silence is dropped, short runs join
    their neighbour, equal neighbours merge; they are named PART n for the user to rename (`--auto`
-   does the same for a file with markers).
+   does the same for a file with markers). The sections found, from markers or from the drums, are a draft: the user's
+   workflow (2026-10-24) fixes them by hand in the section editor against the file open in TuxGuitar (where
+   each starts and ends, the fills, the outro); README, "In practice".
 3b. **Compact songs and a time signature per section (done 2026-10-13).** The packed form is "SNG2": a section
    header of 18 bytes (name, steps, division, flags, the meter, the section's size), the fill conditions, then a
    step as 2 bytes of lanes and a byte a hit (level, ratchet, fill mark; bit 6 a flam since 2026-10-17). A 64-step section of three hits a step
