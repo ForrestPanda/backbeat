@@ -166,6 +166,10 @@ or those pads once you edit them, or WAVs you pick. The page must be served, not
 root `python3 -m http.server 8000`, then `http://localhost:8000/web/editor.html?mock=1` for the simulated
 FM-1 (serving `web/` itself works too: the importer is linked there).
 
+<p align="center"><img src="assets/screens/backbeat-editor-setlist.png" alt="The web editor's setlist: three songs, the first playing in the Play card, its sections as tiles" width="840"></p>
+
+<p align="center"><img src="assets/screens/backbeat-editor-song.png" alt="The web editor's section editor: a song's sections, the chorus open on the grid with its entry and fill bars" width="840"></p>
+
 Or take the drum track of a Guitar Pro file (.gp3 / .gp4 / .gp5; `pip install pyguitarpro`) or of a MIDI file
 (.mid, type 0 or 1, nothing to install: channel 10 is the drums, the marker meta events the sections, the time
 signatures the bars, the first set-tempo the tempo): the section markers become the sections, each with the
@@ -295,11 +299,15 @@ SELECT picks a row, REC or OCT+ loads it and goes back to LIVE; a white key 1..1
 The LIVE header names the song's bank: "song 3" or "factory 3". EDIT's SAVE held on a groove says FACTORY: READ-ONLY
 (to change one, add it to the set in the web editor, edit it there and send it to a slot).
 
+<p align="center"><img src="assets/screens/backbeat-songs.png" alt="SONGS: your 16 slots; LIVE with no song loaded, the white keys load one; a song loaded, its intro cued" width="720"></p>
+
 **EDIT.** SLOOP's drum grid and kit page for the section playing; its header names the section and, stopped,
 the song. Change hits, levels and ratchets as SLOOP does, then hold SAVE (stopped): a ring fills for a second and
 the section is written back into its song in flash ("SAVED INTO THE SONG"; "SONG FULL" past 3800 bytes; nudges and
 parameter locks are not kept, SNG2 has no room for them, and the screen says so). With no song loaded SAVE held
 saves the project slot, as SLOOP did. A tap of SAVE opens SONGS.
+
+<p align="center"><img src="assets/screens/backbeat-edit.png" alt="EDIT: the drum grid of the section playing, and the kit page" width="480"></p>
 
 **SETUP.** SLOOP's menu, its GLO pages and its mix layer in one place, a section at a time (SELECT), up to four
 rows each on KNOB 1..4 (PRESETS moves the cursor, OCT+ acts): PEDAL (channel, count-in, load the last song at
@@ -311,6 +319,8 @@ tune), FEEL (swing, humanize), DRUMS (level, reverb, delay, pan), MASTER, TEXTUR
 the screen and its backlight go dark; a button, key, knob or the pedal wakes it, and the press that wakes it does
 nothing else), LIGHTS, AUDIO,
 LOAD (the audio's load and the drum voices), SYSTEM (calibration, the JAM project pages, ABOUT). The pedal settings are saved once the music stops.
+
+<p align="center"><img src="assets/screens/backbeat-setup.png" alt="SETUP: the pedal (channel, count-in, the last song at start, MIDI clock in), MIDI, and MIDI 2 with TRS TO USB" width="720"></p>
 
 **Humanize** (SETUP > FEEL: OFF, LIGHT, MORE; LIGHT out of the box): the sequencer plays each step a little early
 or late (LIGHT up to 3 ms, MORE 6 ms; all the drums of a step together, so no flams) and each hit a little louder or
@@ -357,6 +367,7 @@ firmware ([BUILDING.md](BUILDING.md)): at your own risk.
 | `web/kit/` | the kit the editor serves (the Muldjord Kit with two velocity layers), the files `tools/mkkit.py` makes the device image from |
 | `tools/gen_realkit.py`, `tools/realkit.json`, `assets/realkit/` | the built-in layered kit MULDJORD: the recipe, rendered once from the source kits into WAVs (layers, takes, levels, fitted to 290 KB); `tools/gen_samples.py` builds them in as set REAL, the editor's player plays them (`web/realkit/`) |
 | `tools/fm1_render.py`, `tests/song_render.c` | a song played by the pedal, rendered to a WAV on the host |
+| `tools/gen_screens.py`, `assets/screens/` | the screen pictures in this README, from the host tests' renders of every screen (`build/host/*.ppm`) |
 | `tools/gp2song.py`, `tests/gp2song_test.py`, `tests/midi2song_test.py` | the drum track of a Guitar Pro file or a MIDI file into a song (markers, patterns, fills, levels, ratchets, flams); the MIDI reader is its own, the tests write their files |
 | `tools/mkkit.py` | a sampled kit from a folder of WAVs or an SFZ kit onto USR3+4: lanes by name, two velocity layers, trim, cut, level; an image for the renderer, or the upload |
 | `firmware/src/seq.c` | SLOOP's sequencer; the pedal hooks in its MIDI loop and `events_block` |
