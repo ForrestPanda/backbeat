@@ -48,7 +48,7 @@ check("offline: no app, no service worker (a file has no site)",
 tmp = Path(tempfile.mkdtemp())
 try:
     pkg = bytearray(4096)
-    for i, ch in enumerate("FM-1_900"):
+    for i, ch in enumerate("FM-1_985"):
         pkg[i * make_site.BLK + make_site.KEEP] = (ord(ch) + i + 1) & 0xFF
     for i in range(8, make_site.BLOCKS):
         pkg[i * make_site.BLK + make_site.KEEP] = 0x7D

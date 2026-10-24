@@ -406,6 +406,13 @@ next bar). No named sections, one song, no fill tied to a section change.
    button, a knob, the pedal, the waking press eaten; every UI test runs through scr_input / scr_poll). The target cost check's
    mix_block line re-based (tests/target_budget.txt says why: layout, no audio code). **Verify on the unit:** the
    backlight dark, every button, key and knob wakes it, a pedal cue wakes it and still plays.
+   **Its own identity, `FM-1_985`** (2026-10-24, for the Firmware Hub listing, which asks each firmware for an identity
+   no other uses and the `9NN` form it can resume): SLOOP's `FM-1_900` is shared by some twenty firmwares in the hub's
+   catalogue; 985 was claimed by none (the catalogue's `ident` patterns, the catch-all `FM-1_\d{3,8}` aside), and
+   92x (SLOOP 2.x release builds) and 96x (Shine On's 963x) were left alone. build.py's PRODUCT, also the loader's
+   (`ota-FM-1_985`, passed in); `--release` no longer maps X.Y to `FM-1_9XY`. The USB names stay "Felucca": every
+   installer (the hub's, the editors', M-VAVE's way back) finds the FM-1 under them. To verify on hardware: the
+   install over 0.9 (`FM-1_900` to `FM-1_985`), `--info`, and leaving it for another firmware.
 
 The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log
