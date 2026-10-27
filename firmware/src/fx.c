@@ -885,9 +885,35 @@ static void texture_mix(int32_t *l, int32_t *r, uint32_t n)
         texture_reset(src);                             /* faded out: the new source from rest */
 }
 
+/* The audio gate (core.h; 2026-10-27, the battery). After AUD_QUIET_S of silence (the output exactly 0, both channels,
+ * every sample; and the mix before the MASTER knob within AUD_QUIET_LSB, -54 dBFS: the buses keep a DC residue of
+ * some -13 after a tail, the master's DC blocker takes it out, and the knob turned down to 0 with a tail still ringing
+ * is the other way to a 0 output) with the transport stopped and nothing sounding, the mix is skipped and the block
+ * zeroed: the reverb's and the echo's lines, the limiter and the beds stay as they are, all quiet, and go on from
+ * there when sound comes back. 3 s is longer than the echo's line (1.49 s): nothing is still on its way, and the
+ * zeroed block is what the mix would have given (tests/golden.txt unchanged: tests/gate_test.c). What opens it, in the block it happens: the transport, a count-in, a roll (seq_quiet); a drum
+ * voice, the click or a declick tail (drums_sounding: a key, the pedal, MIDI, the editor's audition all end in
+ * drum_on); TEXTURE asked to play or still fading (tx_wants, tx.g). DUST's bed turns only with PLAY (dust_process:
+ * a stopped SLOOP is silent), so DUST on needs nothing here. events_block runs before the test, so what arrives in a
+ * block is heard in it, as before. The gated block costs the events
+ * and the test alone (the idle mix was ~60 % of a playing one, tests/cpu_baseline.txt). */
+#define AUD_QUIET_S 3u
+#define AUD_QUIET_LSB 64                        /* a power of two (the OR below) */
+#define AUD_QUIET_BLOCKS (AUD_QUIET_S * (uint32_t)FS / CTL)
+static uint32_t aud_quiet_blocks;                       /* silent blocks in a row, saturating */
+static void audio_gate_reset(void) { aud_quiet_blocks = 0; audio_gated = 0; }
+static uint32_t tx_wants(void)                          /* texture_mix's "on", but for the source check */
+{
+    return clamp(song.g[G_TXSRC], 0, TX_N - 1) && (song.playing || song.g[G_TXWHEN]) && clamp(song.g[G_TXLVL], 0, 127);
+}
+static uint32_t audio_quiet_now(void)
+{
+    return aud_quiet_blocks >= AUD_QUIET_BLOCKS && seq_quiet() && !drums_sounding() && !tx_wants() && !tx.g;
+}
+
 static void mix_block(int32_t *out, uint32_t n)
 {
-    uint32_t i;
+    uint32_t i, pk_mix = 0, pk_out = 0;
     int32_t m0, m1;
     for (i = 0; i < n; i++)
         send_d[i] = send_r[i] = mix_l[i] = mix_r[i] = 0;
@@ -897,6 +923,17 @@ static void mix_block(int32_t *out, uint32_t n)
         thr_dly = (q & 2u) ? (thr_dly + 1928 > 32767 ? 32767 : thr_dly + 1928) : (thr_dly > 1928 ? thr_dly - 1928 : 0);
     }
     events_block(n);
+    if (audio_quiet_now()) {                            /* the audio gate (above): the block stays silent */
+        for (i = 0; i < 2u * n; i++)
+            out[i] = 0;
+        if (usb_full_now)
+            for (i = 0; i < 2u * n; i++)
+                usb_out[i] = 0;
+        audio_gated = 1;
+        audio_gate_blocks++;
+        return;
+    }
+    audio_gated = 0;
     duck_block(n * (uint32_t)song.g[G_BPM]);           /* (the synth parts are no longer mixed: drums only) */
     drums.a0 = TDRUM->att;                              /* the drum track's mute / solo fade */
     drums.a1 = 32767 - gain_next(TDRUM);
@@ -953,6 +990,7 @@ static void mix_block(int32_t *out, uint32_t n)
         static uint8_t usb_was;
         for (i = 0; i < n; i++) {
             int32_t m = m0 + (((m1 - m0) * (int32_t)i) >> CTL_LOG2);
+            pk_mix |= (uint32_t)(mix_l[i] < 0 ? -mix_l[i] : mix_l[i]) | (uint32_t)(mix_r[i] < 0 ? -mix_r[i] : mix_r[i]);
             ol[i] = ((mix_l[i] >> 2) * m) >> 10;
             orr[i] = ((mix_r[i] >> 2) * m) >> 10;
             master_pre(&ol[i], &orr[i]);
@@ -965,6 +1003,15 @@ static void mix_block(int32_t *out, uint32_t n)
         for (i = 0; i < n; i++) {
             out[2u * i] = knee(ol[i]);
             out[2u * i + 1u] = knee(orr[i]);
+            pk_out |= (uint32_t)(out[2u * i] | out[2u * i + 1u]);   /* 0 iff every sample is 0 */
+        }
+        if (pk_out == 0u && pk_mix < (uint32_t)AUD_QUIET_LSB) {   /* the audio gate: a silent block (the OR of the
+                                                                    * mix's magnitudes is below a power of two iff
+                                                                    * each of them is) */
+            if (aud_quiet_blocks < AUD_QUIET_BLOCKS)
+                aud_quiet_blocks++;
+        } else {
+            aud_quiet_blocks = 0;
         }
         if (usb_full_now && !usb_was) {                 /* (a new recording: no old block in its delay) */
             memset(&lim_usb, 0, sizeof lim_usb);

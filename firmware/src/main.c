@@ -169,6 +169,7 @@ static void fm1_main(void)
     lcd_fill(0, 0, 240, 240, C_BLACK);
 
     healthy_since = fm1_ms;
+    battlog_boot();                                     /* the battery log goes on across a reset (battlog.c) */
     for (;;) {
         uint32_t m = fm1_ms;
         fm1_wdt_feed();
@@ -265,6 +266,7 @@ static void fm1_main(void)
         scr_poll();
         felucca_dbg.stage = 8;
         autosave_tick();                                /* the working project into flash, when quiet */
+        battlog_tick();                                 /* the battery, once a minute (battlog.c) */
 #if FELUCCA_DRUMMER
         sections_flush();                               /* live sections / the recorded song, when quiet */
 #endif
@@ -274,6 +276,8 @@ static void fm1_main(void)
 #if FELUCCA_OTA
             ed_service();                       /* editor replies without waiting for the next frame */
 #endif
+            fm1_idle();                         /* the core halts until the next interrupt (TIMER5's tick, 100 us;
+                                                 * the audio block): the battery (2026-10-27; hal/fm1_sys.h) */
         }
     }
 }

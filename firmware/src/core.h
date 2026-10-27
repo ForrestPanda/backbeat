@@ -200,6 +200,13 @@ static uint32_t dly_samples(uint32_t d) { return dly_units(d) / (uint32_t)song.g
  * bit 1 the echo (the UI); thr_rev, thr_dly: the glide now, Q15 (fx.c mix_block, a block at a time) */
 static volatile uint8_t thr_req;
 static int32_t thr_rev, thr_dly;
+/* The audio gate (2026-10-27, the battery; fx.c before mix_block): stopped and silent for AUD_QUIET_S, mix_block
+ * skips the mix and zeroes the block. The sequencer's events still run every block, so a key, a MIDI note, the pedal
+ * or PLAY open it at once, TEXTURE or DUST turned on too. audio_gated: the last block was skipped (SETUP > AUDIO
+ * LOAD reads 0 then; the console's status, the battery log). */
+static volatile uint8_t audio_gated;
+static uint32_t audio_gate_blocks;        /* blocks skipped since boot (the console) */
+static uint32_t seq_quiet(void);          /* seq.c: the transport stopped, no count-in, no roll */
 static inline int32_t send_thr(int32_t s, int32_t g) { return g ? s + (((127 * 258 - s) * g) >> 15) : s; }   /* s 0..32766 */
 #define TDRUM (&trk[TRK_DRUM])
 static int is_drum(const track_t *t) { return t == TDRUM; }

@@ -85,6 +85,7 @@ static void host_tracks_init(void)                /* as felucca_init: defaults, 
     }
     song.master_q12 = 4096;
     drum_hum = HOST_HUM;                         /* (the tests' hits on the grid, as written: humanize has its own) */
+    audio_gate_reset();                          /* (the audio gate: a test starts with the mix running) */
 }
 
 /* step i of the drum track: GM notes -> its lanes (accent: hard); a TIME other than NOTE: an empty step */

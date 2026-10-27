@@ -130,6 +130,10 @@ static void fm1_enter_uboot(void)
         ;
 }
 
+/* The core halts until the next interrupt (pi32v2 `idle`, as the SDK's idle task spins on it with its audio and USB
+ * running): the main loop's wait between UI frames (main.c; the battery, 2026-10-27). Interrupts must be enabled. */
+FM1_INLINE void fm1_idle(void) { __asm__ volatile("idle"); }
+
 FM1_INLINE void fm1_core_reset(void)
 {
     FM1_PWR_CON |= 0x10u;

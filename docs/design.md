@@ -1181,6 +1181,69 @@ hazard; what it found and what was done:
   change, for little gain on cymbals), and the installer writing the data region (a riskier update path; not before
   the alpha). Not started.
 
+## The battery (2026-10-27)
+
+The user asked (2026-10-26) whether the firmware could be made more efficient for the battery: nothing measured,
+no complaint yet, "wondering". What was found, what was done, what to measure. Nothing in BackBeat managed power
+until then, and no number exists: the first step is the measurement, not a change.
+
+**What the firmware did, up to 0.9.** (1) The core never halted: the main loop spun at full speed for the rest
+of each 15 ms frame, polling the panel and the editor's link. The pi32v2 has an `idle` instruction that halts the
+core until the next interrupt, and the SDK's own idle task spins on it; Felucca had no equivalent, and runs at
+whatever clock the boot loader leaves (the SDK's `clk_set` is in a closed library; the bridge's notes have lsb_clk
+at 192 MHz under the SDK), never lowered. (2) The audio engine rendered every block, playing or not: stopped, the
+reverb, the echo, the master chain and the limiter ran on silence; on the host the idle mix was about 60 % of the
+playing mix (tests/cpu_baseline.txt: idle 586 against idle + drums 1000). (3) The codec and I2S run always; the
+four control lines (PC0, PC1, PC2, PC6) are set once at init and the chip is not identified, so there is no mute or
+shutdown path. (4) The backlight is full on or off: SCREEN OFF exists, default NEVER, no brightness. (5) The rest is
+cheap: the 10 kHz scan, the LEDs' duty, the ADC reads, the dirty-signature redraws; USB without a cable retries once
+a second (keeps the 48 MHz PLL and the PHY up: small).
+
+**Done (after 0.9).** (1) `fm1_idle()` (hal/fm1_sys.h) in the main loop's wait between frames (main.c): the core
+halts until TIMER5's next tick (100 us) or the audio block, and sleeps the rest. As the SDK does it with DMA audio
+and USB running. (2) **The audio gate** (fx.c before mix_block, core.h): after 3 s of silence (the output exactly
+0, the mix before the MASTER knob within -54 dBFS: the buses keep a DC residue of some -13 after a tail, the master's
+DC blocker takes it out) with the transport stopped and nothing sounding, the mix is skipped and the block zeroed:
+the reverb's and the echo's lines, the limiter and the beds stay as they are and go on when sound comes back; 3 s is
+longer than the echo's line (1.49 s), so the zeroed block is what the mix would have given, and `tests/golden.txt`
+is unchanged. The sequencer's events_block still runs every block, so what opens the gate does so in the block it
+arrives: the transport, a count-in, a roll (seq.c seq_quiet); a drum voice, the click or a declick tail
+(drums.c drums_sounding: a key, the pedal, MIDI, the editor's audition all end in drum_on); TEXTURE asked to play or
+still fading. DUST's hiss turns with PLAY only, so DUST on leaves it closed. On the host (tests/gate_test.c): closed
+3.00 s from rest, 5.0 s after a kick with the default sends, 8.3 s after a crash into the largest reverb and the
+echo, 4.3 s after a groove's stop; TEXTURE turned on while closed is heard in the next block. `audio_gated`:
+SETUP > AUDIO LOAD reads 0 then; the console's `status` (`audio_gated`, `gate_blocks`, `screen_dark`); the
+battery log. (3) **The battery log** (battlog.c): one reading a minute of `song.batt_raw` (the SARADC's raw 10
+bits on PB1, smoothed) in .noinit RAM (1024 minutes, 17 h, a reset or UBOOT keeps it, a power-off clears it), with
+the minute's flags: playing, played, the screen dark, a USB host alive, the gate closed, the first minute after a
+boot. Read over the console (SETUP > USB SERIAL = ON): `batt`, `batt clear`; `tools/fm1_batt.py` prints the
+readings and the slope of each run of minutes in one state, in raw counts an hour (the counts to volts are not
+calibrated: the number to compare is the slope, between states and between firmwares).
+
+**Measuring (the user, to do):** on the battery, the cable out (in, it charges), an hour or more in each state,
+then the cable in and `tools/fm1_batt.py --csv`: stopped with the screen on; stopped with the screen dark (SCREEN
+OFF 1 MIN); a song playing (the pedal or PLAY, the speaker at a usual level). The slopes rank what is left below.
+A charger alone leaves no host flag: note when the cable went in and out. The same three runs on the 0.9 package
+(docs/firmware/backbeat-0.9.fwsc) give the gain of the idle instruction and the gate.
+
+**On the first unit, 2026-10-27:** installed over USB (FM-1_900 -> FM-1_985, the usual path); it restarts,
+enumerates and answers the identity SysEx. Over the console, 19 s after a boot, stopped: `audio_gated 1`,
+`cpu_pct 0`, 21002 blocks skipped (15 s of the 19), `late 0`, the worst block 732 us; the audio halves, TIMER5's
+ticks and the UI frames advance at their rates between two `dbg` reads 2 s apart, no USB reset or suspend. So the
+core idles through `fm1_idle()` with the audio DMA, the scan and USB running, and the gate closes on the unit.
+**Still to verify** (the user): it plays, the panel, the TRS jack, the editor; the load back on a hit; the log over
+a run. Found on the way: a setting changed in SETUP reached flash only when the menu closed (menu_close), so USB
+SERIAL set ON and the unit powered off from the menu lost it; now every change in the menu marks the settings for
+the save when quiet (ui_menu.c mi_set, `settings_later`; tests/ui_pages_test.c), the menu open or not.
+
+**Left (in the order the measurement should decide):** the backlight by PWM (PA2 is on or off and shared with the
+key matrix's /OE; the dark mode shows the scan can force it low for its reads, so a duty cycle from the 10 kHz tick
+is feasible: a SETUP > SCREEN > BRIGHTNESS row; flicker and the matrix reads to check on the unit); the speaker
+amplifier asleep after a few idle minutes, if one of the codec's control lines is a shutdown or mute (the chip to
+identify from the board first; an amplifier's quiescent current is often tens of mA); a lower system clock while
+stopped (the PLL dividers to reverse engineer; a lower clock tightens the audio budget: last, and only if the core
+matters by the numbers); whether the radio's power domain is off at all (never enabled; a measurement tells).
+
 ## Open questions
 
 - (answered 2026-10-19) The FM-1's TRS MIDI type: Type A (the Ampero over a plain stereo cable, milestone 7).

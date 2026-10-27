@@ -34,5 +34,11 @@ drums_mix 6492
 # main loop did); the compiler stops inlining texture_reset and puts a case of TEXTURE's source jump table after the
 # texture code with a goto back into it: a span of 1137 instructions closed by a backward branch, counted as a loop.
 # The host CPU check (regress.c, callgrind) unchanged, every entry in budget.
-mix_block 33988
+# The audio gate (2026-10-27): mix_block 33988 -> 49466 (+46 %). The per-sample code grew by the gate's silence test
+# (two magnitudes OR-ed, the output OR-ed: the host counts +13 instructions a sample playing, mix/idle_drums 677 ->
+# 690, +2 %); the rest is layout again: the gate's early return before duck_block leaves the mix in a span closed by
+# a backward branch, and the compiler inlines differently around it (27 divides counted in its loops, none added:
+# the per-sample loops have no divide). The host CPU check (regress.c, callgrind) is within budget on every entry;
+# stopped and silent the whole mix is skipped (tests/gate_test.c).
+mix_block 49466
 fm1_alnk0_irq 30

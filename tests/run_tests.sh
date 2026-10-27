@@ -80,6 +80,8 @@ $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/font_test" tests/font_test.c
 run "the screen font at 1 bit a pixel: every glyph, the same pixels as 2.5" "$OUT/font_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/fx251_test" tests/fx251_test.c -lm
 run "after Felucca 1.4 / 1.5: the drums INSERT, mutes, MIDI LEARN, TEXTURE, limiter, THROW" "$OUT/fx251_test"
+$CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/gate_test" tests/gate_test.c -lm
+run "the audio gate: closed 3 s after silence, opened by a hit, a key, a TRS note, the transport, TEXTURE, DUST" "$OUT/gate_test"
 
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/ui_pages_test" tests/ui_pages_test.c -lm
 run "live UI: pages, layers (fx, steps, erase, roll, key, mix), holds, drums, REC, fuzz" "$OUT/ui_pages_test" "$OUT"

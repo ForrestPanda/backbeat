@@ -1577,6 +1577,17 @@ static uint32_t mclk_adv(uint32_t n)               /* units to advance this bloc
 
 /* everything that happens between two rendered blocks: transport, input, the steps of every
  * track at the clock, the click, the rolls and the arps; then the clock moves on by n samples */
+static uint32_t seq_quiet(void)             /* the audio gate (fx.c): stopped, nothing asked, no count-in, no roll */
+{
+    uint32_t r;
+    if (song.playing || ci_on || transport_req)
+        return 0;
+    for (r = 0; r < NROLL; r++)
+        if (roll[r].on)
+            return 0;
+    return 1;
+}
+
 static void events_block(uint32_t n)
 {
     uint32_t adv;

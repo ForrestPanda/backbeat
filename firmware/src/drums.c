@@ -496,3 +496,12 @@ static __attribute__((noinline)) void drums_mix(int32_t *ml, int32_t *mr, int32_
     drums.peak = pk;
 }
 static void drums_render(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dly, uint32_t n) { drums_mix(ml, mr, rev, dly, 0, n); }
+
+static uint32_t drums_sounding(void)      /* a voice, the click or a declick tail: the audio gate (fx.c) */
+{
+    uint32_t i;
+    for (i = 0; i < NDRUM; i++)
+        if (drums.v[i].active)
+            return 1;
+    return click.env != 0 || drums.tail != 0;
+}

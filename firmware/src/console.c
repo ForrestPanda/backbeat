@@ -2,8 +2,8 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Serial console on the CDC-ACM function (FELUCCA_CDC=1): read-only
  * diagnostics. Runs in the main loop (cdc_task); usb_poll moves the bytes.
- * The baud rate is ignored. Nothing here writes memory or flash; `uboot`
- * does what the SysEx soft key does. */
+ * The baud rate is ignored. Nothing here writes memory or flash (`batt clear`
+ * empties the battery log, battlog.c); `uboot` does what the SysEx soft key does. */
 #define CON_LINE 64u
 
 static struct {
@@ -167,6 +167,28 @@ static void con_flr(const char *p)                  /* flash read over SPI (no X
 }
 #endif
 
+static void con_batt(const char *p)                     /* the battery log (battlog.c): oldest first */
+{
+    uint32_t n = battlog.n, k = n < BL_N ? n : BL_N, i;
+    if (con_word(&p, "clear")) {
+        battlog_clear();
+        con_puts("battery log cleared\r\n");
+        return;
+    }
+    con_puts("batt readings ");
+    con_dec((int32_t)n);
+    con_puts(" period_s 60 flags 1=playing 2=played 4=dark 8=host 16=gated 32=boot\r\n");
+    for (i = n - k; i < n; i++) {
+        con_dec((int32_t)i);
+        con_putc(' ');
+        con_dec(battlog.v[i % BL_N]);
+        con_putc(' ');
+        con_dec(battlog.f[i % BL_N]);
+        con_puts("\r\n");
+    }
+    con_puts("end\r\n");
+}
+
 static void con_status(void)
 {
     con_puts("felucca ");
@@ -179,6 +201,9 @@ static void con_status(void)
     con_kv("drum_voices_peak", drums.vpeak);
     con_kv("drum_voices_full", (int32_t)drums.full);
     con_kv("batt_raw", song.batt_raw);
+    con_kv("audio_gated", audio_gated);                 /* the audio gate (fx.c): 1 = the mix is being skipped */
+    con_kv("gate_blocks", (int32_t)audio_gate_blocks);
+    con_kv("screen_dark", fm1_dark);
     con_puts("kit ");
     con_puts(DRUM_KIT_NAMES[drum_kit()]);
     con_puts("\r\n");
@@ -242,7 +267,7 @@ static void con_params(void)
 static void con_exec(const char *p)
 {
     if (con_word(&p, "help") || con_word(&p, "?"))
-        con_puts("status  dbg  crash  params  memr ADDR [LEN]  flr OFF [LEN]  uboot yes\r\n");
+        con_puts("status  dbg  crash  params  batt [clear]  memr ADDR [LEN]  flr OFF [LEN]  uboot yes\r\n");
     else if (con_word(&p, "status"))
         con_status();
     else if (con_word(&p, "dbg"))
@@ -251,6 +276,8 @@ static void con_exec(const char *p)
         con_crash();
     else if (con_word(&p, "params"))
         con_params();
+    else if (con_word(&p, "batt"))
+        con_batt(p);
     else if (con_word(&p, "memr"))
         con_memr(p);
 #if FELUCCA_FLASH

@@ -730,8 +730,10 @@ int main(int argc, char **argv)
         check(usb_full == 0u && ui.menu == 1, "menu USB AUDIO: OCT+ toggles back to MASTER");
         ui.menu_sel = (uint8_t)mi_find(MI_SERIAL); ui.force = 1; frame();
         check(usb_serial == 0u && !(lights_word() >> 16 & 1u), "menu USB SERIAL: OFF by default (2.3 settings read so)");
+        settings_later = 0;
         encs[panel.enc[EN_K1 + mi_row(ui.menu_sel)]] = 1; frame();
         check(usb_serial == 1u && (lights_word() >> 16 & 1u), "menu USB SERIAL: its knob (KNOB 3) -> ON, saved with the settings");
+        check(settings_later == 1u && ui.menu == 1, "a setting changed marks the settings for the save when quiet, the menu still open (2026-10-27)");
         ui.force = 1; frame(); ppm("menu-serial");
         lights_from_word(lights_word());
         check(usb_serial == 1u, "menu USB SERIAL: read back");

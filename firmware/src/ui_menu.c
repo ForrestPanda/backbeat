@@ -324,6 +324,9 @@ static void mi_set(uint32_t i, int32_t s)
             ui.bpm_t = 40;
         return;
     }
+    settings_later = 1;                                /* saved when quiet (project.c autosave_tick), not only when the
+                                                        * menu closes: USB SERIAL set ON and the unit powered off from
+                                                        * the menu lost it (2026-10-27). Unchanged settings write nothing */
     switch (r->id) {
     case MI_PCH:                                       /* OFF, CH 1..16, ANY; OCT+ round */
         pedal.ch = (uint8_t)(s ? clamp((int32_t)pedal.ch + s, 0, PEDAL_CH_OMNI) : (pedal.ch + 1u) % (PEDAL_CH_OMNI + 1u));

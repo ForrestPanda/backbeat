@@ -63,6 +63,7 @@
 #include "ui_menu.c"
 #include "ui_input.c"
 #include "screen.c"          /* SETUP > SCREEN OFF: the panel asleep, the backlight dark */
+#include "battlog.c"         /* the battery, once a minute, in .noinit: the console's batt (tools/fm1_batt.py) */
 #ifndef FELUCCA_FLASH
 #define FELUCCA_FLASH 1          /* flash driver + storage.c */
 #endif
