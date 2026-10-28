@@ -49,7 +49,7 @@ Use the web installer (Chrome or Edge), or from the command line:
 
 ```
 python3 tools/fm1_install.py --info                       # what runs now: FM-1_015 is stock V15, FM-1_985 BackBeat
-python3 tools/fm1_install.py backbeat-1.0.fwsc            # about two minutes
+python3 tools/fm1_install.py backbeat-0.9.fwsc            # about two minutes
 ```
 
 Close every other program that uses MIDI first, and keep the cable in. The install runs in two
