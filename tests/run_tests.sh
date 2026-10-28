@@ -35,16 +35,10 @@ run "flash storage (A/B, torn writes)" "$OUT/storage_test"
 $CC -o "$OUT/recovery_test" tests/recovery_test.c
 run "application USB recovery and boot-loop guard" "$OUT/recovery_test"
 
-$CC -o "$OUT/arranger_test" tests/arranger_test.c
-run "song order, timing, repeats and missing scenes" "$OUT/arranger_test"
-$CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/song_audio_test" tests/song_audio_test.c -lm
-run "song: two drum sections, scene transition and stop" "$OUT/song_audio_test" "$OUT/song-demo.wav"
-$CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/song_ui_test" tests/song_ui_test.c -lm
-run "song screen: commands, load (OCT+ twice), display bounds" "$OUT/song_ui_test" "$OUT/song-screen.ppm"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/pedal_test" tests/pedal_test.c -lm
-run "pedal: sections, next / previous, stop, tap tempo over TRS MIDI" "$OUT/pedal_test"
+run "pedal: a song's sections, next / previous, stop, tap tempo, fills, endings, the count-in over TRS MIDI" "$OUT/pedal_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/song_test" tests/song_test.c -lm
-run "songs: packed form, PC loads one, its sections on the bar, the outro, back to A..D" "$OUT/song_test"
+run "songs: packed form, PC loads one, its sections on the bar, the outro, PC 127 unloads" "$OUT/song_test"
 run "songs: a section is whole bars of its time signature (tools/fm1_song.py bar_fit)" python3 tests/song_bars_test.py
 run "songs: the example packed by tools/fm1_song.py passes the firmware's check" sh -c \
     "python3 tools/fm1_song.py tests/example-song.json --out $OUT/example-song.bin >/dev/null && $OUT/song_test $OUT/example-song.bin"

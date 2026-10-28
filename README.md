@@ -73,8 +73,7 @@ song in one of the FM-1's 16 slots.
 
 Everything else (breaks, next / previous, tap tempo, entries, the count-in) is in the full table below.
 
-**Known limits.** No MIDI out: the FM-1 has no MIDI out jack. JAM, on the SONGS screen, is SLOOP's own A..D
-sections, left as SLOOP had it and not supported. How much of its time the audio takes on your unit is on SETUP > LOAD (the
+**Known limits.** No MIDI out: the FM-1 has no MIDI out jack. How much of its time the audio takes on your unit is on SETUP > LOAD (the
 average, the worst block since OCT+, blocks rendered too late, which you would hear as a click, and the drum voices):
 play your busiest song, then look.
 
@@ -94,7 +93,7 @@ Footswitches send MIDI on channel 16 (default) to the TRS jack or over USB:
 | CC 26 | tap tempo (on the device: the last black key, F#5, on LIVE) |
 | PC 0..15 | load your song in slot 1..16: stopped, its tempo and kit now and its first section cued; playing, with the next section |
 | PC 16..31 | load factory groove 1..16 (the same way) |
-| PC 32..127 | no song: SLOOP's sections A..D again |
+| PC 32..127 | no song: the drum track's own pattern loops, with no sections to cue |
 
 **Count-in.** A setting kept with the pedal channel (off by default): a section pressed while stopped first
 clicks one or two bars at the song's tempo (the metronome's voice, the first beat of each bar accented), then
@@ -241,7 +240,7 @@ sounds at 44.1 kHz); `docs/kits.md` has the kits tried, the chosen one (the Muld
 Songs then use that kit by its index (`"kit": 41` in the JSON, the kit after the built-in and SYN kits).
 The songs live in the flash of the USR1 and USR2 sample slots (8 songs each, two safe copies of every song), which
 the drummer gives up: the kit pair USR3+4 stays yours. With no song loaded the
-pedal plays SLOOP's own sections A..D (the four project slots). **Fills** are marks on the hits of a section's
+pedal has no sections to play: the drum track's own pattern loops. **Fills** are marks on the hits of a section's
 pattern: a hit marked "only in a fill" plays only during a fill (CC 21, a black key or SEL on the LIVE screen),
 one marked "not in a fill" rests then, mark by mark in the editor's grid or lane by lane in the JSON (`"fills"`);
 SLOOP's own whole-step conditions still work on top. Built for the Hotone Ampero II Stage (each footswitch sends up to three CC / PC messages), but any
@@ -309,7 +308,7 @@ ENV / LFO switch), and the white keys 1..16 load them.
 **SONGS.** Two pages, as tabs in the header: **USER**, your 16 slots, and **FACTORY**, the 16 grooves (read-only). ENV
 shows USER, LFO FACTORY (the header's "env/lfo: page"; "rec: load" at the bottom). It opens on the loaded song's page; with no song, on USER, or on FACTORY while your slots are
 all empty. Each page lists 16 songs (9 rows at a time, the list scrolling with the row picked) with their name, tempo
-and number of sections, and a last row JAM: SECTIONS A..D, SLOOP's four sections and their chain editor. KNOB 1 or
+and number of sections. KNOB 1 or
 SELECT picks a row, REC or OCT+ loads it and goes back to LIVE; a white key 1..16 loads that song of the page at once.
 The LIVE header names the song's bank: "song 3" or "factory 3". EDIT's SAVE held on a groove says FACTORY: READ-ONLY
 (to change one, add it to the set in the web editor, edit it there and send it to a slot).
@@ -320,7 +319,7 @@ The LIVE header names the song's bank: "song 3" or "factory 3". EDIT's SAVE held
 the song. Change hits, levels and ratchets as SLOOP does, then hold SAVE (stopped): a ring fills for a second and
 the section is written back into its song in flash ("SAVED INTO THE SONG"; "SONG FULL" past 3800 bytes; nudges and
 parameter locks are not kept, SNG2 has no room for them, and the screen says so). With no song loaded SAVE held
-saves the project slot, as SLOOP did. A tap of SAVE opens SONGS.
+has nothing to save into and says so. A tap of SAVE opens SONGS (from SONGS, LIVE).
 
 <p align="center"><img src="assets/screens/backbeat-edit.png" alt="EDIT: the drum grid of the section playing, and the kit page" width="480"></p>
 
@@ -333,7 +332,7 @@ and nothing else, the FM-1 a TRS-to-USB MIDI interface that plays nothing, LIVE 
 tune), FEEL (swing, humanize), DRUMS (level, reverb, delay, pan), MASTER, TEXTURE and TEXTURE 2, SCREEN (colour, zoom; SCREEN OFF: NEVER, 1, 5 or 15 minutes stopped and untouched, then
 the screen and its backlight go dark; a button, key, knob or the pedal wakes it, and the press that wakes it does
 nothing else), LIGHTS, AUDIO,
-LOAD (the audio's load and the drum voices), SYSTEM (calibration, the JAM project pages, ABOUT). The pedal settings are saved once the music stops.
+LOAD (the audio's load and the drum voices), SYSTEM (calibration, ABOUT). The pedal settings are saved once the music stops.
 
 <p align="center"><img src="assets/screens/backbeat-setup.png" alt="SETUP: the pedal (channel, count-in, the last song at start, MIDI clock in), MIDI, and MIDI 2 with TRS TO USB" width="720"></p>
 
@@ -347,10 +346,12 @@ What else is on it, from SLOOP: one track, the drums (the kits: the
 synthesised kits, SYN1..SYN4 from the editor's Drum synth, your own sampled kits on the user slots; and this fork's
 MULDJORD), a pattern of
 up to 64 steps over 16 lanes with levels, ratchets, nudges, parameter locks and fill conditions, rolls, erase and
-mutes; sections A..D, their quick chain and SLOOP's song order; the drum track's INSERT and FILTER, the delay and
+mutes; the drum track's INSERT and FILTER, the delay and
 reverb sends, the master (DUST, DUCK, the DJ filter, the limiter), TEXTURE; MIDI in, out, clock and learn. The web
-editor (protocol v11) edits the pattern, the kits, the drum synth, the samples, projects, songs and settings. (Gone
-from SLOOP's screens: TRACKS, the visualiser, the GLO pages and layer, the HOME-held menu.)
+editor (protocol v11) edits the pattern, the kits, the drum synth, the samples, songs and settings. (Gone
+from SLOOP's screens: TRACKS, the visualiser, the GLO pages and layer, the HOME-held menu; gone since 2026-10-27,
+JAM: SLOOP's sections A..D with their project slots, quick chain, song order and SONG screen, the SAVE layer that
+held them, and the editor's Jam tab.)
 
 ## Build and test
 

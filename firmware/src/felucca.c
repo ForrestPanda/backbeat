@@ -49,12 +49,10 @@
 #include "midi_uart.c"
 #endif
 #define FELUCCA_DRUMMER 1
-#include "arranger.c"
 #include "seq.c"
 #include "audio.c"
 #include "panel.c"
 #include "ui.c"
-#include "ui_song.c"
 #include "ui_studio.c"
 #include "ui_drummer.c"       /* fm1-drummer: LIVE and SONGS, on the SONG page */
 #include "icons.c"           /* parameter icons (FELUCCA_ICONS), used by ui_draw.c */

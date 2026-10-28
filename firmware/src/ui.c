@@ -5,12 +5,7 @@
 #ifndef FELUCCA_VERSION
 #define FELUCCA_VERSION "BACKBEAT 0.9"  /* the drummer firmware for the FM-1 (a fork of SLOOP, based on Felucca) */
 #endif
-static void project_save(uint32_t slot);
-static void arrangement_save(void);
 static void panel_setup(void);
-static void project_load(uint32_t slot);
-static void project_erase(uint32_t slot);        /* SAVE > PROJECT > ERASE (2.6) */
-static int project_used(uint32_t slot);
 static uint8_t sync_reload;                  /* a kit / project loaded: editor RELOAD push */
 
 #define ACC C_HI                   /* amber everywhere; white is the only accent */
@@ -202,8 +197,10 @@ static int page_walk(int32_t s)
 }
 
 #if FELUCCA_DRUMMER
-enum { DV_JAM, DV_LIVE, DV_LIB };                /* the SONG page's screens: SLOOP's chain, LIVE, SONGS (ui_drummer.c) */
+enum { DV_LIVE, DV_LIB };                        /* the SONG page's screens: LIVE, SONGS (ui_drummer.c; SLOOP's chain
+                                                  * page, JAM's, gone 2026-10-27) */
 static void drummer_open(uint32_t view);
+static int on_song_page(void) { return !ui.home && cur_page()->scope == SC_SONG; }   /* (LIVE or SONGS) */
 #endif
 static void go_home(void)                        /* fm1-drummer: the LIVE screen (the SONG page) */
 {

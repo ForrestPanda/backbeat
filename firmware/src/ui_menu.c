@@ -9,7 +9,7 @@
  * (sng.c arrset_save, once stopped: arrset_dirty), the others as before (settings_save, the project). */
 /* ------------------------------------------------------------ menu --- */
 enum { MI_PCH, MI_PCOUNT, MI_AUTO, MI_LEARN, MI_LCLEAR, MI_COLOR, MI_ZOOM, MI_LIGHTS, MI_KEYS, MI_NOTES, MI_LOWCUT,
-       MI_USB, MI_SERIAL, MI_PANEL, MI_PROJ, MI_ABOUT, MI_HUMAN, MI_CLOCK, MI_LOAD, MI_WORST, MI_LATE, MI_VOICES,
+       MI_USB, MI_SERIAL, MI_PANEL, MI_ABOUT, MI_HUMAN, MI_CLOCK, MI_LOAD, MI_WORST, MI_LATE, MI_VOICES,
        MI_THRU, MI_SCROFF, MI_N };
 enum { RK_MI, RK_G, RK_P };                        /* a row: a setting (MI_*), song.g[id], TDRUM->p[id] */
 typedef struct { const char *name; uint8_t kind, id; } mrow_t;
@@ -29,7 +29,8 @@ static const mrow_t MROW[] = {
     {"SPEAKER LOWCUT", RK_MI, MI_LOWCUT}, {"USB AUDIO", RK_MI, MI_USB}, {"USB SERIAL", RK_MI, MI_SERIAL},
     {"AUDIO LOAD", RK_MI, MI_LOAD}, {"WORST BLOCK", RK_MI, MI_WORST}, {"LATE BLOCKS", RK_MI, MI_LATE},
     {"DRUM VOICES", RK_MI, MI_VOICES},
-    {"HARDWARE CALIBRATION", RK_MI, MI_PANEL}, {"JAM PROJECTS", RK_MI, MI_PROJ}, {"ABOUT", RK_MI, MI_ABOUT},
+    {"HARDWARE CALIBRATION", RK_MI, MI_PANEL}, {"ABOUT", RK_MI, MI_ABOUT},   /* (JAM PROJECTS, SLOOP's slots: gone
+                                                                              * 2026-10-27) */
 };
 #define MI_COUNT (sizeof MROW / sizeof MROW[0])
 enum { MS_PEDAL, MS_MIDI, MS_LEARN, MS_TEMPO, MS_FEEL, MS_DRUMS, MS_MASTER, MS_TEX, MS_TEX2, MS_SCREEN, MS_LIGHTS,
@@ -40,7 +41,7 @@ static const char *const MS_NAME[MS_COUNT] = {"PEDAL", "MIDI", "MIDI 2", "TEMPO"
 static const uint8_t MS_FIRST[MS_COUNT + 1] = {0, 4, 8, 11, 14, 16, 20, 24, 28, 31, 34, 37, 40, 44,
                                                 MI_COUNT};   /* rows of
                                                                                                           * each */
-_Static_assert(MI_COUNT == 47, "MS_FIRST follows MROW");
+_Static_assert(MI_COUNT == 46, "MS_FIRST follows MROW");
 static const char *const LIGHTS_NAME[LIGHTS_N] = {"OFF", "LOW", "MID", "HIGH"};   /* every button lit, the labels readable */
 static const char *const KEYS_NAME[KEYS_N] = {"OFF", "C KEYS", "WHITE KEYS", "ALL KEYS"};      /* keys lit too, at the LIGHTS level */
 static const char *const SCR_NAME[SCR_N] = {"NEVER", "1 MIN", "5 MIN", "15 MIN"};   /* stopped, untouched that long */
@@ -402,12 +403,6 @@ static void mi_set(uint32_t i, int32_t s)
         if (!s) {
             panel_setup();
             ui.force = 1;
-        }
-        break;
-    case MI_PROJ:                                      /* SLOOP's project slots (JAM): their pages */
-        if (!s) {
-            menu_close();
-            open_family(FAM_SAVE);
         }
         break;
     case MI_ABOUT:

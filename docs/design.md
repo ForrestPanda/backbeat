@@ -282,7 +282,7 @@ next bar). No named sections, one song, no fill tied to a section change.
    place shows the section playing (the song's name for it, or A..D) and under it the bar it is in,
    grey and "cued" while stopped; the parameter pages' top bar shows the same in the octave's place.
    The pedal's events are said in the top bar for about 1.5 s: "NEXT: CHORUS", "SONG: BLACK",
-   "ENDING: OUTRO", "FILL NEXT BAR", "STOP", "NO SONG 3", "SECTIONS A-D". The UI reads only variables
+   "ENDING: OUTRO", "FILL NEXT BAR", "STOP", "NO SONG 3" (and, until 2026-10-27, "SECTIONS A-D"). The UI reads only variables
    the sequencer keeps (`sng_ui_name`, `pedal_ui`), so SLOOP's UI tests, which stub the drummer, still
    build. While a request is pending the line under the section shows the one coming, ">SOLO", in
    amber (or ">STOP" for an ending with no outro). Not done: the pedal channel in the menu (no free
@@ -324,7 +324,8 @@ next bar). No named sections, one song, no fill tied to a section change.
      end (`pedal_at_end`) itself made the last bar a fill, so LIVE's first fill-free keys still filled into a
      section longer than a bar; `live_block` no longer does.
    - **SONGS** (SAVE tapped): the 8 slots from a cache (`sng_lib`, refreshed after a load, an editor write or a
-     section save: `sng_slot_name` read a whole copy for its CRC every frame) and JAM, SLOOP's A..D chain page.
+     section save: `sng_slot_name` read a whole copy for its CRC every frame) and, until 2026-10-27, JAM, SLOOP's
+     A..D chain page.
    - **EDIT** (SEQ tapped: the drum grid): SAVE held 0.7 s + 1 s writes the section playing back into its song
      (`sng_pack_section`, the reverse of `sng_apply`, staged in `proj_tmp`, then `st_save` and the copy indexed
      again); stopped only; nudges and locks are not kept (no room in SNG2). Applying a section now clears the
@@ -752,7 +753,8 @@ hazard; what it found and what was done:
   fm1_song.py), so songs need re-sending only once.
 - (done 2026-10-14) **Drums first: SLOOP's synth side taken out**, in ten stages (`docs/drums-only.md`): 332 KB of
   flash and about 28 KB of static RAM free. Kept: the drum track (kits, steps with levels, ratchets, nudges,
-  locks and fill conditions, rolls, erase, the mutes), sections A..D and their chain, the songs and the pedal,
+  locks and fill conditions, rolls, erase, the mutes), sections A..D and their chain (gone 2026-10-27: "JAM
+  removed" below), the songs and the pedal,
   the INSERT and FILTER, the delay and reverb, the master (DUST, DUCK, the DJ filter, the limiter), TEXTURE, MIDI
   in / out / clock / learn, the visualiser, the web editor (protocol v11).
 - (done 2026-10-14, but by ear and on hardware) **A more realistic kit** (asked 2026-10-14): KIT **MULDJORD** (46), the
@@ -876,7 +878,8 @@ hazard; what it found and what was done:
   wrapping, the set's and the grooves' rows wrapping their buttons. The section editor: the cells at 26 px
   (`--cell`, the grid's columns from the same variable) and the lane names sticky while the grid scrolls sideways.
   Still open: the tables, the kit page's pads and the help texts folded; the manifest's orientation; landscape.
-- **JAM on the device, fixed** (asked 2026-10-16: "the Jam feature that we lost with SLOOP"). JAM is what is left
+- **JAM on the device, fixed** (asked 2026-10-16: "the Jam feature that we lost with SLOOP"; **removed instead,
+  2026-10-27**: "JAM removed" below). JAM is what is left
   of SLOOP's own way of playing: its sections A..D with the quick chain and the song chain, reached from the SONGS
   screen's last row (`sng_view DV_JAM`, `drummer_load(SNG_JAM)`: no song loaded, the drum track's own pattern) and
   the JAM PROJECTS pages under SETUP > SYSTEM. The drums-only stages and the UI redesign (LIVE, SONGS, SETUP, the
@@ -1243,6 +1246,41 @@ amplifier asleep after a few idle minutes, if one of the codec's control lines i
 identify from the board first; an amplifier's quiescent current is often tens of mA); a lower system clock while
 stopped (the PLL dividers to reverse engineer; a lower clock tightens the audio budget: last, and only if the core
 matters by the numbers); whether the radio's power domain is off at all (never enabled; a measurement tells).
+
+## JAM removed (2026-10-27)
+
+Asked: "let's remove the JAM feature entirely from this project, I don't see myself using it on the device". JAM
+was what was left of SLOOP's own way of playing, dormant since 2026-10-19 (the item above): the four project slots
+that doubled as its sections A..D (`proj_slot`, flash objects 1..4, backup objects 2..5), the live sections and
+the quick chain (SAVE held + keys, `ui_layers.c` LY_SONG, `seq.c` chain_*), SONG REC and the song chain
+(`arranger.h`, `arrangement` in bytes 48..83 of the settings object, song mode), the SONG chain page
+(`ui_song.c`, the SONGS list's last row "JAM: SECTIONS A..D"), the JAM PROJECTS pages under SETUP > SYSTEM
+(SAVE's PROJECT and TOOLS pages: load, save, erase, new), the editor's `PROJECT` command and its Jam tab.
+
+What the device does now without a song: the drum track's own pattern loops (PLAY), the grid edits it, and
+there are no sections: the pedal's section commands, LIVE's keys and NEXT / PREV do nothing (`pedal_ready` 0),
+PC 127 unloads the song and keeps its last section's pattern in the track. SAVE is no longer a layer: tapped
+anywhere it opens SONGS (from SONGS, LIVE), held on the drum grid it writes the section into its song as before,
+and with no song it says NO SONG TO SAVE INTO. The LIVE header's second line reads "keys: songs" with no song.
+
+Kept on purpose, for compatibility: the settings object keeps its size and magic ("PER3"), bytes 48..83 are
+reserved zeros (`persist_t.reserved`); a backup from before restores with its objects 2..5 left out (the
+firmware answers rc 1 to a BK_PUT of them, the editor skips them); flash objects 1..4 are retired with 5, 6
+and 8 (`storage.c` OBJ_RETIRED: never read or written, their 8 sectors at 0x97000.. free); the global ids
+G_SLOT, G_LOAD, G_SAVE, G_CLRSEQ, G_NEWPRJ and the command id 9 keep their numbers, unused. The renders are
+unchanged (tests/golden.txt as it was).
+
+Tests: `tests/arranger_test.c`, `song_ui_test.c` and `song_audio_test.c` (all arrangement) are gone;
+`pedal_test.c` runs on a song of four sections (tests/songbuild.h, the packers shared with song_test.c)
+instead of the slots, every check as before; seq2_test lost the quick chain; ui_pages_test checks SAVE's tap
+and hold without the layer, the SONGS list of 16 rows, SYSTEM's two rows; storage_test checks the retired
+objects refuse a save; song_test checks PC 127 leaves no sections. The web editor: test_web.mjs follows
+editor.c's ED_BK_IDS and the mock's protocol. Installed on the first unit over USB (2026-10-27) and checked
+over the editor protocol: INFO answers BACKBEAT 0.9 v11, BK_LIST lists 25 objects without 2..5 (the twelve
+songs kept, their lengths as before), BK_GET of 2..5 answers rc 1, the settings object is 88 bytes PER3 with
+48..83 zero (the arrangement bytes cleared by the restore at boot), the pedal settings kept (channel 16,
+no count-in). Still to verify by hand: SAVE's tap and hold, SONGS' last row, SETUP > SYSTEM, a song through
+the pedal, a restore of an older backup.
 
 ## Open questions
 

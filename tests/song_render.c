@@ -35,7 +35,7 @@ static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len)
     *len = slot == 0u ? blob_n : 0u;
     return *len ? blob : 0;
 }
-#include "../firmware/src/arranger_scene.c"
+#include "../firmware/src/sng.c"
 
 static void cc(uint32_t num, uint32_t val) { um_byte(0xBFu); um_byte(num); um_byte(val); }   /* channel 16 */
 static void pc(uint32_t n) { um_byte(0xCFu); um_byte(n); }

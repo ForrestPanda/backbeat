@@ -1,10 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* Projects: four slots in .noinit RAM (the song sections A..D), so they survive resets and UBOOT
- * entry. With FELUCCA_FLASH every save also goes to flash through storage.c, and an empty RAM slot
- * is filled from flash on load. The working project is also kept in flash by itself (autosave, when
- * the transport is stopped and nothing sounds) and comes back at power-on: SLOOP starts where you
- * left it.
+/* The project: the drum track and the globals as one object. The working project is kept in flash by itself
+ * (autosave, when the transport is stopped and nothing sounds, storage.c) and comes back at power-on: BackBeat
+ * starts where you left it; the editor's backup carries it (object 0) and restores it. (SLOOP's four project slots
+ * in .noinit RAM, its sections A..D, went with JAM 2026-10-27: docs/design.md.)
  *
  * Format DRM1 (written, fm1-drummer drums only): the globals, the drum track (its parameters, pattern, nudges and
  * conditions, locks), as format 6's drum track was stored. Read and converted, the drum track only (SLOOP's three
@@ -112,7 +111,6 @@ typedef struct {                               /* format 4, read only */
 _Static_assert(sizeof(project_v4_t) == 3112u && sizeof(project_v5_t) == 3840u && sizeof(project_v6_t) == 3816u,
                "formats 4 / 5 / 6 as they were stored");
 _Static_assert(sizeof(project_t) <= 3840u, "a project fits one flash object (storage.c ST_PAYLOAD_MAX)");
-project_t proj_slot[4] __attribute__((section(".noinit")));
 
 static uint32_t proj_hash(const void *p, uint32_t n)   /* FNV-1a over n bytes */
 {
@@ -317,9 +315,9 @@ static void proj_apply(const project_t *p, int all)
 
 #ifndef PROJ_HOST
 #if FELUCCA_DRUMMER
-#include "arranger_scene.c"
+#include "sng.c"                                   /* fm1-drummer: songs (their sections into the drum track) */
 #endif
-static uint8_t sec_dirty, song_dirty;           /* live sections / the song: in RAM, not yet in flash */
+static uint8_t settings_dirty;                  /* the settings changed while playing: into flash when quiet */
 #if FELUCCA_FLASH
 /* slot from flash into RAM (DRM1, or a SLOOP 2.x project's drum track) */
 static union {
@@ -359,96 +357,23 @@ static int sng_save_section(void)
     return 0;
 }
 #endif
-static void proj_fetch(uint32_t slot)
-{
-    project_t *q = &proj_slot[slot & 3u];
-    int n = st_load(OBJ_PROJECT0 + (slot & 3u), &proj_tmp, sizeof proj_tmp);
-    if (!proj_import(q, &proj_tmp, n))
-        q->magic = 0;
-}
 #endif
 
-static void project_save(uint32_t slot)
-{
-    project_t *p = &proj_slot[slot & 3u];
-#if FELUCCA_DRUMMER
-    if (song.playing || transport_req) { ui_message("STOP BEFORE SAVE"); return; }
-#endif
-    proj_capture(p);
-#if FELUCCA_FLASH
-    if (flash_ok) {
-        ui_message(st_save(OBJ_PROJECT0 + (slot & 3u), p, sizeof *p) ? "SAVE ERROR" : "SAVED");
-        return;
-    }
-#endif
-    ui_message("SAVED (RAM)");
-}
-
-/* SAVE > PROJECT > ERASE (SLOOP 2.6, after a YouTube comment): the slot (section A..D) empty again. In flash as the
- * editor's restore leaves an empty slot (project_restore): an object of no bytes, which proj_fetch (older SLOOP too)
- * reads as no project. The song's steps that played that section are taken out (the default song if none is left),
- * so song mode still plays. Stopped only: a flash erase stops the audio ~50 ms */
-static void project_erase(uint32_t slot)
-{
-    slot &= 3u;
-#if FELUCCA_DRUMMER
-    if (song.playing || transport_req) { ui_message("STOP BEFORE ERASE"); return; }
-#endif
-    if (!proj_ok(&proj_slot[slot])) {
-        ui_message("EMPTY SLOT");
-        return;
-    }
-#if FELUCCA_FLASH
-    if (flash_ok && st_save(OBJ_PROJECT0 + slot, &proj_slot[slot], 0)) {
-        ui_message("ERASE ERROR");
-        return;
-    }
-#endif
-    fm1_irq_off();
-    memset(&proj_slot[slot], 0, sizeof proj_slot[slot]);
-    sec_dirty &= (uint8_t)~(1u << slot);
-    if (live_sec == (int8_t)slot)
-        live_sec = -1;
-#if FELUCCA_DRUMMER
-    if (arr_drop_scene(&arrangement, slot))
-        song_dirty = 1;                                     /* (saved with the settings, when quiet) */
-#endif
-    fm1_irq_on();
-    ui_message("ERASED");
-}
-
-/* a project into the working one: the transport stops, everything sounding is released */
+/* a project into the working one (the editor's restore of a backup): the transport stops, everything sounding is
+ * released. (SLOOP's four project slots, JAM's sections A..D, are gone since 2026-10-27: docs/design.md) */
 static void project_apply(const project_t *p)
 {
     transport_req = 2;
     drum_mute = 0;                                      /* (the live mutes: a performance's, not the project's) */
     fm1_irq_off();                                      /* the audio ISR must not see half a project */
 #if FELUCCA_DRUMMER
-    sng_unload();                                       /* (fm1-drummer: a project over a song: A..D again) */
+    sng_unload();                                       /* (fm1-drummer: a project over a song: no song, its pattern) */
     drum_fill_masks_clear();
 #endif
     proj_apply(p, 1);
     fm1_irq_on();
     sync_reload = 1;
     ui.force = 1;
-}
-
-static void project_load(uint32_t slot)
-{
-    project_t *p = &proj_slot[slot & 3u];
-#if FELUCCA_DRUMMER
-    if (song.playing || transport_req) { ui_message("STOP BEFORE LOAD"); return; }
-#endif
-#if FELUCCA_FLASH
-    if (flash_ok && !proj_ok(p))
-        proj_fetch(slot);
-#endif
-    if (!proj_ok(p)) {
-        ui_message("EMPTY SLOT");
-        return;
-    }
-    project_apply(p);
-    ui_message("LOADED");
 }
 
 /* ---- the working project, kept in flash by itself: saved when it changed, the transport is stopped,
@@ -515,7 +440,9 @@ typedef struct {
     uint32_t magic, palette, lowcut, zoom;
     panel_t panel;
 #if FELUCCA_DRUMMER
-    arr_config_t arrangement;
+    uint8_t reserved[36];                          /* bytes 48..83: SLOOP's song order (arr_config_t) until 2026-10-27,
+                                                    * JAM's; kept as zeros so the object ("PER3") and every backup of it
+                                                    * read as before */
 #endif
     uint32_t lights;                               /* SLOOP 2.3: the backlight (panel.c lights_word); appended,
                                                     * so 2.2 still reads its part (st_load cuts at its size) */
@@ -523,8 +450,8 @@ typedef struct {
 #define PERSIST_SIZE_V22 __builtin_offsetof(persist_t, lights)   /* the settings as 2.2 wrote them (no lights) */
 _Static_assert(sizeof(persist_t) == PERSIST_SIZE_V22 + 4u, "lights: the last word, no padding before it");
 #if FELUCCA_DRUMMER
-_Static_assert(__builtin_offsetof(persist_t, arrangement) == 48u && sizeof(arr_config_t) == 36u,
-               "the web editor's Song page edits bytes 48..83 of the settings (web/editor.html ARR)");
+_Static_assert(__builtin_offsetof(persist_t, reserved) == 48u && sizeof(persist_t) == 88u,
+               "the settings object as SLOOP 2.5 / BackBeat 0.9 wrote it (web/editor.html mockSettings)");
 #endif
 #if FELUCCA_DRUMMER
 #define PERSIST_MAGIC 0x50455233u                  /* "PER3": includes the song order */
@@ -538,9 +465,6 @@ static void dsu_boot(void);
 
 static void persist_boot(void)                    /* before settings_init / panel_init */
 {
-#if FELUCCA_DRUMMER
-    arr_defaults(&arrangement);
-#endif
 #if FELUCCA_FLASH
     persist_t p;
     uint32_t f = irq_save();
@@ -576,10 +500,7 @@ static void persist_boot(void)                    /* before settings_init / pane
             else
                 p.lights = 0;
 #if FELUCCA_DRUMMER
-            if (p.magic == PERSIST_MAGIC && arr_valid(&p.arrangement, 15u))
-                arrangement = p.arrangement;
-            else
-                p.arrangement = arrangement;
+            memset(p.reserved, 0, sizeof p.reserved);   /* (a song order written before 2026-10-27: dropped) */
 #endif
             persist_saved = p;
         } else if (n == (int)(8u + sizeof(panel_t)) && p.magic == 0x50455231u) {   /* "PER1": palette, panel */
@@ -594,25 +515,10 @@ static void persist_boot(void)                    /* before settings_init / pane
                 panel = old;
         }
     }
-    {   /* projects: fill empty RAM slots from flash, so the slot list is right after power-on. A slot
-         * still valid in RAM (a warm reset: an update, UPDATE MODE, a crash) may never have reached
-         * flash (a live section stored while playing): marked to be written when quiet */
-        uint32_t i;
-        for (i = 0; i < 4u; i++)
-            if (!proj_ok(&proj_slot[i])) {
-                proj_fetch(i);
-            } else {
-                int n = st_load(OBJ_PROJECT0 + i, &proj_tmp, sizeof proj_tmp);
-                if (n != (int)sizeof proj_slot[i] || memcmp(&proj_tmp.drm, &proj_slot[i], sizeof proj_slot[i]))
-                    sec_dirty |= (uint8_t)(1u << i);
-            }
-    }
     dsu_boot();                                    /* SLOOP 2.5: the SYN kits (after the settings) */
     arrset_boot();                                 /* fm1-drummer: the pedal channel (sng.c) */
 #endif
 }
-
-static int project_used(uint32_t slot) { return proj_ok(&proj_slot[slot & 3u]); }
 
 #if FELUCCA_FLASH
 /* SLOOP 2.5: the settings object holds the SYN kits after persist_t (drum_synth.c dsu): firmware before 2.5 reads
@@ -717,9 +623,6 @@ static void persist_fill(persist_t *p)              /* the settings as they are 
     p->zoom = settings.zoom;
     p->panel = panel;
     p->lights = lights_word();
-#if FELUCCA_DRUMMER
-    p->arrangement = arrangement;
-#endif
 }
 
 static void settings_save(void)
@@ -773,10 +676,7 @@ static uint32_t settings_restore(const void *raw, uint32_t n)
     if (p.magic != PERSIST_MAGIC || p.palette >= NPALETTES || p.lowcut > 1u || p.zoom > 1u || !panel_valid(&p.panel))
         return 2;
 #if FELUCCA_DRUMMER
-    if (!arr_valid(&p.arrangement, 15u))
-        return 2;
-    if ((song.playing || transport_req) && memcmp(&p.arrangement, &arrangement, sizeof arrangement))
-        return 3;                                    /* SLOOP 2.5: a new song order only when stopped (as on the SONG screen) */
+    memset(p.reserved, 0, sizeof p.reserved);        /* (a backup from before 2026-10-27: SLOOP's song order, dropped) */
 #endif
     if (!flash_ok || settings_write(&p))
         return 4;
@@ -785,9 +685,6 @@ static uint32_t settings_restore(const void *raw, uint32_t n)
     settings.lowcut = p.lowcut;
     settings.zoom = p.zoom;
     panel = p.panel;
-#if FELUCCA_DRUMMER
-    arrangement = p.arrangement;
-#endif
     lights_from_word(p.lights);
     song.g[G_SYNC] = (int16_t)lights_sync;
     song.g[G_MIDI] = (int16_t)lights_mout;
@@ -798,107 +695,43 @@ static uint32_t settings_restore(const void *raw, uint32_t n)
     return 0;
 }
 
-/* slot 0..3 (n 0: empty), or 4: the working project (loaded now) */
-static uint32_t project_restore(uint32_t slot, const void *raw, uint32_t n)
+/* the working project (object 0 of a backup), loaded now. (The slots 2..5 of a backup, SLOOP's projects A..D, are
+ * not restored since 2026-10-27: the editor leaves them out, editor.c refuses them) */
+static uint32_t project_restore(const void *raw, uint32_t n)
 {
     if (song.playing || transport_req)
         return 3;
-    if (slot < 4u && !n) {
-        if (!flash_ok || st_save(OBJ_PROJECT0 + slot, raw, 0))
-            return 4;
-        memset(&proj_slot[slot], 0, sizeof proj_slot[slot]);
-        sec_dirty &= (uint8_t)~(1u << slot);
-        return 0;
-    }
     if (!proj_import(&autosave_buf, raw, (int)n))
         return 2;
-    if (slot == 4u) {
-        project_apply(&autosave_buf);
-        return 0;
-    }
-    if (!flash_ok || st_save(OBJ_PROJECT0 + slot, &autosave_buf, sizeof autosave_buf))
-        return 4;
-    memcpy(&proj_slot[slot], &autosave_buf, sizeof proj_slot[slot]);
-    sec_dirty &= (uint8_t)~(1u << slot);
+    project_apply(&autosave_buf);
     return 0;
 }
 #endif
 #if FELUCCA_DRUMMER
-static void arrangement_save(void)
+static void settings_write_dirty(void)                  /* the settings changed while playing: into flash */
 {
-    if (song.playing || transport_req) { ui_message("STOP BEFORE SAVE"); return; }
-    settings_save();
-#if FELUCCA_FLASH
-    if (flash_ok) {
-        ui_message(memcmp(&persist_saved.arrangement, &arrangement, sizeof arrangement) ? "SAVE ERROR" : "SONG SAVED");
-        return;
-    }
-#endif
-    ui_message("SONG IN RAM ONLY");
-}
-
-/* ---- live sections (SAVE + key, ui_layers.c). A section is a project slot (A..D = 1..4): stored into RAM
- * at once (playing too), written to flash once the transport is stopped and nothing sounds (an erase
- * stops the audio for ~50 ms); a song recorded with SONG REC is saved the same way. */
-static void section_store(uint32_t s)
-{
-    s &= 3u;
-    fm1_irq_off();                                      /* (the audio ISR may be applying a section) */
-    proj_capture(&proj_slot[s]);
-    live_sec = (int8_t)s;
-    fm1_irq_on();
-    sec_dirty |= (uint8_t)(1u << s);
-}
-static void section_load(uint32_t s)                    /* stopped: the section is the loop now */
-{
-    s &= 3u;
-    project_apply(&proj_slot[s]);
-    live_sec = (int8_t)s;
-}
-static void sections_write(void)                        /* the dirty sections and song into flash */
-{
-    uint32_t i;
-#if FELUCCA_FLASH
-    if (flash_ok)
-        for (i = 0; i < 4u; i++)
-            if (((sec_dirty >> i) & 1u) && st_save(OBJ_PROJECT0 + i, &proj_slot[i], sizeof proj_slot[i]) == 0)
-                sec_dirty &= (uint8_t)~(1u << i);       /* (a failed write stays dirty: tried again later) */
-    if (!flash_ok)
-#endif
-        sec_dirty = 0;
-    (void)i;
-    if (song_dirty) {
-        song_dirty = 0;
+    if (settings_dirty) {
+        settings_dirty = 0;
         settings_save();
     }
 }
 /* before an intentional reset (an update, UPDATE MODE, UBOOT from the host): the audio is stopped, so
- * whatever is only in RAM goes to flash now: the live sections, the song, the working project */
+ * whatever is only in RAM goes to flash now: the settings, the working project */
 static void persist_flush_now(void)
 {
-    sections_write();
+    settings_write_dirty();
 #if FELUCCA_FLASH
-    if (flash_ok && !arrangement_clock.running) {     /* (a song playing: the tracks hold a section) */
+    if (flash_ok) {
         proj_capture(&autosave_buf);
         if (autosave_buf.sum != autosave_hash && st_save(OBJ_AUTOSAVE, &autosave_buf, sizeof autosave_buf) == 0)
             autosave_hash = autosave_buf.sum;
     }
 #endif
 }
-static void sections_flush(void)                        /* main loop */
+static void settings_flush(void)                        /* main loop: the settings mirrored in song.g, the pedal's, the
+                                                         * menu's changes: into flash when quiet */
 {
     static uint32_t tried;
-    if (srec_done) {
-        song_dirty = srec_done != 0xFFu;
-        if (song_dirty) {
-            char b[8];
-            fmt_int(b, srec_done);
-            ui_say("SONG PARTS ", b);
-        } else {
-            ui_message("NO SONG");
-        }
-        srec_done = 0;
-    }
     if ((uint32_t)song.g[G_SYNC] != lights_sync) {      /* SETUP > PEDAL > MIDI CLOCK IN: kept with the settings */
         lights_sync = (uint8_t)song.g[G_SYNC];
         settings_later = 1;
@@ -928,15 +761,13 @@ static void sections_flush(void)                        /* main loop */
 #endif
     if (settings_later) {                               /* the menu closed while playing */
         settings_later = 0;
-        song_dirty = 1;                                 /* (settings_save when quiet, with the song) */
+        settings_dirty = 1;                             /* (settings_save when quiet) */
     }
-    if ((!sec_dirty && !song_dirty) || song.playing || transport_req || !audio_quiet() || fm1_ms - ui_input_ms < 1500u ||
+    if (!settings_dirty || song.playing || transport_req || !audio_quiet() || fm1_ms - ui_input_ms < 1500u ||
         fm1_ms - tried < 5000u)
         return;
-    tried = fm1_ms;                                     /* (a failed write: again in 5 s, not every frame) */
-    sections_write();
-    if (sec_dirty)
-        ui_message("SAVE ERROR: RETRYING");
+    tried = fm1_ms;                                     /* (not every frame) */
+    settings_write_dirty();
 }
 #endif
 #endif /* PROJ_HOST */

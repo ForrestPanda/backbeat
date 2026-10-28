@@ -34,7 +34,7 @@ const E = vm.runInNewContext(proto + `
 ;({ frame, unframe, parse, req, Link, parseWav, resample, normalize, rootFromName, buildSlot, makeMockDevice, CMD, PROTO, SMP,
    wavFile, zipStore, crc32, startWatch, fmtValue, F, DRUM_LANES, LV_NAMES, emptyDrum, lockable, MICRO, FC, fillGet, fillSet, pack7, unpack7,
    parseNote, backupCapture, backupRestore, backupObjects, b64enc, b64dec, BK, KIT, KIT_SONGS, kitOptions, kitPad, kitZones, kitLen, kitBytes,
-   kitFit, kitSplit, kitLaneOf, kitPlace, zipRead, ARR, mockSettings, DSYN, DSYN_MOCK_NAMES, DSYN_MOCK_KITS, SetGate, bkProjFormat, bkProjOk,
+   kitFit, kitSplit, kitLaneOf, kitPlace, zipRead, mockSettings, DSYN, DSYN_MOCK_NAMES, DSYN_MOCK_KITS, SetGate, bkProjFormat, bkProjOk,
    bkFwAtLeast, SNG, PLAY, SED, PEDALIN, PCLK, SET, BLEMIDI })`,
 { setTimeout, clearTimeout, setInterval, clearInterval, console, TextEncoder, TextDecoder, Blob, Response, DecompressionStream });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -55,7 +55,7 @@ function attachMock(opt, linkOpt = {}) {
 const noReply = (rq, r) => rq(r, { timeout: 60, retries: 0, quiet: true }).then(() => false, (e) => /^timeout/.test(e.message));
 const fw = (f) => readFileSync(join(HERE, "../firmware/src/" + f), "utf8");
 
-/* the device v11: INFO, the parameters, DUMP / SET, a project, a sample, the commands that are gone */
+/* the device v11: INFO, the parameters, DUMP / SET, a sample, the commands that are gone (PROJECT among them) */
 async function editorMock() {
   const C = E.CMD;
   const { rq, ev, done } = attachMock({});
@@ -80,8 +80,8 @@ async function editorMock() {
   const set = E.parse[C.SET](await rq(E.req.set(0, 50, 500)));
   const eng = E.parse[C.SET](await rq(E.req.set(1, 20, 3)));
   ok(set.value === 63 && eng.value === 0, "editor: SET clamps to the range; G_ENGSEL stays (no engine to change)");
-  const pj = E.parse[C.PROJECT](await rq(E.req.project(1, 2), { timeout: 4000, retries: 0 }));
-  ok(pj.used === 1, "editor: PROJECT save");
+  ok(C.PROJECT === undefined && await noReply(rq, [9, [2, 0]]) && !/case ED_PROJECT:/.test(fw("editor.c")) && /ED_PRESET, ED_PROJECT, ED_NAMES,/.test(fw("editor.c")),
+    "editor: PROJECT (9) is gone with JAM (no reply; the number reserved in editor.c's enum)");
   /* sample upload as smpUpload() does it, into USR3; USR1 and USR2 hold the songs: refused (rc 4) */
   const s = Int16Array.from({ length: 3000 }, (_, i) => Math.round(8000 * Math.sin(i / 7)));
   const { hdr, data } = E.buildSlot("test", [{ s, root: 60 }]);
@@ -146,11 +146,18 @@ async function editorLive() {
   ok(s7.index === 7 && r && js(E.parse[C.RELOAD](r.a)) === js({ engine: 0, preset: 0, track: 0 }) && sc && E.parse[C.STEP_CHANGED](sc.a).index === 3,
     "live: RELOAD (0, 0, track 0) and STEP_CHANGED routed");
   const nr = ev.pushes.filter((f) => f.cmd === C.RELOAD).length;
-  await rq(E.req.project(0, 0), { timeout: 4000, retries: 0 });
+  {   /* a restore the editor asked for (BK_PUT of the settings, object 1, as the backup writes it back) */
+    const L = E.parse[C.BK_LIST](await rq(E.req.bkList(), { timeout: 5000, retries: 0 })), it = L.items.find((x) => x.id === 1);
+    const d = E.parse[C.BK_GET](await rq(E.req.bkGet(1, 0, it.len), { timeout: 1500 })).data;
+    await rq(E.req.bkBegin(1, d.length, E.crc32(d)), { timeout: 1500 });
+    await rq(E.req.bkData(1, 0, d), { timeout: 1500 });
+    const rc = E.parse[C.BK_PUT](await rq(E.req.bkCommit(1), { timeout: 5000, retries: 0 })).rc;
+    ok(rc === 0, "live: the settings written back (rc 0)");
+  }
   await rq(E.req.drumStep(9, { ...E.emptyDrum(), on: 1 }));
   await sleep(10);
   ok(ev.pushes.filter((f) => f.cmd === C.RELOAD).length === nr + 1 && !ev.pushes.some((f) => f.cmd === C.STEP_CHANGED && f.a[0] === 9),
-    "live: RELOAD after an editor PROJECT load too, nothing after its DRUM_STEP");
+    "live: RELOAD after a restore the editor asked for too (editor.c sync_reload), nothing after its DRUM_STEP");
   const lv = m.sim.level(77);
   await sleep(10);
   const lc = ev.pushes.filter((f) => f.cmd === C.CHANGED).map((f) => E.parse[C.CHANGED](f.a)).find((c) => c.scope === 1);
@@ -257,8 +264,8 @@ async function editorSongs() {
     ok(!/data-dev\b/.test(panel) && (songs.match(/ data-devonly>/g) || []).length === 3 && /\$\("songs-offline"\)\.hidden = ready/.test(html)
       && /<span data-devonly><label><span data-t="gpiSlot"><\/span> <select id="gpi-slot">/.test(html) && /<span data-devonly><label><span data-t="gpiSlot"><\/span> <select id="sed-slot">/.test(html)
       && /<section class="panel" id="p-setlist" data-tab="setlist" hidden>/.test(html) && !songs.includes('id="songslots"')
-      && /tabSong: "Jam"/.test(html) && /tabSongs: "Song editor"/.test(html) && /tabSetlist: "Setlist"/.test(html) && /songsOffline: "No FM-1 connected/.test(html),
-      "songs: the Song editor tab without an FM-1 (import, editor, player), the pedal and Send with one; the slots in Setlist; Jam, Song editor, Setlist");
+      && !/tabSong: /.test(html) && /tabSongs: "Song editor"/.test(html) && /tabSetlist: "Setlist"/.test(html) && /songsOffline: "No FM-1 connected/.test(html),
+      "songs: the Song editor tab without an FM-1 (import, editor, player), the pedal and Send with one; the slots in Setlist; Song editor, Setlist (no Jam)");
     ok(/`\$\{k \+ 1\}: \$\{x\.name\}/.test(html) && /`\$\{SONGED\.sel \+ 1\}: \$\{sedSec\(\)\.name\}/.test(html) && /sp\.swing \?\? 0;/.test(html),
       "sed: the sections numbered 1..16 as on the device; a song without swing shows 0");
   }
@@ -1261,11 +1268,10 @@ async function editorBackup() {
   const info = E.parse[C.INFO](await rq(E.req.info()));
   const ec = fw("editor.c");
   const songIds = [16, 17, 18, 19, 20, 21, 22, 23, 40, 41, 42, 43, 44, 45, 46, 47];
-  ok(/ED_BK_IDS\[\] = \{0, 1, 2, 3, 4, 5, 9, 10, 32, 33, 34, 35,[^\n]*\n[^\n]*\n\s*16, 17, 18, 19, 20, 21, 22, 23, 40, 41, 42, 43, 44, 45, 46, 47, 24\};/.test(ec) && /if \(id >= 32u && SNG_SMP_TAKEN\(id - 32u\)\) \{/.test(ec)
-    && js(E.BK.RESTORE.concat(E.BK.SAMPLES).sort((a, b) => a - b)) === js([0, 1, 2, 3, 4, 5, 9, 10, 16, 17, 18, 19, 20, 21, 22, 23, 24, 34, 35, 40, 41, 42, 43, 44, 45, 46, 47]) && js(E.BK.SKIP) === js([6, 7, 8, 32, 33])
+  ok(/ED_BK_IDS\[\] = \{0, 1, 9, 10, 32, 33, 34, 35,[^\n]*\n[^\n]*\n\s*16, 17, 18, 19, 20, 21, 22, 23, 40, 41, 42, 43, 44, 45, 46, 47, 24\};/.test(ec) && /if \(id >= 32u && SNG_SMP_TAKEN\(id - 32u\)\) \{/.test(ec)
+    && js(E.BK.RESTORE.concat(E.BK.SAMPLES).sort((a, b) => a - b)) === js([0, 1, 9, 10, 16, 17, 18, 19, 20, 21, 22, 23, 24, 34, 35, 40, 41, 42, 43, 44, 45, 46, 47]) && js(E.BK.SKIP) === js([2, 3, 4, 5, 6, 7, 8, 32, 33])
     && js(E.BK.RESTORE.slice(-2)) === "[0,1]",
-    "backup: the object ids == editor.c ED_BK_IDS (no 6..8: drums only; USR1 and USR2 listed empty: the songs; the songs and the pedal settings since 2026-10-21)");
-  await rq(E.req.project(1, 2), { timeout: 4000, retries: 0 });
+    "backup: the object ids == editor.c ED_BK_IDS (no 2..5: the project slots gone with JAM 2026-10-27; no 6..8: drums only; USR1 and USR2 listed empty: the songs; the songs and the pedal settings since 2026-10-21)");
   const s = Int16Array.from({ length: 3000 }, (_, i) => Math.round(8000 * Math.sin(i / 7)));
   const { hdr, data } = E.buildSlot("test", [{ s, root: 60 }]);
   await rq(E.req.smpBegin(2), { timeout: 1000, retries: 0 });
@@ -1273,16 +1279,29 @@ async function editorBackup() {
   await rq(E.req.smpEnd(2, hdr), { timeout: 2000, retries: 0 });
   const A = await E.backupCapture(rq, info);
   const obj = (id) => A.objects.find((o) => o.id === id);
-  ok(A.format === "sloop-backup" && A.objects.map((o) => o.id).join() === "0,1,2,3,4,5,9,32,33,34,35," + songIds.join() + ",24" && obj(9).len === 1464
+  ok(A.format === "sloop-backup" && A.objects.map((o) => o.id).join() === "0,1,9,32,33,34,35," + songIds.join() + ",24" && obj(9).len === 1464
     && songIds.every((id) => obj(id).len === 0) && obj(24).len === 16 && obj(34).len > 512 && obj(33).len === 0 && obj(35).len === 0
-    && obj(4).len > 0 && obj(3).len === 0 && obj(32).len === 0 && E.bkProjFormat(E.b64dec(obj(0).data)) === "DRM1",
-    "backup: LIST + GET: 28 objects (project in C as DRM1, sample in USR3, B empty, the SYN kits, USR1 and USR2 empty, 16 empty song slots, the pedal settings)");
+    && obj(32).len === 0 && E.bkProjFormat(E.b64dec(obj(0).data)) === "DRM1" && obj(1).len === 88 && E.b64dec(obj(1).data).subarray(48, 84).every((x) => x === 0),
+    "backup: LIST + GET: 24 objects (the working project as DRM1, the settings (PER3, bytes 48..83 zero), sample in USR3, the SYN kits, USR1 and USR2 empty, 16 empty song slots, the pedal settings)");
   await rq(E.req.smpErase(1), { timeout: 2500, retries: 0 });
   await rq(E.req.set(0, 50, 5));
-  await rq(E.req.project(1, 1), { timeout: 4000, retries: 0 });
   const r0 = await E.backupRestore(rq, JSON.parse(JSON.stringify(A)));   /* as written to disk and read back */
   const B = await E.backupCapture(rq, info);
-  ok(js(B.objects) === js(A.objects) && js(r0.skipped) === "[]", "backup: restore -> the same bytes again (projects, samples, settings); nothing skipped (USR1 empty)");
+  ok(js(B.objects) === js(A.objects) && js(r0.skipped) === "[]", "backup: restore -> the same bytes again (the working project, samples, settings); nothing skipped (USR1 empty)");
+  /* a backup from before 2026-10-27 (BackBeat with JAM, or SLOOP) holds the project slots 2..5: restored without them, the
+     ones that held something said; the device refuses a BK_PUT begin of them anyway (rc 1) */
+  {
+    const J = JSON.parse(JSON.stringify(A)), p0 = J.objects.find((o) => o.id === 0);
+    J.objects.splice(2, 0, { ...p0, id: 2 }, { id: 3, len: 0, crc: E.crc32(new Uint8Array(0)) >>> 0, data: "" }, { ...p0, id: 4 }, { id: 5, len: 0, crc: E.crc32(new Uint8Array(0)) >>> 0, data: "" });
+    let puts = [];
+    const rqj = (r, o) => { if (r[0] === C.BK_PUT) puts.push(r[1][1]); return rq(r, o); };
+    const rj = await E.backupRestore(rqj, J);
+    const D = await E.backupCapture(rq, info);
+    const b2 = E.parse[C.BK_PUT](await rq(E.req.bkBegin(2, p0.len, p0.crc), { timeout: 1500, retries: 0 }));
+    ok(js(rj.skipped) === "[2,4]" && !puts.some((id) => id >= 2 && id <= 5) && js(D.objects) === js(A.objects) && b2.rc === 1
+      && /id >= 2 && id <= 5 \? "bkSkipProj"/.test(html) && (html.match(/bkSkipProj: "/g) || []).length === 2,
+      "backup: a backup with the project slots 2..5 restores without them (the used ones said: bkSkipProj); their BK_PUT begin: rc 1");
+  }
   /* a SLOOP backup: user preset banks, the FM6 bank and a sample in USR1 too: the rest restored, those left out and named */
   const S = JSON.parse(JSON.stringify(A));
   const blob = (id, n) => { const d = Uint8Array.from({ length: n }, (_, i) => (i * 7 + id) & 0xFF); return { id, len: n, crc: E.crc32(d) >>> 0, data: E.b64enc(d) }; };
@@ -1302,7 +1321,7 @@ async function editorBackup() {
     && E.bkFwAtLeast("SLOOP 2.6", [2, 5, 1]) && !E.bkFwAtLeast("SLOOP 2.5", [2, 5, 1]) && !E.bkFwAtLeast("FELUCCA SLOOP 2.0 (MOCK)", [2, 5, 1]) && E.bkFwAtLeast("FELUCCA BACKBEAT 0.9", [2, 5, 1]),
     "backup: project formats read (DRM1, FUN4..6 == project.c), the firmware compared");
   {
-    const F3 = JSON.parse(JSON.stringify(A)), p2 = F3.objects.find((x) => x.id === 2);
+    const F3 = JSON.parse(JSON.stringify(A)), p2 = F3.objects.find((x) => x.id === 0);
     const d = E.b64dec(p2.data);
     d.set([0x33, 0x4E, 0x55, 0x46], 0);
     p2.data = E.b64enc(d);
@@ -1310,7 +1329,7 @@ async function editorBackup() {
     let err = null, writes = 0;
     const rqw = (r, o) => { if (r[0] !== C.INFO) writes++; return rq(r, o); };
     try { await E.backupRestore(rqw, F3); } catch (e) { err = e; }
-    ok(err && err.code === "bkNewer" && writes === 0, "backup: a SLOOP 1.x project (FUN3) in it: refused (bkNewer), nothing written");
+    ok(err && err.code === "bkNewer" && writes === 0, "backup: a SLOOP 1.x working project (FUN3) in it: refused (bkNewer), nothing written");
   }
   const bad = JSON.parse(JSON.stringify(A));
   bad.objects[2].data = E.b64enc(E.b64dec(bad.objects[2].data).map((x, i) => i === 3 ? x ^ 1 : x));
@@ -1354,14 +1373,14 @@ async function editorV5() {
   const en = (/enum \{ ED_INFO = 1,([^}]*)\}/.exec(ec) || [])[1] || "";
   const names = ["ED_INFO", ...en.replace(/\/\*[^*]*\*\//g, "").split(",").map((x) => x.trim().replace(/ = \d+$/, "")).filter(Boolean)];
   const num = (n) => { const m = new RegExp(`${n} = (\\d+)`).exec(en); return m ? +m[1] : names.indexOf(n) + 1; };
-  const want = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 7, PROJECT: 9, SMP_BEGIN: 11, SMP_INFO: 15, WATCH: 22, CHANGED: 23,
+  const want = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 7, SMP_BEGIN: 11, SMP_INFO: 15, WATCH: 22, CHANGED: 23,
     RELOAD: 24, PING: 25, STEP_CHANGED: 26, TRACK: 27, TRACK_CHANGED: 32, DRUM_STEP: 33, BK_LIST: 34, BK_PUT: 36, LOCK_GET: 37, LOCK_SET: 38,
     MICRO_GET: 39, MICRO_SET: 40, FILL_GET: 41, FILL_SET: 42 };
   ok(Object.entries(want).every(([k, v]) => C[k] === v && num("ED_" + k) === v)
     && /#define ED_PROTO 11u/.test(ec) && /ed_b\(ED_PROTO\);/.test(ec) && /ed_b\(0\);\s*\/\* the engines \(drums only: none, no names\) \*\//.test(ec)
-    && /#define ED_NOENG 0u/.test(ec) && !/case ED_PRESET:|case ED_NAMES:|case ED_UP_|case ED_FM6_/.test(ec)
+    && /#define ED_NOENG 0u/.test(ec) && !/case ED_PRESET:|case ED_PROJECT:|case ED_NAMES:|case ED_UP_|case ED_FM6_/.test(ec) && num("ED_PROJECT") === 9 && !("PROJECT" in C)
     && /enum \{ ED_DSYN_LIST = 72, ED_DSYN_GET, ED_DSYN_PUT, ED_DSYN_STORE, ED_DSYN_PLAY \};/.test(fw("editor_dsyn.c"))
-    && C.DSYN_LIST === 72 && C.DSYN_PLAY === 76, "v5..v11: command numbers and INFO == editor.c / editor_dsyn.c (11; no engine; PRESET, NAMES, UP_*, FM6_* gone)");
+    && C.DSYN_LIST === 72 && C.DSYN_PLAY === 76, "v5..v11: command numbers and INFO == editor.c / editor_dsyn.c (11; no engine; PRESET, PROJECT (9 reserved), NAMES, UP_*, FM6_* gone)");
   const enumNames = (id) => (new RegExp(`${id}\\[\\] = \\{([^}]*)\\}`).exec(pc) || [])[1].split(",").map((x) => x.trim().replace(/"/g, ""));
   const gd = [];
   for (let i = 27; i < 32; i++) gd.push(E.parse[C.DESC](await rq(E.req.desc(1, i))));
@@ -1558,26 +1577,19 @@ await (async () => {
 })();
 
 
-/* ------------------------------ SLOOP 2.5: length, song order --- */
+/* ------------------------------ SLOOP 2.5: length; the settings object without JAM's song order (2026-10-27) --- */
 async function editorSong() {
-  const { ARR } = E;
-  /* the song order */
-  const sb = E.mockSettings(), song = ARR.decode(sb);
-  ok(ARR.ok(sb) && sb.length === 88 && !song.loop && js(song.entries) === js([0, 1, 2, 3].map((scene) => ({ scene, bars: 4 }))), "song: the settings' song order (PER3, arr_defaults)");
-  const rows = ARR.group([{ scene: 0, bars: 4 }, { scene: 0, bars: 4 }, { scene: 1, bars: 8 }, { scene: 0, bars: 4 }]);
-  ok(js(rows) === js([{ scene: 0, bars: 4, times: 2 }, { scene: 1, bars: 8, times: 1 }, { scene: 0, bars: 4, times: 1 }]) && ARR.expand(rows).length === 4,
-    "song: rows (a section n times) <-> entries");
-  const enc = ARR.encode(sb, { loop: true, entries: ARR.expand(rows) });
-  ok(js(ARR.decode(enc)) === js({ loop: true, entries: ARR.expand(rows) }) && enc.subarray(0, 48).every((v, i) => v === sb[i]) && enc.subarray(84).every((v, i) => v === sb[84 + i]),
-    "song: encode keeps the rest of the settings");
-  ok(!ARR.valid({ entries: [] }) && !ARR.valid({ entries: Array(17).fill({ scene: 0, bars: 1 }) }) && !ARR.valid({ entries: [{ scene: 4, bars: 1 }] })
-    && !ARR.valid({ entries: [{ scene: 0, bars: 65 }] }) && ARR.valid({ entries: Array(16).fill({ scene: 3, bars: 64 }) }), "song: valid == arranger.h arr_valid (1..16 entries, A..D, 1..64 bars)");
-  const pc = readFileSync(join(HERE, "../firmware/src/project.c"), "utf8"), ah = readFileSync(join(HERE, "../firmware/src/arranger.h"), "utf8");
+  /* the settings object (backup object 1): 88 bytes, "PER3", bytes 48..83 reserved zeros (SLOOP's song order, gone with JAM) */
+  const sb = E.mockSettings();
+  const magic = (b) => (b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24)) >>> 0;
+  ok(sb.length === 88 && magic(sb) === 0x50455233 && sb.subarray(48, 84).every((x) => x === 0) && sb.subarray(4, 48).some((x) => x) && sb.subarray(84).some((x) => x),
+    "settings: the mock's object: 88 bytes, PER3, bytes 48..83 zero");
+  const pc = readFileSync(join(HERE, "../firmware/src/project.c"), "utf8");
   const pt = (/typedef struct \{([^}]*)\} persist_t;/.exec(pc) || [, ""])[1];
-  ok(/PERSIST_MAGIC 0x50455233u/.test(pc) && /arr_config_t arrangement;/.test(pt) && /ARR_STEPS 16u/.test(ah)
-    && /if \(\(song\.playing \|\| transport_req\) && memcmp\(&p\.arrangement, &arrangement, sizeof arrangement\)\)\s*return 3;/.test(pc),
-    "song: PER3, persist_t has the arrangement, 16 steps; a new order refused while playing (project.c)");
-  /* read and send it through the backup objects, as the Song page does */
+  ok(/PERSIST_MAGIC 0x50455233u/.test(pc) && /uint8_t reserved\[36\];/.test(pt) && !/arr_config_t arrangement;/.test(pc)
+    && /memset\(p\.reserved, 0, sizeof p\.reserved\);/.test(pc) && !existsSync(join(HERE, "../firmware/src/arranger.h")),
+    "settings: PER3 kept, persist_t.reserved[36] in place of the song order, zeroed on a restore (project.c); no arranger.h");
+  /* through the backup objects: a settings PUT with those bytes set comes back with them zero; playing or not (no rc 3) */
   const { m, rq, done } = attachMock({});
   const get1 = async () => { const L = E.parse[E.CMD.BK_LIST](await rq(E.req.bkList())); const it = L.items.find((x) => x.id === 1);
     return E.parse[E.CMD.BK_GET](await rq(E.req.bkGet(1, 0, it.len))).data; };
@@ -1587,16 +1599,17 @@ async function editorSong() {
     return E.parse[E.CMD.BK_PUT](await rq(E.req.bkCommit(1))).rc;
   };
   const cur = await get1();
-  const mine = ARR.encode(cur, { loop: true, entries: [{ scene: 2, bars: 8 }, { scene: 3, bars: 2 }] });
+  const mine = Uint8Array.from(cur); mine[5] ^= 0x40; mine.fill(7, 48, 84);
   const rc1 = await put1(mine), now = await get1();
-  const bad = ARR.encode(cur, { loop: false, entries: [{ scene: 0, bars: 4 }] }); bad[ARR.OFF + 5] = 0;
+  const bad = Uint8Array.from(cur); bad[0] ^= 1;
   const rc2 = await put1(bad);
   m.sim.play(true);
-  const rc3 = await put1(ARR.encode(cur, { loop: false, entries: [{ scene: 1, bars: 1 }] }));
-  const rc4 = await put1(now);                                 /* the same order while playing: fine */
+  const other = Uint8Array.from(cur); other[5] ^= 0x20; other.fill(3, 48, 84);
+  const rc3 = await put1(other), after = await get1();
   m.sim.play(false);
-  ok(ARR.ok(cur) && rc1 === 0 && js(ARR.decode(now)) === js({ loop: true, entries: [{ scene: 2, bars: 8 }, { scene: 3, bars: 2 }] }) && rc2 === 2 && rc3 === 3 && rc4 === 0
-    && js(ARR.decode(await get1())) === js(ARR.decode(now)), "song: mock: read, send (rc 0), a bad one (rc 2), a new one while playing (rc 3)");
+  ok(cur.length === 88 && cur.subarray(48, 84).every((x) => x === 0) && rc1 === 0 && now[5] === mine[5] && now.subarray(48, 84).every((x) => x === 0)
+    && rc2 === 2 && rc3 === 0 && after[5] === other[5] && after.subarray(48, 84).every((x) => x === 0),
+    "settings: mock: read, send (rc 0, bytes 48..83 zeroed), a bad magic (rc 2), while playing too (rc 0: no rc 3 any more)");
   done();
   /* the page */
   ok(/id="lenval" type="number" min="1" max="64"/.test(html) && /if \(!s && id === pSlen\(\)\) lenChanged\(\);/.test(html) && /function lenChanged\(\) \{ renderSteps\(\); \}/.test(html),
@@ -1706,17 +1719,18 @@ function editorTabs() {
   const tabs = [...html.matchAll(/<button role="tab" data-tab="(\w+)"/g)].map((x) => x[1]);
   const panels = [...html.matchAll(/<section class="panel" id="p-(\w+)" data-tab="(\w+)"/g)].map((x) => [x[1], x[2]]);
   const TABS = JSON.parse((/const TABS = (\[[^\]]*\]);/.exec(html) || [])[1] || "[]");
-  ok(tabs.length === 8 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b)
-    && js([...TABS].sort()) === js(["drumsynth", "kits", "samples", "sequencer", "setlist", "settings", "song", "songs"])
-    && /id="p-settings"[\s\S]*id="bkgroup"[\s\S]*id="p-sequencer"/.test(html) && /id="p-song"[\s\S]*id="slots"/.test(html),
+  ok(tabs.length === 7 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b)
+    && js([...TABS].sort()) === js(["drumsynth", "kits", "samples", "sequencer", "setlist", "settings", "songs"])
+    && /id="p-settings"[\s\S]*id="bkgroup"[\s\S]*id="p-sequencer"/.test(html) && !/id="p-song"|id="slots"|data-tab="song"/.test(html),
     `editor: ${tabs.length} tabs, one panel each (${tabs.join(" ")})`);
   /* drums only: SLOOP's Sound, Tracks and Library tabs, the synth step grid, piano roll, MIDI files, CHOP and FM6 are gone; a tab
      remembered from SLOOP's editor opens the first one; the side bar's headings */
   ok(!/id="p-(sound|tracks|library)"|id="(stepgrid|rollcv|midifile|chop|fm6panel|trackbar|engine|preset)"/.test(html)
     && !/\b(ROLL|SMF|FM6|CHOP|UP|LIB)\s*=|function (renderMixer|chopUI|renderLib|fm6Send|capturePatch)\b/.test(html)
-    && /return TABS\[0\];/.test(html) && TABS[0] === "setlist" && js(TABS.slice(-2)) === js(["sequencer", "song"])
+    && /return TABS\[0\];/.test(html) && TABS[0] === "setlist" && js(TABS.slice(-1)) === js(["sequencer"])
+    && !/\bARR\b|arranger\.h|CMD\.PROJECT|slotUsed|renderSlots|readSong\b|sendSong|SECTIONS A-D/.test(html) && /a\.slot < 0 \? "NO SONG"/.test(html)
     && js([...html.matchAll(/<div class="navh" data-t="(\w+)">/g)].map((x) => x[1])) === js(["navDrums", "navSounds", "navDevice", "navFuture"]),
-    "editor: drums only (no Sound / Tracks / Library, synth grid, roll, MIDI files, CHOP, FM6); first tab the setlist, the sequencer and the jam under \"future\"");
+    "editor: drums only (no Sound / Tracks / Library, synth grid, roll, MIDI files, CHOP, FM6; no Jam since 2026-10-27: no ARR, PROJECT, project slots, Song page); first tab the setlist, the sequencer under \"future\"");
   /* the cards: the drum track's PATTERN and FX (FILTER, INSERT, INSERT 2), the globals (params.c's pages) */
   const lay = (/const LAYOUT = \[([\s\S]*?)\n\];/.exec(html) || [])[1] || "";
   const pages = [...lay.matchAll(/\["([A-Z0-9 ]+)", (\d), \[([\d, ]+)\]\]/g)].map((x) => `${x[1]}:${x[2]}:${x[3]}`);
@@ -1733,7 +1747,7 @@ function editorTabs() {
   const TEXT = vm.runInNewContext(tb.replace("const TEXT =", "(") + ")");
   const ja = new Set(Object.keys(TEXT.ja)), en = new Set(Object.keys(TEXT.en));
   const used = new Set([...html.matchAll(/data-t="(\w+)"|\bt\("(\w+)"\)|sayK\("(\w+)"|hint = "(\w+)"/g)].map((x) => x[1] || x[2] || x[3] || x[4]));
-  for (const k of ["needDevice", "smpNone", "live", "polling", "bkSkipUp", "bkSkipFm6", "bkSkipUsr1", "fcNorm", "fcFill", "fcNoFill"]) used.add(k);
+  for (const k of ["needDevice", "smpNone", "live", "polling", "bkSkipUp", "bkSkipFm6", "bkSkipUsr1", "bkSkipProj", "fcNorm", "fcFill", "fcNoFill"]) used.add(k);
   const miss = [...used].filter((k) => !ja.has(k) || !en.has(k));
   const odd = [...ja].filter((k) => !en.has(k)).concat([...en].filter((k) => !ja.has(k)));
   ok(!miss.length && !odd.length, `editor: every string in ja and en (${used.size} used${miss.length ? ", missing " + miss : ""}${odd.length ? ", one language only " + odd : ""})`);

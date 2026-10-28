@@ -361,7 +361,8 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
 enum { FAM_HOME, FAM_ENV, FAM_LFO, FAM_FX, FAM_SCL, FAM_EDIT, FAM_GLO, FAM_SAVE, FAM_ARP, FAM_SEQ, FAM_TRK,
        FAM_COUNT };
 enum { SC_TRACK, SC_GLOBAL, SC_TRK, SC_SONG, SC_DRUM };   /* (SC_TRK: the TRACKS screen, gone; the visualiser's) */
-enum { GR_NONE, GR_STEPS, GR_SLOTS, GR_TRK, GR_INS };   /* (GR_TRK: the TRACKS screen's, gone) */
+enum { GR_NONE, GR_STEPS, GR_SLOTS, GR_TRK, GR_INS };   /* (GR_SLOTS: the PROJECT page's, gone 2026-10-27; GR_TRK: the
+                                                         * TRACKS screen's, gone) */
 
 typedef struct {
     const char *title;
@@ -377,9 +378,8 @@ static const page_t PAGES[] = {
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, 0xFF, 0xFF, 0xFF}},  /* .. its dry / wet */
     {"DLY", FAM_FX, SC_GLOBAL, GR_NONE, {G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX}},
     {"REV", FAM_FX, SC_GLOBAL, GR_NONE, {G_RSIZE, G_RDAMP, 0xFF, 0xFF}},
-    /* (GLO's pages, GLOBAL MASTER SYSTEM DRUMS MIDI TEXTURE: SETUP now, ui_menu.c) */
-    {"PROJECT", FAM_SAVE, SC_GLOBAL, GR_SLOTS, {G_SLOT, 0xFF, G_LOAD, G_SAVE}},   /* (KNOB 2: ERASE, 2.6: ui_input.c) */
-    {"TOOLS", FAM_SAVE, SC_GLOBAL, GR_NONE, {G_CLRSEQ, 0xFF, 0xFF, G_NEWPRJ}},   /* (INIT SOUND: a synth's) */
+    /* (GLO's pages, GLOBAL MASTER SYSTEM DRUMS MIDI TEXTURE: SETUP now, ui_menu.c; SAVE's pages, PROJECT and TOOLS,
+     * SLOOP's four project slots: gone 2026-10-27 with JAM; G_SLOT, G_LOAD, G_SAVE, G_CLRSEQ, G_NEWPRJ keep their ids) */
     {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}},
     {"SONG", FAM_SEQ, SC_SONG, GR_NONE, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"DRUMS", FAM_TRK, SC_DRUM, GR_NONE, {0xFF,0xFF,0xFF,0xFF}},

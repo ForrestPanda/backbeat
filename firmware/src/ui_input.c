@@ -234,30 +234,6 @@ static int32_t accel(uint32_t role, int32_t s, int32_t range)
     return s;
 }
 
-/* a new project: every track empty, the default kit, 90 BPM (TOOLS > NEW) */
-static void project_new(void)
-{
-    uint32_t i;
-    transport_req = 2;
-    for (i = 0; i < NTRK; i++) {
-        track_t *t = &trk[i];
-        undo_mark(t, (undo_sess += 4u) | 3u);
-        fm1_irq_off();
-        track_defaults(t);
-        fm1_irq_on();
-    }
-    TDRUM->p[P_E0] = DRUM_DEFAULT_KIT;
-    drum_mute = 0;                                      /* (2.6: the live mutes) */
-    for (i = 0; i < G_COUNT; i++)
-        if (i != G_SLOT && i != G_DRCH && i != G_SYNC && i != G_MIDI && i != G_ROUTE && (i < G_CH1 || i > G_CHOTH) &&
-            i != G_BEND)                                                                                   /* (the
-                                                                 * FM-1's settings: SETUP > MIDI 2.6) */
-            song.g[i] = GP[i].def;
-    song.octave = 0;
-    sync_reload = 1;
-    ui.force = 1;
-}
-
 static void edit_param(uint32_t slot, int32_t steps)
 {
     int16_t *vp;
@@ -265,19 +241,6 @@ static void edit_param(uint32_t slot, int32_t steps)
     const param_desc_t *d;
     uint32_t id = pg->id[slot];
     int32_t v;
-    if (pg->graph == GR_SLOTS && slot == 1u) {           /* 2.6: KNOB 2 ERASE, a GO button (the slot KNOB 1 picks) */
-        if (steps <= 0)
-            return;
-        if (ui.arm != 0xE8u) {                            /* one detent arms, a second one within ~1.5 s acts */
-            ui.arm = 0xE8u;
-            ui.arm_t = 90;
-            ui_say("AGAIN: ", "ERASE");
-            return;
-        }
-        ui.arm = 0;
-        project_erase((uint32_t)song.g[G_SLOT] - 1u);
-        return;
-    }
     d = page_desc(pg, slot, &vp);
     if (!d || !vp || d->max == d->min)
         return;
@@ -288,50 +251,6 @@ static void edit_param(uint32_t slot, int32_t steps)
         ui.lock_par = (uint8_t)id;                        /* the SEQ layer's lock parameter: the last one touched */
     if (pg->scope != SC_GLOBAL)
         ml_knob(TDRUM, id);                                /* MIDI LEARN: this parameter (2.6) */
-    if (!v)
-        return;
-    if (pg->scope == SC_GLOBAL && (id == G_LOAD || id == G_SAVE || id == G_CLRSEQ || id == G_NEWPRJ) &&
-        ui.arm != id) {                                   /* one detent arms, a second one within ~1.5 s acts */
-        *vp = 0;
-        ui.arm = (uint8_t)id;
-        ui.arm_t = 90;
-        ui_say("AGAIN: ", d->label);
-        return;
-    }
-    ui.arm = 0;
-    if (pg->scope != SC_GLOBAL)
-        return;
-    switch (id) {                                         /* GO buttons: act, then back to 0 */
-    case G_LOAD:
-        *vp = 0;
-        project_load((uint32_t)song.g[G_SLOT] - 1u);
-        break;
-    case G_SAVE:
-        *vp = 0;
-        project_save((uint32_t)song.g[G_SLOT] - 1u);
-        break;
-    case G_CLRSEQ:
-        *vp = 0;
-        undo_mark(TDRUM, (undo_sess += 4u) | 3u);
-        fm1_irq_off();
-        track_defaults_steps(TDRUM);
-        fm1_irq_on();
-        ui_message("PATTERN CLEARED");
-        break;
-    case G_NEWPRJ:
-        *vp = 0;
-#if FELUCCA_DRUMMER
-        if (song.playing && arrangement_enabled) {      /* (the song's stop would bring the old loop back) */
-            ui_message("STOP THE SONG FIRST");
-            break;
-        }
-#endif
-        project_new();
-        ui_message("NEW PROJECT");
-        break;
-    default:
-        break;
-    }
 }
 
 /* HOME: tap on release, hold 0.7 s fires once. t0 = press time | 1,
@@ -371,15 +290,8 @@ static void layer_tap(uint32_t layer)
         studio_open(SC_DRUM);                             /* fm1-drummer: the grid of the section playing */
         break;
     /* (ARP, SEL: no pages, drums only; ENV, LFO: LIVE's PREV and NEXT, ui_drummer.c) */
-    case LY_SONG:                                         /* SAVE tapped: SONGS (from SONGS: LIVE); on SLOOP's chain
-                                                           * page (JAM) it stores the chain */
-        if (drummer_on())
-            drummer_open(sng_view == DV_LIB ? DV_LIVE : DV_LIB);
-        else if (on_song_page())
-            arrangement_save();
-        else
-            studio_open(SC_SONG);
-        break;
+    /* (SAVE: no layer since 2026-10-27, JAM's went; tapped it opens SONGS, held on the drum grid it saves the
+     * section: holds_input) */
     default:
         break;
     }
@@ -434,8 +346,6 @@ static int layers_input(uint32_t note_edges, uint32_t *pressed, uint32_t home)
             used[l] = 1;                                  /* a key while held: not a tap */
         if (!d && down[l] && !used[l] && now - t0[l] < TAP_MS && !ui.menu && !ui.confirm)
             layer_tap(l);
-        if (!d && down[l] && l == LY_SONG)
-            chain_release();                              /* SAVE let go: the section taps of the hold (ui_layers.c) */
         down[l] = (uint8_t)d;
         if (d && held == LY_PLAY)
             held = l;
@@ -535,16 +445,16 @@ static int layers_input(uint32_t note_edges, uint32_t *pressed, uint32_t home)
 
 /* REC (live recording is gone, drums only): held 0.7 s a ring fills: held on to the end, the selected track is
  * cleared (EDIT + OCT- brings it back); let go before, nothing happens.
- * SAVE on the drum grid (EDIT, fm1-drummer; elsewhere the SONG layer: ui_layers.c, tapped: layer_tap): tapped, the
- * SONGS list; held 0.7 s a ring fills, and held on to the end the section playing is written into its song (no song:
- * the project into its slot, as SLOOP's SAVE did) */
+ * SAVE (fm1-drummer; SLOOP's SAVE layer, JAM's sections A..D, went 2026-10-27): tapped, the SONGS list (from SONGS,
+ * LIVE); on the drum grid (EDIT) held 0.7 s a ring fills, and held on to the end the section playing is written into
+ * its song (no song loaded: nothing to write into) */
 static void section_keep(void)
 {
     static const char *const MSG[6] = {"SAVED INTO THE SONG", "STOP TO SAVE", "SONG FULL", "SAVE ERROR", "",
                                        "FACTORY: READ-ONLY"};
     int r;
     if (sng_cur < 0 || live_sec < 0) {
-        project_save((uint32_t)clamp(song.g[G_SLOT], 1, 4) - 1u);
+        ui_message("NO SONG TO SAVE INTO");
         return;
     }
     r = sng_save_section();
@@ -590,14 +500,12 @@ static void holds_input(uint32_t pressed, uint32_t now_ms)
         }
         rec_on = 0;
     }
-    /* SAVE (the drum grid only: ly_bit[LY_SONG] is 0 there) */
-    if (!on_drum_page() && !ui.hold_kind)
-        save_on = 0;
-    if ((pressed & sb) && on_drum_page()) {
+    /* SAVE: a tap anywhere opens SONGS (from SONGS, LIVE); the hold is the drum grid's */
+    if (pressed & sb) {
         save_t0 = now_ms;
         save_on = 1;
     }
-    if (save_down && save_on && !ui.hold_kind && now_ms - save_t0 >= 700u) {
+    if (save_down && save_on && !ui.hold_kind && on_drum_page() && now_ms - save_t0 >= 700u) {
         ui.msg_t = 0;
         ui.hold_kind = 2;
         ui.hold_t0 = now_ms;
@@ -613,8 +521,11 @@ static void holds_input(uint32_t pressed, uint32_t now_ms)
         if (ui.hold_kind == 2u) {
             ui.hold_kind = 0;                             /* let go before the end: nothing */
             ui.force = 1;
-        } else if (save_on && on_drum_page()) {
-            studio_open(SC_SONG);                         /* a tap: SONGS */
+        } else if (save_on && now_ms - save_t0 < 700u) {
+            if (drummer_on())                             /* a tap: SONGS (from SONGS: LIVE) */
+                drummer_open(sng_view == DV_LIB ? DV_LIVE : DV_LIB);
+            else
+                studio_open(SC_SONG);
         }
         save_on = 0;
     }
@@ -642,16 +553,13 @@ static void ui_input(void)
         menu_open();                                    /* fm1-drummer: GLO tapped, SETUP (the GLO pages and layer gone) */
         return;
     }
-    ly_bit[LY_SONG] = on_drum_page() && !(fm1_in.buttons & ly_bit[LY_SONG]) ? 0u : 1u << panel.btn[B_SAVE];   /* (the
-                                                         * drum grid: SAVE a hold of its own, holds_input; not while held) */
     layered = layers_input(notes, &pressed, home);
     if (home_eat && !((fm1_in.buttons >> panel.btn[B_HOME]) & 1u)) {   /* (the HOME that unlocked: let go) */
         if (home == BT_TAP)
             home = BT_NONE;
         home_eat = 0;
     }
-    pressed &= ~(ly_bit[LY_FX] | ly_bit[LY_ERASE] | ly_bit[LY_ROLL] | ly_bit[LY_STEP] |
-                 ly_bit[LY_SONG]);
+    pressed &= ~(ly_bit[LY_FX] | ly_bit[LY_ERASE] | ly_bit[LY_ROLL] | ly_bit[LY_STEP]);
     holds_input(pressed, fm1_ms);
     pressed &= ~((on_song_page() ? 0u : 1u << panel.btn[B_REC]) | (1u << panel.btn[B_SAVE]));
     if (layered || ui.hold_kind) {                      /* a layer / a hold: the rest waits */
@@ -680,10 +588,6 @@ static void ui_input(void)
         drummer_input(pressed, home);
         return;
     }
-    if (on_song_page()) {
-        song_screen_input(pressed, home);
-        return;
-    }
     if (on_drum_page()) {
         drum_screen_input(pressed, home);
         return;
@@ -699,12 +603,6 @@ static void ui_input(void)
         b = panel_btn_of(id);
         switch (b) {
         case B_PLAY:
-#if FELUCCA_DRUMMER
-            if (!song.playing && arrangement_enabled && !arr_valid(&arrangement, arrangement_ready())) {
-                ui_message("EMPTY SECTION: REC");
-                break;
-            }
-#endif
             transport_req = song.playing ? 2 : 1;
             break;
         case B_OCTDN:

@@ -31,7 +31,9 @@ enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_AUTOSAVE = OBJ_PROJECT0 + 6, OBJ_SONG0 = 
 _Static_assert(OBJ_AUTOSAVE == 7 && OBJ_SONG0 == 9 && OBJ_ARRSET == 17 && OBJ_SONG8 == 18 && OBJ_COUNT == 26,
                "object ids as stored in flash");
 static uint32_t sng_obj(uint32_t slot) { return slot < 8u ? OBJ_SONG0 + slot : OBJ_SONG8 + (slot - 8u); }   /* song slot 0..15 */
-#define OBJ_RETIRED (1u << 5 | 1u << 6 | 1u << 8)   /* the user preset banks, the FM6 bank: no sector, never read or written */
+#define OBJ_RETIRED (1u << 1 | 1u << 2 | 1u << 3 | 1u << 4 | 1u << 5 | 1u << 6 | 1u << 8)   /* SLOOP's four project slots
+                                                         * (JAM's sections A..D, gone 2026-10-27), the user preset banks,
+                                                         * the FM6 bank: no sector, never read or written */
 static int st_obj_ok(uint32_t obj) { return obj < OBJ_COUNT && !((OBJ_RETIRED >> obj) & 1u); }
 
 typedef struct {

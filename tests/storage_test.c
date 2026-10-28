@@ -43,50 +43,50 @@ int main(void)
     memset(nor, 0xFF, sizeof nor);
     memset(a, 'A', sizeof a);
     memset(b, 'B', sizeof b);
-    bad += check("empty flash loads nothing", st_load(OBJ_PROJECT0, got, sizeof got) < 0);
-    bad += check("save A", st_save(OBJ_PROJECT0, a, sizeof a) == 0);
-    n = st_load(OBJ_PROJECT0, got, sizeof got);
+    bad += check("empty flash loads nothing", st_load(OBJ_SONG0, got, sizeof got) < 0);
+    bad += check("save A", st_save(OBJ_SONG0, a, sizeof a) == 0);
+    n = st_load(OBJ_SONG0, got, sizeof got);
     bad += check("load returns A", n == (int)sizeof a && !memcmp(got, a, sizeof a));
-    bad += check("save B", st_save(OBJ_PROJECT0, b, sizeof b) == 0);
-    n = st_load(OBJ_PROJECT0, got, sizeof got);
+    bad += check("save B", st_save(OBJ_SONG0, b, sizeof b) == 0);
+    n = st_load(OBJ_SONG0, got, sizeof got);
     bad += check("load returns B (newer seq)", n == (int)sizeof b && !memcmp(got, b, sizeof b));
     fail_after = 1;                                  /* payload page 1 written, the rest torn */
-    st_save(OBJ_PROJECT0, a, sizeof a);
+    st_save(OBJ_SONG0, a, sizeof a);
     fail_after = -1;
-    n = st_load(OBJ_PROJECT0, got, sizeof got);
+    n = st_load(OBJ_SONG0, got, sizeof got);
     bad += check("torn save keeps B", n == (int)sizeof b && !memcmp(got, b, sizeof b));
     fail_after = 3;                                  /* all payload pages, header torn */
-    st_save(OBJ_PROJECT0, a, sizeof a);
+    st_save(OBJ_SONG0, a, sizeof a);
     fail_after = -1;
-    n = st_load(OBJ_PROJECT0, got, sizeof got);
+    n = st_load(OBJ_SONG0, got, sizeof got);
     bad += check("header not written keeps B", n == (int)sizeof b && !memcmp(got, b, sizeof b));
-    bad += check("save A again", st_save(OBJ_PROJECT0, a, sizeof a) == 0);
-    n = st_load(OBJ_PROJECT0, got, sizeof got);
+    bad += check("save A again", st_save(OBJ_SONG0, a, sizeof a) == 0);
+    n = st_load(OBJ_SONG0, got, sizeof got);
     bad += check("load returns A", n == (int)sizeof a && !memcmp(got, a, sizeof a));
-    nor[st_sector(OBJ_PROJECT0, 0) + ST_PAYLOAD_OFF + 10] ^= 0x01;   /* bit rot in one copy */
-    nor[st_sector(OBJ_PROJECT0, 1) + ST_PAYLOAD_OFF + 10] ^= 0x01;
-    n = st_load(OBJ_PROJECT0, got, sizeof got);
+    nor[st_sector(OBJ_SONG0, 0) + ST_PAYLOAD_OFF + 10] ^= 0x01;   /* bit rot in one copy */
+    nor[st_sector(OBJ_SONG0, 1) + ST_PAYLOAD_OFF + 10] ^= 0x01;
+    n = st_load(OBJ_SONG0, got, sizeof got);
     bad += check("both copies corrupt -> nothing", n < 0);
-    bad += check("other objects untouched", st_load(OBJ_PROJECT0 + 1, got, sizeof got) < 0);
+    bad += check("other objects untouched", st_load(OBJ_SONG0 + 1, got, sizeof got) < 0);
     bad += check("settings save/load",
                  st_save(OBJ_SETTINGS, "hello", 5) == 0 && st_load(OBJ_SETTINGS, got, 5) == 5 && !memcmp(got, "hello", 5));
     bad += check("CRC-32 is zlib's (check value 0xCBF43926)", st_crc32("123456789", 9) == 0xCBF43926u);
     memset(nor, 0xFF, sizeof nor);
-    st_save(OBJ_PROJECT0 + 2, a, sizeof a);
-    st_save(OBJ_PROJECT0 + 2, b, sizeof b);              /* B is newer, in the other copy */
+    st_save(OBJ_SONG0 + 2, a, sizeof a);
+    st_save(OBJ_SONG0 + 2, b, sizeof b);              /* B is newer, in the other copy */
     {
         st_hdr_t h;
-        int cur = st_current(OBJ_PROJECT0 + 2, &h);
-        nor[st_sector(OBJ_PROJECT0 + 2, (uint32_t)cur) + ST_PAYLOAD_OFF + 300] ^= 0x10;   /* rot in the newer copy */
+        int cur = st_current(OBJ_SONG0 + 2, &h);
+        nor[st_sector(OBJ_SONG0 + 2, (uint32_t)cur) + ST_PAYLOAD_OFF + 300] ^= 0x10;   /* rot in the newer copy */
     }
-    n = st_load(OBJ_PROJECT0 + 2, got, sizeof got);
+    n = st_load(OBJ_SONG0 + 2, got, sizeof got);
     bad += check("newer copy rotten -> the older one loads", n == (int)sizeof a && !memcmp(got, a, sizeof a));
-    bad += check("save over the rotten copy", st_save(OBJ_PROJECT0 + 2, b, sizeof b) == 0);
-    n = st_load(OBJ_PROJECT0 + 2, got, sizeof got);
+    bad += check("save over the rotten copy", st_save(OBJ_SONG0 + 2, b, sizeof b) == 0);
+    n = st_load(OBJ_SONG0 + 2, got, sizeof got);
     bad += check("... loads the new data", n == (int)sizeof b && !memcmp(got, b, sizeof b));
-    nor[st_sector(OBJ_PROJECT0 + 2, 0) + 8] ^= 0x01;    /* both headers broken */
-    nor[st_sector(OBJ_PROJECT0 + 2, 1) + 8] ^= 0x01;
-    bad += check("both headers broken -> nothing", st_load(OBJ_PROJECT0 + 2, got, sizeof got) < 0);
+    nor[st_sector(OBJ_SONG0 + 2, 0) + 8] ^= 0x01;    /* both headers broken */
+    nor[st_sector(OBJ_SONG0 + 2, 1) + 8] ^= 0x01;
+    bad += check("both headers broken -> nothing", st_load(OBJ_SONG0 + 2, got, sizeof got) < 0);
     {   /* every copy of every object in the Felucca regions, off the sample slots (0xA0000..0xDBFFF) and
          * the update staging (0xE0000..0xE4FFF; the FM6 bank's two sectors follow it), and no two sectors shared */
         uint32_t o, c, o2, c2, inside = 1, apart = 1;
@@ -127,16 +127,19 @@ int main(void)
         bad += check("2.5: ... a torn save keeps the last one", n == (int)sizeof all && !memcmp(got2, all, sizeof all));
         bad += check("2.5: ... too big for a sector: refused", st_save2(OBJ_SETTINGS, p2, 3000, p2, 1000) == -1);
     }
-    {   /* 2.6: SAVE > PROJECT > ERASE (project.c project_erase), as the editor's restore of an empty slot: an object
-         * of no bytes; a load reads 0 bytes (proj_fetch: no project), the next save works as ever */
-        static uint8_t a2[3816], got3[3816];
+    {   /* an object of no bytes (2.6: the editor's restore of an empty slot; fm1-drummer: an erased song slot in a
+         * backup): a load reads 0 bytes, the next save works as ever. SLOOP's project slots (objects 1..4) are retired
+         * since 2026-10-27 (JAM): never written or read */
+        static uint8_t a2[3800], got3[3800];
         memset(a2, 'P', sizeof a2);
-        bad += check("2.6 erase: a project saved", st_save(OBJ_PROJECT0 + 2u, a2, sizeof a2) == 0);
-        bad += check("2.6 erase: the empty object written", st_save(OBJ_PROJECT0 + 2u, a2, 0) == 0);
-        n = st_load(OBJ_PROJECT0 + 2u, got3, sizeof got3);
-        bad += check("2.6 erase: loads 0 bytes (an empty slot)", n == 0);
-        bad += check("2.6 erase: saved again", st_save(OBJ_PROJECT0 + 2u, a2, sizeof a2) == 0 &&
-                     st_load(OBJ_PROJECT0 + 2u, got3, sizeof got3) == (int)sizeof a2 && !memcmp(got3, a2, sizeof a2));
+        bad += check("empty object: a song saved", st_save(OBJ_SONG0 + 2u, a2, sizeof a2) == 0);
+        bad += check("empty object: the empty object written", st_save(OBJ_SONG0 + 2u, a2, 0) == 0);
+        n = st_load(OBJ_SONG0 + 2u, got3, sizeof got3);
+        bad += check("empty object: loads 0 bytes (an empty slot)", n == 0);
+        bad += check("empty object: saved again", st_save(OBJ_SONG0 + 2u, a2, sizeof a2) == 0 &&
+                     st_load(OBJ_SONG0 + 2u, got3, sizeof got3) == (int)sizeof a2 && !memcmp(got3, a2, sizeof a2));
+        bad += check("the project slots retired: a save refused", st_save(OBJ_PROJECT0 + 2u, a2, sizeof a2) != 0);
+        bad += check("the project slots retired: a load reads nothing", st_load(OBJ_PROJECT0 + 2u, got3, sizeof got3) <= 0);
     }
     {   /* fm1-drummer, 16 songs: slots 0..7 objects 9..16 (USR1's flash), 8..15 objects 18..25 (USR2's), each its
          * own A/B pair, saved and loaded as any object; the pedal settings (17) stay where they were */

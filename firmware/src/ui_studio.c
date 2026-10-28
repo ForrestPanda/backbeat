@@ -132,7 +132,7 @@ static void te_header(const char *title, uint16_t tc, uint32_t *cache)
     uint32_t beat = clk_beat, k, playing = song.playing;
     uint32_t sig = studio_hash((uint32_t)song.g[G_BPM] * 7u + playing * 3u +
                                (playing ? beat * 131u + TDRUM->seq_idx * 7919u : 0u) + (uint32_t)song.g[G_CLOCK] * 77u +
-                               arrangement_enabled * 5u + (ui.bpm_t != 0) * 104729u, title);
+                               (ui.bpm_t != 0) * 104729u, title);
     sig = sig * 31u + tc + (uint32_t)(sng_cur + 1) * 7u;
 #if FELUCCA_DRUMMER
     sig = studio_hash(sig + live_bar * 17u + (uint32_t)(live_sec + 1) * 23u, sng_ui_name);   /* (fm1-drummer) */
@@ -150,7 +150,7 @@ static void te_header(const char *title, uint16_t tc, uint32_t *cache)
         loop_pos(TDRUM, b);
         cv_text(122, 5, &FONT_S, b, C_WHITE);
     } else {
-        cv_text(122, 5, &FONT_S, arrangement_enabled ? "song" : "loop", TE_G3);
+        cv_text(122, 5, &FONT_S, "stopped", TE_G3);
     }
     for (k = 0; k < 4u; k++)                           /* the four beats of the bar */
         cv_rect(104 + (int32_t)k * 9, 26, 7, 7, playing && beat % 4u == k ? (k ? C_WHITE : TE_RED) : TE_G2);
@@ -361,10 +361,6 @@ static void grid_key(uint32_t k)
     if (idx >= len)
         return;
     drum_cursor = (uint8_t)idx;
-    if (song.playing && arrangement_enabled) {
-        ui_message("STOP THE SONG FIRST");
-        return;
-    }
     undo_mark(TDRUM, ui.step_sess ? ui.step_sess : (ui.step_sess = (undo_sess += 4u) | 3u));
     st = &TDRUM->dstep[idx];
     fm1_irq_off();
@@ -396,8 +392,7 @@ static void drum_screen_input(uint32_t pressed, uint32_t home)
     for (k = 0; k < NB; k++) if ((pressed >> panel.btn[k]) & 1u) {
         b = k;
         if (b == B_PLAY) {
-            if (!song.playing && arrangement_enabled && !arr_valid(&arrangement, arrangement_ready())) ui_message("EMPTY SECTION: REC");
-            else transport_req = song.playing ? 2 : 1;
+            transport_req = song.playing ? 2 : 1;
         } else if (b == B_SEQ || b == B_EDIT) {
             drum_page = (uint8_t)((drum_page + 1u) % 2u);
             ui.msg_t = 0;
@@ -427,7 +422,6 @@ static void drum_screen_input(uint32_t pressed, uint32_t home)
                 drum_cursor = c;
             }
             if (k >= 2) {
-                if (song.playing && arrangement_enabled) { ui_message("STOP THE SONG FIRST"); continue; }
                 undo_mark(TDRUM, ui.step_sess ? ui.step_sess : (ui.step_sess = (undo_sess += 4u) | 3u));
                 fm1_irq_off();
                 if (k == 2) {

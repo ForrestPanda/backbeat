@@ -27,7 +27,7 @@
 #include "../firmware/src/project.c"
 static struct { uint8_t force; } ui;
 static uint8_t sync_reload;
-#include "../firmware/src/arranger_scene.c"
+#include "../firmware/src/sng.c"
 #ifdef __APPLE__
 #include <libproc.h>
 #include <sys/resource.h>

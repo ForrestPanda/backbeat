@@ -23,7 +23,7 @@
 #include "../firmware/src/project.c"
 static struct { uint8_t force; } ui;
 static uint8_t sync_reload;
-#include "../firmware/src/arranger_scene.c"
+#include "../firmware/src/sng.c"
 
 static uint64_t blk;
 typedef struct { uint64_t blk; uint8_t note, vel; int32_t zid; } hit_t;   /* zid: the sample zone (the layer) */
@@ -845,95 +845,6 @@ static void t_fill(void)
         run_block();
 }
 
-/* SLOOP 2.4: the quick chain (SAVE held + two or more section keys, ui_layers.c chain_release). Sections A (1 bar:
- * 16 steps of 1/16) and B (2 bars: the drum track 32 steps) in proj_slot[0..1]; the chain A B asked for while
- * playing: A on the next bar, B a bar later, A two bars after that, round again; a single tap ends the chain */
-static void t_chain(void)
-{
-    uint32_t i, bar = (uint32_t)((double)FS * 60.0 / 120.0 * 4.0 / CTL + 0.5), t0 = 0, n = 0, ok = 1, bars_a, bars_b;
-    struct { uint32_t blk; int8_t sec; } ev[8];
-    int8_t last;
-    reset(120);
-    for (i = 0; i < NTRK; i++) {
-        trk[i].p[P_SLEN] = 16;
-        trk[i].p[P_SDIV] = 2;
-    }
-    dstep_set(&TDRUM->dstep[0], 0, LV_NORM, 0);
-    proj_capture(&proj_slot[0]);                     /* A: one bar */
-    TDRUM->p[P_SLEN] = 32;
-    dstep_set(&TDRUM->dstep[16], 2, LV_NORM, 0);
-    proj_capture(&proj_slot[1]);                     /* B: two bars (the drum track) */
-    TDRUM->p[P_SLEN] = 3;
-    TDRUM->p[P_SDIV] = 7;                            /* 1BAR x 3: three bars */
-    proj_capture(&proj_slot[2]);                     /* C: three bars */
-    proj_slot[3].magic = 0;
-    bars_a = section_bars(0);
-    bars_b = section_bars(1);
-    check(bars_a == 1u && bars_b == 2u && section_bars(2) == 3u && section_bars(3) == 1u && arrangement_ready() == 7u,
-          "2.4: section_bars: A 1 bar, B 2 bars (32 x 1/16), C 3 bars (3 x 1BAR); an empty slot 1");
-    proj_apply(&proj_slot[2], 1);                    /* C is the loop */
-    live_sec = 2;
-    arrangement_enabled = 0;
-    transport_req = 1;
-    run_block();
-    bar_run(2);                                      /* mid bar 1: SAVE held, A then B tapped, SAVE let go */
-    chain_n = 0;
-    live_req = 0;                                    /* (the first tap, as ever) */
-    chain_sec[0] = 0;
-    chain_sec[1] = 1;
-    chain_i = 0;
-    chain_bars = (uint8_t)bars_a;
-    chain_n = 2;
-    last = live_sec;
-    while (n < 6u && blk < 40000u) {
-        run_block();
-        if (live_sec != last) {
-            last = live_sec;
-            ev[n].blk = (uint32_t)blk - 1u;
-            ev[n].sec = live_sec;
-            n++;
-        }
-    }
-    /* the section changes seen: A (the tap, bar 2) B (bar 3) A (bar 5) B (bar 6) A (bar 8) B (bar 9) */
-    ok = n == 6u && ev[0].sec == 0 && ev[1].sec == 1 && ev[2].sec == 0 && ev[3].sec == 1 && ev[4].sec == 0 && ev[5].sec == 1;
-    t0 = n ? ev[0].blk : 0;
-    for (i = 1; i < n && i < 6u; i++) {
-        static const uint32_t AT[6] = {0, 1, 3, 4, 6, 7};
-        uint32_t want = t0 + AT[i] * bar, got = ev[i].blk;
-        ok &= got + 1u >= want && got <= want + 1u;
-    }
-    if (!ok) {
-        printf("seq2:   chain: %u changes:", n);
-        for (i = 0; i < n; i++) printf(" %c@%u", 'A' + ev[i].sec, ev[i].blk);
-        printf(" (bar %u blocks)\n", bar);
-    }
-    check(ok, "2.4: chain A B: A on the next bar, B a bar later, A two bars after that, round again (bar exact)");
-    check(chain_n == 2u && chain_i == 1u && chain_bars == 2u, "2.4: the chain state follows: entry 2 (B), 2 bars");
-    chain_n = 0;                                     /* a single tap of A: the chain ends, A plays on */
-    live_req = 0;
-    {
-        uint32_t changes = 0;
-        last = live_sec;
-        for (i = 0; i < 6u * bar; i++) {
-            run_block();
-            if (live_sec != last) {
-                changes++;
-                last = live_sec;
-            }
-        }
-        check(changes == 1u && live_sec == 0 && chain_n == 0u, "2.4: a single section tap cancels the chain: A, and it stays");
-    }
-    transport_req = 2;
-    run_block();
-    check(!song.playing && live_req < 0 && chain_n == 0u, "2.4: STOP: no chain, no request");
-    for (i = 0; i < (uint32_t)(FS / CTL); i++)
-        run_block();
-    reset(120);
-    for (i = 0; i < 4u; i++)
-        proj_slot[i].magic = 0;
-    live_sec = -1;
-}
-
 /* SLOOP 2.4: GLO > SYSTEM > IN = CLOCK: MIDI note-ons are ignored (the clock is not); a note-off still ends a
  * note held when IN was switched */
 static void t_midiin(void)
@@ -1134,7 +1045,6 @@ int main(void)
     t_micro();
     t_plock();
     t_fill();
-    t_chain();
     t_mclk();
     t_fixes24();
     t_longdiv();

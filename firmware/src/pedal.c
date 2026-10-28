@@ -5,7 +5,7 @@
  *   A section change brings no fill of its own (asked 2026-10-14): a fill is CC 21's, and a footswitch that
  *   wants a fill into the change sends CC 21 with its CC 20 (either order: the fill to the bar's end, the
  *   change on the bar after it, as an arranger's AUTO FILL IN).
- *   CC 20 n    go to section n (0..3 = A..D) when the section playing ends: it plays its pattern out (its
+ *   CC 20 n    go to section n (0..15, the song's) when the section playing ends: it plays its pattern out (its
  *              bars, from where it started); a one-bar section: the next bar. Stopped: start the loop with
  *              it. The section already playing asked for again (nothing else cued): nothing; with an
  *              ending pending it cancels the ending. A fill pending (asked before or after): on the bar
@@ -45,14 +45,14 @@
  * bar accented), then the loop starts with the section; CC 23 cancels it, another section command only
  * changes what starts. Playing, nothing changes: sections land on the bar as before.
  *   PC n       load a song: 0..15 the user's slots 1..16, 16..31 the factory grooves 1..16; stopped, its tempo
- *              and kit now and its first section cued; playing, with the next section. n >= 32: no song,
- *              SLOOP's sections A..D again (sng.c)
+ *              and kit now and its first section cued; playing, with the next section. n >= 32: no song
+ *              (sng.c): the drum track's pattern loops, there are no sections (SLOOP's A..D went 2026-10-27)
  *
  * A fill is SLOOP's: the steps marked FILL ONLY play, the NO FILL steps rest; a pattern with no
  * conditions plays as usual through a fill. The value of CC 23..26 does not matter. Section and
  * ending commands are absolute, so a footswitch that sends its message on every press (both presses
  * of a toggle) does no harm; next / previous / tap count presses. A section asked for cancels an
- * ending asked for before, and ends a quick chain (as a single section tap does).
+ * ending asked for before.
  *
  * Called from events_block (the audio ISR) between two blocks, so it only sets what the sequencer
  * applies itself on the bar: live_req, pedal_fill / pedal_at_end / pedal_end_* (seq.c live_block) and
@@ -90,22 +90,17 @@ static int pedal_listens(uint32_t ch)            /* ch: 0..15 as on the wire */
     return pedal.ch == PEDAL_CH_OMNI || (pedal.ch && ch + 1u == (uint32_t)pedal.ch);
 }
 
-/* the sections the pedal plays: the song's (sng.c) while one is loaded, else SLOOP's A..D */
-static uint32_t pedal_nsec(void) { return sng_cur >= 0 ? SNG_SECTIONS : ARR_SCENES; }
-static uint32_t pedal_ready(void) { return sng_cur >= 0 ? sng_ready() : arrangement_ready(); }
-static uint32_t pedal_bars(uint32_t s) { return sng_cur >= 0 ? sng_bars(s) : section_bars(s); }
+/* the sections the pedal plays: the song's (sng.c); none without a song (JAM's A..D gone 2026-10-27) */
+static uint32_t pedal_nsec(void) { return SNG_SECTIONS; }
+static uint32_t pedal_ready(void) { return sng_cur >= 0 ? sng_ready() : 0u; }
+static uint32_t pedal_bars(uint32_t s) { return sng_bars(s); }
 static int pedal_section_ok(uint32_t s)
 {
     return s < pedal_nsec() && ((pedal_ready() >> s) & 1u) != 0u;
 }
-static void pedal_name(uint32_t s, char *out)    /* the section's name for the screen: the song's, or A..D */
+static void pedal_name(uint32_t s, char *out)    /* the section's name for the screen: the song's */
 {
-    if (sng_cur >= 0) {
-        sng_name(s, out);
-    } else {
-        out[0] = (char)('A' + (s & 3u));
-        out[1] = 0;
-    }
+    sng_name(s, out);
 }
 
 /* CC 21: the fill. A section with a fill bar of its own, as the arrangers (Yamaha, Korg, Roland, Ketron, the
@@ -154,29 +149,27 @@ static void pedal_fill_req(uint32_t next)
  * keys 1..16, ENV, LFO) or on the next bar (CC 27; LIVE's white keys with OCT+ held) */
 enum { PS_END, PS_BAR };
 /* section s: how (PS_*), through its break (brk: CC 28) or its entry; stopped: the loop starts with it on its bar 0
- * (seq_start resets the bar count, live_block then applies the request at once). An empty section, or a section
- * while the song chain plays (as the UI: "SONG PLAYS"), is ignored. */
+ * (seq_start resets the bar count, live_block then applies the request at once). An empty section (no song: every
+ * one) is ignored. */
 static void pedal_section_to(uint32_t s, uint32_t how, uint32_t brk)
 {
-    if (!pedal_section_ok(s) || arrangement_clock.running)
+    if (!pedal_section_ok(s))
         return;
     if (song.playing && live_req < 0 && (int32_t)s == live_sec && !pedal_end_req && !pedal_end_bars && !brk &&
-        !(sng_cur >= 0 && sng_pending()))      /* (a song just loaded waits for a section: its own, not this one's) */
+        !sng_pending())                           /* (a song just loaded waits for a section: its own, not this one's) */
         return;                                   /* the section playing, asked for again: it plays already */
-    chain_n = 0;                                  /* a section asked for ends a quick chain */
-    pedal_end_req = 0;                            /* ..and an ending asked for before */
+    pedal_end_req = 0;                            /* an ending asked for before: the section wins */
     pedal_end_bars = 0;
     live_req = (int8_t)s;
     live_req_brk = (uint8_t)brk;                  /* (the last asked for wins: its break or not) */
     if (!song.playing) {
         char b[13];
         pedal_fill = 0;
-        arrangement_enabled = 0;                  /* a pedal plays sections, not the chain */
         pedal_name(s, b);
         str_cpy(sng_ui_next, b, sizeof sng_ui_next);   /* (the screen: cued, in amber, until it starts) */
         if (pedal.count && !ci_on && !mclk_on()) {   /* the count-in: the clicks, the start after them
                                                    * (events_block; not with a MIDI clock master) */
-            ci_meter = (uint8_t)(sng_cur >= 0 ? sng_meter(s) : 0u);   /* (the section's meter: its bars of clicks) */
+            ci_meter = (uint8_t)sng_meter(s);     /* (the section's meter: its bars of clicks) */
             ci_pedal = (uint8_t)(meter_num(ci_meter) * (uint32_t)pedal.count);
             ci_on = 1;
             ci_u = 0;
@@ -227,11 +220,11 @@ static void pedal_step(int dir, uint32_t how)     /* the next / previous ready s
     }
 }
 
-/* the ending: the outro s once (its bars: section_bars, as the quick chain counts them), then stop;
+/* the ending: the outro s once (its bars: sng_bars), then stop;
  * no outro, or the outro playing already: the section playing ends, then stop */
 static void pedal_ending(uint32_t s)
 {
-    if (!song.playing || arrangement_clock.running)
+    if (!song.playing)
         return;
     if (!pedal_section_ok(s) && sng_cur >= 0)
         s = sng_outro();                          /* the song's own outro, if one is flagged */
@@ -245,7 +238,6 @@ static void pedal_ending(uint32_t s)
     } else {
         pedal_say(PU_ENDING, "");
         str_cpy(sng_ui_next, "STOP", sizeof sng_ui_next);
-        chain_n = 0;
         live_req = -1;                            /* (a section asked for before: the ending wins) */
         pedal_end_req = 0;
         {                                         /* the section playing ends, then the stop (a fill pending: the

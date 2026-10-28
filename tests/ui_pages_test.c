@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* The real UI (ui.c, ui_draw.c, ui_studio.c, ui_layers.c, ui_song.c, ui_menu.c, ui_input.c) on a
+/* The real UI (ui.c, ui_draw.c, ui_studio.c, ui_layers.c, ui_menu.c, ui_input.c) on a
  * framebuffer with panel / flash / storage doubles, the audio (mix_block) running between frames as on
  * the device. Renders every screen to PPM for review (DIR/page-*.ppm, live-*.ppm, layer-*.ppm) and
  * drives the panel:
@@ -14,8 +14,8 @@
  *   SEL     held + a key: the key of the song
  *   GLO     tapped: SETUP (the pedal, MIDI, tempo, drums, master, texture, screen, lights, audio, system)
  *   REC     held: the clear ring, to the end: cleared (undo brings it back); live recording is gone
- *   SAVE    tapped: the song page; held: the SONG layer (sections A..D: play / store, SONG REC; two or more
- *           section taps: a chain, "chain A B" on the sub line)
+ *   SAVE    tapped: SONGS (from SONGS, LIVE); held on the drum grid: the save ring, the section into its song (no
+ *           layer since 2026-10-27: SLOOP's sections A..D went with JAM)
  *   DRUMS   the grid: sound / step / hit / level knobs, GRID <-> KIT
  * then 20000 frames of random use: every draw stays on the screen. */
 #define FELUCCA_DRUMMER 1
@@ -50,20 +50,6 @@ static volatile uint32_t audio_max_us;                /* (audio.c's: SETUP > LOA
 #define FELUCCA_ICONS 1
 #include "../firmware/src/panel.c"
 #include "../firmware/src/ui.c"
-static uint32_t saves, loads, erases;
-static int project_used(uint32_t i) { return i < 2; }
-static void project_save(uint32_t i) { (void)i; saves++; ui_message("SAVED"); }
-static void project_load(uint32_t i) { (void)i; loads++; }
-static void project_erase(uint32_t i) { (void)i; erases++; ui_message("ERASED"); }
-static void arrangement_save(void) {}
-static uint32_t arrangement_ready(void) { return 3; }
-static void arrangement_apply(uint32_t s) { (void)s; }
-static uint32_t section_bars(uint32_t s) { return s == 1u ? 2u : 1u; }   /* (B: two bars) */
-static void song_backup(void) {}
-static void song_restore(void) {}
-static uint32_t sec_stores, sec_loads;
-static void section_store(uint32_t s) { sec_stores++; live_sec = (int8_t)s; }
-static void section_load(uint32_t s) { sec_loads++; live_sec = (int8_t)s; }
 static int up_used(uint32_t k) { return k < 2; }
 static int up_load(uint32_t k) { (void)k; return 0; }
 static int up_load_to(track_t *t, uint32_t k) { (void)t; (void)k; return 0; }
@@ -107,7 +93,6 @@ static void sng_lib_refresh(void)                  /* (sng.c's reads the flash: 
     str_cpy(sng_lib[2].name, "BLACK", 13); sng_lib[2].bpm = 86; sng_lib[2].nsec = 5;
     str_cpy(sng_lib[12].name, "THIRTEEN", 13); sng_lib[12].bpm = 140; sng_lib[12].nsec = 4;   /* (16 slots since 2026-10-14) */
 }
-#include "../firmware/src/ui_song.c"
 #include "../firmware/src/ui_studio.c"
 #include "../firmware/src/ui_drummer.c"
 #include "../firmware/src/icons.c"
@@ -428,47 +413,21 @@ int main(int argc, char **argv)
     check(dstep_has(&TDRUM->dstep[3], 2), "REC let go before the end: nothing cleared");
     TDRUM->dstep[3] = (dstep_t){0};
 
-    /* ---- SAVE: tap = the song page; held = the SONG layer (live sections, SONG REC) */
+    /* ---- SAVE: no layer since 2026-10-27 (JAM's sections A..D went): a tap opens SONGS (from SONGS, LIVE); a long
+     * press off the drum grid does nothing; the keys while it is held are LIVE's own */
     go_home(); frame();
-    song.playing = 0; live_sec = -1; live_req = -1; srec = 0; arrangement_enabled = 0;
-    press(B_SAVE); frames(15); check(ui.layer == LY_SONG, "SAVE held: the song layer");
-    key(key_of_white(4)); check(sec_stores == 0 && sec_armed == 1u, "store over a used A: asks again");
-    key(key_of_white(4)); check(sec_stores == 1 && live_sec == 0, "again: the loop stored in A");
-    key(key_of_white(6)); check(sec_stores == 2 && live_sec == 2, "an empty C: stored at once");
-    key(key_of_white(1)); check(sec_loads == 1 && live_sec == 1, "stopped: B loaded as the loop");
-    key(key_of_white(3)); check(sec_loads == 1, "an empty D: not played");
-    song.playing = 1; clk_beat = 1; clk_pos = 0;
-    key(key_of_white(0)); check(live_req == 0, "playing: A asked for the next bar");
+    song.playing = 0; live_sec = -1; live_req = -1; sng_cur = -1;
+    press(B_SAVE); frames(15); check(ui.layer == LY_PLAY && drummer_on() && sng_view == DV_LIVE, "SAVE held on LIVE: no layer, LIVE still");
+    key(key_of_white(2)); check(sng_req == 3u && sng_view == DV_LIVE, "SAVE held, no song: a white key loads a song, as without SAVE");
+    sng_req = 0;
     release(B_SAVE); frames(2);
-    check(chain_n == 0u && chain_taps == 0u && live_req == 0, "one tap, SAVE let go: no chain (as before)");
-    live_req = -1;
-    press(B_SAVE); frames(15);                        /* (2.4) SAVE held: A, B, B tapped: a chain on release */
-    key(key_of_white(0)); key(key_of_white(1));
-    check(live_req == 0 && chain_taps == 2u && chain_n == 0u, "SAVE held, A then B tapped: A asked for, the chain building");
-    ui.force = 1; frame();
-    check(str_eq(sub_line(), "chain A B"), "the sub line reads \"chain A B\"");
-    key(key_of_white(1));
-    ui.force = 1; frame(); ppm("layer-song-chain");
-    check(chain_taps == 3u && str_eq(sub_line(), "chain A B B"), "B again: \"chain A B B\"");
-    release(B_SAVE); frames(2);
-    check(chain_n == 3u && chain_i == 0u && chain_sec[0] == 0 && chain_sec[1] == 1 && chain_sec[2] == 1 && chain_bars == 1u && live_req == 0,
-          "SAVE let go: the chain A B B plays (A asked for, 1 bar)");
-    press(B_SAVE); frames(15);
-    check(str_eq(sub_line(), "chain A B B"), "SAVE held again: the chain shown");
-    key(key_of_white(1)); release(B_SAVE); frames(2);
-    check(chain_n == 0u && live_req == 1, "a single tap of B: the chain ends, B asked for");
-    press(B_SAVE); frames(15);
-    live_req = -1; song.playing = 0;
-    key(key_of_white(13)); check(srec == 1u && !arrangement_enabled, "SONG REC armed (loop mode)");
-    ui.force = 1; frame(); ppm("layer-song");
-    key(key_of_white(13)); check(srec == 0u, "SONG REC again: off");
-    key(key_of_white(12)); check(arrangement_enabled == 1u, "loop / song: song mode");
-    key(key_of_white(12)); check(arrangement_enabled == 0u, "again: loop mode");
-    release(B_SAVE);
-    check(drummer_on() && sng_view == DV_LIVE && saves == 0, "SAVE held and let go: LIVE still (no SONGS), no save");
+    check(drummer_on() && sng_view == DV_LIB, "SAVE let go within 0.7 s: a tap, SONGS");
+    press(B_SAVE); frames(60); release(B_SAVE); frames(2);
+    check(drummer_on() && sng_view == DV_LIB, "SAVE held ~1 s on SONGS and let go: not a tap, SONGS still");
+    tap(B_SAVE); check(drummer_on() && sng_view == DV_LIVE, "SAVE tapped on SONGS: LIVE");
     tap(B_SAVE); check(drummer_on() && sng_view == DV_LIB, "SAVE tapped on LIVE: SONGS");
-    {   /* fm1-drummer: SONGS lists the slots (cached), KNOB 1 picks, REC loads and goes back to LIVE; the last row
-         * (JAM) is SLOOP's chain on the page; HOME: LIVE again; there, with a song, the keys are the pedal's */
+    {   /* fm1-drummer: SONGS lists the slots (cached), KNOB 1 picks, REC loads and goes back to LIVE (its last row,
+         * JAM, SLOOP's chain page, went 2026-10-27); HOME: LIVE again; there, with a song, the keys are the pedal's */
         sng_lib_dirty = 1;
         ui.force = 1; frames(16); ppm("page-songs");       /* (after SAVE: the knobs quiet, #39) */
         check(!strcmp(sng_lib[0].name, "TIME") && !strcmp(sng_lib[2].name, "BLACK") && !sng_lib_dirty, "SONGS: the slots read once (TIME, BLACK)");
@@ -482,10 +441,12 @@ int main(int argc, char **argv)
         tap(B_REC); frame();
         check(sng_req == 16u, "SONGS: REC on slot 16: song 16 asked for");
         sng_req = 0;
-        tap(B_SAVE); encs[panel.enc[EN_K1]] = 20; frame(); tap(B_REC); frame();
-        check(!drummer_on() && on_song_page() && sng_req == 0xFFu && kb_grid == 0u, "SONGS: the last row (JAM), REC: SLOOP's chain on the page");
+        tap(B_SAVE); encs[panel.enc[EN_K1]] = 20; frame();
+        check(sng_pick == 15u && drummer_on() && sng_view == DV_LIB, "SONGS: KNOB 1 stops at slot 16 (no JAM row after it)");
+        tap(B_REC); frame();
+        check(sng_req == 16u && sng_view == DV_LIVE, "SONGS: REC there: song 16 asked for, LIVE");
         sng_req = 0;
-        ui.force = 1; frame(); ppm("page-song");
+        tap(B_SAVE); frame();
         tap(B_HOME); frame();
         check(drummer_on() && sng_view == DV_LIVE, "HOME: LIVE");
         ui.force = 1; frame(); ppm("live-nosong");
@@ -649,14 +610,13 @@ int main(int argc, char **argv)
         }
         check(!song.playing, "LIVE: PLAY again: stop");
         sng_cur = -1; sng_ui_song[0] = 0; live_sec = -1; live_req = -1; sng_ui_name[0] = 0;
-        studio_open(SC_SONG); sng_view = DV_JAM; frame();  /* (SLOOP's page for what follows) */
     }
 
     /* ---- the drum screen */
     studio_open(SC_DRUM); ui.force = 1; frames(16);   /* (after SAVE: the knobs quiet, #39) */
     check(on_drum_page(), "the drum screen");
     {   /* fm1-drummer: SAVE on the grid (EDIT): tapped, SONGS; held to the end, the section into its song (stopped) */
-        uint32_t s0 = sec_saves, p0 = saves;
+        uint32_t s0 = sec_saves;
         sng_cur = 1; live_sec = 1; str_cpy(sng_ui_name, "VERSE", sizeof sng_ui_name); song.playing = 0;
         tap(B_SAVE); frames(2);
         check(drummer_on() && sng_view == DV_LIB && ui.layer == LY_PLAY, "EDIT: SAVE tapped: SONGS (no SONG layer on the grid)");
@@ -674,7 +634,7 @@ int main(int argc, char **argv)
         check(!strcmp(ui.msg, "STOP TO SAVE") && sec_saves == s0 + 1u, "EDIT, playing: STOP TO SAVE");
         song.playing = 0; sng_cur = -1; live_sec = -1; sng_ui_name[0] = 0;
         press(B_SAVE); frames(120); release(B_SAVE); frames(2);
-        check(saves == p0 + 1u, "EDIT, no song (JAM): SAVE held saves the project, as SLOOP did");
+        check(!strcmp(ui.msg, "NO SONG TO SAVE INTO") && sec_saves == s0 + 1u, "EDIT, no song: SAVE held: nothing to save into (JAM's slots went)");
         studio_open(SC_DRUM); ui.msg_t = 0; frames(16);
     }
     encs[panel.enc[EN_K3]] = 1; frame(); check(dstep_has(&TDRUM->dstep[0], 0), "DRUMS: KNOB 3 adds the kick on step 1");
@@ -890,7 +850,7 @@ int main(int argc, char **argv)
         sec = mi_sec(ui.menu_sel);
         check(sec == MS_SYSTEM, "menu: SELECT stops at the last section, SYSTEM");
         encs[panel.enc[EN_K2]] = 1; frame();
-        check(ui.menu == 1 && ui.menu_sel == mi_find(MI_PROJ), "menu SYSTEM: KNOB 2 is JAM PROJECTS, nothing opened by a turn");
+        check(ui.menu == 1 && ui.menu_sel == mi_find(MI_ABOUT), "menu SYSTEM: KNOB 2 is ABOUT (no JAM PROJECTS since 2026-10-27), nothing opened by a turn");
         ui.force = 1; frame(); ppm("menu-system");
         encs[panel.enc[EN_K3]] = 1; frame();
         check(ui.menu == 1 && ui.menu_sel == mi_find(MI_ABOUT), "menu SYSTEM: a knob does not open ABOUT, it moves the cursor");
@@ -1135,28 +1095,6 @@ int main(int argc, char **argv)
         #undef WALK
     }
 
-    {   /* 2.6 (a YouTube comment): SAVE > PROJECT, KNOB 2 ERASE, a GO button: one detent arms (AGAIN: ERASE), a second
-         * one erases the slot KNOB 1 picks; a turn to the left does nothing */
-        uint32_t i, e0 = erases;
-        song.playing = 0;
-        go_home(); frame();
-        for (i = 0; i < NPAGES; i++) if (!strcmp(PAGES[i].title, "PROJECT")) break;
-        open_family(PAGES[i].fam); ui.page = (uint8_t)i; ui.fam_last[PAGES[i].fam] = (uint8_t)i; page_entered(); ui.force = 1; frame();
-        check(PAGES[ui.page].graph == GR_SLOTS && PAGES[ui.page].id[1] == 0xFFu, "SAVE > PROJECT: KNOB 2 free for ERASE (no parameter)");
-        song.g[G_SLOT] = 2;
-        encs[panel.enc[EN_K2]] = -1; frames(2);
-        check(erases == e0 && ui.arm != 0xE8u, "PROJECT, KNOB 2 left: nothing");
-        encs[panel.enc[EN_K2]] = 1; frames(2);
-        check(erases == e0 && ui.arm == 0xE8u && !strcmp(ui.msg, "AGAIN: ERASE"), "PROJECT, KNOB 2 one detent: AGAIN: ERASE, nothing erased");
-        ui.force = 1; frame(); ppm("page-project-erase");
-        encs[panel.enc[EN_K2]] = 1; frames(2);
-        check(erases == e0 + 1u && !ui.arm && !strcmp(ui.msg, "ERASED"), "PROJECT, KNOB 2 again: the slot erased");
-        encs[panel.enc[EN_K2]] = 1; frames(100);
-        encs[panel.enc[EN_K2]] = 1; frames(2);
-        check(erases == e0 + 1u && ui.arm == 0xE8u, "  the arm runs out (~1.5 s): a detent after it arms again");
-        ui.arm = 0; song.g[G_SLOT] = 1;
-        go_home(); frames(4);
-    }
     {   /* fuzz: 20000 frames of random buttons (held or tapped), knobs and keys, with the audio running
          * between frames; every draw stays on the screen (lcd_blit / lcd_fill assert it) */
         uint32_t f, seed = 777, held = 0;
@@ -1179,7 +1117,7 @@ int main(int argc, char **argv)
         fm1_in.buttons = 0; fm1_in.notes = 0; frames(4);
         #undef R
     }
-    printf("ui: %s\n", fails ? "FAILED" : "pages, layers (fx, steps, erase, roll, key, mix), layer lock, song layer, REC hold, drums, 20000-frame fuzz PASS");
+    printf("ui: %s\n", fails ? "FAILED" : "pages, layers (fx, steps, erase, roll, key, mix), layer lock, SAVE's tap and hold, REC hold, drums, 20000-frame fuzz PASS");
     return fails;
 }
 #endif

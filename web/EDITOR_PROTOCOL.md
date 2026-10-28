@@ -14,11 +14,21 @@ protocol does not change with them.
 
 The device has one track, the drum track (track 0); SLOOP's synth side (three synth tracks, the twelve
 engines, presets, user presets, FM6) is gone from the firmware. The frames, the command numbers and the
-parameter and global ids are unchanged (projects, locks and learned CCs name them by number; the ids of the
+parameter and global ids are unchanged (the working project, locks and learned CCs name them by number; the ids of the
 synth side are unused, their `DESC` still answers). `web/editor.html` speaks v11 only: a device whose `INFO`
 ends with less than 11 (SLOOP) is refused right after `INFO` (the status line says this editor is for the
 BackBeat firmware).
 
+- **JAM gone (2026-10-27).** SLOOP's own way of playing (the four project slots A..D, the song order, SONG REC, the
+  SONG screen) left BackBeat. `PROJECT` (9) is gone: the device answers nothing to it (as to any command it does not
+  have); the number stays reserved, never reused. The backup objects **2..5** (the project slots) are gone: `BK_LIST` does
+  not list them, `BK_GET` of them answers rc 1 (no such object) and a `BK_PUT` begin of 2..5 answers rc 1. A backup made
+  by an older firmware may still hold them: a restore leaves them out (the editor says so when one held something) and
+  restores the rest. The settings object (1) keeps its 88 bytes and its magic "PER3", but bytes 48..83, which held the
+  song order (`arr_config_t`), are reserved zeros now: the firmware zeroes them on a restore and never checks them, and
+  there is no rc 3 ("stop the song first") for a settings restore any more. The working project (object 0) is unchanged:
+  a restore of it still loads it at once (stopped only, rc 3 while playing). With no song loaded the device has no
+  sections (the drum track's own pattern loops).
 - **INFO** keeps its layout: version string (`FELUCCA BACKBEAT 0.9`: the `FELUCCA ` prefix kept; the editor
   shows what follows it), NENGINES = **0** (no engine names follow), P_COUNT 71, G_COUNT 45,
   NSTEP 64, P_E0 63, NTRK **1**, protocol **11**.
@@ -32,19 +42,20 @@ BackBeat firmware).
   first four lanes as GM notes, as v5 describes), `TRACK`, `TRACK_MIX` (the drums' level is G_DRLVL), `TRACK_DUMP`,
   `TRACK_STEP`, `TRACK_PARAM` for track 0; any other track gets no reply. `TRACK_CHANGED` is never pushed (it is for
   tracks that are not selected). The editor uses `DRUM_STEP` for the steps and none of these.
-- **Unchanged:** `GET` / `SET` / `DUMP` / `DESC`, `PROJECT`, the sample slots, `WATCH` / `PING` and the pushes,
+- **Unchanged:** `GET` / `SET` / `DUMP` / `DESC`, the sample slots, `WATCH` / `PING` and the pushes,
   `DRUM_STEP`, the locks, nudges and fill conditions (track 0), `BK_*`, `DSYN_*` (72..76).
 - **USR1 and USR2 hold the songs** (`firmware/src/sng.c`; USR2 since 2026-10-14, for songs 9..16): `SMP_BEGIN`,
   `SMP_ERASE` and `SMP_WRITE` on slots 0 and 1 answer rc 4 (`SMP_END` rc 6), `SMP_INFO` lists them empty, and the KIT
-  values USR1 and USR2 play nothing. The kit values keep their numbers (songs and projects store them); the device's knob
+  values USR1 and USR2 play nothing. The kit values keep their numbers (the songs and the working project store them); the device's knob
   and the editor's kit lists pass over both.
-- **Backup objects** (`ED_BK_IDS`): 0 the working project, 1 the settings, 2..5 the projects A..D, 9 the SYN kits, 10
-  the MIDI part (listed only while not at its defaults), 32..35 the sample slots (32, USR1, always with length 0).
-  Objects 6..7 (the user preset banks) and 8 (the FM6 bank) are gone: a `BK_PUT` of them is refused (rc 1 at the
-  commit). A project object is "DRM1" (the globals and the drum track); a restore also takes SLOOP 2.x's "FUN4".."FUN6"
-  (their drum track), not SLOOP 1.x's. The editor restores a SLOOP backup without its objects 6..8 and its USR1
-  sample, says which it left out, and refuses (before writing anything) a backup whose projects the firmware cannot
-  read. Since 2026-10-21 `BK_LIST` also lists the songs (16..23, 40..47: an empty slot with length 0, which a restore
+- **Backup objects** (`ED_BK_IDS`, since 2026-10-27 exactly `{0, 1, 9, 10, 32, 33, 34, 35, 16..23, 40..47, 24}`): 0 the
+  working project, 1 the settings, 9 the SYN kits, 10 the MIDI part (listed only while not at its defaults), 32..35 the
+  sample slots (32, USR1, always with length 0). Objects 2..5 (SLOOP's project slots A..D, JAM's until 2026-10-27) are
+  gone: a `BK_PUT` begin of them answers rc 1. Objects 6..7 (the user preset banks) and 8 (the FM6 bank) are gone: a
+  `BK_PUT` of them is refused (rc 1 at the commit). The working project object is "DRM1" (the globals and the drum
+  track); a restore also takes SLOOP 2.x's "FUN4".."FUN6" (their drum track), not SLOOP 1.x's. The editor restores a
+  SLOOP backup, or one of BackBeat from before 2026-10-27, without its objects 2..8 and its USR1 sample, says which it
+  left out, and refuses (before writing anything) a backup whose working project the firmware cannot read. Since 2026-10-21 `BK_LIST` also lists the songs (16..23, 40..47: an empty slot with length 0, which a restore
   erases) and the pedal settings (24), after the sample slots: a backup holds the whole BackBeat. A backup from before
   has none of them and its restore leaves the songs as they are. The factory grooves (48..63, below) stay outside
   `BK_LIST` (GET only). An editor from before 2026-10-21 refuses a newer backup file (objects it does not know).
@@ -111,11 +122,11 @@ after an engine change.
 | 6 STEP_GET | index 0..NSTEP−1 | index, n (0..4 notes), note0..note3, time (0 NOTE, 1 TIE, 2 REST), flags (1 accent, 2 slide), vel, then (v5) lvl, hi, rat |
 | 7 STEP_SET | index, n, note0..3, time, flags, vel [, lvl, hi, rat (v5)] | same as STEP_GET (after the write). Without the v5 bytes the step's levels and ratchets become 0 |
 | 8 PRESET | engine, preset | engine, preset (applies the preset: sound, sends, arp; never the pattern, the mix or the key: `LEVEL PAN MUTE`, `LEN DIV SWG GATE`, `ROOT SCL QNT CHORD` stay) |
-| 9 PROJECT | op (0 load, 1 save, 2 query), slot 0..3 | op, slot, used (1/0). Save writes flash: allow ~2 s |
+| 9 PROJECT | op (0 load, 1 save, 2 query), slot 0..3 | op, slot, used (1/0). Save writes flash: allow ~2 s. **v11 since 2026-10-27: gone with JAM, no reply; 9 stays reserved** |
 
 The local Studio build may append status `1` to a PROJECT reply when playback
 prevents a load/save. No operation occurred; stop playback and try again.
-An absent status byte retains the original reply format.
+An absent status byte retains the original reply format. (SLOOP; BackBeat answers nothing to PROJECT since 2026-10-27.)
 | 10 NAMES | engine | engine, count, count preset-name strings, then the two edit-page titles |
 | 11 SMP_BEGIN | slot 0..2 | slot, rc (0 ok). Erases the slot's header sector: the slot is empty from now on |
 | 12 SMP_WRITE | slot, offset (3 × 7 bit, LSB first), pack7 data (≤ 256 bytes) | slot, offset, rc: 0 ok, 1 arguments, 2 erase, 3 write, 4 slot in use (send SMP_BEGIN first). Offset ≥ 512 and a multiple of 256; writes go in increasing order (a write at a 4 KiB boundary erases that sector) |
@@ -330,9 +341,11 @@ G_COUNT 45. An editor reads both from `INFO` and maps a patch file by its own co
 ## v6: backup / restore (SLOOP 2.3)
 
 `INFO` ends with 6. Objects: **0** the working project (a `project_t`, as the autosave), **1** the settings
-(`persist_t`: colours, low cut, zoom, the panel calibration, the song order, the lights word: lights, SYNC,
+(`persist_t`: colours, low cut, zoom, the panel calibration, the song order (on BackBeat since 2026-10-27: 36
+reserved zero bytes in its place), the lights word: lights, SYNC,
 the REC screen's mode and start, USB AUDIO and, since 2.4, MIDI OUT = SEQ (bit 14) and IN = CLOCK (bit 15)),
-**2..5** the projects 1..4 (song sections A..D; length 0 = empty), **6..7** the user preset banks (`up_bank_t`,
+**2..5** the projects 1..4 (song sections A..D; length 0 = empty; gone from BackBeat 2026-10-27 with JAM, a `BK_PUT`
+begin of them rc 1), **6..7** the user preset banks (`up_bank_t`,
 16 records each; 0 = empty), **32..35** the user sample slots USR1..4 (35: SLOOP 2.4) (header + ADPCM data, as in flash; 0 =
 empty). Numbers are 5 × 7 bit (u35, LSB first); data is pack7.
 
@@ -340,7 +353,7 @@ empty). Numbers are 5 × 7 bit (u35, LSB first); data is pack7.
 | --- | --- | --- |
 | 34 BK_LIST | — | rc (0 ok, 4 no flash), count, then per object: id, length u35, CRC-32 u35 (zlib). Takes a snapshot of the working project and the settings for GET |
 | 35 BK_GET | id, offset u35, count (2 × 7 bit, 1..256) | id, rc (0 ok, 1 arguments, 5 the snapshot is gone: LIST again), offset u35, count, pack7 data |
-| 36 BK_PUT | op 0 begin: id 0..9 (8: v9, 9: v10), length u35, CRC-32 u35 · op 1 data: id, offset u35, pack7 (≤ 256 bytes, in order) · op 2 commit: id · op 3 abort: id | op, id, rc: 0 ok, 1 arguments, 2 not a valid object (CRC, magic, sizes, ranges), 3 stop the song first (projects and preset banks; since 2.5 the settings too when their song order differs), 4 flash, 5 no begin for this object (or more than 15 s ago) |
+| 36 BK_PUT | op 0 begin: id 0..9 (8: v9, 9: v10), length u35, CRC-32 u35 · op 1 data: id, offset u35, pack7 (≤ 256 bytes, in order) · op 2 commit: id · op 3 abort: id | op, id, rc: 0 ok, 1 arguments, 2 not a valid object (CRC, magic, sizes, ranges), 3 stop the song first (projects and preset banks; since 2.5 the settings too when their song order differs, not on BackBeat since 2026-10-27), 4 flash, 5 no begin for this object (or more than 15 s ago) |
 
 **fm1-drummer (objects 16..24, 40..63):** `BK_GET` and `BK_PUT` also reach the songs (object 16 + slot for slots 0..7,
 object 40 + slot - 8 for slots 8..15 since 2026-10-14,
@@ -357,14 +370,16 @@ the same packed form, byte for byte; the simulated device holds the song objects
 
 A restore stages one object in RAM (the project load buffer), checks it at the commit as a load checks it
 (projects: magic, size and sum, older formats converted; banks: magic, record size, slot count; settings:
-magic, palette, a permutation of the buttons and knobs, a valid song order) and writes it through the usual
+magic, palette, a permutation of the buttons and knobs, a valid song order (BackBeat since 2026-10-27: bytes 48..83
+zeroed instead, never checked)) and writes it through the usual
 A/B commit; the working project is loaded at once (the song must be stopped). Samples are restored with
 `SMP_BEGIN` / `SMP_WRITE` / `SMP_END` (the header is the first 480 bytes of the object, the data from byte
 512), an empty slot with `SMP_ERASE`. The editor's file is JSON: `{format: "sloop-backup", version: 1,
 firmware, date, objects: [{id, len, crc, data (base64)}]}`; it is checked (lengths, CRCs) before anything is
 written.
 
-**The song order (SLOOP 2.5, the editor's Song page)** is bytes 48..83 of the settings object: `arr_config_t`
+**The song order (SLOOP 2.5, the editor's Song page; gone from BackBeat 2026-10-27 with JAM: those bytes are reserved
+zeros, the Jam tab left the editor)** is bytes 48..83 of the settings object: `arr_config_t`
 (`firmware/src/arranger.h`): count (1..16), loop (0/1), 2 reserved, then 16 × {section 0..3 = A..D, bars
 1..64}; bytes 0..3 are the magic "PER3" (0x50455233, little-endian). The editor reads object 1 (BK_LIST, BK_GET),
 changes those 36 bytes only and writes it back (BK_PUT). The commit answers rc 2 for an invalid order and,

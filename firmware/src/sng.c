@@ -5,9 +5,8 @@
  * (storage.c OBJ_SONG0.., A/B sectors 0xA0000..: the USR1 sample slot's place, given up: the drummer keeps
  * USR2 and the kit pair USR3+4; editor.c refuses sample uploads into USR1), packed; as the FM6 bank, a song is read in place through
  * the plain XIP window (the device has little RAM left): loading it only checks the packed form and keeps a
- * pointer and the sections' offsets. A section starts on the bar as SLOOP's live sections do (seq.c
- * live_block: sng_apply instead of arrangement_apply while a song is loaded): the drum track takes its
- * pattern, the synth tracks keep theirs. The pedal's PC n loads song n (sng_req, taken by sng_poll in the
+ * pointer and the sections' offsets. A section starts on the bar (seq.c live_block: sng_apply): the drum track
+ * takes its pattern. The pedal's PC n loads song n (sng_req, taken by sng_poll in the
  * main loop: flash); stopped, the song's tempo and kit are set and its first section cued at once;
  * playing, they come with the next section.
  *
@@ -33,7 +32,7 @@
  * device: not read.)
  * tools/fm1_song.py writes one from a JSON file and sends it (EDITOR_PROTOCOL.md: BK_PUT object 16 + slot).
  * The pedal settings (the channel) are a small object of their own (OBJ_ARRSET, backup object 24).
- * Included from arranger_scene.c (the firmware through project.c, the host tests directly). */
+ * Included from project.c (the firmware), or directly by the host tests. */
 #define SNG_MAGIC 0x32474E53u                    /* "SNG2" (SNG_SLOTS, SNG_SECTIONS: seq.c) */
 #define SNG_NAME 12u
 #define SNG_HDR 32u
@@ -160,7 +159,7 @@ static uint32_t sng_meter(uint32_t k)            /* section k's meter byte (0: 4
 {
     return sng_cur >= 0 && k < sng.nsec ? sng_sec(k)[15] : 0u;
 }
-static uint32_t sng_bars(uint32_t k)             /* as section_bars: the bars its pattern takes, in its meter
+static uint32_t sng_bars(uint32_t k)             /* the bars its pattern takes, in its meter
                                                   * (in 1/48 of a beat: every step and bar is a whole number of them) */
 {
     const uint8_t *s;
@@ -260,7 +259,7 @@ static void sng_apply(uint32_t k)
 
 /* the entry (brk 0) or the break of section k armed before its pattern, as it lands (live_block, after the reset:
  * eb_dstep's step i at the drum track's step i). A break asked for where none is written: the entry; neither: a bar of
- * rest (also SLOOP's sections A..D, which have neither) */
+ * rest */
 static __attribute__((noinline)) void sng_eb(uint32_t k, uint32_t brk)
 {
     const uint8_t *s = sng_cur >= 0 && k < sng.nsec ? sng_sec(k) : 0;
@@ -405,7 +404,7 @@ static int sng_load(uint32_t slot)
     uint32_t n;
     if (slot >= SNG_ALL) {
         fm1_irq_off();
-        sng_unload();                            /* SLOOP's sections A..D again; the drum track keeps its pattern */
+        sng_unload();                            /* no song: the drum track keeps its pattern, no sections */
         sng.pend = 0;
         fm1_irq_on();
         pedal_say(PU_NOSONG, "");
@@ -433,7 +432,6 @@ static int sng_load(uint32_t slot)
         sng_ui_song[i] = 0;
     }
     if (!song.playing) {                         /* cued: its tempo and kit now, its first section in the drum track */
-        chain_n = 0;
         sng_globals();
         sng_apply(0);
         live_sec = 0;

@@ -212,7 +212,7 @@ static void fm1_main(void)
             } else if (fm1_ms - t0 > 5000u) {
                 fm1_audio_stop();
 #if FELUCCA_DRUMMER
-                persist_flush_now();                    /* (live sections, song, project: RAM-only so far) */
+                persist_flush_now();                    /* (the settings, the project: RAM-only so far) */
 #endif
                 scr_wake_now();
                 lcd_fill(0, 0, 240, 240, C_BLACK);
@@ -241,7 +241,7 @@ static void fm1_main(void)
         if (usb.uboot_req) {                            /* SysEx F0 22 24 35 7D F7 from the host */
             fm1_audio_stop();
 #if FELUCCA_DRUMMER
-            persist_flush_now();                    /* (live sections, song, project: RAM-only so far) */
+            persist_flush_now();                    /* (the settings, the project: RAM-only so far) */
 #endif
             scr_wake_now();
             lcd_fill(0, 0, 240, 240, C_BLACK);
@@ -268,7 +268,7 @@ static void fm1_main(void)
         autosave_tick();                                /* the working project into flash, when quiet */
         battlog_tick();                                 /* the battery, once a minute (battlog.c) */
 #if FELUCCA_DRUMMER
-        sections_flush();                               /* live sections / the recorded song, when quiet */
+        settings_flush();                               /* the settings changed while playing, when quiet */
 #endif
         felucca_dbg.stage = 9;
         while (fm1_ms - m < 15u) {                               /* ~60 UI frames/s at most */

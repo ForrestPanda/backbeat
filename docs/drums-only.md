@@ -4,7 +4,7 @@ The user's decision (2026-10-13): the FM-1 becomes a drummer only. SLOOP's synth
 tracks, the twelve engines, voices, the FM6 bank, user presets, arp, chords, scales, the SLICER insert, the
 punch FX and live loop recording (REC, free takes). What stays: the drum track and its kits (ACOUSTIC and
 its treatments until 2026-10-15, then MULDJORD; the SYN kits, the user kits USR2..4), the drum grid and kit pages, SLOOP's sections A..D,
-quick chain and song chain, the drummer (pedal, songs, the song screen), the metronome and the pedal's
+quick chain and song chain (JAM, gone in turn 2026-10-27: `design.md`), the drummer (pedal, songs, the song screen), the metronome and the pedal's
 count-in, MIDI in (drum notes, the pedal, clock) and out (drum notes), USB audio, the master chain (reverb
 and delay sends, TEXTURE, DUST, the DJ filter, the limiter), backup, OTA and recovery.
 
@@ -93,7 +93,8 @@ says why if they do. The CPU and target budgets are re-based where the code they
    parts sent to it: the renders bit for bit); the editor's INFO lists no engine (the drum marker of v10 then
    holds for every track) and its PRESET / NAMES / UP_* / FM6_* commands and backup objects 6..8 are gone. Not
    renumbered after all: a flash sector's header names its object, so the ids of the preset banks and the FM6
-   bank stay retired (renumbering would orphan every song and project saved). The menu NOTES item stays: it
+   bank stay retired (renumbering would orphan every song and project saved; since 2026-10-27 the four project
+   slots, objects 1..4, are retired the same way: JAM went). The menu NOTES item stays: it
    lights the drum hits on the layers.
 
 8. **One track.** `NTRK` 1, `TRK_DRUM` 0, `track_t` trimmed to what the drum track uses, `song.sel` and

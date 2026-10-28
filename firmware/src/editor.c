@@ -352,7 +352,7 @@ static const param_desc_t *ed_desc(uint32_t scope, uint32_t id, int16_t **vp)
 }
 
 /* ---- v6: backup / restore (web/EDITOR_PROTOCOL.md). Objects: 0 the working project, 1 the settings
- * (colours, calibration, the song order, the lights, SYNC), 2..5 the projects A..D, 9 the SYN kits, 10 the MIDI part,
+ * (colours, calibration, the lights, SYNC), 9 the SYN kits, 10 the MIDI part (2..5, SLOOP's projects A..D: gone 2026-10-27),
  * 32..35 the user sample slots USR1..4 (read only here: restored with SMP_BEGIN / WRITE / END). (6..7 the user preset
  * banks and 8 the FM6 patch bank went with the synth, drums only.)
  * LIST takes a snapshot of the working project and the settings; GET reads 1..256 bytes of an object.
@@ -397,11 +397,7 @@ static const uint8_t *ed_bk_obj(uint32_t id, uint32_t *len)   /* 0 = no such obj
         *len = sizeof ed_bk_set;
         return (const uint8_t *)&ed_bk_set;
     }
-    if (id >= 2u && id <= 5u) {
-        if (project_used(id - 2u))
-            *len = sizeof proj_slot[0];
-        return (const uint8_t *)&proj_slot[id - 2u];
-    }
+    /* (2..5, SLOOP's projects A..D: no such objects since 2026-10-27, JAM's; a backup's are left out by the editor) */
     if (id == 9u) {                                       /* SLOOP 2.5: the SYN drum kits (drum_synth.c dsu) */
         (void)dsu_kit(0);
         *len = sizeof dsu;
@@ -443,8 +439,8 @@ static const uint8_t *ed_bk_obj(uint32_t id, uint32_t *len)   /* 0 = no such obj
     }
     return 0;
 }
-static const uint8_t ED_BK_IDS[] = {0, 1, 2, 3, 4, 5, 9, 10, 32, 33, 34, 35,   /* 35: USR4 (2.4), 9: SYN kits (2.5),
-                                                                                      * 10: MIDI LEARN (2.6) */
+static const uint8_t ED_BK_IDS[] = {0, 1, 9, 10, 32, 33, 34, 35,   /* 35: USR4 (2.4), 9: SYN kits (2.5), 10: MIDI LEARN
+                                                                       * (2.6); 2..5, SLOOP's projects A..D: gone 2026-10-27 */
                                      16, 17, 18, 19, 20, 21, 22, 23, 40, 41, 42, 43, 44, 45, 46, 47, 24};   /* fm1-drummer
                                                          * (2026-10-21): the songs (an empty slot: length 0, so a restore
                                                          * erases it) and the pedal settings; the reply 29 x 11 bytes */
@@ -461,8 +457,8 @@ static uint32_t ed_bk_commit(void)
         return 2;
     if (id == 1u)
         return settings_restore(raw, n);
-    if (id <= 5u)
-        return project_restore(id == 0u ? 4u : id - 2u, raw, n);
+    if (id == 0u)
+        return project_restore(raw, n);
     if (id == 9u) {                                       /* SLOOP 2.5: the SYN drum kits, written with the settings */
         persist_t p;
         uint32_t k;
@@ -564,8 +560,9 @@ static int ed_backup(uint32_t cmd, const uint8_t *a, uint32_t na)   /* 1: a back
         rc = 1;
         if (!flash_ok) {
             rc = 4;
-        } else if (op == 0u && na == 12u && (id <= 10u || ed_bk_song(id) >= 0 || id == ED_BK_ARRSET)) {   /* begin: id,
-                                                       * length (5), CRC-32 (5); 16..24, 40..47: fm1-drummer */
+        } else if (op == 0u && na == 12u && ((id <= 10u && (id < 2u || id > 5u)) || ed_bk_song(id) >= 0 || id == ED_BK_ARRSET)) {   /* begin:
+                                                       * id, length (5), CRC-32 (5); 16..24, 40..47: fm1-drummer; 2..5
+                                                       * (SLOOP's projects A..D): rc 1, no such objects since 2026-10-27 */
             len = ed_bk_r32(a + 2);
             if (id >= 2u || len) {                        /* (the working project and the settings are never empty) */
                 if (len <= sizeof proj_tmp) {
@@ -701,24 +698,8 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_b(a[0]);
         ed_step_out(TDRUM, a[0]);
         break;
-    case ED_PROJECT:                                       /* 0 = load, 1 = save, 2 = query; slot 0..3 */
-        if (na < 2u || a[0] > 2u)
-            return;
-#if FELUCCA_DRUMMER
-        if (a[0] < 2u && (song.playing || transport_req)) {
-            ed_b(a[0]); ed_b(a[1] & 3u); ed_b(project_used(a[1] & 3u));
-            ed_b(1);                                  /* optional status: transport busy */
-            break;
-        }
-#endif
-        if (a[0] == 1u)
-            project_save(a[1] & 3u);
-        else if (a[0] == 0u)
-            project_load(a[1] & 3u);
-        ed_b(a[0]);
-        ed_b(a[1] & 3u);
-        ed_b(project_used(a[1] & 3u));
-        break;
+    /* (ED_PROJECT, 9: SLOOP's four project slots, gone 2026-10-27 with JAM: no reply, as any command this firmware
+     * does not have) */
     case ED_SMP_BEGIN:                                     /* slot -> slot, rc */
     case ED_SMP_ERASE: {
         uint32_t rc;

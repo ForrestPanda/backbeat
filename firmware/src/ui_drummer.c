@@ -5,9 +5,9 @@
  *          instead while it clicks), what comes (NEXT, FILL, FILL > NEXT, ENDING), the song's sections (up to 16) as
  *          tiles, four to a row as the white keys 1..16, and a footer: the kit, the pedal channel and its MIDI dot,
  *          the last message.
- *   SONGS  SAVE tapped: two pages of 16 (name, tempo, sections) and JAM, SLOOP's sections A..D with their chain
- *          (ui_song.c: the page's own screen then, sng_view DV_JAM): USER, the slots the editor and the tools
+ *   SONGS  SAVE tapped: two pages of 16 (name, tempo, sections): USER, the slots the editor and the tools
  *          write; FACTORY, the grooves in the firmware (read-only; the pedal's PC 16..31). ENV / LFO: the page.
+ *          (Its last row, JAM, SLOOP's sections A..D with their chain page, is gone since 2026-10-27.)
  *          It opens on the loaded song's page; with none, on USER, or FACTORY while USER is empty.
  * The keys go through pedal.c's own calls (the host tests cover both). A change of section brings no fill of
  * its own (as the pedal's CC 20 / 27): a fill is asked for by itself, so one press changes, two fill into it:
@@ -26,9 +26,8 @@
  * SONGS (9 rows at a time, following the row picked): KNOB 1 / SELECT a row, REC or OCT+ loads it (and LIVE again),
  * a white key 1..16 loads that song of the page. */
 static uint8_t sng_view = DV_LIVE;                  /* DV_* (ui.c) */
-static uint8_t sng_pick;                            /* SONGS: the row of the page (SNG_SLOTS: JAM) */
+static uint8_t sng_pick;                            /* SONGS: the row of the page (0..15) */
 static int8_t sng_page = -1;                        /* 0 USER, 1 FACTORY; -1 not chosen yet: lib_page */
-#define SNG_JAM 0xFFu                               /* drummer_load: no song, JAM */
 static uint32_t lib_page(void)                      /* the page shown: the one chosen, or FACTORY while USER is empty */
 {
     uint32_t i;
@@ -46,7 +45,7 @@ static void lib_turn(uint32_t page)                 /* ENV / LFO: USER / FACTORY
     sng_page = (int8_t)page;
 }
 static uint32_t str_hash(uint32_t h, const char *s);
-static int drummer_on(void) { return on_song_page() && sng_view != DV_JAM; }
+static int drummer_on(void) { return on_song_page(); }
 static int drummer_keys_on(void) { return drummer_on() && !ui.menu; }
 static void drummer_open(uint32_t view)             /* (ui.c go_home, studio_open: the page is the SONG page) */
 {
@@ -56,15 +55,15 @@ static void drummer_open(uint32_t view)             /* (ui.c go_home, studio_ope
         sng_page = (int8_t)((uint32_t)sng_cur / SNG_SLOTS);
     ui.force = 1;
 }
-static void drummer_load(uint32_t k)                /* a song (0..31), or SNG_JAM: no song; then LIVE / JAM */
+static void drummer_load(uint32_t k)                /* a song (0..31); then LIVE */
 {
-    sng_req = (uint8_t)(k < SNG_ALL ? k + 1u : 0xFFu);   /* (sng_poll loads it, as a PC) */
-    sng_view = k < SNG_ALL ? DV_LIVE : DV_JAM;
+    sng_req = (uint8_t)(k + 1u);                    /* (sng_poll loads it, as a PC) */
+    sng_view = DV_LIVE;
     ui.force = 1;
 }
-static void lib_load(uint32_t row)                  /* a row of the page shown: its song, or JAM */
+static void lib_load(uint32_t row)                  /* a row of the page shown: its song */
 {
-    drummer_load(row < SNG_SLOTS ? lib_page() * SNG_SLOTS + row : SNG_JAM);
+    drummer_load(lib_page() * SNG_SLOTS + (row % SNG_SLOTS));
 }
 
 static int32_t key_black(uint32_t k)             /* a key (0..26, from F3) -> its black key index 0.., -1 = a white key */
@@ -150,7 +149,7 @@ static void drummer_input(uint32_t pressed, uint32_t home)
     if (sng_view == DV_LIB) {
         s = panel_enc(EN_K1) + panel_enc(EN_SELECT);
         if (s) {
-            sng_pick = (uint8_t)clamp((int32_t)sng_pick + s, 0, (int32_t)SNG_SLOTS);
+            sng_pick = (uint8_t)clamp((int32_t)sng_pick + s, 0, (int32_t)SNG_SLOTS - 1);
             ui.force = 1;
         }
         panel_enc(EN_K2); panel_enc(EN_K3); panel_enc(EN_K4);   /* (no hidden action) */
@@ -218,7 +217,7 @@ static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, const cha
     if (sng_cur >= 0) {
         sng_label(b, (uint32_t)sng_cur);
     } else {
-        str_cpy(b, "jam a-d", 8);
+        str_cpy(b, "keys: songs", 12);              /* (the white keys load the page's songs) */
     }
     cv_text(4, 22, &FONT_S, b, TE_G3);
     fmt_int(b, song.g[G_BPM]);
@@ -498,7 +497,7 @@ static void live_draw(void)
     live_foot();
 }
 
-/* SONGS: a page's 16 songs and JAM, the row picked white; the pages as tabs in the header (the one shown white) */
+/* SONGS: a page's 16 songs, the row picked white; the pages as tabs in the header (the one shown white) */
 static void lib_draw(void)
 {
     static uint32_t cache;
@@ -517,40 +516,35 @@ static void lib_draw(void)
     cv_text(236 - text_w(&FONT_S, "env/lfo: page"), 4, &FONT_S, "env/lfo: page", TE_G3);   /* (the keys that turn it) */
     cv_rect(0, 23, 240, 1, TE_G1);
     cv_blit(0, 0);
-    {   /* 9 rows of 22 px over the 16 slots and JAM (the last row): the window follows the row picked */
-        uint32_t top = (uint32_t)clamp((int32_t)sng_pick - 4, 0, (int32_t)SNG_SLOTS + 1 - 9), r;
+    {   /* 9 rows of 22 px over the 16 slots: the window follows the row picked */
+        uint32_t top = (uint32_t)clamp((int32_t)sng_pick - 4, 0, (int32_t)SNG_SLOTS - 9), r;
         for (r = 0; r < 9u; r++) {
             const sng_lib_t *e;
             int pick, cur;
             uint16_t fg;
             i = top + r;
-            e = &lib[i < SNG_SLOTS ? i : 0];
+            e = &lib[i % SNG_SLOTS];
             pick = i == sng_pick;
-            cur = (i < SNG_SLOTS && (int32_t)(page * SNG_SLOTS + i) == sng_cur) || (i == SNG_SLOTS && sng_cur < 0);
+            cur = (int32_t)(page * SNG_SLOTS + i) == sng_cur;
             fg = pick ? C_BLACK : C_WHITE;
             cv_begin(240, 22, pick ? C_WHITE : C_BLACK);
-            if (i == SNG_SLOTS) {
-                cv_text(4, 3, &FONT_S, "J", pick ? C_BLACK : TE_G3);
-                cv_text(36, 3, &FONT_S, "JAM: SECTIONS A..D", fg);
+            fmt_int(b, (int32_t)i + 1);
+            cv_text(4, 3, &FONT_S, b, pick ? C_BLACK : TE_G3);
+            if (!e->name[0]) {
+                cv_text(36, 3, &FONT_S, "-", pick ? C_BLACK : TE_G2);
             } else {
-                fmt_int(b, (int32_t)i + 1);
-                cv_text(4, 3, &FONT_S, b, pick ? C_BLACK : TE_G3);
-                if (!e->name[0]) {
-                    cv_text(36, 3, &FONT_S, "-", pick ? C_BLACK : TE_G2);
-                } else {
-                    cv_text(36, 3, &FONT_S, e->name, fg);
-                    fmt_int(b, e->bpm);
-                    cv_text(236 - text_w(&FONT_S, b), 3, &FONT_S, b, pick ? C_BLACK : TE_G4);
-                    fmt_int(b, e->nsec);
-                    str_cpy(b + str_len(b), "s", 2);
-                    cv_text(180, 3, &FONT_S, b, pick ? C_BLACK : TE_G3);
-                }
+                cv_text(36, 3, &FONT_S, e->name, fg);
+                fmt_int(b, e->bpm);
+                cv_text(236 - text_w(&FONT_S, b), 3, &FONT_S, b, pick ? C_BLACK : TE_G4);
+                fmt_int(b, e->nsec);
+                str_cpy(b + str_len(b), "s", 2);
+                cv_text(180, 3, &FONT_S, b, pick ? C_BLACK : TE_G3);
             }
             if (cur)
                 cv_rect(25, 7, 6, 6, pick ? C_BLACK : TE_DRUM);   /* the one loaded */
             if (r == 0u && top > 0u)
                 cv_rect(237, 2, 2, 6, TE_G3);                  /* more above */
-            if (r == 8u && top + 9u < SNG_SLOTS + 1u)
+            if (r == 8u && top + 9u < SNG_SLOTS)
                 cv_rect(237, 14, 2, 6, TE_G3);                 /* more below */
             cv_blit(0, 24u + 22u * r);
         }

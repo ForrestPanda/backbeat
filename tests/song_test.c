@@ -4,7 +4,8 @@
  * packed form's checks; PC loads a song (stopped: tempo, kit and the first section at once); its sections
  * start on the bar with their length, division and fill conditions; next / previous over the song's
  * sections; the ending takes the flagged outro, for its bars; PC while playing waits for the next section;
- * a bad or empty slot leaves the song alone; PC 127 goes back to SLOOP's A..D; the pedal settings object. */
+ * a bad or empty slot leaves the song alone; PC 127 unloads (no song: no sections, the pattern stays); the pedal
+ * settings object. */
 #define FELUCCA_DRUMMER 1
 #define main hostsim_main
 #include "hostsim.c"
@@ -23,88 +24,9 @@ static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len)
     *len = slot < SNG_ALL ? blob_n[slot] : 0u;
     return *len ? blob[slot] : 0;
 }
-#include "../firmware/src/arranger_scene.c"
+#include "../firmware/src/sng.c"
+#include "songbuild.h"                                 /* song_hdr, song_sec, song_secm, song_blk, song_fb */
 
-/* ---- a packed song, as the tool writes it */
-static void w16(uint8_t *b, uint32_t v) { b[0] = (uint8_t)v; b[1] = (uint8_t)(v >> 8); }
-static uint32_t song_hdr(uint8_t *b, const char *name, uint32_t bpm, uint32_t kit, uint32_t nsec)
-{
-    memset(b, 0, SNG_HDR);
-    w16(b, SNG_MAGIC & 0xFFFFu); w16(b + 2, SNG_MAGIC >> 16);
-    strncpy((char *)b + 4, name, SNG_NAME);
-    w16(b + 16, bpm);
-    b[18] = (uint8_t)kit; b[19] = 50; b[20] = 100; b[21] = 20; b[22] = (uint8_t)nsec;
-    return SNG_HDR;
-}
-/* a section, packed as the tool packs it ("SNG2"): any lanes from pattern strings ('.' rest, 'x' norm, 'X' hard,
- * 'g' ghost, 's' soft), cond: '.' normal, 'F' fill only, 'N' no fill; marks: per step the lanes only during a fill
- * (fonly) and not during one (fno); meter: the section header's meter byte (0: 4/4) */
-static uint32_t song_secm(uint8_t *b, uint32_t pos, const char *name, uint32_t len, uint32_t div, uint32_t flags,
-                          uint32_t meter, const char *const lane[DRUM_LANES], const char *cond, const uint16_t *fonly,
-                          const uint16_t *fno)
-{
-    uint32_t i, l, nf = (len + 3u) / 4u, q = pos + SNG_SEC_HDR + nf;
-    memset(b + pos, 0, SNG_SEC_HDR + nf);
-    strncpy((char *)b + pos, name, SNG_NAME);
-    b[pos + 12] = (uint8_t)len; b[pos + 13] = (uint8_t)div; b[pos + 14] = (uint8_t)flags; b[pos + 15] = (uint8_t)meter;
-    for (i = 0; i < len; i++) {
-        uint32_t c = cond && cond[i] ? (cond[i] == 'F' ? FC_FILL : cond[i] == 'N' ? FC_NOFILL : FC_NORM) : FC_NORM, on = 0;
-        b[pos + SNG_SEC_HDR + i / 4u] |= (uint8_t)(c << (2u * (i % 4u)));
-        for (l = 0; l < DRUM_LANES; l++)
-            if (lane[l] && lane[l][i] && lane[l][i] != '.')
-                on |= 1u << l;
-        w16(b + q, on);
-        q += 2;
-        for (l = 0; l < DRUM_LANES; l++) {
-            char ch;
-            if (!((on >> l) & 1u))
-                continue;
-            ch = lane[l][i];
-            b[q++] = (uint8_t)((ch == 'X' ? LV_HARD : ch == 'g' ? LV_GHOST : ch == 's' ? LV_SOFT : LV_NORM) |
-                               (fonly && (fonly[i] >> l & 1u) ? 0x10u : 0u) | (fno && (fno[i] >> l & 1u) ? 0x20u : 0u));
-        }
-    }
-    w16(b + pos + 16, q - pos);
-    return q;
-}
-/* a block of steps appended to the section at pos (just written, ending at end): its fill bar of its own, entry or
- * break (flag f: SNG_F_FILLBAR, _ENTRY, _BREAK, in that order), fl steps, lanes as song_secm (no marks); the
- * section's flag and size follow. Returns the new end */
-static uint32_t song_blk(uint8_t *b, uint32_t pos, uint32_t end, uint32_t f, uint32_t fl, const char *const lane[DRUM_LANES])
-{
-    uint32_t i, l, q = end;
-    b[pos + 14] |= (uint8_t)f;
-    b[q++] = (uint8_t)fl;
-    for (i = 0; i < fl; i++) {
-        uint32_t on = 0;
-        for (l = 0; l < DRUM_LANES; l++)
-            if (lane[l] && lane[l][i] && lane[l][i] != '.')
-                on |= 1u << l;
-        w16(b + q, on);
-        q += 2;
-        for (l = 0; l < DRUM_LANES; l++) {
-            char ch;
-            if (!((on >> l) & 1u))
-                continue;
-            ch = lane[l][i];
-            b[q++] = (uint8_t)(ch == 'X' ? LV_HARD : ch == 'g' ? LV_GHOST : ch == 's' ? LV_SOFT : LV_NORM);
-        }
-    }
-    w16(b + pos + 16, q - pos);
-    return q;
-}
-static uint32_t song_fb(uint8_t *b, uint32_t pos, uint32_t end, uint32_t fl, const char *const lane[DRUM_LANES])
-{
-    return song_blk(b, pos, end, SNG_F_FILLBAR, fl, lane);
-}
-/* lanes 0 (kick), 2 (snare), 4 (hat) */
-static uint32_t song_sec(uint8_t *b, uint32_t pos, const char *name, uint32_t len, uint32_t div, uint32_t flags,
-                         const char *kick, const char *snare, const char *hat, const char *cond)
-{
-    const char *lane[DRUM_LANES] = {kick, 0, snare, 0, hat};
-    return song_secm(b, pos, name, len, div, flags, 0, lane, cond, 0, 0);
-}
-static void capture(uint32_t slot) { proj_capture(&proj_slot[slot]); }
 static void cc(uint32_t ch, uint32_t num, uint32_t val) { um_byte(0xB0u | (ch - 1u)); um_byte(num); um_byte(val); }
 static void pc(uint32_t ch, uint32_t n) { um_byte(0xC0u | (ch - 1u)); um_byte(n); }
 
@@ -173,8 +95,6 @@ int main(int argc, char **argv)
         uint8_t drum[] = {42, (uint8_t)(k % 8u == 4u ? 38 : 36)};
         put_step(TDRUM, k, k % 4u ? 1 : 2, drum, ST_NOTE, 0);
     }
-    capture(0);                                           /* SLOOP's A: PAN 36, a 16-step beat */
-    capture(1);
 
     /* ---- the songs: slot 0 three sections (INTRO 1 bar, VERSE 2 bars with FILL ONLY steps, OUTRO flagged),
      * slot 1 one section at 100 BPM, slot 2 a bad magic, the rest empty */
@@ -361,7 +281,8 @@ int main(int argc, char **argv)
     assert(sng_cur == 0);
     cc(16, 20, 0); advance(bar);
 
-    /* ---- a bad slot and an empty slot leave the song alone; PC 127 unloads: SLOOP's A..D again */
+    /* ---- a bad slot and an empty slot leave the song alone; PC 127 unloads: no song, the drum track keeps the
+     * section's pattern, a section asked for is ignored (no sections without a song since 2026-10-27) */
     pc(16, 2); advance(CTL); sng_poll();
     assert(sng_cur == 0);                                          /* (TEST stays loaded) */
     pc(16, 5); advance(CTL); sng_poll();
@@ -370,11 +291,12 @@ int main(int argc, char **argv)
     assert(sng_cur == -1 && sng_req == 0 && !sng_ready() && song.playing);
     bar = bar_len();
     advance(bar / 4u);
-    cc(16, 20, 0); advance(bar);                                   /* A: the project slot, its PAN and beat */
-    assert(live_sec == 0 && TDRUM->p[P_PAN] == 36 && !lane_on(&TDRUM->dstep[2], 0) && lane_on(&TDRUM->dstep[4], 2));
+    cc(16, 20, 1); advance(bar);                                   /* a section: nothing to ask for */
+    assert(live_req == -1 && song.playing && TDRUM->p[P_PAN] == 36 && !lane_on(&TDRUM->dstep[2], 0) &&
+           lane_on(&TDRUM->dstep[4], 2));                           /* (INTRO's pattern stays in the drum track) */
     cc(16, 23, 0); advance(CTL * 2u);
     assert(!song.playing);
-    printf("song: bad / empty slot ignored, PC 127 back to A..D PASS\n");
+    printf("song: bad / empty slot ignored, PC 127 unloads (no sections, the pattern stays) PASS\n");
 
     /* ---- (lane marks) a section whose hits are marked one by one: the masks reach the sequencer, the lanes
      * follow them in and out of a fill; a plain section clears them */
@@ -655,18 +577,15 @@ int main(int argc, char **argv)
         assert(song.playing && !ci_on && live_sec == 1 && eb_len == 64u);
         pedal.count = 0;
         cc(16, 23, 0); advance(CTL * 2u);
-        /* SLOOP's sections A..D (no song): CC 28, a bar of rest */
+        /* no song (PC 127): CC 20 and CC 28 ask for nothing (no sections), the pattern loops as it is */
         pc(16, 127); advance(CTL); sng_poll();
         assert(sng_cur == -1);
         cc(16, 20, 0);  advance(CTL * 2u);
-        while (live_req >= 0)
-            advance(CTL);
-        assert(song.playing && live_sec == 0 && eb_len == 0u);
+        assert(live_req == -1 && !song.playing);
+        transport_req = 1; advance(CTL * 2u);
+        assert(song.playing && eb_len == 0u);
         cc(16, 28, 127); advance(CTL * 2u);
-        assert(live_req == 0 && live_req_brk);
-        while (live_req >= 0)
-            advance(CTL);
-        assert(eb_len == 16u && drum_src(TDRUM, 0, (0) % trk_len(TDRUM), &fb) == &eb_dstep[0] && fb && !dstep_mask(&eb_dstep[0]));
+        assert(live_req == -1 && !live_req_brk && eb_len == 0u);
         cc(16, 23, 0); advance(CTL * 2u);
         pc(16, 0); advance(CTL); sng_poll();
         assert(sng_cur == 0);
@@ -713,7 +632,7 @@ int main(int argc, char **argv)
            "cycle, or the fill bar), then the pattern PASS\n");
     printf("song: entries and breaks: checked, saved back, from stopped and from another section, never a re-press, the "
            "pattern from its top after them (a change waits for their end), CC 28 (the section playing, fallback, a bar of rest, with a fill, from stopped), a fill "
-           "cuts one, SLOOP's A..D PASS\n");
+           "cuts one, none without a song PASS\n");
 
     /* ---- the pedal settings object */
     {

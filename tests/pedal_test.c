@@ -1,9 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* fm1-drummer: a pedalboard's MIDI drives the sections (firmware/src/pedal.c) through the real
- * sequencer. Bytes go in through the TRS parser (midi_uart.c), as on the jack. Sections A, B, D are
- * stored, C is empty. Checks: a section from stopped starts the loop with it; a section while playing
- * lands exactly on the next bar; next / previous skip the empty section and wrap; empty sections,
- * other channels and program changes are ignored; the pedal channel can be off or omni; tap tempo;
+ * sequencer. Bytes go in through the TRS parser (midi_uart.c), as on the jack. The sections are a song's
+ * (since 2026-10-27: SLOOP's slots A..D, JAM's, went): A, B, C, D, a bar of 16 steps each (D two bars later on),
+ * told apart by one hit on step 0 (A the kick, B the snare, D the hat; C a hat on step 8), at 100 BPM (the tempo
+ * the tap test leaves, so a reload does not move the bar). Checks: without a song the pedal does nothing; a
+ * section from stopped starts the loop with it; a section while playing lands exactly on the next bar; next /
+ * previous walk the sections and wrap; sections the song lacks, other channels and program changes of empty
+ * slots are ignored; the pedal channel can be off or omni; tap tempo;
  * stop. Milestone 2: fills and endings. Since 2026-10-15 a fill (CC 21) is an arranger's fill-in: the rest
  * of this bar (asked in its last beat: the whole next bar), then the pattern from its top, or the section
  * asked for, which lands on the bar after the fill; CC 22 plays the outro once and stops on the bar (or
@@ -17,12 +20,30 @@
 #include "../firmware/src/project.c"
 static struct { uint8_t force; } ui;
 static uint8_t sync_reload;
-#include "../firmware/src/arranger_scene.c"
-
-static void capture(uint32_t slot)             /* (proj_capture: as song_audio_test.c in 2.6) */
+static uint8_t blob[SNG_ALL][3800];              /* the flash slots, then the grooves (the image's) */
+static uint32_t blob_n[SNG_ALL];
+#define SNG_HOST_FETCH 1
+static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len)
 {
-    proj_capture(&proj_slot[slot]);
+    *len = slot < SNG_ALL ? blob_n[slot] : 0u;
+    return *len ? blob[slot] : 0;
 }
+#include "../firmware/src/sng.c"
+#include "songbuild.h"
+
+static void build_song(uint32_t d_len)          /* slot 0: A B C D; D of d_len steps (16: a bar, 32: two) */
+{
+    uint32_t pos = song_hdr(blob[0], "PEDAL", 100, 0, 4);
+    pos = song_sec(blob[0], pos, "A", 16, 2, 0, "x...............", 0, 0, 0);
+    pos = song_sec(blob[0], pos, "B", 16, 2, 0, 0, "x...............", 0, 0);
+    pos = song_sec(blob[0], pos, "C", 16, 2, 0, 0, 0, "........x.......", 0);
+    pos = song_sec(blob[0], pos, "D", d_len, 2, 0, 0, 0, d_len == 16u ? "x..............." : "x...............................", 0);
+    blob_n[0] = pos;
+}
+static int lane_on(const dstep_t *d, uint32_t l) { return (d->on[(l >> 3) & 1u] >> (l & 7u)) & 1u; }
+#define IS_A() (lane_on(&TDRUM->dstep[0], 0) && !lane_on(&TDRUM->dstep[0], 2) && !lane_on(&TDRUM->dstep[0], 4))
+#define IS_B() (lane_on(&TDRUM->dstep[0], 2) && !lane_on(&TDRUM->dstep[0], 0))
+#define IS_D() (lane_on(&TDRUM->dstep[0], 4) && !lane_on(&TDRUM->dstep[8], 4))
 
 static void cc(uint32_t ch, uint32_t num, uint32_t val)   /* ch 1..16, as on the wire */
 {
@@ -62,28 +83,22 @@ int main(void)
         trk[i].p[P_AMODE] = 0;
         trk[i].p[P_LEVEL] = 90;
     }
-    TDRUM->p[P_PAN] = 36;                                 /* the section's marker (drums only: no bass track) */
-    for (k = 0; k < 16; k++) {
-        uint8_t drum[] = {42, (uint8_t)(k % 8u == 4u ? 38 : 36)};
-        put_step(TDRUM, k, k % 4u ? 1 : 2, drum, ST_NOTE, 0);
-    }
-    capture(0);                                           /* A: PAN 36 */
-    TDRUM->p[P_PAN] += 5;
-    capture(1);                                           /* B: PAN 41 */
-    TDRUM->p[P_PAN] += 5;
-    TDRUM->p[P_E0] = 4;
-    capture(3);                                           /* D: PAN 46, kit 4; C stays empty */
-    assert(arrangement_ready() == 0xBu);
-    bar = 4u * 60u * FS / (uint32_t)song.g[G_BPM];
     assert(pedal.ch == 16u);
+    /* no song: the pedal's sections do nothing (JAM's A..D went 2026-10-27); PC 0 loads the song, cued, stopped */
+    assert(!pedal_ready());
+    cc(16, 20, 0); cc(16, 24, 0); advance(CTL * 3u);
+    assert(!song.playing && live_req == -1);
+    build_song(16);
+    pc(16, 0); advance(CTL); sng_poll();
+    assert(sng_cur == 0 && sng_ready() == 0xFu && !song.playing && live_sec == 0 && IS_A());
+    bar = 4u * 60u * FS / (uint32_t)song.g[G_BPM];
+    assert(song.g[G_BPM] == 100);
 
-    /* nothing loaded, stopped: NEXT starts A */
-    assert(!song.playing && live_sec == -1);
+    /* the song cued, stopped: NEXT starts A (the first) */
     cc(16, 24, 0);
     advance(CTL * 3u);
-    assert(song.playing && live_sec == 0 && live_req == -1 && TDRUM->p[P_PAN] == 36);
-    assert(jumped == t0);                                 /* applied on bar 0 of the start */
-    printf("pedal: NEXT from nothing starts A at %u PASS\n", t0);
+    assert(song.playing && live_sec == 0 && live_req == -1 && IS_A());   /* (A was cued already: no jump to see) */
+    printf("pedal: no song: nothing; NEXT from stopped starts A at %u PASS\n", t0);
 
     /* STOP */
     cc(16, 23, 0);
@@ -93,7 +108,7 @@ int main(void)
     /* stopped: section B starts the loop with B */
     cc(16, 20, 1);
     advance(CTL * 3u);
-    assert(song.playing && live_sec == 1 && TDRUM->p[P_PAN] == 41 && jumped == t0);
+    assert(song.playing && live_sec == 1 && IS_B() && jumped == t0);
     printf("pedal: section B from stopped starts with B PASS\n");
 
     /* playing: A asked for in bar 1 (1.5 bars in) lands exactly on bar 2 */
@@ -102,26 +117,28 @@ int main(void)
     advance(CTL);
     assert(live_req == 0 && live_sec == 1);              /* pending, not yet */
     advance(bar);
-    assert(live_sec == 0 && live_req == -1 && TDRUM->p[P_PAN] == 36);
+    assert(live_sec == 0 && live_req == -1 && IS_A());
     assert(since_start() >= 2u * bar && since_start() < 2u * bar + CTL);
     printf("pedal: A on the bar (%u) PASS\n", since_start());
 
-    /* an empty section, another channel, a program change: ignored */
-    cc(16, 20, 2); advance(CTL);
+    /* a section the song does not have, another channel, a program change of an empty slot: ignored */
+    cc(16, 20, 4); advance(CTL);
     assert(live_req == -1);
     cc(5, 20, 1); advance(CTL);
     assert(live_req == -1);
-    pc(16, 3); advance(CTL);
-    assert(live_req == -1 && song.playing && live_sec == 0);
+    pc(16, 3); advance(CTL); sng_poll();
+    assert(live_req == -1 && song.playing && live_sec == 0 && sng_cur == 0);
     cc(16, 20, 9); advance(CTL);
     assert(live_req == -1);
-    printf("pedal: empty C, channel 5, PC, section 9 ignored PASS\n");
+    printf("pedal: section 5, channel 5, PC of an empty slot, section 9 ignored PASS\n");
 
-    /* NEXT: A -> B -> D (C skipped) -> A (wrap); PREV: A -> D */
+    /* NEXT: A -> B -> C -> D -> A (wrap); PREV: A -> D */
     cc(16, 24, 0); advance(bar);
     assert(live_sec == 1 && since_start() % bar < CTL);
     cc(16, 24, 0); advance(bar);
-    assert(live_sec == 3 && TDRUM->p[P_PAN] == 46 && drum_kit() == 4 && since_start() % bar < CTL);
+    assert(live_sec == 2 && since_start() % bar < CTL);
+    cc(16, 24, 0); advance(bar);
+    assert(live_sec == 3 && IS_D() && since_start() % bar < CTL);
     cc(16, 24, 0); advance(bar);
     assert(live_sec == 0 && since_start() % bar < CTL);
     cc(16, 25, 0); advance(bar);
@@ -129,7 +146,7 @@ int main(void)
     /* two presses in one bar: the last one counts (a toggle switch sending twice: the second is a no-op) */
     cc(16, 25, 0); cc(16, 20, 1); advance(bar);
     assert(live_sec == 1);
-    printf("pedal: NEXT skips C and wraps, PREV wraps, last request wins PASS\n");
+    printf("pedal: NEXT and PREV walk the song's sections and wrap, last request wins PASS\n");
 
     /* the channel: off ignores all, omni takes any */
     pedal.ch = 0;
@@ -386,11 +403,12 @@ int main(void)
     cc(16, 23, 0); advance(CTL * 2u);
     printf("pedal: the count-in: one bar, two bars, cancelled by stop, the section changed meanwhile PASS\n");
 
-    /* a 2-bar section (D, 32 steps): a section asked for waits for D's end (no fill; with CC 21: the fill to the end) */
+    /* a 2-bar section (D, 32 steps): a section asked for waits for D's end (no fill; with CC 21: the fill to the end).
+     * The song written again with D of 32 steps and loaded again (stopped: cued, A in the drum track, the tempo its own) */
 #define NEXT_BAR() advance(bar - (now - t0) % bar + CTL)   /* just past the next bar line */
-    TDRUM->p[P_SLEN] = 32;
-    capture(3);
-    assert(section_bars(3) == 2u);
+    build_song(32);
+    pc(16, 0); advance(CTL); sng_poll();
+    assert(sng_cur == 0 && !song.playing && song.g[G_BPM] == 100 && sng_bars(3) == 2u && sng_bars(0) == 1u);
     cc(16, 20, 3); advance(CTL * 3u);                      /* D from stopped */
     assert(song.playing && live_sec == 3 && live_bar == 0);
     advance(bar / 4u);

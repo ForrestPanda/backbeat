@@ -239,32 +239,12 @@ static uint32_t graph_signature(void)
     h ^= (uint32_t)pg->graph * 131u;
     for (i = 0; i < P_COUNT; i++)
         h = (h ^ (uint32_t)t->p[i]) * 16777619u;
-    h ^= (uint32_t)song.g[G_SLOT] * 13u;
-    if (pg->graph == GR_SLOTS)                       /* (a checksum over each slot) */
-        for (i = 0; i < 4u; i++)
-            h ^= (uint32_t)project_used(i) << (20u + i);
     if (pg->graph == GR_STEPS) {
         uint32_t ph = song.playing ? t->seq_idx : 0xFFFFu;
         h ^= steps_hash(t) + ph * 31u + ui.cursor * 7919u;
     }
     return h;
 }
-static void graph_slots(void)
-{
-    uint32_t i;
-    for (i = 0; i < 4u; i++) {
-        int32_t y = 8 + (int32_t)i * 26;
-        char b[4];
-        int sel = (int32_t)i + 1 == song.g[G_SLOT];
-        b[0] = (char)('1' + i);
-        b[1] = 0;
-        if (sel)
-            cv_rect(4, y + 6, 3, 3, C_WHITE);
-        cv_text(14, y, &FONT_S, b, sel ? C_WHITE : C_GRAY);
-        cv_text(40, y, &FONT_S, project_used(i) ? "USED" : "EMPTY", project_used(i) ? (sel ? C_WHITE : C_HI) : C_DIM);
-    }
-}
-
 /* SLOOP 2.4: a page without a graph (EDIT, VOICE, the DEST pages, GLOBAL, MASTER, SYSTEM...): its values
  * large in the empty space, 2 x 2 as the knobs (KNOB 1 2 / KNOB 3 4), the one turned in white; one value
  * alone (FILTER) across the width. The columns (draw_columns, drawn first) fill ui.big_* */
@@ -309,10 +289,6 @@ static void draw_graph(void)
         case GR_STEPS:
             graph_steps(t, c);
             break;
-        case GR_SLOTS:
-            cv_oy = 0;
-            graph_slots();
-            break;
         default:
             if (big_page(pg)) {
                 cv_oy = 0;
@@ -321,7 +297,7 @@ static void draw_graph(void)
             break;
         }
     }
-    top = !ui.home && (pg->graph == GR_SLOTS || big_page(pg));   /* these draw from the top */
+    top = !ui.home && big_page(pg);                  /* these draw from the top */
     cv_oy = 0;
     if (ui.hot_t && settings.zoom && !(top && big_page(pg))) {   /* (the big values show it already) */                 /* focus (menu ZOOM): the touched value, large and white */
         int32_t x;
@@ -427,10 +403,6 @@ static void draw_columns(void)
     for (c = 0; c < 4u; c++) {
         int16_t *vp;
         const param_desc_t *d = page_desc(cur_page(), c, &vp);
-        if (cur_page()->graph == GR_SLOTS && c == 1u) {   /* 2.6: ERASE, lit while the slot holds a project */
-            draw_column(1, "ERASE", "--", "", project_used((uint32_t)song.g[G_SLOT] - 1u) ? C_HI : C_DIM, -1, ICON_AUTO);
-            continue;
-        }
         if (!d || !d->label || d->label[0] == '-') {
             draw_column(c, "", "", "", C_HI, -1, ICON_AUTO);
             continue;
@@ -486,7 +458,7 @@ static void ui_draw(void)
         case PU_SONG:   ui_say("SONG: ", nm); break;
         case PU_ENDING: ui_say("ENDING", nm[0] ? ": " : ""); if (nm[0]) str_cpy(ui.msg + str_len(ui.msg), nm, sizeof ui.msg - str_len(ui.msg)); break;
         case PU_FILL:   ui_message(pedal_fill_wait > 1u ? "FILL AT THE END" : pedal_fill_wait ? "FILL NEXT BAR" : "FILL"); break;
-        case PU_NOSONG: ui_say(nm[0] ? "NO SONG " : "SECTIONS A-D", nm); break;
+        case PU_NOSONG: ui_say(nm[0] ? "NO SONG " : "NO SONG", nm); break;   /* (PC 127: no song, no sections) */
         case PU_STOP:   ui_message("STOP"); break;
         case PU_COUNT:  ui_say("COUNT-IN: ", nm); break;
         case PU_BREAK:  ui_say("BREAK: ", nm); break;
@@ -516,10 +488,7 @@ static void ui_draw(void)
     }
 #if FELUCCA_DRUMMER
     if (!ui.menu && on_song_page()) {
-        if (drummer_on())
-            drummer_draw();                             /* (fm1-drummer: a song's, ui_drummer.c) */
-        else
-            song_screen_draw();
+        drummer_draw();                                 /* (fm1-drummer: LIVE / SONGS, ui_drummer.c) */
         ui_timers();
         ui.force = 0;
         return;

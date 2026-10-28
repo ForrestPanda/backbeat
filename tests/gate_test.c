@@ -15,7 +15,7 @@
 #include "../firmware/src/project.c"
 static struct { uint8_t force; } ui;
 static uint8_t sync_reload;
-#include "../firmware/src/arranger_scene.c"             /* (the sequencer's song arranger, as pedal_test.c) */
+#include "../firmware/src/sng.c"                       /* (the songs, as pedal_test.c) */
 
 static int32_t out[CTL * 2];
 static uint32_t nblk;                               /* blocks rendered */

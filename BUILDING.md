@@ -56,7 +56,7 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 
 | Flag | Default | |
 | --- | --- | --- |
-| `FELUCCA_FLASH` | 1 | settings, projects and songs in flash |
+| `FELUCCA_FLASH` | 1 | the settings, the working project and the songs in flash |
 | `FELUCCA_OTA` | 1 | update entry (needs `FELUCCA_FLASH`) |
 | `FELUCCA_CDC` | 1 | USB serial console |
 | `FELUCCA_UAC` | 1 | USB audio input: the master output, 44.1 kHz stereo (after Felucca 1.0) |
