@@ -281,7 +281,7 @@ has been played from the pedal on an FM-1 (2026-10-19).
 | Button | Tapped | Held |
 | --- | --- | --- |
 | HOME | **LIVE**, the screen it starts on | |
-| SAVE | **SONGS** (from SONGS: LIVE again) | on EDIT: the section into its song; elsewhere SLOOP's section layer (A..D) |
+| SAVE | **SONGS** (from SONGS: LIVE again) | on LIVE or EDIT: the section into its song |
 | SEQ | **EDIT**, the drum grid of the section playing (again: GRID / KIT) | the step layer, as SLOOP |
 | GLO | **SETUP** (again, HOME or OCT-: closed) | |
 | SEL / ENV / LFO | on LIVE: **FILL**, **PREV**, **NEXT** (the pedal's CC 21, 25, 24; PREV / NEXT without a fill) | |
@@ -316,10 +316,10 @@ The LIVE header names the song's bank: "song 3" or "factory 3". EDIT's SAVE held
 <p align="center"><img src="assets/screens/backbeat-songs.png" alt="SONGS: your 16 slots; LIVE with no song loaded, the white keys load one; a song loaded, its intro cued" width="720"></p>
 
 **EDIT.** SLOOP's drum grid and kit page for the section playing; its header names the section and, stopped,
-the song. Change hits, levels and ratchets as SLOOP does, then hold SAVE (stopped): a ring fills for a second and
-the section is written back into its song in flash ("SAVED INTO THE SONG"; "SONG FULL" past 3800 bytes; nudges and
-parameter locks are not kept, SNG2 has no room for them, and the screen says so). With no song loaded SAVE held
-has nothing to save into and says so. A tap of SAVE opens SONGS (from SONGS, LIVE).
+the song. Change hits, levels and ratchets as SLOOP does, then hold SAVE (stopped, on EDIT or on LIVE): a ring fills
+for a second and the section is written back into its song in flash ("SAVED INTO THE SONG"; "SONG FULL" past 3800
+bytes; nudges and parameter locks are not kept, SNG2 has no room for them, and the screen says so). With no song
+loaded SAVE held has nothing to save into and says so. A tap of SAVE opens SONGS (from SONGS, LIVE).
 
 <p align="center"><img src="assets/screens/backbeat-edit.png" alt="EDIT: the drum grid of the section playing, and the kit page" width="480"></p>
 
@@ -376,7 +376,7 @@ firmware ([BUILDING.md](BUILDING.md)): at your own risk.
 | `firmware/src/sng.c` | songs: the packed form ("SNG2": a byte a hit, a meter per section), read in place from flash, a section into the drum track on the bar, the pedal settings |
 | `firmware/src/ui_drummer.c` | LIVE and SONGS (on SLOOP's SONG page): the song playing, its sections, the keys as the pedal; the song list |
 | `firmware/src/ui_menu.c` | SETUP: the pedal, MIDI, tempo, drums, master, texture, screen and system settings |
-| `firmware/src/ui_studio.c`, `ui_input.c` | EDIT (SLOOP's drum grid and kit pages); the buttons, the layers and SAVE's hold on the grid |
+| `firmware/src/ui_studio.c`, `ui_input.c` | EDIT (SLOOP's drum grid and kit pages); the buttons, the layers and SAVE's hold (LIVE, the grid) |
 | `tools/fm1_emu.py` | the firmware on the fm1-emu emulator, songs imported into its flash: a script of keys, knobs and pedal MIDI, screens and sound saved |
 | `tools/fm1_song.py`, `song_examples/` | songs from JSON: check, pack, send, read back; `song_examples/` holds three original demo songs that show the features, each with its pedal plan in `docs/demos.md` (the factory songs are the grooves) |
 | `grooves/`, `docs/grooves.md` | generic grooves, not songs (two sections, verse and chorus, 4-bar phrases, a fill at each phrase's end; each one's tempo, meter, verse, chorus and fill in `docs/grooves.md`): classic rock, blues, rock ballad, slow rock, punk, half-time shuffle, train beat, one drop, four on the floor, metal gallop, a 6/8 ballad, and some to spark ideas (7/8, a tom groove, linear funk, three over four, ride and kick only); the firmware's factory songs, slots 1..16 in `grooves/factory.txt`'s order |

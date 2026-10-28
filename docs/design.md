@@ -1279,8 +1279,10 @@ editor.c's ED_BK_IDS and the mock's protocol. Installed on the first unit over U
 over the editor protocol: INFO answers BACKBEAT 0.9 v11, BK_LIST lists 25 objects without 2..5 (the twelve
 songs kept, their lengths as before), BK_GET of 2..5 answers rc 1, the settings object is 88 bytes PER3 with
 48..83 zero (the arrangement bytes cleared by the restore at boot), the pedal settings kept (channel 16,
-no count-in). Still to verify by hand: SAVE's tap and hold, SONGS' last row, SETUP > SYSTEM, a song through
-the pedal, a restore of an older backup.
+no count-in). By hand (the user, 2026-10-27): SAVE's tap, SONGS' last row and SETUP > SYSTEM as meant; SAVE
+held did nothing on LIVE, the hold was EDIT's only, so it is LIVE's too now (ui_input.c holds_input, ui_pages_test),
+and ABOUT names this repository (github.com/ForrestPanda/backbeat) above SLOOP's. Still to verify by hand: SAVE
+held on LIVE, a song through the pedal, a restore of an older backup.
 
 ## Open questions
 

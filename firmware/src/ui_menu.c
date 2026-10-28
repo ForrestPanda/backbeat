@@ -192,17 +192,21 @@ static void draw_about(void)
     cv_text(4, 4, &FONT_L, "BACKBEAT", C_WHITE);
     for (i = 0; i < 4u; i++)                          /* the logo's beat bars: the 2 and the 4 tall */
         cv_rect(196 + i * 10u, (i & 1u) ? 6u : 16u, 7, (i & 1u) ? 24u : 14u, TE_COL[i]);
-    cv_text(4, 36, &FONT_S, "BASED ON SLOOP, FELUCCA", C_AMB);
+    /* BackBeat's own page (the user, 2026-10-27: its repository, not SLOOP's; SLOOP and Felucca credited below) */
+    cv_text(4, 36, &FONT_S, "A DRUMMER FOR THE FM-1", C_AMB);
     cv_text(4, 54, &FONT_S, FELUCCA_VERSION, C_HI);
     cv_text(236 - text_w(&FONT_S, __DATE__), 54, &FONT_S, __DATE__, C_GRAY);   /* build date */
-    cv_text(cv_text(4, 72, &FONT_S, "LEO KUROSHITA", C_HI) + 8, 72, &FONT_S, "@KUROGEDELIC", C_AMB);
-    cv_text(4, 88, &FONT_S, "H\xDCGELTON INSTRUMENTS", C_HI);   /* Latin-1 U-umlaut */
-    cv_text(4, 104, &FONT_S, "HUGELTON.COM", C_AMB);
-    cv_text(4, 119, &FONT_S, "GPL-3.0, NO WARRANTY", C_HI);
-    cv_text(4, 132, &FONT_S, "GITHUB.COM/ISOD89/SLOOP-FM1", C_AMB);   /* (the source it forks) */
-    cv_text(4, 146, &FONT_S, "FONT: TERMINUS (OFL)", C_DIM);
-    cv_text(4, 159, &FONT_S, "SAMPLES: VERSILIAN (CC0)", C_DIM);
-    cv_text(4, 172, &FONT_S, "+ SONIC PI (CC0)", C_DIM);
+    cv_text(4, 72, &FONT_S, "GITHUB.COM/FORRESTPANDA/", C_HI);   /* the source, the installer, the editor (the
+                                                                 * whole address is wider than the screen) */
+    cv_text(4, 88, &FONT_S, "BACKBEAT", C_HI);
+    cv_text(4, 104, &FONT_S, "GPL-3.0, NO WARRANTY", C_AMB);
+    cv_text(4, 122, &FONT_S, "BASED ON SLOOP, FELUCCA", C_HI);
+    cv_text(cv_text(4, 136, &FONT_S, "LEO KUROSHITA", C_AMB) + 8, 136, &FONT_S, "@KUROGEDELIC", C_DIM);
+    cv_text(4, 150, &FONT_S, "H\xDCGELTON INSTRUMENTS", C_AMB);   /* Latin-1 U-umlaut */
+    cv_text(4, 164, &FONT_S, "GITHUB.COM/ISOD89/SLOOP-FM1", C_DIM);   /* (the source it forks) */
+    cv_text(4, 180, &FONT_S, "FONT: TERMINUS (OFL)", C_DIM);
+    cv_text(4, 193, &FONT_S, "SAMPLES: VERSILIAN (CC0)", C_DIM);
+    cv_text(4, 206, &FONT_S, "+ SONIC PI (CC0)", C_DIM);
 }
 
 static void draw_menu(void)

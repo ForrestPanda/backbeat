@@ -446,8 +446,10 @@ static int layers_input(uint32_t note_edges, uint32_t *pressed, uint32_t home)
 /* REC (live recording is gone, drums only): held 0.7 s a ring fills: held on to the end, the selected track is
  * cleared (EDIT + OCT- brings it back); let go before, nothing happens.
  * SAVE (fm1-drummer; SLOOP's SAVE layer, JAM's sections A..D, went 2026-10-27): tapped, the SONGS list (from SONGS,
- * LIVE); on the drum grid (EDIT) held 0.7 s a ring fills, and held on to the end the section playing is written into
- * its song (no song loaded: nothing to write into) */
+ * LIVE); on LIVE or the drum grid (EDIT) held 0.7 s a ring fills, and held on to the end the section playing is
+ * written into its song (no song loaded: it says so). LIVE too since 2026-10-27 (the user: held there, on the unit,
+ * it did nothing; the section is the same one, LIVE is where it plays). SONGS: a long press does nothing. */
+static int on_live_page(void) { return drummer_on() && sng_view == DV_LIVE; }
 static void section_keep(void)
 {
     static const char *const MSG[6] = {"SAVED INTO THE SONG", "STOP TO SAVE", "SONG FULL", "SAVE ERROR", "",
@@ -500,12 +502,12 @@ static void holds_input(uint32_t pressed, uint32_t now_ms)
         }
         rec_on = 0;
     }
-    /* SAVE: a tap anywhere opens SONGS (from SONGS, LIVE); the hold is the drum grid's */
+    /* SAVE: a tap anywhere opens SONGS (from SONGS, LIVE); the hold is LIVE's and the drum grid's */
     if (pressed & sb) {
         save_t0 = now_ms;
         save_on = 1;
     }
-    if (save_down && save_on && !ui.hold_kind && on_drum_page() && now_ms - save_t0 >= 700u) {
+    if (save_down && save_on && !ui.hold_kind && (on_drum_page() || on_live_page()) && now_ms - save_t0 >= 700u) {
         ui.msg_t = 0;
         ui.hold_kind = 2;
         ui.hold_t0 = now_ms;

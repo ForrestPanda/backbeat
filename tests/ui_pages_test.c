@@ -414,7 +414,7 @@ int main(int argc, char **argv)
     TDRUM->dstep[3] = (dstep_t){0};
 
     /* ---- SAVE: no layer since 2026-10-27 (JAM's sections A..D went): a tap opens SONGS (from SONGS, LIVE); a long
-     * press off the drum grid does nothing; the keys while it is held are LIVE's own */
+     * press on LIVE or EDIT saves the section (on SONGS it does nothing); the keys while it is held are LIVE's own */
     go_home(); frame();
     song.playing = 0; live_sec = -1; live_req = -1; sng_cur = -1;
     press(B_SAVE); frames(15); check(ui.layer == LY_PLAY && drummer_on() && sng_view == DV_LIVE, "SAVE held on LIVE: no layer, LIVE still");
@@ -425,6 +425,19 @@ int main(int argc, char **argv)
     press(B_SAVE); frames(60); release(B_SAVE); frames(2);
     check(drummer_on() && sng_view == DV_LIB, "SAVE held ~1 s on SONGS and let go: not a tap, SONGS still");
     tap(B_SAVE); check(drummer_on() && sng_view == DV_LIVE, "SAVE tapped on SONGS: LIVE");
+    {   /* held on LIVE to the end: the section into its song (the user, 2026-10-27: on the unit it did nothing there,
+         * the hold was EDIT's only) */
+        uint32_t s0 = sec_saves;
+        press(B_SAVE); frames(120); release(B_SAVE); frames(2);
+        check(!strcmp(ui.msg, "NO SONG TO SAVE INTO") && sec_saves == s0 && drummer_on() && sng_view == DV_LIVE,
+              "LIVE, no song: SAVE held: nothing to save into, LIVE still");
+        sng_cur = 1; live_sec = 1; str_cpy(sng_ui_name, "VERSE", sizeof sng_ui_name); song.playing = 0;
+        press(B_SAVE); frames(50); check(ui.hold_kind == 2u && drummer_on(), "LIVE: SAVE held 0.8 s: the save ring");
+        frames(70); release(B_SAVE); frames(2);
+        check(sec_saves == s0 + 1u && !strcmp(ui.msg, "SAVED INTO THE SONG") && drummer_on() && sng_view == DV_LIVE,
+              "LIVE: SAVE held to the end: the section into its song, LIVE still");
+        sng_cur = -1; live_sec = -1; sng_ui_name[0] = 0; ui.msg_t = 0; frames(2);
+    }
     tap(B_SAVE); check(drummer_on() && sng_view == DV_LIB, "SAVE tapped on LIVE: SONGS");
     {   /* fm1-drummer: SONGS lists the slots (cached), KNOB 1 picks, REC loads and goes back to LIVE (its last row,
          * JAM, SLOOP's chain page, went 2026-10-27); HOME: LIVE again; there, with a song, the keys are the pedal's */
