@@ -2567,7 +2567,7 @@ const PLAY = {
   rkTake(last, nt, r) { return nt <= 1 ? 0 : ((last < 0 ? 0 : last) + 1 + Math.floor(r * (nt - 1))) % nt; },
   create(spec, countIn = 0) {                        /* countIn: bars of clicks before a start from stopped (the device's setting) */
     return { spec, sec: -1, cur: null, step: 0, pos: 0, bar: 0, req: -1, brk: false, eb: null, ebN: 0, ebB: 0, atEnd: false, fill: false, fillBars: 0, fillWait: 0,
-             endReq: 0, endBars: 0, playing: false, stopped: false, countIn, counting: 0, ciNum: 4, ciDen: 4, bpm: spec.bpm,
+             endReq: 0, endBars: 0, endEb: false, playing: false, stopped: false, countIn, counting: 0, ciNum: 4, ciDen: 4, bpm: spec.bpm,
              swing: +spec.swing || 0, swing8: spec.swing_grid === "1/8" };
   },
   barU(s) { const m = SNG.meter(s.time); return (192 * m.num) / m.den; },
@@ -2613,7 +2613,7 @@ const PLAY = {
   request(st, k, now = false, brk = false) {
     if (k < 0 || k >= st.spec.sections.length) return;
     if (st.playing && !st.counting && !st.cur && st.req < 0 && k === st.sec && !st.endReq && !st.endBars && !brk) return;   /* the section playing, asked for again: nothing (as pedal.c) */
-    st.endReq = 0; st.endBars = 0;
+    st.endReq = 0; st.endBars = 0; st.endEb = false;
     st.req = k;
     st.brk = brk;
     if (st.counting) return;                         /* during the count-in: only what starts changes */
@@ -2650,7 +2650,7 @@ const PLAY = {
     if (!st.fill && !st.fillWait) {
       const late = at + beat >= barU ? 1 : 0, wait = late + PLAY.fillWaitFrom(s, st.bar + late);
       if (wait) st.fillWait = wait;
-      else { st.eb = null; st.ebB = 0; st.fill = true; st.fillBars = PLAY.fillBars(s, st.bar); }   /* (an entry or break playing: cut) */
+      else { PLAY.ebCut(st); st.fill = true; st.fillBars = PLAY.fillBars(s, st.bar); }   /* (an entry or break playing: cut) */
     } else if (st.fill && st.fillBars <= 1 && at + beat >= barU) st.fillWait = 1;
     if (st.req >= 0) st.atEnd = false;             /* a section cued: on the bar after the fill */
   },
@@ -2694,9 +2694,12 @@ const PLAY = {
     st.cur = PLAY.playing(st);
     st.swing = +st.spec.swing || 0; st.swing8 = st.spec.swing_grid === "1/8";   /* (the old song's swing goes on with its pattern) */
     st.spec = spec;
-    st.req = -1; st.atEnd = false; st.endReq = 0; st.endBars = 0;
+    st.req = -1; st.atEnd = false; st.endReq = 0; st.endBars = 0; st.endEb = false;
   },
-  stop(st) { st.playing = false; st.stopped = true; st.req = -1; st.brk = false; st.eb = null; st.ebB = 0; st.fill = st.atEnd = false; st.fillWait = 0; st.fillBars = 0; st.endReq = st.endBars = 0; st.counting = 0; },
+  stop(st) { st.playing = false; st.stopped = true; st.req = -1; st.brk = false; st.eb = null; st.ebB = 0; st.fill = st.atEnd = false; st.fillWait = 0; st.fillBars = 0; st.endReq = st.endBars = 0; st.endEb = false; st.counting = 0; },
+  /* a fill cuts the entry or break playing; the ending's outro in its entry: the stop at the fill's end, as any ending
+     with a fill pending (seq.c eb_cut) */
+  ebCut(st) { st.eb = null; st.ebB = 0; if (st.endEb) { st.endEb = false; st.endBars = st.bar + st.endReq; st.endReq = 0; } },
   /* a new bar: the fill over at its bar line (a fill bar of its own: the pattern from its top; or the section cued, or
      the ending's stop), the one asked for in the last beat on, the request at the section's end (live_block) */
   bar(st) {
@@ -2706,7 +2709,7 @@ const PLAY = {
       if (st.fillBars > 1) st.fillBars--;
       else if (st.fillWait) { st.fillWait = 0; st.fillBars = PLAY.fillBars(PLAY.playing(st), st.bar); }   /* (another one, straight on) */
       else { st.fill = false; st.fillBars = 0; over = true; }
-    } else if (st.fillWait && !--st.fillWait) { st.eb = null; st.ebB = 0; st.fill = true; st.fillBars = PLAY.fillBars(PLAY.playing(st), ebOver ? 0 : st.bar); }   /* (right
+    } else if (st.fillWait && !--st.fillWait) { PLAY.ebCut(st); st.fill = true; st.fillBars = PLAY.fillBars(PLAY.playing(st), ebOver ? 0 : st.bar); }   /* (right
                                                         after an entry or break: from the pattern's top, restarted below) */
     if (st.atEnd && st.bar % PLAY.curBars(st) === 0) st.atEnd = false;   /* waiting for the section's end */
     if (st.endBars && st.req < 0 && (st.bar >= st.endBars || over)) { PLAY.stop(st); return; }
@@ -2716,14 +2719,21 @@ const PLAY = {
                                                         and swing with its first section, sng.c sng_globals) */
       const enter = st.brk || st.sec !== st.req || st.sec < 0 || entering;   /* (its entry: from another section, from stopped,
                                                         a song just loaded; never the section playing asked for again) */
-      st.sec = st.req; st.req = -1; st.step = 0; st.pos = 0; st.bar = 0; st.fill = false; st.fillBars = 0; st.fillWait = 0; st.endBars = st.endReq; st.endReq = 0;
+      st.sec = st.req; st.req = -1; st.step = 0; st.pos = 0; st.bar = 0; st.fill = false; st.fillBars = 0; st.fillWait = 0;
       const e = enter ? PLAY.ebOf(st.spec.sections[st.sec], st.brk) : null;
       st.eb = e && e.eb; st.ebN = e ? e.n : 0; st.ebB = e ? e.bars : 0; st.brk = false;
-    } else if ((over && st.req < 0 && PLAY.playing(st).fillbar) || ebOver) { st.step = 0; st.pos = 0; st.bar = 0; st.eb = null; st.ebB = 0; }   /* a fill bar of its
+      if (st.ebB) st.endEb = !!st.endReq;         /* the ending's outro through its entry: its bars from the entry's end
+                                                     (below; 2026-10-28: counted from here, the stop came as the entry
+                                                     ended, as the firmware did) */
+      else { st.endBars = st.endReq; st.endReq = 0; }
+    } else if ((over && st.req < 0 && PLAY.playing(st).fillbar) || ebOver) {   /* a fill bar of its
                                                         own over, nothing asked for: the pattern from its top (an arranger's
                                                         variation after its fill-in); without one the fill ran to the
                                                         section's end, which is its top. An entry or break over: the
                                                         pattern from its top */
+      st.step = 0; st.pos = 0; st.bar = 0; st.eb = null; st.ebB = 0;
+      if (st.endEb) { st.endEb = false; st.endBars = st.endReq; st.endReq = 0; }   /* the ending's outro, its entry played: its bars from here */
+    }
   },
   /* the hits of the step the clock is on, then one step further; null when stopped */
   tick(st) {

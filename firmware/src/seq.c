@@ -832,6 +832,9 @@ static volatile uint8_t pedal_fill_wait;           /* bar lines before the fill 
                                                     * on the section's end (fill_wait_from) */
 static volatile uint8_t pedal_end_req;             /* bars of the outro asked for (taken when its section starts) */
 static volatile uint32_t pedal_end_bars;           /* stop when the section playing has played this many (0: none) */
+static volatile uint8_t pedal_end_eb;              /* the ending's outro landed through its entry: pedal_end_req is taken
+                                                    * at the entry's end (2026-10-28: taken at the landing, a 1-bar outro
+                                                    * stopped as its entry ended, its pattern unheard) */
 static volatile uint8_t live_req_brk;              /* live_req comes in through its break (CC 28), not its entry */
 /* fm1-drummer (sng.c): a song loaded from flash: its sections are what live_req names */
 #define SNG_SLOTS 16u                              /* the user's songs, in flash (8 until 2026-10-14) */
@@ -969,6 +972,18 @@ static __attribute__((noinline)) void eb_rest(void)                       /* the
     memset(eb_flam, 0, sizeof eb_flam);
     eb_arm(eb_bar_steps());
 }
+static void eb_cut(void)                           /* a fill cuts the entry or break playing (pedal_fill_req, live_block);
+                                                    * the ending's outro in its entry: the stop at the fill's end, as
+                                                    * any ending with a fill pending */
+{
+    eb_len = 0;
+    eb_bars = 0;
+    if (pedal_end_eb) {
+        pedal_end_eb = 0;
+        pedal_end_bars = live_bar + pedal_end_req;
+        pedal_end_req = 0;
+    }
+}
 static __attribute__((noinline)) void live_block(void)   /* once a block while playing a loop (not the song; out of line
                                                     * since 2026-10-18: its code inside mix_block made a jump table
                                                     * there read as a loop, tests/target_budget.py) */
@@ -992,8 +1007,7 @@ static __attribute__((noinline)) void live_block(void)   /* once a block while p
     } else if (pedal_fill_wait && !--pedal_fill_wait) {   /* asked in the last beat, or a fill of several bars waiting
                                                      * for the section's end: this bar, whole (no fill bar of its own:
                                                      * to the section's end; at its top, the whole cycle) */
-        eb_len = 0;                                 /* (an entry or break playing: the fill cuts it) */
-        eb_bars = 0;
+        eb_cut();                                   /* (an entry or break playing: the fill cuts it) */
         pedal_fill = 1;
         pedal_fill_bars = (uint8_t)fill_bars_from(eb_over ? 0u : live_bar);   /* (an entry or break over: the fill
                                                      * right after it, from the pattern's top, restarted below) */
@@ -1031,8 +1045,13 @@ static __attribute__((noinline)) void live_block(void)   /* once a block while p
             pedal_fill = 0;                         /* (a fill never reaches here: the change waits for its end) */
             pedal_fill_bars = 0;
             pedal_fill_wait = 0;
-            pedal_end_bars = pedal_end_req;         /* (the outro: its bars, then stop) */
-            pedal_end_req = 0;
+            if (eb_bars) {                          /* the outro through its entry: its bars from the entry's end
+                                                     * (below), the entry, then the pattern once, then the stop */
+                pedal_end_eb = (uint8_t)(pedal_end_req != 0u);
+            } else {
+                pedal_end_bars = pedal_end_req;     /* (the outro: its bars, then stop) */
+                pedal_end_req = 0;
+            }
             sng_ui_next[0] = 0;                     /* (the screen: it is here) */
         }
     } else if ((fill_over && fb_bars && live_req < 0) || eb_over) {   /* a fill bar of its own over, nothing asked for:
@@ -1042,6 +1061,11 @@ static __attribute__((noinline)) void live_block(void)   /* once a block while p
                                                      * its top */
         seq_reset_tracks(clk_pos % (BEAT_U / 4u));
         live_bar = 0;
+        if (pedal_end_eb) {                         /* the ending's outro, its entry played: its bars from here */
+            pedal_end_eb = 0;
+            pedal_end_bars = pedal_end_req;
+            pedal_end_req = 0;
+        }
     }
 }
 static int mclk_on(void);                          /* (below: the MIDI clock drives the sequencer) */
@@ -1102,6 +1126,7 @@ static void seq_stop(void)
     pedal_fill_wait = 0;
     pedal_end_req = 0;
     pedal_end_bars = 0;
+    pedal_end_eb = 0;
     live_req_brk = 0;
     eb_len = 0;
     eb_bars = 0;

@@ -577,6 +577,38 @@ int main(int argc, char **argv)
         assert(song.playing && !ci_on && live_sec == 1 && eb_len == 64u);
         pedal.count = 0;
         cc(16, 23, 0); advance(CTL * 2u);
+        /* the ending naming GROOVE, an outro with a 4-bar entry (the user, 2026-10-28: the stop came as the entry
+         * ended, the pattern unheard): ONE playing, CC 22 1: ONE to its end, GROOVE's entry, its pattern once (3 bars),
+         * the stop on the bar: 7 bars from the landing */
+        {
+            uint32_t bl = bar_len();
+            cc(16, 20, 0); advance(CTL * 3u);
+            assert(song.playing && live_sec == 0 && eb_len == 0u);   /* ONE from stopped: no entry written */
+            advance(bl / 3u);
+            cc(16, 22, 1); advance(CTL * 2u);
+            assert(live_req == 1 && pedal_end_req == 3u && pedal_at_end && !pedal_end_bars);
+            advance(bl);                                               /* GROOVE at ONE's end: its entry first */
+            assert(live_sec == 1 && eb_bars == 4u && pedal_end_eb && !pedal_end_bars && pedal_end_req == 3u);
+            advance(4u * bl);                                          /* the entry over: the pattern, its bars counted */
+            assert(song.playing && live_sec == 1 && !eb_bars && !pedal_end_eb && pedal_end_bars == 3u && !pedal_end_req);
+            advance(2u * bl);
+            assert(song.playing);
+            advance(bl);
+            assert(!song.playing && stopped - jumped + CTL >= 7u * bl && stopped - jumped < 7u * bl + CTL);
+            printf("song: the ending with an outro that has an entry: the entry, the pattern once, then the stop PASS\n");
+            /* the same, a fill during the entry: the fill cuts it and pulls the stop to the fill's end (as any ending
+             * with a fill pending), the pattern not played */
+            cc(16, 20, 0); advance(CTL * 3u);
+            advance(bl / 3u);
+            cc(16, 22, 1); advance(CTL * 2u);
+            advance(bl + bl / 4u);
+            assert(live_sec == 1 && eb_bars == 4u && pedal_end_eb);
+            cc(16, 21, 127); advance(CTL * 2u);
+            assert(pedal_fill && !eb_bars && !pedal_end_eb && pedal_end_bars && !pedal_end_req);
+            advance(4u * bl);
+            assert(!song.playing);
+            printf("song: the ending with an outro that has an entry, a fill in the entry: the stop at the fill's end PASS\n");
+        }
         /* no song (PC 127): CC 20 and CC 28 ask for nothing (no sections), the pattern loops as it is */
         pc(16, 127); advance(CTL); sng_poll();
         assert(sng_cur == -1);

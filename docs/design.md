@@ -539,6 +539,11 @@ player, the docs):
   before or after) lands on the bar after the fill, not at the pattern's end (`pedal_at_end` is cleared by the fill
   request, not set by a request made during one). An ending's outro the same; an ending with no outro stops at the
   fill's end.
+- **An outro with an entry** (the user, 2026-10-28: the entry played, then the stop, the pattern never: the outro's
+  bars were counted from the landing, so a 1-bar outro ended with its 1-bar entry): the ending's bars count from
+  the entry's end (`pedal_end_eb`, `live_block`): the entry, the pattern once, the stop on the bar. A fill during
+  that entry cuts it and pulls the stop to the fill's end, as above (song_test). The browser player had the same
+  (`PLAY.bar`, `PLAY.ebCut`; test_web). To verify on the unit: an ending into an outro with an entry.
 - A fill asked for again while one plays changes nothing (it ends at its bar line), except in the last beat of its
   last bar: then the next bar is a fill too, straight on, the pattern restarting after both (asked 2026-10-16: the
   press was ignored there; `pedal_fill_wait` while `pedal_fill`, chained in `live_block`). The "fill hits ahead"

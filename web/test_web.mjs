@@ -397,6 +397,28 @@ function editorPlay() {
     ok(w.req === 2 && w.atEnd && !w.fill && w.endReq === 1, "play: the ending waits for B's end too");
     for (let i = 4; i < 32; i++) P.tick(w);
     ok(w.sec === 2 && w.endBars === 1, "play: ..the outro after it");
+    {   /* the outro with an entry (2026-10-28, the firmware's bug too: the outro's bars counted from the landing, the
+         * stop came as the entry ended): the entry, the pattern once, the stop; a fill in the entry: the stop at its end */
+      const es = JSON.parse(JSON.stringify(spec)); es.sections[2].entry = { bars: 1, lanes: { CRASH: "X..............." } };
+      const u = P.create(es);
+      P.request(u, 0); for (let i = 0; i < 4; i++) P.tick(u);          /* A, 4 steps in */
+      P.ending(u, null);
+      ok(u.req === 2 && u.atEnd && u.endReq === 1, "play: the ending, the outro has an entry: cued after A's end");
+      for (let i = 4; i < 16; i++) P.tick(u);
+      ok(u.sec === 2 && !!u.eb && u.ebB === 1 && u.endEb && !u.endBars && u.endReq === 1, "play: ..the outro lands through its entry, its bars not counted yet");
+      for (let i = 0; i < 16; i++) P.tick(u);
+      ok(u.playing && u.sec === 2 && !u.eb && u.endBars === 1 && !u.endReq && u.bar === 0, "play: ..the entry over: the pattern, its bar counted from here");
+      for (let i = 0; i < 16; i++) P.tick(u);
+      ok(!u.playing, "play: ..the pattern once, then the stop");
+      const f = P.create(es);
+      P.request(f, 0); for (let i = 0; i < 4; i++) P.tick(f);
+      P.ending(f, null); for (let i = 4; i < 20; i++) P.tick(f);        /* the outro's entry, 4 steps in */
+      ok(f.sec === 2 && !!f.eb && f.endEb, "play: the outro's entry playing");
+      P.fillNext(f);
+      ok(f.fill && !f.eb && !f.endEb && f.endBars === 1 && !f.endReq, "play: a fill in the outro's entry cuts it, the stop at the fill's end");
+      for (let i = 4; i < 16; i++) P.tick(f);
+      ok(!f.playing, "play: ..the stop at the fill's end");
+    }
     const v = P.create({ name: "N", bpm: 100, sections: [spec.sections[1]] });
     P.request(v, 0); for (let i = 0; i < 4; i++) P.tick(v);
     P.ending(v, null);

@@ -132,8 +132,7 @@ static void pedal_fill_req(uint32_t next)
                                                    * its start, to end on the section's end */
             pedal_fill_wait = (uint8_t)wait;
         } else {
-            eb_len = 0;                           /* (an entry or break playing: the fill cuts it) */
-            eb_bars = 0;
+            eb_cut();                             /* (an entry or break playing: the fill cuts it) */
             pedal_fill = 1;
             pedal_fill_bars = (uint8_t)fill_bars_from(live_bar);
         }
@@ -160,6 +159,7 @@ static void pedal_section_to(uint32_t s, uint32_t how, uint32_t brk)
         return;                                   /* the section playing, asked for again: it plays already */
     pedal_end_req = 0;                            /* an ending asked for before: the section wins */
     pedal_end_bars = 0;
+    pedal_end_eb = 0;
     live_req = (int8_t)s;
     live_req_brk = (uint8_t)brk;                  /* (the last asked for wins: its break or not) */
     if (!song.playing) {
