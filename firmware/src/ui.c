@@ -112,10 +112,11 @@ static int trk_step_on(const track_t *t, uint32_t i) { return dstep_mask(&t->dst
 static int undo_swap(int redo)
 {
     track_t *t;
-    int16_t len;
+    int16_t len, div;
     if (!undo.valid || (uint32_t)!!redo != undo.undone)
         return 0;
     t = &trk[undo.trk % NTRK];
+    div = t->p[P_SDIV];
     fm1_irq_off();
     {
         uint32_t i;
@@ -128,6 +129,16 @@ static int undo_swap(int redo)
     len = t->p[P_SLEN];
     t->p[P_SLEN] = undo.len;
     undo.len = len;
+    t->p[P_SDIV] = undo.div;
+    undo.div = div;
+    if (div != t->p[P_SDIV]) {                       /* a DIV change undone (or redone): the snapshot's steps are on the
+                                                      * other grid; the nudges, locks, conditions, marks and the fill bar
+                                                      * follow it (seq.c rediv_extras: those of steps dropped on the way
+                                                      * out are gone) */
+        uint32_t uo = div_u48((uint32_t)div), un = div_u48(trk_div(t));
+        rediv_extras(t, (uint32_t)(len > 0 ? len : 1), trk_len(t), uo, un);
+        fb_rediv(uo, un, trk_div(t));
+    }
     undo.undone = (uint8_t)!redo;
     fm1_irq_on();
     sync_reload = 1;
@@ -148,6 +159,26 @@ static void cursor_fix(void)                           /* LEN got shorter: onto 
 {
     if (ui.cursor >= (uint32_t)TDRUM->p[P_SLEN])
         cursor_set(TDRUM->p[P_SLEN] - 1);
+}
+
+/* the pattern's DIV set (the SEQ layer's knob, the PATTERN page, the editor's SET): the hits keep their place on the
+ * beat and the length follows (seq.c pattern_rediv); over 64 steps nothing changes and the screen says so. sess: the
+ * undo session to mark (0: a new one) */
+static void pattern_div_set(track_t *t, uint32_t div, uint32_t sess)
+{
+    if (div == trk_div(t))
+        return;
+    if (!pattern_rediv_ok(t, div)) {
+        ui_say("DIV: OVER 64 STEPS", "");
+        return;
+    }
+    undo_mark(t, sess ? sess : (undo_sess += 4u) | 3u);
+    pattern_rediv(t, div);
+    sync_reload = 1;                                   /* (the editor reads the steps again) */
+    cursor_fix();
+    if ((uint32_t)ui.step_page * 16u >= trk_len(t))
+        ui.step_page = (uint8_t)((trk_len(t) - 1u) / 16u);
+    ui.force = 1;
 }
 
 static void open_family(uint32_t fam)

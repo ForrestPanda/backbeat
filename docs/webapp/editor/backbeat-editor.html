@@ -177,11 +177,6 @@
   .seqtools input[type=number] { width: 64px; text-align: center; }
   .seqtools .sq { min-width: 34px; padding: 0 8px; }
   .seqtools > * { margin-right: 6px; }
-  table.song td, table.song th { padding: 4px 8px; text-align: left; }
-  table.song input[type=number] { width: 64px; }
-  table.song td.acts button { min-width: 34px; padding: 0 6px; margin-right: 4px; }
-  table.song tr.bad td { color: var(--red); }
-  #p-song .bad { color: var(--red); }
   .dgrid { display: grid; gap: 2px; margin: 8px 0 16px; overflow-x: auto; }
   .dgrid .ln { color: var(--fg2); white-space: nowrap; padding-right: 10px; align-self: center; text-transform: lowercase; }
   .dgrid .hd { color: var(--dim); }
@@ -331,7 +326,7 @@
   .frow .fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
   .frow input.root { width: 72px; }
   .frow button { padding: 3px 0; }
-  /* ---- projects, settings ---- */
+  /* ---- the setlist's slots, settings ---- */
   .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
   .sedchips button[aria-pressed="true"] { background: var(--trk); color: #000; }
   /* the pen and the fill mark: the chosen one painted as the cells it draws */
@@ -529,7 +524,6 @@
       <button role="tab" data-tab="settings" data-t="tabSettings" data-ic="symbol_cog"></button>
       <div class="navh" data-t="navFuture"></div>   <!-- SLOOP's pages BackBeat does not support yet (the drummer plays songs) -->
       <button role="tab" data-tab="sequencer" data-t="tabSeq" data-ic="symbol_grid"></button>
-      <button role="tab" data-tab="song" data-t="tabSong" data-ic="control_arrow_loop"></button>
     </nav>
     <div class="devcard">
       <div class="devline"><span class="led" id="led"></span><span data-t="fm1"></span></div>
@@ -776,28 +770,6 @@
       </div>
     </section>
 
-    <section class="panel" id="p-song" data-tab="song" data-dev hidden>
-      <div class="card">
-        <h2 data-t="songTitle" data-ic="control_arrow_loop"></h2>
-        <p class="dim" data-t="songHelp"></p>
-        <p class="bad" id="songerr" hidden></p>
-        <div id="songbody" hidden>
-          <table class="song"><thead><tr><th>#</th><th data-t="songSection"></th><th data-t="songBars"></th><th data-t="songTimes"></th><th></th></tr></thead>
-            <tbody id="songrows"></tbody></table>
-          <p class="bad" id="songempty" data-t="songEmpty" hidden></p>
-          <p class="bar"><button type="button" id="songadd" data-t="songAdd"></button> <span class="dim" id="songsum"></span></p>
-          <p class="bar"><span data-t="songLoop"></span> <span class="seg" id="songloop"><button type="button" data-v="0" data-t="songLoopOff"></button><button type="button" data-v="1" data-t="songLoopOn"></button></span></p>
-          <p class="bar"><button type="button" id="songread" data-t="songRead" data-ic="control_arrow_loop"></button>
-            <button type="button" id="songsend" data-t="songSend" data-ic="symbol_upload"></button></p>
-        </div>
-      </div>
-      <div class="card">   <!-- the Jam's project slots (the device's JAM PROJECTS: sections A..D) -->
-        <h2 data-t="projects" data-ic="symbol_folder"></h2>
-        <p class="dim" data-t="projHelp"></p>
-        <div class="slots" id="slots"></div>
-      </div>
-    </section>
-
     <footer>BackBeat, a fork of SLOOP, based on Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>. GPL-3.0.<br>
       <span data-t="foot"></span> M-VAVE and FM-1 are trademarks of their respective owners.<br>
       <a href="https://isod89.github.io/sloop-fm1/webapp/editor/FUKIAI-LICENSE.txt" target="_blank" rel="noopener" data-t="iconsCredit"></a> · <span data-t="fontCredit"></span></footer>
@@ -808,10 +780,11 @@
 /*PROTO-BEGIN*/
 /* ---------------------------------------------------------------- protocol --- */
 const HDR = [0x7D, 0x46, 0x4C];
-/* v11 (fm1-drummer, drums only): the commands the device still answers. Gone (no reply): PRESET 8, NAMES 10, the user
-   presets UP_* 16..21, FM6_* 68..71. STEP_GET / STEP_SET and TRACK_* still answer for older tools (one track, the drum
+/* v11 (fm1-drummer, drums only): the commands the device still answers. Gone (no reply): PRESET 8, PROJECT 9 (SLOOP's
+   four project slots, gone with JAM 2026-10-27; the number stays reserved), NAMES 10, the user presets UP_* 16..21,
+   FM6_* 68..71. STEP_GET / STEP_SET and TRACK_* still answer for older tools (one track, the drum
    track, its steps as notes); this editor reads the drum track's steps with DRUM_STEP and has no use for them. */
-const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 7, PROJECT: 9,
+const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 7,
   SMP_BEGIN: 11, SMP_WRITE: 12, SMP_END: 13, SMP_ERASE: 14, SMP_INFO: 15,
   WATCH: 22, CHANGED: 23, RELOAD: 24, PING: 25, STEP_CHANGED: 26,
   TRACK: 27, TRACK_MIX: 28, TRACK_DUMP: 29, TRACK_STEP: 30,
@@ -898,7 +871,6 @@ const parse = {
     if (o.fmt === F.ENUM) for (let i = 0; i <= o.max - o.min && i < 64 && r.i < a.length; i++) o.names.push(r.s());
     return o;
   },
-  [CMD.PROJECT](a) { const r = new Reader(a); return { op: r.b(), slot: r.b(), used: r.b(), busy: a.length > 3 && a[3] === 1 }; },
   [CMD.SMP_BEGIN](a) { const r = new Reader(a); return { slot: r.b(), rc: r.b() }; },
   [CMD.SMP_WRITE](a) { const r = new Reader(a); return { slot: r.b(), offset: r.b() | (r.b() << 7) | (r.b() << 14), rc: r.b() }; },
   [CMD.SMP_END](a) { return parse[CMD.SMP_BEGIN](a); },
@@ -988,7 +960,6 @@ const req = {
     const g7 = (x, n) => Array.from({ length: n }, (_, k) => Math.floor(x / 2 ** (7 * k)) & 0x7F);
     return [CMD.DRUM_STEP, [i & 0x7F, ...g7(d.on & 0xFFFF, 3), ...g7(lv, 5), ...g7(rt, 5)]];
   },
-  project: (op, slot) => { if (![0, 1, 2].includes(op)) throw new Error("bad PROJECT op"); return [CMD.PROJECT, [op, slot & 3]]; },   /* 0 load, 1 save, 2 query */
   smpBegin: (s) => [CMD.SMP_BEGIN, [s & 0x7F]],
   smpWrite: (s, off, bytes) => [CMD.SMP_WRITE, [s & 0x7F, off & 0x7F, (off >> 7) & 0x7F, (off >> 14) & 0x7F, ...pack7(bytes)]],
   smpEnd: (s, hdr) => [CMD.SMP_END, [s & 0x7F, ...pack7(hdr)]],
@@ -1029,7 +1000,6 @@ function replyMatches(cmd, args, a) {
     case CMD.GET: case CMD.SET: case CMD.DESC: return a[0] === args[0] && a[1] === args[1];
     case CMD.SMP_BEGIN: case CMD.SMP_END: case CMD.SMP_ERASE: return a[0] === args[0];
     case CMD.SMP_WRITE: return a[0] === args[0] && a[1] === args[1] && a[2] === args[2] && a[3] === args[3];
-    case CMD.PROJECT: return a[0] === args[0] && a[1] === args[1];
     case CMD.DRUM_STEP: return a[0] === args[0];
     case CMD.WATCH: return (a[0] & 1) === (args[0] & 1);
     case CMD.BK_GET: return a[0] === args[0] && [0, 1, 2, 3, 4].every((k) => a[2 + k] === args[1 + k]);
@@ -1375,7 +1345,7 @@ function zipStore(files) {
   return out;
 }
 
-/* ---- v6: the complete backup (the projects, the SYN kits, the samples, the settings) ---- */
+/* ---- v6: the complete backup (the working project, the settings, the SYN kits, the samples, the songs) ---- */
 function u35enc(v) { v >>>= 0; return [0, 1, 2, 3, 4].map((k) => Math.floor(v / 2 ** (7 * k)) & 0x7F); }
 function u35dec(r) { let v = 0; for (let k = 0; k < 5; k++) v += r.b() * 2 ** (7 * k); return v >>> 0; }
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -1398,15 +1368,16 @@ function b64dec(s) {
   }
   return out.subarray(0, o);
 }
-/* object ids (firmware editor.c ED_BK_IDS): 0 the working project, 1 the settings, 2..5 projects A..D, 9 the SYN drum
-   kits, 10 the MIDI part (MIDI LEARN, GLO > MIDI; listed only when not at its defaults), 32..35 the sample slots USR1..4,
-   16..23 and 40..47 the songs 1..16 (an empty slot: length 0, erased by a restore) and 24 the pedal settings (listed
-   since 2026-10-21; a backup from before has none, and a restore leaves the songs as they are).
+/* object ids (firmware editor.c ED_BK_IDS): 0 the working project, 1 the settings, 9 the SYN drum kits, 10 the MIDI
+   part (MIDI LEARN, GLO > MIDI; listed only when not at its defaults), 32..35 the sample slots USR1..4, 16..23 and
+   40..47 the songs 1..16 (an empty slot: length 0, erased by a restore) and 24 the pedal settings (listed since
+   2026-10-21; a backup from before has none, and a restore leaves the songs as they are).
    RESTORE: the objects in the order they are written back; SAMPLES: the slots written after them (USR2..4).
-   SKIP: what a backup of SLOOP may hold that this firmware has no more: 6..7 the user preset banks, 8 the FM6 patch
-   bank, and USR1 (32), whose flash holds the songs here (sng.c: listed empty, never written); a restore leaves them out
-   and says so (an empty USR1, as every backup of this firmware has it, silently) */
-const BK = { FORMAT: "sloop-backup", VERSION: 1, SAMPLES: [34, 35], RESTORE: [9, 10, 2, 3, 4, 5, 24, ...Array.from({ length: 16 }, (_, k) => (k < 8 ? 16 : 32) + k), 0, 1], SKIP: [6, 7, 8, ...SMP.SONGS.map((k) => 32 + k)] };
+   SKIP: what a backup of SLOOP, or of BackBeat before 2026-10-27, may hold that this firmware has no more: 2..5 the
+   project slots (SLOOP's sections A..D, JAM's until 2026-10-27; a BK_PUT begin of them answers rc 1), 6..7 the user
+   preset banks, 8 the FM6 patch bank, and USR1 (32), whose flash holds the songs here (sng.c: listed empty, never
+   written); a restore leaves them out and says so (an empty one silently) */
+const BK = { FORMAT: "sloop-backup", VERSION: 1, SAMPLES: [34, 35], RESTORE: [9, 10, 24, ...Array.from({ length: 16 }, (_, k) => (k < 8 ? 16 : 32) + k), 0, 1], SKIP: [2, 3, 4, 5, 6, 7, 8, ...SMP.SONGS.map((k) => 32 + k)] };
 class BackupError extends Error { constructor(code, msg) { super(msg); this.code = code; } }
 /* read everything; progress(done, total bytes) */
 async function backupCapture(rq, info, progress = () => {}) {
@@ -1458,12 +1429,12 @@ const bkFwAtLeast = (v, want) => {
   for (let i = 0; i < 3; i++) if (a[i] !== want[i]) return a[i] > want[i];
   return true;
 };
-/* write it back: the SYN kits, the MIDI part, the projects, the working project, the settings, then the samples
-   -> {skipped: the ids left out (BK.SKIP) that held something} */
+/* write it back: the SYN kits, the MIDI part, the pedal settings, the songs, the working project, the settings, then the
+   samples -> {skipped: the ids left out (BK.SKIP) that held something} */
 async function backupRestore(rq, file, progress = () => {}) {
   const m = backupObjects(file);
-  /* projects the device cannot read (SLOOP 1.x's, or a newer format): stop before anything is written */
-  const bad = [0, 2, 3, 4, 5].filter((id) => m.has(id) && !bkProjOk(m.get(id)));
+  /* a working project the device cannot read (SLOOP 1.x's, or a newer format): stop before anything is written */
+  const bad = [0].filter((id) => m.has(id) && !bkProjOk(m.get(id)));
   if (bad.length) throw new BackupError("bkNewer", `${file.firmware || "?"}: ${bad.map((id) => bkProjFormat(m.get(id))).join(", ")}`);
   const skipped = BK.SKIP.filter((id) => m.has(id) && m.get(id).length);
   for (const id of BK.SKIP) m.delete(id);
@@ -1521,11 +1492,13 @@ async function startWatch(rq) {
 }
 
 /* ------------------------------------------------------------ mock device --- */
-/* the mock's settings object: "PER3", the rest opaque, the song order A B C D, 4 bars each (arranger.h arr_defaults) */
+/* the mock's settings object (project.c persist_t, 88 bytes): "PER3", the rest opaque but bytes 48..83, reserved zeros
+   (SLOOP's song order until 2026-10-27) */
+const PERSIST = { SIZE: 88, RES_OFF: 48, RES_END: 84, MAGIC: 0x50455233 };
 function mockSettings() {
-  const b = Uint8Array.from({ length: 88 }, (_, i) => (i * 37 + 5) & 0xFF);
+  const b = Uint8Array.from({ length: PERSIST.SIZE }, (_, i) => (i * 37 + 5) & 0xFF);
   b.set([0x33, 0x52, 0x45, 0x50]);
-  return ARR.encode(b, { loop: false, entries: [0, 1, 2, 3].map((scene) => ({ scene, bars: 4 })) });
+  return b.fill(0, PERSIST.RES_OFF, PERSIST.RES_END);
 }
 /* backup object 10 at its default: nothing learned, CH1-3 = 1 2 3, drums 10, OTHER SEL, BEND 2 (a 32 / 36-byte one: the
    map, the map and the channels) */
@@ -1544,7 +1517,7 @@ function makeMockDevice(opt = {}) {
   const NCH = ["OFF", ...Array.from({ length: 16 }, (_, i) => String(i + 1))];
   const D = (label, fmt, min, max, def, names = null, unit = "") => ({ label, fmt, min, max, def, names, unit });
   const E = (label, names, def) => D(label, F.ENUM, 0, names.length - 1, def, names);
-  /* params.c TP: the ids keep their numbers (projects, locks, learned CCs name them); the drum track uses LEN DIV SWG
+  /* params.c TP: the ids keep their numbers (the working project, locks, learned CCs name them); the drum track uses LEN DIV SWG
      GATE, PAN MUTE, FILT, the INSERT and P_E0 (its kit), the rest is SLOOP's synth side, unused */
   const TP = [
     D("LVL", F.DB, 0, 127, 104),
@@ -1603,7 +1576,6 @@ function makeMockDevice(opt = {}) {
     micro: new Array(NSTEP).fill(0), locks: [],      /* v7: nudges, parameter locks (at most NLOCK) */
     fill: new Array(NSTEP / 4).fill(0),              /* v8: fill conditions, 2 bits a step */
     g: GP.map((d) => d.def),
-    slots: [null, null, null, null],
     smp: [0, 1, 2, 3].map(() => ({ flash: new Uint8Array(SMP.SLOT_SIZE).fill(0xFF), zones: 0, name: "", len: 0, next: SMP.DATA_OFF })),   /* USR1..4 */
     settings: mockSettings(),                       /* v6: the settings object (2.5: a PER3 with a song order) */
     dsyn: null, dsynStored: null, dsynPlayed: [],  /* v10: the SYN kits (RAM, flash), the auditions heard */
@@ -1639,7 +1611,6 @@ function makeMockDevice(opt = {}) {
     if (!st.dsyn) { st.dsyn = [0, 1, 5, 12].map(dsynFactory); st.dsynStored = DSYN.bankEncode(st.dsyn); }
     return st.dsyn;
   }
-  st.slots[0] = project();
 
   function handle(cmd, a) {
     const out = [];
@@ -1743,15 +1714,6 @@ function makeMockDevice(opt = {}) {
         if (d.fmt === F.ENUM && d.names) for (let i = 0; i <= d.max - d.min && i < 64; i++) s(d.names[i]);
         break;
       }
-      case CMD.PROJECT: {
-        if (a.length < 2) return null;
-        const k = a[1] & 3;
-        if (a[0] > 2) return null;
-        if (a[0] === 1) st.slots[k] = project();
-        else if (a[0] === 0 && st.slots[k]) Object.assign(st, JSON.parse(JSON.stringify(st.slots[k])));
-        b(a[0]); b(k); b(st.slots[k] ? 1 : 0);
-        break;
-      }
       /* user sample slots: the header is checked like the firmware's ed_smp_end(); USR1 refused (rc 4: the songs) */
       case CMD.SMP_BEGIN: case CMD.SMP_ERASE: {
         if (a.length < 1 || a[0] >= st.smp.length) return null;
@@ -1796,9 +1758,9 @@ function makeMockDevice(opt = {}) {
         b(a[0]); b(rc);
         break;
       }
-      /* v6 backup: projects as DRM1 + JSON, the raw sample slots (USR1 listed empty: the songs' flash) */
+      /* v6 backup: the working project as DRM1 + JSON, the raw sample slots (USR1 listed empty: the songs' flash) */
       case CMD.BK_LIST: {
-        st.bkSnap = new Map([[0, enc(project())], [1, st.settings.slice()], ...[0, 1, 2, 3].map((k) => [2 + k, st.slots[k] ? enc(st.slots[k]) : new Uint8Array(0)]),
+        st.bkSnap = new Map([[0, enc(project())], [1, st.settings.slice()],
           [9, DSYN.bankEncode(dsynKits())],
           ...(st.ml && !mlDefault(st.ml) ? [[10, st.ml.slice()]] : []),   /* MIDI LEARN (2.6): only when not the
                                                                            * default (editor.c, project.c midi_part_default) */
@@ -1823,9 +1785,12 @@ function makeMockDevice(opt = {}) {
         if (a.length < 2) return null;
         const op = a[0], id = a[1], r = new Reader(a.slice(2));
         let rc = 1;
-        if (op === 0 && a.length === 12 && (id <= 10 || SNG.isObj(id))) {   /* (editor.c: 6..8 begin, their commit fails) */
+        if (op === 0) {                                   /* begin (editor.c: 6..8 begin, their commit fails; 2..5, the
+                                                           * project slots gone 2026-10-27, and any other id: rc 1) */
           const len = u35dec(r), crc = u35dec(r);
-          if ((id >= 2 || len) && len <= 1 << 20) { st.bkPut = { id, len, crc, pos: 0, buf: new Uint8Array(len) }; st.bkSnap = null; rc = 0; }
+          if (a.length === 12 && (id <= 1 || (id >= 6 && id <= 10) || SNG.isObj(id)) && (id >= 6 || len) && len <= 1 << 20) {
+            st.bkPut = { id, len, crc, pos: 0, buf: new Uint8Array(len) }; st.bkSnap = null; rc = 0;
+          }
         } else if (!st.bkPut || st.bkPut.id !== id) rc = 5;
         else if (op === 1 && a.length >= 9) {
           const off = u35dec(r), d = unpack7(a.slice(7));
@@ -1835,16 +1800,16 @@ function makeMockDevice(opt = {}) {
           st.bkPut = null;
           rc = P.pos !== P.len || crc32(P.buf) !== P.crc ? 2 : 0;
           if (!rc) try {
-            if (id === 1) {                                 /* project.c settings_restore */
-              if (P.len !== st.settings.length || !ARR.ok(P.buf) || P.buf[ARR.OFF] > ARR.STEPS || P.buf[ARR.OFF + 1] > 1 || !ARR.valid(ARR.decode(P.buf))) throw 0;
-              if (st.playing && P.buf.subarray(ARR.OFF, ARR.OFF + ARR.SIZE).some((x, k) => x !== st.settings[ARR.OFF + k])) { rc = 3; }
-              else st.settings = P.buf.slice();
+            if (id === 1) {                                 /* project.c settings_restore: the magic and the size; bytes
+                                                               48..83 (SLOOP's song order until 2026-10-27) zeroed, never
+                                                               checked; playing or not (no rc 3) */
+              if (P.len !== st.settings.length || ((P.buf[0] | (P.buf[1] << 8) | (P.buf[2] << 16) | (P.buf[3] << 24)) >>> 0) !== PERSIST.MAGIC) throw 0;
+              st.settings = P.buf.slice().fill(0, PERSIST.RES_OFF, PERSIST.RES_END);
             }
-            else if (id <= 5) {                             /* project.c project_restore: DRM1 (the mock's), else not read */
-              if (P.len && bkProjFormat(P.buf) !== "DRM1") throw 0;
+            else if (id === 0) {                            /* project.c project_restore: DRM1 (the mock's), else not read */
+              if (!P.len || bkProjFormat(P.buf) !== "DRM1") throw 0;
               if (st.playing) rc = 3;
-              else if (id === 0) Object.assign(st, dec(P.buf));
-              else st.slots[id - 2] = P.len ? dec(P.buf) : null;
+              else Object.assign(st, dec(P.buf));
             }
             else if (id === 10) {                           /* the MIDI part (2.6; editor.c: stopped only): the LEARN
                                                                map (16 x 2 bytes), then GLO > MIDI's channels (4 bytes) */
@@ -1931,7 +1896,8 @@ function makeMockDevice(opt = {}) {
         busy = false;
         const r = handle(f.cmd, f.a);
         if (r && input.onmidimessage) input.onmidimessage({ data: Uint8Array.from(r) });
-        if (r && f.cmd === CMD.PROJECT && f.a[0] === 0 && r[7]) reloadPush();   /* a section loaded (used) */
+        if (r && f.cmd === CMD.BK_PUT && f.a[0] === 2 && r[7] === 0) reloadPush();   /* a restore committed (editor.c:
+                                                                                      * sync_reload) */
       }, SMP.taken(f.a[0]) && f.cmd >= CMD.SMP_BEGIN && f.cmd <= CMD.SMP_ERASE ? 4   /* (USR1: refused at once, no flash work) */
         : f.cmd === CMD.SMP_ERASE ? 900 : f.cmd === CMD.SMP_BEGIN ? 120 : f.cmd === CMD.SMP_WRITE ? 25 + Math.random() * 10 : 4 + Math.random() * 12);
     },
@@ -1957,7 +1923,7 @@ function makeMockDevice(opt = {}) {
       push(CMD.CHANGED, [0, id, ...v14enc(st.p[id])]);
       return { id, value: st.p[id] };
     },
-    /* a section loaded on the device (or a song section played): RELOAD */
+    /* a song loaded on the device (or a song's section played): RELOAD */
     reload() { reloadPush(); return true; },
     /* TRACKS / MIX: the drums' level (G_DRLVL) and MUTE; pushes CHANGED */
     level(v) { st.g[G_DRLVL] = clamp(v, 0, 127); push(CMD.CHANGED, [1, G_DRLVL, ...v14enc(st.g[G_DRLVL])]); return st.g[G_DRLVL]; },
@@ -1999,8 +1965,8 @@ function makeMockDevice(opt = {}) {
 const KIT = { TUNE: 12, GAIN_MIN: -24, FADE: Math.round(SMP.RATE * 0.004) };
 /* the kits the drum track offers, [value, name] from KIT's DESC d: every one but USR1 and USR2, whose flash holds the
    songs (SMP.SONGS: they play nothing, the device's knob passes over them, drums.c drum_kit_step). The values keep
-   their numbers (songs and projects store them); one still shows while it is the kit (cur) */
-/* the drum track's kits, by number (drums.c DRUM_KIT_NAMES: songs and projects store the number) */
+   their numbers (the songs and the working project store them); one still shows while it is the kit (cur) */
+/* the drum track's kits, by number (drums.c DRUM_KIT_NAMES: the songs and the working project store the number) */
 const KIT_NAMES = ["MULDJORD", "808", "909", "606", "80S", "VINTAGE", "TRAP", "DRILL", "BOOMBAP", "LO-FI", "PHONK", "HOUSE", "D.HOUSE", "TECHNO", "MINIMAL", "ELECTRO", "DISCO", "GARAGE", "JUNGLE", "DUBSTEP", "DEMBOW", "AMAPIANO", "AFRO", "LATIN", "TRIBAL", "SYNTHWV", "CHIP", "ARCADE", "GLITCH", "INDUSTR", "HYPER", "AMBIENT", "JAZZ", "USR1", "USR2", "USR3", "USR4", "USR3+4", "SYN1", "SYN2", "SYN3", "SYN4"];
 const KIT_SONGS = SMP.SONGS.map((k) => `USR${k + 1}`);
 const kitOptions = (d, cur) => d.names.map((n, i) => [i + d.min, n]).filter(([v, n]) => !KIT_SONGS.includes(n) || v === cur);
@@ -2106,44 +2072,6 @@ async function zipRead(bytes) {
   }
   return out;
 }
-
-/* ------------------------------------------- SLOOP 2.5: the song order --- */
-/* The song order lives in the settings object (backup object 1, firmware project.c persist_t): bytes 48..83
-   are arranger.h arr_config_t: count, loop, 2 reserved, then 16 x {scene 0..3 = A..D, bars 1..64}. */
-const ARR = {
-  OFF: 48, STEPS: 16, SIZE: 36, MAX_BARS: 64, MAGIC: 0x50455233,
-  ok: (b) => !!b && b.length >= ARR.OFF + ARR.SIZE && ((b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24)) >>> 0) === ARR.MAGIC,
-  decode(b) {
-    const count = b[ARR.OFF], loop = b[ARR.OFF + 1], entries = [];
-    for (let i = 0; i < Math.min(count, ARR.STEPS); i++) entries.push({ scene: b[ARR.OFF + 4 + 2 * i], bars: b[ARR.OFF + 5 + 2 * i] });
-    return { loop: loop === 1, entries };
-  },
-  /* the settings bytes with this song order (the rest kept as it was) */
-  encode(b, song) {
-    const o = Uint8Array.from(b), e = song.entries;
-    o[ARR.OFF] = e.length; o[ARR.OFF + 1] = song.loop ? 1 : 0; o[ARR.OFF + 2] = o[ARR.OFF + 3] = 0;
-    for (let i = 0; i < ARR.STEPS; i++) {
-      o[ARR.OFF + 4 + 2 * i] = i < e.length ? e[i].scene : i % 4;
-      o[ARR.OFF + 5 + 2 * i] = i < e.length ? e[i].bars : 4;
-    }
-    return o;
-  },
-  /* arranger.h arr_valid: 1..16 entries, sections A..D, 1..64 bars */
-  valid: (song) => song.entries.length >= 1 && song.entries.length <= ARR.STEPS
-    && song.entries.every((e) => e.scene >= 0 && e.scene < 4 && e.bars >= 1 && e.bars <= ARR.MAX_BARS),
-  /* entries -> rows {scene, bars, times}: the same section with the same bars in a row is one row played `times` */
-  group(entries) {
-    const rows = [];
-    for (const e of entries) {
-      const r = rows[rows.length - 1];
-      if (r && r.scene === e.scene && r.bars === e.bars) r.times++;
-      else rows.push({ scene: e.scene, bars: e.bars, times: 1 });
-    }
-    return rows;
-  },
-  expand: (rows) => rows.flatMap((r) => Array.from({ length: Math.max(1, r.times | 0) }, () => ({ scene: r.scene, bars: r.bars }))),
-};
-
 
 /* ------------------------------------- v10 (SLOOP 2.5): the SYN drum kits --- */
 /* A synthesised drum sound is the firmware's dsnd_t (drum_synth.c, tools/gen_drumkits.py), 22 bytes in this order.
@@ -2645,7 +2573,7 @@ const PLAY = {
   rkTake(last, nt, r) { return nt <= 1 ? 0 : ((last < 0 ? 0 : last) + 1 + Math.floor(r * (nt - 1))) % nt; },
   create(spec, countIn = 0) {                        /* countIn: bars of clicks before a start from stopped (the device's setting) */
     return { spec, sec: -1, cur: null, step: 0, pos: 0, bar: 0, req: -1, brk: false, eb: null, ebN: 0, ebB: 0, atEnd: false, fill: false, fillBars: 0, fillWait: 0,
-             endReq: 0, endBars: 0, playing: false, stopped: false, countIn, counting: 0, ciNum: 4, ciDen: 4, bpm: spec.bpm,
+             endReq: 0, endBars: 0, endEb: false, playing: false, stopped: false, countIn, counting: 0, ciNum: 4, ciDen: 4, bpm: spec.bpm,
              swing: +spec.swing || 0, swing8: spec.swing_grid === "1/8" };
   },
   barU(s) { const m = SNG.meter(s.time); return (192 * m.num) / m.den; },
@@ -2691,7 +2619,7 @@ const PLAY = {
   request(st, k, now = false, brk = false) {
     if (k < 0 || k >= st.spec.sections.length) return;
     if (st.playing && !st.counting && !st.cur && st.req < 0 && k === st.sec && !st.endReq && !st.endBars && !brk) return;   /* the section playing, asked for again: nothing (as pedal.c) */
-    st.endReq = 0; st.endBars = 0;
+    st.endReq = 0; st.endBars = 0; st.endEb = false;
     st.req = k;
     st.brk = brk;
     if (st.counting) return;                         /* during the count-in: only what starts changes */
@@ -2728,7 +2656,7 @@ const PLAY = {
     if (!st.fill && !st.fillWait) {
       const late = at + beat >= barU ? 1 : 0, wait = late + PLAY.fillWaitFrom(s, st.bar + late);
       if (wait) st.fillWait = wait;
-      else { st.eb = null; st.ebB = 0; st.fill = true; st.fillBars = PLAY.fillBars(s, st.bar); }   /* (an entry or break playing: cut) */
+      else { PLAY.ebCut(st); st.fill = true; st.fillBars = PLAY.fillBars(s, st.bar); }   /* (an entry or break playing: cut) */
     } else if (st.fill && st.fillBars <= 1 && at + beat >= barU) st.fillWait = 1;
     if (st.req >= 0) st.atEnd = false;             /* a section cued: on the bar after the fill */
   },
@@ -2772,9 +2700,12 @@ const PLAY = {
     st.cur = PLAY.playing(st);
     st.swing = +st.spec.swing || 0; st.swing8 = st.spec.swing_grid === "1/8";   /* (the old song's swing goes on with its pattern) */
     st.spec = spec;
-    st.req = -1; st.atEnd = false; st.endReq = 0; st.endBars = 0;
+    st.req = -1; st.atEnd = false; st.endReq = 0; st.endBars = 0; st.endEb = false;
   },
-  stop(st) { st.playing = false; st.stopped = true; st.req = -1; st.brk = false; st.eb = null; st.ebB = 0; st.fill = st.atEnd = false; st.fillWait = 0; st.fillBars = 0; st.endReq = st.endBars = 0; st.counting = 0; },
+  stop(st) { st.playing = false; st.stopped = true; st.req = -1; st.brk = false; st.eb = null; st.ebB = 0; st.fill = st.atEnd = false; st.fillWait = 0; st.fillBars = 0; st.endReq = st.endBars = 0; st.endEb = false; st.counting = 0; },
+  /* a fill cuts the entry or break playing; the ending's outro in its entry: the stop at the fill's end, as any ending
+     with a fill pending (seq.c eb_cut) */
+  ebCut(st) { st.eb = null; st.ebB = 0; if (st.endEb) { st.endEb = false; st.endBars = st.bar + st.endReq; st.endReq = 0; } },
   /* a new bar: the fill over at its bar line (a fill bar of its own: the pattern from its top; or the section cued, or
      the ending's stop), the one asked for in the last beat on, the request at the section's end (live_block) */
   bar(st) {
@@ -2784,7 +2715,7 @@ const PLAY = {
       if (st.fillBars > 1) st.fillBars--;
       else if (st.fillWait) { st.fillWait = 0; st.fillBars = PLAY.fillBars(PLAY.playing(st), st.bar); }   /* (another one, straight on) */
       else { st.fill = false; st.fillBars = 0; over = true; }
-    } else if (st.fillWait && !--st.fillWait) { st.eb = null; st.ebB = 0; st.fill = true; st.fillBars = PLAY.fillBars(PLAY.playing(st), ebOver ? 0 : st.bar); }   /* (right
+    } else if (st.fillWait && !--st.fillWait) { PLAY.ebCut(st); st.fill = true; st.fillBars = PLAY.fillBars(PLAY.playing(st), ebOver ? 0 : st.bar); }   /* (right
                                                         after an entry or break: from the pattern's top, restarted below) */
     if (st.atEnd && st.bar % PLAY.curBars(st) === 0) st.atEnd = false;   /* waiting for the section's end */
     if (st.endBars && st.req < 0 && (st.bar >= st.endBars || over)) { PLAY.stop(st); return; }
@@ -2794,14 +2725,21 @@ const PLAY = {
                                                         and swing with its first section, sng.c sng_globals) */
       const enter = st.brk || st.sec !== st.req || st.sec < 0 || entering;   /* (its entry: from another section, from stopped,
                                                         a song just loaded; never the section playing asked for again) */
-      st.sec = st.req; st.req = -1; st.step = 0; st.pos = 0; st.bar = 0; st.fill = false; st.fillBars = 0; st.fillWait = 0; st.endBars = st.endReq; st.endReq = 0;
+      st.sec = st.req; st.req = -1; st.step = 0; st.pos = 0; st.bar = 0; st.fill = false; st.fillBars = 0; st.fillWait = 0;
       const e = enter ? PLAY.ebOf(st.spec.sections[st.sec], st.brk) : null;
       st.eb = e && e.eb; st.ebN = e ? e.n : 0; st.ebB = e ? e.bars : 0; st.brk = false;
-    } else if ((over && st.req < 0 && PLAY.playing(st).fillbar) || ebOver) { st.step = 0; st.pos = 0; st.bar = 0; st.eb = null; st.ebB = 0; }   /* a fill bar of its
+      if (st.ebB) st.endEb = !!st.endReq;         /* the ending's outro through its entry: its bars from the entry's end
+                                                     (below; 2026-10-28: counted from here, the stop came as the entry
+                                                     ended, as the firmware did) */
+      else { st.endBars = st.endReq; st.endReq = 0; }
+    } else if ((over && st.req < 0 && PLAY.playing(st).fillbar) || ebOver) {   /* a fill bar of its
                                                         own over, nothing asked for: the pattern from its top (an arranger's
                                                         variation after its fill-in); without one the fill ran to the
                                                         section's end, which is its top. An entry or break over: the
                                                         pattern from its top */
+      st.step = 0; st.pos = 0; st.bar = 0; st.eb = null; st.ebB = 0;
+      if (st.endEb) { st.endEb = false; st.endBars = st.endReq; st.endReq = 0; }   /* the ending's outro, its entry played: its bars from here */
+    }
   },
   /* the hits of the step the clock is on, then one step further; null when stopped */
   tick(st) {
@@ -2903,7 +2841,7 @@ const PEDALIN = {
       case "stop": return "STOP";
       case "step": return a.dir > 0 ? "NEXT" : "PREVIOUS";
       case "tap": return "TAP";
-      case "song": return a.slot < 0 ? "SECTIONS A-D" : a.slot >= SNG.SLOTS ? `FACTORY ${a.slot - SNG.SLOTS + 1}` : `SONG ${a.slot}`;
+      case "song": return a.slot < 0 ? "NO SONG" : a.slot >= SNG.SLOTS ? `FACTORY ${a.slot - SNG.SLOTS + 1}` : `SONG ${a.slot}`;
       default: return "";
     }
   },
@@ -3080,7 +3018,34 @@ const SED = {
     return SED.norm({ ...sec, fill: f.join("") });
   },
   setSteps(sec, steps) { return SED.norm({ ...sec, steps }); },
-  setDiv(sec, div) { return SED.norm({ ...sec, div }); },
+  /* a step string (n steps of uo units, 1/48 beat) re-gridded at un units, m steps: the new grid's step j takes the old
+     step at the same time, when there is one (j x un = i x uo), else a rest */
+  regrid(str, n, m, uo, un) {
+    const s = SED.pad(str, n);
+    let out = "";
+    for (let j = 0; j < m; j++) { const t = j * un; out += t % uo === 0 && t / uo < n ? s[t / uo] : "."; }
+    return out;
+  },
+  /* the division changed (2026-10-29): the hits keep their place on the beat. 1/16 -> 1/8 keeps every other step (the
+     16ths between go), 1/8 -> 1/16 puts an empty step between, 1/16 -> 8T keeps the beats; the length in time is kept,
+     rounded up to a step. The ratchets, flams, marks and conditions go with their steps; the fill bar, the entry and the
+     break the same (the whole bars that fit). null: the pattern would be over 64 steps (shorten it first). The firmware
+     does the same on the device (seq.c pattern_rediv) */
+  setDiv(sec, div) {
+    const uo = PLAY.STEP_U[sec.div] || 12, un = PLAY.STEP_U[div];
+    if (!un || un === uo) return SED.norm({ ...sec, div });
+    const n = sec.steps, m = Math.ceil((n * uo) / un);
+    if (m > SNG.NSTEP) return null;
+    const re = (o, a, b) => Object.fromEntries(Object.entries(o || {}).map(([l, v]) => [l, SED.regrid(v, a, b, uo, un)]));
+    const out = { ...sec, div, steps: m, lanes: re(sec.lanes, n, m), ratchets: re(sec.ratchets, n, m), flams: re(sec.flams, n, m),
+                  fills: re(sec.fills, n, m), fill: SED.regrid(sec.fill, n, m, uo, un) };
+    const bar = SNG.fillbarSteps({ time: sec.time, div });
+    const fit = (k) => { const b = Math.ceil((k * uo) / un); return b <= SNG.NSTEP ? b : bar ? SNG.NSTEP - (SNG.NSTEP % bar) : SNG.NSTEP; };
+    const blk = (o, k) => { const b = fit(k); return { steps: b, lanes: re(o.lanes, k, b), ratchets: re(o.ratchets, k, b), flams: re(o.flams, k, b) }; };
+    if (sec.fillbar) out.fillbar = blk(sec.fillbar, Math.round(+sec.fillbar.steps) || SNG.fillbarSteps(sec) || n);
+    for (const key of ["entry", "break"]) if (SED.ebSteps(sec, key)) out[key] = blk(sec[key], SED.ebSteps(sec, key));
+    return SED.norm(out);
+  },
   setTime(sec, time) { SNG.meter(time); return SED.norm({ ...sec, time }); },   /* "7/8" ("" or "4/4": 4/4); throws on a bad one */
   /* a section is whole bars of its time signature (the FM-1 counts bars: a change waits for the bar line); one that is
      not: { bars: its length in bars, sig: the signature whose one bar is the pattern ("1/4"), or null } (tools/fm1_song.py
@@ -3349,8 +3314,7 @@ function setLabel(e, txt) { e.replaceChildren(...(e.dataset.ic ? [icon(e.dataset
 const TEXT = {
   ja: {
     other: "English", connect: "接続", disconnect: "切断", mock: "モック（実機なし）",
-    projects: "プロジェクト",
-    load: "読込", save: "保存", used: "使用中", empty: "空", unknown: "—",
+    empty: "空",
     steps: "ステップ", reload: "再読み込み", clearSeq: "シーケンスを消去",
     time: "タイム",
     foot: "Chrome か Edge で使えます。", iconsCredit: "アイコン: Fukiai（MIT）Hügelton Instruments",
@@ -3363,8 +3327,6 @@ const TEXT = {
     ready: "接続しました", disconnected: "切断されました", lost: "FM-1 が外されました",
     noreply: "応答がありません", error: "エラー: ",
     applying: "書き込み中 ",
-    savedSlot: "保存しました: スロット ", loadedSlot: "読み込みました: スロット ", emptySlot: "空のスロットです: ",
-    confirmSave: "スロット {n} に上書き保存しますか？", confirmLoad: "スロット {n} を読み込みますか？ 今のパターンと設定は置き換わります。",
     confirmClear: "シーケンスを全部消しますか？",
     samples: "サンプル",
     zones: "ゾーン", smpName: "名前", erase: "消去", clearList: "リストを消す",
@@ -3401,15 +3363,14 @@ const TEXT = {
     lockFull: "ロックは 1 トラック 24 個まで。", lockRefused: "このパラメータはロックできません。",
     lockHelp: "ナッジ：ステップの長さの 1/64 単位で早め（−）／遅め（＋）。ロック：そのステップだけパラメータの値を変え、次のステップで元に戻ります。フィル：「フィル時のみ」のステップはフィルの間（ペダルの CC 21、LIVE 画面の黒鍵または SEL）だけ鳴り、「フィル時は休み」はその間だけ休みます（グリッドの F と ×）。本体では SEQ ＋ ステップ長押し ＋ KNOB 4（ナッジ）／PRESETS（ロック、ALGORITHM でパラメータ）／OCT+（フィル）。",
     level: "レベル",
-    projHelp: "プロジェクト（ソングのセクション A〜D）はドラムトラック（キット、パターン、ロック、ナッジ、フィル条件）とグローバル設定をまとめて保存します。",
-    bkTitle: "バックアップ", bkHelp: "FM-1 の中身をすべて 1 つのファイルに保存します: ソング 1〜16 とペダルの設定、設定（色、キャリブレーション、ライト、MIDI）、SYN キット、サンプル USR3〜4、ジャムのパターンとプロジェクト 1〜4。復元すると、本体はファイルの状態に戻ります（今の内容は上書きされます。2026-10-21 より前のバックアップにはソングがなく、ソングはそのまま残ります）。先に FM-1 を停止してください。SLOOP のバックアップも復元できます（ユーザープリセット、FM6 の音色バンク、USR1、USR2 は除きます）。",
+    bkTitle: "バックアップ", bkHelp: "FM-1 の中身をすべて 1 つのファイルに保存します: ソング 1〜16 とペダルの設定、設定（色、キャリブレーション、ライト、MIDI）、SYN キット、サンプル USR3〜4、今のパターン。復元すると、本体はファイルの状態に戻ります（今の内容は上書きされます。2026-10-21 より前のバックアップにはソングがなく、ソングはそのまま残ります）。先に FM-1 を停止してください。SLOOP のバックアップも復元できます（ユーザープリセット、FM6 の音色バンク、プロジェクト 1〜4、USR1、USR2 は除きます）。",
     bkSave: "バックアップを保存", bkLoad: "ファイルから復元", bkSaving: "バックアップ中 ", bkSaved: "バックアップを保存しました",
     bkRestoring: "復元中 ", bkRestored: "復元しました", bkConfirm: "FM-1 の今の内容をすべてこのバックアップで置き換えます。続けますか？",
     bkBad: "BackBeat のバックアップファイルではないか、壊れています: ", bkStop: "FM-1 の再生を止めてから、もう一度復元してください。",
     bkStale: "本体の内容が途中で変わりました。もう一度バックアップしてください: ", bkRead: "読み取りエラー: ", bkWrite: "書き込みエラー: ", bkRc4: "フラッシュがありません",
-    bkNewer: "このファームウェアが読めないプロジェクトを含むバックアップです（SLOOP 1.x か新しい形式）。何も変更していません: ",
+    bkNewer: "このファームウェアが読めない形式のパターンを含むバックアップです（SLOOP 1.x か新しい形式）。何も変更していません: ",
     bkSkipped: "復元しました。このファームウェアにないものは除きました: ", bkSkipUp: "ユーザープリセット", bkSkipFm6: "FM6 の音色バンク",
-    bkSkipUsr1: "サンプル USR1（ソングの領域）",
+    bkSkipUsr1: "サンプル USR1（ソングの領域）", bkSkipProj: "プロジェクト 1〜4（SLOOP のセクション A〜D）",
     system: "システム", firmware: "ファームウェア", sync: "同期", stepsN: "ステップ数",
     smpSlots: "サンプルスロット", none: "なし",
     kitStep1: "音",
@@ -3423,7 +3384,7 @@ const TEXT = {
     kitReplaces: "今の中身を置き換えます: {x}",
     kitNo4: "このファームウェアには USR4 がありません（SLOOP 2.4 以降）。",
     kitStep3: "FM-1 に送る",
-    kitWhereFM1: "FM-1 では: ドラムトラックの KIT = {x}。保存したプロジェクトもこのキットを覚えています。",
+    kitWhereFM1: "FM-1 では: ドラムトラックの KIT = {x}。ソングはそのキットを覚えています。",
     smpIntro: "FM-1 に入れる自分の音。スロットは 2 つ（USR3 と USR4）、各約 7 秒（USR1 と USR2 には 16 曲のソングが入っています）。スロットはドラムキット（KIT = USRn: 各レーンが自分の音程のゾーンを鳴らす。「ドラムキット」ページで作れます）か、ミックスの下のテクスチャー（SETUP > TEXTURE > SOURCE）として鳴ります。",
     smpStep1: "スロットを選ぶ",
     smpStep2: "音を作る",
@@ -3454,16 +3415,9 @@ const TEXT = {
     dsBad: "FM-1 が受け付けませんでした", dsCopyAsk: "{k} を {x} のコピーにします。よろしいですか？", dsCopied: "コピーしました:",
     dsStop: "ソングを止めてから保存してください", dsFlash: "フラッシュに書けませんでした", dsSaved: "FM-1 に保存しました",
     dsFileBad: "ドラムシンセキットのファイルではありません", dsOpenAsk: "{x} を {k} に読み込みます。よろしいですか？", dsOpened: "読み込みました:",
-    /* SLOOP 2.5: length, song */
+    /* SLOOP 2.5: length */
     lenLabel: "長さ（ステップ）",
-    tabSong: "ジャム", songTitle: "ジャム",
-    songHelp: "FM-1 の SONG 画面と同じもの: セクション A〜D（4 つのプロジェクトスロット）を並べ、それぞれ何小節鳴らすか。全部で 16 項目まで。PLAY はソングモード（SAVE + 13）で。",
-    songSection: "セクション", songBars: "小節", songTimes: "回数",
-    songEmpty: "空のスロットのセクションがあります: FM-1 で先に SAVE + 5〜8 で保存してください。",
-    songAdd: "追加", songSum: "{n} / {max} 項目、{bars} 小節", songLoop: "最後まで来たら:",
-    songLoopOff: "止まる", songLoopOn: "最初に戻る", songRead: "FM-1 から読む", songSend: "FM-1 に送る",
     songUp: "上へ", songDown: "下へ", songDel: "削除",
-    songOld: "この FM-1 のファームウェアではソングを読めません（SLOOP 2.5 以降）。",
     tabSongs: "ソングエディタ", tabSetlist: "セットリスト", setTitle: "セット", setDevTitle: "FM-1 のスロット",
     grvTitle: "FM-1 のファクトリー・グルーヴ", grvHelp: "ファームウェアに内蔵、読み取り専用：FM-1 の FACTORY ページ（SONGS から LFO）、ペダルの PC 16〜31。ここで再生、ソングタブのエディタで開く、またはセットに追加（追加すると自分の曲として編集し、スロットに送れます）。",
     grvAdd: "セットに追加", grvReading: "グルーヴを読み込み中…", grvNone: "グルーヴはサイトに含まれています：ダウンロードしたファイルではなく、ウェブのアドレスからエディタを開いてください。",
@@ -3485,7 +3439,7 @@ const TEXT = {
     sedSteps: "ステップ", sedTime: "拍子", sedOutro: "アウトロ", sedDup: "複製", sedNew: "新規セクション", sedDel: "削除", sedSplit: "分割（小節）", sedSplitBtn: "分割", sedMerge: "次と結合",
     sedBarWarn: "拍子の小節に揃っていません：切り替えは小節線まで待ちます。", sedBarFix: "拍子を {sig} に",
     sedPen: "ペン:", sedRat: "ラチェット", sedFlam: "フラム", sedMark: "フィル:", sedMarkAlways: "常に", sedMarkF: "フィル時のみ", sedMarkN: "フィル時は休み", sedGridHelp: "クリックでペンのレベル・ラチェット・フィル印の打点、同じ打点をもう一度で消す。フィル印が「フィル時のみ」「フィル時は休み」のとき、既にある打点をクリックするとその印を変えます（黄の枠: フィル時のみ、赤の枠: フィル時は休み）。上の行はステップ全体の印。", sedBarsHelp: "ファイルの小節（このセクションの範囲に印）：1〜4 小節を選んでパターンに、1 小節をフィルに。",
-    sedHear: "クリックで音を聞く", sedKey: "キー: ", sedUndo: "元に戻す", sedRedo: "やり直す", sedPlaySec: "このセクションを試聴", sedKeys: "キー: n 通常、h 強、s 弱、g ゴースト、x 消去、r ラチェット、l フラム、m フィル印、[ ] 前後のセクション、Delete 選択ステップを消去、Ctrl+C / Ctrl+V ステップのコピーと貼り付け、Ctrl+Z / Ctrl+Y 元に戻す / やり直す、p このセクションを試聴。レーン名をクリックすると音が鳴ります。", sedCols: "ステップ（番号をクリック、Shift+クリックで範囲。フィル小節・エントリー・ブレイクの番号も：そこへコピーと貼り付け）:", sedCopy: "コピー", sedPaste: "貼り付け（選択位置に）", sedClear: "消去", sedCopied: "コピーしました: ", sedUseBars: "選んだ小節をパターンに", sedUseFill: "選んだ小節をフィルに", sedEntry: "エントリー", sedBreak: "ブレイク", sedEbNone: "なし", sedEbBar: "小節", sedEbBars: "小節", sedUseEntry: "選んだ小節をエントリーに", sedUseBreak: "選んだ小節をブレイクに", sedEbHelp: "エントリーとブレイク：セクションのパターンの前に鳴る小節（無音でも可）。終わるとパターンは頭から始まり、その間に押したセクションはその終わりで切り替わります。エントリーは別のセクションや停止から入るとき、ブレイクは CC 28（再生中のセクションにも）で鳴ります。グリッドではエントリーはパターンの左、ブレイクは右（どちらも青い隙間の向こう）。", sedFill: "フィル", sedFbInfo: " + フィル {n} ステップ", sedFbHelp: "隙間の右はこのセクション専用のフィル（1〜4小節）：フィルはいま鳴っている小節の代わりにこれを演奏します（印なし。最初の小節は押した所から小節の終わりまで同じ位置のステップを、続く小節はそのまま）。その後パターンは頭から、または押したセクションへ。追加すると、パターンの最後の小節（フィル時に鳴る形）が写されます。", sedEdit: "編集", sedDropped: "パターンと重なるフィルの打点は捨てました: ", sedTooMany: "16 セクションまで", sedNoMerge: "結合できません（分割数が違うか 64 ステップ超）",
+    sedHear: "クリックで音を聞く", sedKey: "キー: ", sedUndo: "元に戻す", sedRedo: "やり直す", sedPlaySec: "このセクションを試聴", sedKeys: "キー: n 通常、h 強、s 弱、g ゴースト、x 消去、r ラチェット、l フラム、m フィル印、[ ] 前後のセクション、Delete 選択ステップを消去、Ctrl+C / Ctrl+V ステップのコピーと貼り付け、Ctrl+Z / Ctrl+Y 元に戻す / やり直す、p このセクションを試聴。レーン名をクリックすると音が鳴ります。", sedCols: "ステップ（番号をクリック、Shift+クリックで範囲。フィル小節・エントリー・ブレイクの番号も：そこへコピーと貼り付け）:", sedCopy: "コピー", sedPaste: "貼り付け（選択位置に）", sedClear: "消去", sedCopied: "コピーしました: ", sedUseBars: "選んだ小節をパターンに", sedUseFill: "選んだ小節をフィルに", sedEntry: "エントリー", sedBreak: "ブレイク", sedEbNone: "なし", sedEbBar: "小節", sedEbBars: "小節", sedUseEntry: "選んだ小節をエントリーに", sedUseBreak: "選んだ小節をブレイクに", sedEbHelp: "エントリーとブレイク：セクションのパターンの前に鳴る小節（無音でも可）。終わるとパターンは頭から始まり、その間に押したセクションはその終わりで切り替わります。エントリーは別のセクションや停止から入るとき、ブレイクは CC 28（再生中のセクションにも）で鳴ります。グリッドではエントリーはパターンの左、ブレイクは右（どちらも青い隙間の向こう）。", sedFill: "フィル", sedFbInfo: " + フィル {n} ステップ", sedFbHelp: "隙間の右はこのセクション専用のフィル（1〜4小節）：フィルはいま鳴っている小節の代わりにこれを演奏します（印なし。最初の小節は押した所から小節の終わりまで同じ位置のステップを、続く小節はそのまま）。その後パターンは頭から、または押したセクションへ。追加すると、パターンの最後の小節（フィル時に鳴る形）が写されます。", sedEdit: "編集", sedDropped: "パターンと重なるフィルの打点は捨てました: ", sedTooMany: "16 セクションまで", sedNoMerge: "結合できません（分割数が違うか 64 ステップ超）", sedDivLong: "分割数を変えられません（その分割数では 64 ステップ超）: 先にパターンを短くしてください", sedDivHelp: "分割数を変えてもヒットは拍の上の位置を保ちます: 1/16 から 1/8 では間の 16 分が消え、1/8 から 1/16 では間に空のステップが入ります",
     playTitle: "試聴", playCheat: "ペダルのコマンド（ペダルのチャンネルの MIDI CC）", playCheatCmd: "ペダル", playCheatWhat: "動作", playCheatKey: "キー",
     playC20: "再生中のセクションが終わったらセクション n（0 が最初）。停止中はそれで開始", playC27: "次の小節でセクション n",
     playC21: "フィル：この小節の残り（最後の拍なら次の小節を丸ごと）", playC21n: "フィル：次の小節を丸ごと",
@@ -3496,13 +3450,10 @@ const TEXT = {
     playHum: "ヒューマナイズ", humOff: "オフ", humLight: "軽め", humMore: "強め",
     pinFrom: "MIDI 入力", pinClock: "MIDI クロックに合わせる", liveLead: "画面を先に", pinListen: "ペダルを聴く", pinStop: "聴くのをやめる", pinNone: "（使える MIDI 機器なし）", pinFm1: "FM-1：TRS ジャック（SETUP > MIDI 2 > TRS TO USB をオン）", pinOn: "チャンネル {ch} を聴いています", pinNoMidi: "このブラウザには Web MIDI がありません", bleConnect: "Bluetooth で接続", bleOff: "{name} を切断", bleOffLog: "Bluetooth を切断しました", bleOn: "Bluetooth: {name} に接続、チャンネル {ch} を聴いています", bleNo: "このブラウザには Web Bluetooth がありません。Android・Windows・macOS の Chrome か Edge で開いてください（Linux の Chrome は chrome://flags の Web Bluetooth を有効に。Firefox と Safari にはありません）", bleCtx: "Web Bluetooth は https か http://localhost のページでしか使えません。このページは ", bleNone: "デバイスが選ばれませんでした", bleLost: "Bluetooth が切れました。再接続します", bleGone: "Bluetooth が切れました。もう一度「Bluetooth で接続」を押してください", pinNoSong: "ソングがありません（スロットの「試聴」か、ソングを開いてください）", pinHelp: "本物のペダル（Ampero、または間の USB MIDI インターフェース）でブラウザのプレーヤーを動かします。FM-1 と同じ CC 20..28 と PC を、ペダルカードのチャンネルで受けます。PC n はセット（セットリストタブ）の n 曲目、なければ接続中の FM-1（または模擬 FM-1）のスロット n のソングを開きます。PC 16〜31 はファクトリー・グルーヴ。音を出すため、最初に「ペダルを聴く」を押してください。「MIDI クロックに合わせる」で、その入力のテンポと START / STOP に従います（FM-1 の SETUP > PEDAL > MIDI CLOCK IN と同じ。カウントインはなし）。FM-1 をこの機器の USB につなぎ、SETUP > MIDI 2 > TRS TO USB をオンにすると、FM-1 自体がここの入力になります（TRS ジャックが受けたペダルとクロック）。MIDI インターフェースなしでプレーヤーが FM-1 に従います。「Bluetooth で接続」は代わりに BLE MIDI でペダルを受けます（Bluetooth MIDI のペダル、または MIDI ブリッジを入れた FM-1）。Android・Windows・macOS の Chrome か Edge で、https か localhost のページから（Linux の Chrome はフラグが必要）。Firefox と iPhone の Safari には Web Bluetooth がありません。", pedalTitle: "ペダル", pedalHelp: "ペダルボードの MIDI チャンネル（CC 20..28 と PC）と、停止中にセクションを押したときのカウントイン（クリック 1〜2 小節）。電源を切っても保持されます。", pedalCh: "チャンネル", pedalSet: "設定", pedalClock: "MIDI クロック入力", clockTrs: "TRS ジャック", clockUsb: "USB",
     pedalClockHelp: "ペダルボードのクロックのテンポと START / STOP に従います（Ampero: CLOCK OUT (TRS) をオン）。すぐに設定されます", pedalNow: "今: ", pedalOff: "オフ", pedalAny: "すべて", pedalCount: "カウントイン", pedalBar: "1 小節", pedalBars: "2 小節",
-    songBad: "このソングは送れません（16 項目、1〜64 小節まで）", songRefused: "ソングを止めてから送ってください",
-    songSent: "ソングを FM-1 に送りました",
   },
   en: {
     other: "日本語", connect: "Connect", disconnect: "Disconnect", mock: "Mock device (no hardware)",
-    projects: "Projects",
-    load: "Load", save: "Save", used: "used", empty: "empty", unknown: "—",
+    empty: "empty",
     steps: "Steps", reload: "Reload", clearSeq: "Clear sequence",
     time: "Time",
     foot: "Works in Chrome or Edge.", iconsCredit: "Icons: Fukiai (MIT), Hügelton Instruments",
@@ -3515,8 +3466,6 @@ const TEXT = {
     ready: "Connected", disconnected: "Disconnected", lost: "The FM-1 was unplugged",
     noreply: "No reply from the device", error: "Error: ",
     applying: "Writing ",
-    savedSlot: "Saved to slot ", loadedSlot: "Loaded slot ", emptySlot: "Empty slot: ",
-    confirmSave: "Overwrite slot {n}?", confirmLoad: "Load slot {n}? The current pattern and settings will be replaced.",
     confirmClear: "Clear the whole sequence?",
     samples: "Samples",
     zones: "zones", smpName: "Name", erase: "Erase", clearList: "Clear list",
@@ -3553,15 +3502,14 @@ const TEXT = {
     lockFull: "A track holds 24 locks at most.", lockRefused: "This parameter cannot be locked.",
     lockHelp: "Nudge: the step early (-) or late (+), in 1/64 of a step. A lock gives a parameter another value for this step only; the base comes back at the next one. Fill: a \"fill only\" step plays only during a fill (the pedal's CC 21, a black key or SEL on the LIVE screen), a \"no fill\" step is silent then (F and \u00d7 on the grid). On the device: SEQ + a step held + KNOB 4 (nudge) / PRESETS (the lock; ALGORITHM picks its parameter) / OCT+ (the fill condition).",
     level: "Level",
-    projHelp: "A project (a song section A–D) keeps the drum track (its kit, pattern, locks, nudges and fill conditions) and the global settings.",
-    bkTitle: "Backup", bkHelp: "Everything on the FM-1 in one file: the songs 1–16 and the pedal settings, the settings (colours, calibration, the lights, MIDI), the SYN kits, the samples USR3–USR4, and the Jam's pattern and projects 1–4. Restoring puts the FM-1 back as it was in the file (what is on it now is replaced; a backup from before 2026-10-21 holds no songs and leaves them as they are). Stop the FM-1 first. A backup of SLOOP restores too, without its user presets, FM6 patch bank, USR1 and USR2.",
+    bkTitle: "Backup", bkHelp: "Everything on the FM-1 in one file: the songs 1–16 and the pedal settings, the settings (colours, calibration, the lights, MIDI), the SYN kits, the samples USR3–USR4, and the working pattern. Restoring puts the FM-1 back as it was in the file (what is on it now is replaced; a backup from before 2026-10-21 holds no songs and leaves them as they are). Stop the FM-1 first. A backup of SLOOP restores too, without its user presets, FM6 patch bank, projects 1–4, USR1 and USR2.",
     bkSave: "Save a backup", bkLoad: "Restore from a file", bkSaving: "Backing up ", bkSaved: "Backup saved",
     bkRestoring: "Restoring ", bkRestored: "Restored", bkConfirm: "Replace everything on the FM-1 with this backup?",
     bkBad: "Not a BackBeat backup, or damaged: ", bkStop: "Stop the FM-1 (PLAY), then restore again.",
     bkStale: "The FM-1 changed during the backup; back up again: ", bkRead: "Read error: ", bkWrite: "Write error: ", bkRc4: "No flash",
-    bkNewer: "This backup holds projects this firmware cannot read (SLOOP 1.x, or a newer format). Nothing was changed: ",
+    bkNewer: "This backup holds a pattern in a format this firmware cannot read (SLOOP 1.x, or a newer one). Nothing was changed: ",
     bkSkipped: "Restored. Left out, as this firmware has none: ", bkSkipUp: "the user presets", bkSkipFm6: "the FM6 patch bank",
-    bkSkipUsr1: "the sample USR1 (the songs' room)",
+    bkSkipUsr1: "the sample USR1 (the songs' room)", bkSkipProj: "the projects 1–4 (SLOOP's sections A–D)",
     system: "System", firmware: "Firmware", sync: "Sync", stepsN: "Steps",
     smpSlots: "Sample slots", none: "none",
     kitStep1: "Your sounds",
@@ -3575,7 +3523,7 @@ const TEXT = {
     kitReplaces: "It replaces what is there now: {x}",
     kitNo4: "This firmware has no USR4 (SLOOP 2.4 and later).",
     kitStep3: "Send it to the FM-1",
-    kitWhereFM1: "On the FM-1: the drum track's KIT = {x}. A project you save remembers the kit.",
+    kitWhereFM1: "On the FM-1: the drum track's KIT = {x}. A song remembers its kit.",
     smpIntro: "Your own sounds on the FM-1. Two slots (USR3 and USR4) of about 7 s each (USR1 and USR2 hold the 16 songs). A slot plays as a drum kit (KIT = USRn: each lane the zone of its note; the Drum kit page builds one) or as the bed under the mix (SETUP > TEXTURE > SOURCE).",
     smpStep1: "Choose a slot",
     smpStep2: "Make the sound",
@@ -3606,16 +3554,9 @@ const TEXT = {
     dsBad: "The FM-1 refused it", dsCopyAsk: "Make {k} a copy of {x}?", dsCopied: "Copied:",
     dsStop: "Stop the song first, then store", dsFlash: "Could not write the flash", dsSaved: "Stored on the FM-1",
     dsFileBad: "Not a drum synth kit file", dsOpenAsk: "Load {x} into {k}?", dsOpened: "Loaded:",
-    /* SLOOP 2.5: length, song */
+    /* SLOOP 2.5: length */
     lenLabel: "Length (steps)",
-    tabSong: "Jam", songTitle: "Jam",
-    songHelp: "The FM-1's SONG screen: the sections A–D (the four project slots) in order, each for so many bars. 16 entries at most. PLAY it in song mode (SAVE + key 13).",
-    songSection: "Section", songBars: "Bars", songTimes: "Times",
-    songEmpty: "A section has an empty slot: save it on the FM-1 first (SAVE + keys 5–8).",
-    songAdd: "Add", songSum: "{n} of {max} entries, {bars} bars", songLoop: "At the end:",
-    songLoopOff: "stop", songLoopOn: "start again", songRead: "Read from the FM-1", songSend: "Send to the FM-1",
     songUp: "Up", songDown: "Down", songDel: "Remove",
-    songOld: "This FM-1's firmware cannot share its song (SLOOP 2.5 or later).",
     tabSongs: "Song editor", tabSetlist: "Setlist", setTitle: "The set", setDevTitle: "The FM-1's slots",
     grvTitle: "The FM-1's factory grooves", grvHelp: "Built into the firmware and read-only: the FM-1's FACTORY page (SONGS, then LFO), the pedal's PC 16 to 31. Play one here, open it in the Song tab's editor, or add it to the set: there it is a song of yours, to edit and send to a slot.",
     grvAdd: "Add to the set", grvReading: "Reading the grooves...", grvNone: "The grooves come with the site: open the editor from its web address (not the downloaded file) to see them.",
@@ -3637,7 +3578,7 @@ const TEXT = {
     sedSteps: "steps", sedTime: "time", sedOutro: "outro", sedDup: "Duplicate", sedNew: "New section", sedDel: "Delete", sedSplit: "split at bar", sedSplitBtn: "Split", sedMerge: "Merge with next",
     sedBarWarn: "Not whole bars of its time: a change waits for the bar line.", sedBarFix: "Set time to {sig}",
     sedPen: "pen:", sedRat: "ratchet", sedFlam: "flam", sedMark: "fill:", sedMarkAlways: "always", sedMarkF: "only in a fill", sedMarkN: "not in a fill", sedGridHelp: "Click a cell to set a hit with the pen's level, ratchet and fill mark; click the same hit again to clear it. With the fill mark on 'only in a fill' or 'not in a fill', clicking a hit that is there changes its mark instead (amber ring: only in a fill, red ring: not in a fill). The top row marks a whole step at once.", sedBarsHelp: "The file's bars (this section's own range marked): pick 1 to 4 as the pattern, or one as the fill.",
-    sedHear: "click: hear this lane", sedKey: "key: ", sedUndo: "Undo", sedRedo: "Redo", sedPlaySec: "Play this section", sedKeys: "Keys: n normal, h hard, s soft, g ghost, x erase, r ratchet, l flam (a grace note before the hit), m fill mark, [ ] previous / next section, Delete clears the selected steps, Ctrl+C / Ctrl+V copy and paste them, Ctrl+Z / Ctrl+Y undo / redo, p plays this section. Click a lane's name to hear its sound.", sedCols: "steps (click a number, shift-click another for a range; the fill bar's, entry's and break's numbers too, to copy and paste there):", sedCopy: "Copy", sedPaste: "Paste at the selection", sedClear: "Clear", sedCopied: "copied: ", sedUseBars: "Pattern = selected bars", sedUseFill: "Fill = selected bars", sedEntry: "Entry", sedBreak: "Break", sedEbNone: "none", sedEbBar: "bar", sedEbBars: "bars", sedUseEntry: "Entry = selected bars", sedUseBreak: "Break = selected bars", sedEbHelp: "Entry and break: bars played before the section's pattern (silence too); after them the pattern starts from its top, and a section asked for meanwhile comes in at their end. The entry plays when the section comes in from another one or from stopped, the break on CC 28 (the section playing too). In the grid: the entry left of the pattern, the break at the right, each past a blue gap.", sedFill: "Fill", sedFbInfo: " + a fill of {n} steps", sedFbHelp: "Right of the gap: the section's fill of its own, 1 to 4 bars, which a fill plays instead of the bar it is in, as it is (no marks there): its first bar from the press to the bar's end, its step i at the bar's step i, then its other bars whole; then the pattern from its top, or the section asked for. Added, it starts as the pattern's last bars the way a fill played them.", sedEdit: "Edit", sedDropped: "fill hits dropped where the pattern hits too: ", sedTooMany: "at most 16 sections", sedNoMerge: "cannot merge (different division, or over 64 steps)",
+    sedHear: "click: hear this lane", sedKey: "key: ", sedUndo: "Undo", sedRedo: "Redo", sedPlaySec: "Play this section", sedKeys: "Keys: n normal, h hard, s soft, g ghost, x erase, r ratchet, l flam (a grace note before the hit), m fill mark, [ ] previous / next section, Delete clears the selected steps, Ctrl+C / Ctrl+V copy and paste them, Ctrl+Z / Ctrl+Y undo / redo, p plays this section. Click a lane's name to hear its sound.", sedCols: "steps (click a number, shift-click another for a range; the fill bar's, entry's and break's numbers too, to copy and paste there):", sedCopy: "Copy", sedPaste: "Paste at the selection", sedClear: "Clear", sedCopied: "copied: ", sedUseBars: "Pattern = selected bars", sedUseFill: "Fill = selected bars", sedEntry: "Entry", sedBreak: "Break", sedEbNone: "none", sedEbBar: "bar", sedEbBars: "bars", sedUseEntry: "Entry = selected bars", sedUseBreak: "Break = selected bars", sedEbHelp: "Entry and break: bars played before the section's pattern (silence too); after them the pattern starts from its top, and a section asked for meanwhile comes in at their end. The entry plays when the section comes in from another one or from stopped, the break on CC 28 (the section playing too). In the grid: the entry left of the pattern, the break at the right, each past a blue gap.", sedFill: "Fill", sedFbInfo: " + a fill of {n} steps", sedFbHelp: "Right of the gap: the section's fill of its own, 1 to 4 bars, which a fill plays instead of the bar it is in, as it is (no marks there): its first bar from the press to the bar's end, its step i at the bar's step i, then its other bars whole; then the pattern from its top, or the section asked for. Added, it starts as the pattern's last bars the way a fill played them.", sedEdit: "Edit", sedDropped: "fill hits dropped where the pattern hits too: ", sedTooMany: "at most 16 sections", sedNoMerge: "cannot merge (different division, or over 64 steps)", sedDivLong: "cannot change the division (over 64 steps at that one): shorten the pattern first", sedDivHelp: "Changing the division keeps the hits in their place on the beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between",
     playTitle: "Play", playCheat: "Pedal commands (MIDI CC on the pedal channel)", playCheatCmd: "pedal", playCheatWhat: "does", playCheatKey: "key",
     playC20: "section n (0 = the first) when the one playing ends; stopped: starts with it", playC27: "section n on the next bar",
     playC21: "fill: the rest of this bar (in its last beat: the whole next bar)", playC21n: "fill: the whole next bar",
@@ -3648,8 +3589,6 @@ const TEXT = {
     playHum: "humanize", humOff: "off", humLight: "light", humMore: "more",
     pinFrom: "MIDI in from", pinClock: "Follow its MIDI clock", liveLead: "Screen ahead", pinListen: "Listen to the pedal", pinStop: "Stop listening", pinNone: "(no MIDI device available)", pinFm1: "FM-1: its TRS jack (SETUP > MIDI 2 > TRS TO USB on)", pinOn: "listening on channel {ch}", pinNoMidi: "this browser has no Web MIDI", bleConnect: "Connect Bluetooth", bleOff: "Disconnect {name}", bleOffLog: "Bluetooth disconnected", bleOn: "Bluetooth: {name} connected, listening on channel {ch}", bleNo: "this browser has no Web Bluetooth: open the page in Chrome or Edge on Android, Windows or macOS (on Linux, Chrome keeps it behind its Web Bluetooth flag in chrome://flags; Firefox and Safari have none)", bleCtx: "Web Bluetooth works only on https or http://localhost pages: this page is ", bleNone: "no device chosen", bleLost: "Bluetooth connection lost, reconnecting", bleGone: "Bluetooth connection lost: press Connect Bluetooth again", pinNoSong: "no song (press Play on a slot, or open one)", pinHelp: "The real pedal (the Ampero, or a USB MIDI interface between them) drives the player in the browser: the same CC 20..28 and PC as the FM-1, on the Pedal card's channel. PC n opens song n of the set (the Setlist tab), else the song in slot n of the FM-1 connected (or the simulated one); PC 16 to 31 the factory grooves. Press Listen first: the browser plays sound only after a click. With Follow its MIDI clock the player takes that input's tempo and START / STOP, as the FM-1 with SETUP > PEDAL > MIDI CLOCK IN (no count-in: the master counts). With the FM-1 on this device's USB and its SETUP > MIDI 2 > TRS TO USB on, the FM-1 itself is an input here: the pedal and the clock its TRS jack receives, so the player follows the FM-1 with no MIDI interface of its own. Connect Bluetooth takes the pedal over BLE MIDI instead (a Bluetooth MIDI pedal, or an FM-1 running the MIDI bridge): Chrome or Edge on Android, Windows or macOS, from https or localhost (Chrome on Linux needs its Web Bluetooth flag); Firefox and Safari on the iPhone have no Web Bluetooth.", pedalTitle: "Pedal", pedalHelp: "The pedalboard's MIDI channel (its CC 20..28 and PC), and the count-in: a section pressed while stopped first clicks one or two bars at the tempo. Kept through power-off.", pedalCh: "channel", pedalSet: "Set", pedalClock: "MIDI clock in", clockTrs: "TRS jack", clockUsb: "USB",
     pedalClockHelp: "the tempo and START / STOP from the pedalboard's clock (on the Ampero: CLOCK OUT (TRS) on); set at once", pedalNow: "now: ", pedalOff: "off", pedalAny: "any", pedalCount: "count-in", pedalBar: "1 bar", pedalBars: "2 bars",
-    songBad: "This song cannot be sent (16 entries, 1–64 bars each)", songRefused: "Stop the song first, then send",
-    songSent: "Song sent to the FM-1",
   },
 };
 let lang = (navigator.language || "en").toLowerCase().startsWith("ja") ? "ja" : "en";
@@ -3678,7 +3617,7 @@ function applyLang() {
   if (lastKey) $("status").textContent = t(lastKey) + lastArg;
   renderLive();
   renderPanels();
-  if (dev) { renderSlots(); renderStepHead(); renderSamples(); renderSysinfo(); }
+  if (dev) { renderStepHead(); renderSamples(); renderSysinfo(); }
   renderKits();
 }
 $("lang").addEventListener("click", () => { lang = lang === "ja" ? "en" : "ja"; applyLang(); });
@@ -3700,9 +3639,9 @@ $("sidetog").addEventListener("click", () => {
 
 /* ---------------------------------------------------------------- tabs --- */
 /* one panel at a time; the last one is remembered (localStorage) and in the URL hash (#setlist ...). A tab of
-   SLOOP's editor remembered from before (sound, tracks, library) opens the first one, the setlist; the sequencer and the
-   jam last, under "future" (not supported yet, 2026-10-21) */
-const TABS = ["setlist", "songs", "kits", "drumsynth", "samples", "settings", "sequencer", "song"];   /* (the projects: in the Jam, the backup in Settings, 2026-10-21) */
+   SLOOP's editor remembered from before (sound, tracks, library, and the Jam, gone 2026-10-27) opens the first one, the
+   setlist; the sequencer last, under "future" (not supported yet, 2026-10-21) */
+const TABS = ["setlist", "songs", "kits", "drumsynth", "samples", "settings", "sequencer"];   /* (the backup in Settings, 2026-10-21) */
 const TAB_KEY = "felucca-editor-tab";
 let tab = (() => {
   const h = location.hash.slice(1);
@@ -3750,9 +3689,6 @@ function renderPanels() {
   if (want === "songs") playRender();
   if (want === "setlist") { renderSet(); if (GRV.list) renderGrooves(); else grvLoad(); }
   (want === "setlist" ? $("set-player") : $("splay-home")).append($("splay"));   /* one player, on the tab that shows */
-  if (want === "song" && ready) {                      /* (2.5) read the song order once per connection */
-    if (SG.dev !== dev) { Object.assign(SG, { dev, rows: null, err: "", dirty: false }); op(readSong); } else renderSong();
-  }
 }
 $("tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); });
 $("tabs").addEventListener("keydown", (e) => {          /* arrow keys move between the tabs */
@@ -3774,7 +3710,7 @@ let mock = null;
 
 /* -------------------------------------------------------------- state --- */
 let access = null;     /* MIDIAccess */
-let dev = null;        /* {link, input, output, info, pdesc[], gdesc[], kitNames[], dump, dsteps[], slotUsed[], smp,
+let dev = null;        /* {link, input, output, info, pdesc[], gdesc[], kitNames[], dump, dsteps[], smp,
                           micro[], locks[], fill[], watch (pushes on)} */
 let busy = 0;          /* multi-request operations in progress: no polling */
 let dragging = null;   /* key of the slider being dragged */
@@ -3783,7 +3719,7 @@ const ctl = new Map(); /* key "s:id" -> {input, out, desc, scope, id, row} */
 const sets = new SetGate(); /* key -> {last: time of the user's last change, sent: the value last requested} */
 let needReload = false; /* a RELOAD push came: re-read DUMP and the steps when free */
 let lastDump = 0;      /* Date.now() of the last DUMP */
-/* the device also pushes RELOAD after loads the editor asked for (PROJECT load, a restore); the editor re-reads after
+/* the device also pushes RELOAD after loads the editor asked for (a restore); the editor re-reads after
    those anyway, so it skips that many RELOADs for a moment */
 const selfReload = { n: 0, until: 0 };
 function selfLoad() {
@@ -3844,8 +3780,7 @@ async function connect() {
     });
     input.onmidimessage = (e) => link.receive(e.data);
     if (input.open) await input.open().catch(() => {});
-    dev = { link, input, output, info: null, pdesc: [], gdesc: [], kitNames: null, dump: null, dsteps: [], slotUsed: [null, null, null, null],
-      watch: false };
+    dev = { link, input, output, info: null, pdesc: [], gdesc: [], kitNames: null, dump: null, dsteps: [], watch: false };
     sets.clear();                                    /* (another FM-1, maybe) */
     setLabel($("connect"), t("disconnect"));
     renderLive();
@@ -3909,10 +3844,6 @@ async function load(d) {
     for (let i = 0; i < d.info.gcount; i++) { sayK("reading", `${d.info.pcount + i + 1}/${total}`); d.gdesc[i] = await getDescOrNull(1, i); }
     const kd = d.pdesc[d.info.pe0];
     if (kd && kd.label === "KIT" && kd.names.length) d.kitNames = kd.names;   /* the drum track's P_E0: its kit */
-    for (let k = 0; k < 4; k++) {                    /* PROJECT op 2: is the slot used */
-      try { d.slotUsed[k] = parse[CMD.PROJECT](await d.link.request(req.project(2, k))).used; }
-      catch (e) { if (e.message === "closed") throw e; }
-    }
     try { d.smp = parse[CMD.SMP_INFO](await d.link.request(req.smpInfo())); }
     catch (e) { if (e.message === "closed") throw e; d.smp = null; }   /* no flash */
     d.dump = await getDump();
@@ -3952,7 +3883,6 @@ async function loadLocks() {
 /* --------------------------------------------------------------- UI --- */
 function buildUI() {
   buildGroups();
-  renderSlots();
   renderSamples();
   renderSysinfo();
 }
@@ -4125,7 +4055,19 @@ async function sendSet(s, id, k) {
       showValue(k, r.value, false);
       if (!s && id === pSlen() && r.value !== v) lenChanged();   /* (clamped by the device) */
     }
+    if (!s && id === pSdiv()) await divChanged();
   } catch (e) { if (e.message !== "closed") console.warn(e); }
+}
+/* the pattern's DIV set: the device re-grids the pattern (seq.c pattern_rediv, 2026-10-29: the hits keep their place on
+   the beat, LEN follows): LEN and the steps read again */
+const pSdiv = () => pSlen() + 1;                    /* (P_SDIV follows P_SLEN: core.h) */
+async function divChanged() {
+  if (!dev) return;
+  const r = parse[CMD.GET](await rq(req.get(0, pSlen()), { key: "len" }));
+  if (!dev) return;
+  dev.dump.p[pSlen()] = r.value;
+  showValue(key(0, pSlen()), r.value, false);
+  await loadSteps();
 }
 
 /* everything again, after a load (a section, a restore) or a RELOAD push */
@@ -4145,7 +4087,6 @@ function refreshAll() {
 }
 function report(err) { if (err && err.message !== "closed") { console.warn(err); sayK("error", err.message); } }
 
-/* projects: the protocol cannot ask whether a slot is used without loading or saving it */
 /* ------------------------------------- fm1-drummer: the Setlist tab (the slots) --- */
 const SONGS = { dev: null, rows: null, pedal: null, count: 0, err: "", target: 0 };
 async function readSongs() {
@@ -4619,6 +4560,7 @@ function sedRender() {
   const dv = $("sed-div");
   if (!dv.options.length) for (const d of SNG.DIVS) dv.append(el("option", { value: d, text: d }));
   dv.value = sec.div;
+  dv.title = t("sedDivHelp");
   $("sed-outro").checked = !!sec.outro;
   const spb = SED.spb(sec), beat = SED.beat(sec), nb = SED.bars(sec), sb = $("sed-splitbar");
   if (document.activeElement !== $("sed-time")) $("sed-time").value = sec.time || "4/4";
@@ -4795,7 +4737,13 @@ function sedSwingLive() {                                  /* the song playing b
 }
 $("sed-secname").addEventListener("input", () => { const sec = sedSec(); if (sec) { SONGED.spec.sections[SONGED.sel] = SED.rename(sec, $("sed-secname").value); const chips = $("sed-chips").children[SONGED.sel]; if (chips) chips.textContent = `${SONGED.sel + 1}: ${sedSec().name}${sedSec().outro ? "*" : ""}`; } });
 $("sed-steps").addEventListener("change", () => { const sec = sedSec(); if (sec) sedSet(SED.setSteps(sec, +$("sed-steps").value)); });
-$("sed-div").addEventListener("change", () => { const sec = sedSec(); if (sec) sedSet(SED.setDiv(sec, $("sed-div").value)); });
+$("sed-div").addEventListener("change", () => {   /* the hits keep their place on the beat (SED.setDiv); over 64 steps: refused */
+  const sec = sedSec();
+  if (!sec) return;
+  const r = SED.setDiv(sec, $("sed-div").value);
+  if (!r) { sayK("sedDivLong"); sedRender(); return; }
+  sedSet(r);
+});
 $("sed-time").addEventListener("change", () => {
   const sec = sedSec();
   if (!sec) return;
@@ -5245,7 +5193,7 @@ function pinAttach() {
 }
 async function pinSong(slot) {                              /* PC n: song n of the set, else slot n of the FM-1 connected
                                                                (or the simulated one) */
-  if (slot < 0) return;                                      /* (SLOOP's A..D: nothing for the player) */
+  if (slot < 0) return;                                      /* (PC 32 and up: no song, nothing for the player) */
   if (slot >= SNG.SLOTS) {                                   /* PC 16..31: a factory groove (the site's copy: the firmware's) */
     const k = slot - SNG.SLOTS;
     if (!grvPlay(k)) { pinLog(`NO SONG F${k + 1}`); return; }
@@ -5422,35 +5370,6 @@ $("pedal-set").addEventListener("click", () => op(async () => {
   SONGS.count = +$("pedal-count").value;
   renderSongs();
 }));
-
-function renderSlots() {
-  const box = $("slots");
-  box.replaceChildren();
-  for (let i = 0; i < 4; i++) {
-    const u = dev.slotUsed[i];
-    box.append(el("div", { class: "slot" + (u ? " used" : "") },
-      el("b", { text: String(i + 1) }),
-      el("span", { class: "st", text: u == null ? t("unknown") : t(u ? "used" : "empty") }),
-      el("p", { class: "bar" },
-        el("button", { class: u ? "pri" : null, ic: "symbol_folder_open", onclick: () => project(0, i) }, t("load")),
-        el("button", { ic: "port_disk", onclick: () => project(1, i) }, t("save")))));
-  }
-}
-async function project(op, slot) {
-  if (!dev) return;
-  if (!confirm(t(op ? "confirmSave" : "confirmLoad").replace("{n}", slot + 1))) return;
-  busy++;
-  try {
-    /* save writes flash: a long timeout and no retry */
-    if (!op) selfLoad();
-    const r = parse[CMD.PROJECT](await rq(req.project(op, slot), { timeout: 4000, retries: 0 }));
-    if (r.busy) throw new Error("Stop playback before loading or saving a section.");
-    dev.slotUsed[slot] = r.used;
-    renderSlots();
-    if (!op && r.used) await reloadAll();
-    sayK(op ? "savedSlot" : r.used ? "loadedSlot" : "emptySlot", String(slot + 1));
-  } catch (err) { report(err); } finally { busy--; }
-}
 
 /* ---------------------------------------------------------- steps --- */
 /* the drum track's steps up to LEN: its 16 lanes (renderDrums), the selected step's nudge, locks and condition */
@@ -5714,84 +5633,6 @@ $("dsfile").addEventListener("change", async (e) => {
     sayK("dsOpened", ` ${kit.name}`);
   });
 });
-
-/* ---- SLOOP 2.5: the Song page: the order of the sections A..D (the device's SONG screen, from the browser) ---- */
-const SG = { rows: null, loop: false, bytes: null, err: "", dirty: false };
-async function readSong() {
-  if (!dev || !(dev.info.proto >= 6)) { Object.assign(SG, { rows: null, err: "songOld" }); renderSong(); return; }
-  const L = parse[CMD.BK_LIST](await rq(req.bkList(), { timeout: 5000, retries: 0 }));
-  const it = L.rc ? null : L.items.find((x) => x.id === 1);
-  if (!it) throw new Error("the settings are not readable (rc " + L.rc + ")");
-  const data = new Uint8Array(it.len);
-  for (let off = 0; off < it.len; off += 256) {
-    const n = Math.min(256, it.len - off);
-    const g = parse[CMD.BK_GET](await rq(req.bkGet(1, off, n), { timeout: 1500, retries: 2 }));
-    if (g.rc || g.data.length !== n) throw new Error(`settings: GET rc ${g.rc}`);
-    data.set(g.data, off);
-  }
-  if (!ARR.ok(data)) { Object.assign(SG, { rows: null, err: "songOld" }); renderSong(); return; }
-  const song = ARR.decode(data);
-  Object.assign(SG, { bytes: data, rows: ARR.group(song.entries), loop: song.loop, err: "", dirty: false });
-  renderSong();
-}
-async function sendSong() {
-  if (!dev || !SG.rows) return;
-  const song = { loop: SG.loop, entries: ARR.expand(SG.rows) };
-  if (!ARR.valid(song)) { sayK("songBad"); return; }
-  const d = ARR.encode(SG.bytes, song);
-  let r = parse[CMD.BK_PUT](await rq(req.bkBegin(1, d.length, crc32(d)), { timeout: 1500, retries: 1 }));
-  if (r.rc) throw new Error(`song: begin rc ${r.rc}`);
-  for (let off = 0; off < d.length; off += 256) {
-    r = parse[CMD.BK_PUT](await rq(req.bkData(1, off, d.subarray(off, off + 256)), { timeout: 1500, retries: 1 }));
-    if (r.rc) throw new Error(`song: data rc ${r.rc}`);
-  }
-  r = parse[CMD.BK_PUT](await rq(req.bkCommit(1), { timeout: 5000, retries: 0 }));
-  if (r.rc === 3) { sayK("songRefused"); return; }          /* (project.c settings_restore: the song is playing) */
-  if (r.rc) throw new Error(`song: commit rc ${r.rc}`);
-  await readSong();
-  sayK("songSent");
-}
-const songCount = () => (SG.rows || []).reduce((a, r) => a + Math.max(1, r.times | 0), 0);
-function songEdit(fn) { fn(); SG.dirty = true; renderSong(); }
-function renderSong() {
-  const box = $("songrows");
-  if (!dev || !dev.dump) return;
-  $("songerr").hidden = !SG.err;
-  if (SG.err) $("songerr").textContent = t(SG.err);
-  $("songbody").hidden = !SG.rows;
-  if (!SG.rows) return;
-  const LET = "ABCD", n = songCount(), bars = (SG.rows || []).reduce((a, r) => a + r.bars * Math.max(1, r.times | 0), 0);
-  box.replaceChildren(...SG.rows.map((r, k) => {
-    const sec = el("select", { onchange: (e) => songEdit(() => { r.scene = +e.target.value; }) },
-      ...[0, 1, 2, 3].map((s) => el("option", { value: s, text: LET[s] + (dev.slotUsed[s] === false ? ` (${t("empty")})` : "") })));
-    sec.value = String(r.scene);
-    const num = (v, max, set) => el("input", { type: "number", min: 1, max, value: String(v), onchange: (e) =>
-      songEdit(() => set(Math.max(1, Math.min(max, Math.round(+e.target.value) || 1)))) });
-    const empty = dev.slotUsed[r.scene] === false;
-    return el("tr", { class: empty ? "bad" : null },
-      el("td", { class: "i", text: String(k + 1) }), el("td", {}, sec),
-      el("td", {}, num(r.bars, ARR.MAX_BARS, (v) => { r.bars = v; })),
-      el("td", {}, num(r.times, ARR.STEPS, (v) => { r.times = v; })),
-      el("td", { class: "acts" },
-        el("button", { type: "button", title: t("songUp"), disabled: k === 0, onclick: () => songEdit(() => { SG.rows.splice(k - 1, 0, SG.rows.splice(k, 1)[0]); }) }, "▲"),
-        el("button", { type: "button", title: t("songDown"), disabled: k === SG.rows.length - 1, onclick: () => songEdit(() => { SG.rows.splice(k + 1, 0, SG.rows.splice(k, 1)[0]); }) }, "▼"),
-        el("button", { type: "button", title: t("songDel"), disabled: SG.rows.length < 2, onclick: () => songEdit(() => { SG.rows.splice(k, 1); }) }, "✕")));
-  }));
-  $("songsum").textContent = t("songSum").replace("{n}", n).replace("{max}", ARR.STEPS).replace("{bars}", bars);
-  $("songsum").classList.toggle("bad", n > ARR.STEPS);
-  $("songadd").disabled = n >= ARR.STEPS;
-  $("songsend").disabled = n > ARR.STEPS || !n;
-  $("songsend").classList.toggle("pri", SG.dirty);
-  for (const b of $("songloop").children) b.setAttribute("aria-pressed", (b.dataset.v === "1") === SG.loop ? "true" : "false");
-  $("songempty").hidden = !SG.rows.some((r) => dev.slotUsed[r.scene] === false);
-}
-$("songadd").addEventListener("click", () => songEdit(() => {
-  const last = SG.rows[SG.rows.length - 1];
-  SG.rows.push({ scene: last ? (last.scene + 1) % 4 : 0, bars: last ? last.bars : 4, times: 1 });
-}));
-$("songread").addEventListener("click", () => op(readSong));
-$("songsend").addEventListener("click", () => op(sendSong));
-for (const b of $("songloop").children) b.addEventListener("click", () => songEdit(() => { SG.loop = b.dataset.v === "1"; }));
 
 /* ---- v7 (SLOOP 2.4): the selected step's nudge, parameter locks and (v8) fill condition (a drum column, or its
    number above the lanes, picks it) */
@@ -6722,8 +6563,8 @@ function bkProgress(key) {
   pr.hidden = false;
   return (d, n) => { pr.value = d / n; sayK(key, `${Math.round(100 * d / n)} %`); };
 }
-/* what a restore left out (BK.SKIP: SLOOP's, not this firmware's), in words */
-const bkSkipNames = (ids) => [...new Set(ids.map((id) => (id === 6 || id === 7 ? "bkSkipUp" : id === 8 ? "bkSkipFm6" : "bkSkipUsr1")))]
+/* what a restore left out (BK.SKIP: SLOOP's or JAM's, not this firmware's), in words */
+const bkSkipNames = (ids) => [...new Set(ids.map((id) => (id >= 2 && id <= 5 ? "bkSkipProj" : id === 6 || id === 7 ? "bkSkipUp" : id === 8 ? "bkSkipFm6" : "bkSkipUsr1")))]
   .map((k) => t(k)).join(", ");
 function bkReport(e) {
   if (e && e.code && TEXT[lang][e.code]) sayK(e.code, e.code === "bkStop" ? "" : e.message);
@@ -6749,8 +6590,6 @@ $("bk-file").addEventListener("change", async () => {
     try {
       selfLoad();
       const { skipped } = await backupRestore(rq, file, bkProgress("bkRestoring"));
-      dev.slotUsed = [null, null, null, null];
-      renderSlots();
       try { await smpInfo(); renderSamples(); } catch (e) { /* shown by the next action */ }
       await reloadAll("bkRestored");
       try { await readSongs(); } catch (e) { /* shown by the next action */ }   /* (the songs too, written back) */

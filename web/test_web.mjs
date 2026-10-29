@@ -655,6 +655,35 @@ function editorSed() {
   const back = S.merge(parts[0], parts[1]);
   ok(back.steps === 32 && back.lanes.KICK === sec.lanes.KICK && back.fill === sec.fill, "sed: merge gives the section back");
   ok(S.merge(parts[0], S.setDiv(parts[1], "1/8")) === null && S.merge(S.blank("A", 40), S.blank("B", 40)) === null, "sed: no merge across divisions or over 64 steps");
+  {   /* the division changed (2026-10-29): the hits keep their place on the beat (the firmware does the same: seq.c
+       * pattern_rediv): 1/16 -> 1/8 keeps every other step with its ratchet, flam, mark and condition, the 16ths between
+       * go; 1/8 -> 1/16 puts an empty step between; a triplet keeps the beats; the fill bar, entry and break follow; over
+       * 64 steps refused */
+    let d = S.setHit(S.blank("D", 16), "KICK", 0, "x"); d = S.setHit(d, "KICK", 2, "X", 2); d = S.setHit(d, "SNARE", 4, "x", 1, "", true);
+    d = S.setHit(d, "HAT", 3, "g", 1, "F"); d = S.setHit(d, "HAT", 6, "x", 1, "N"); d = S.setCond(d, 2, "F"); d = S.setCond(d, 3, "N");
+    const e = S.setDiv(d, "1/8");
+    ok(e.steps === 8 && e.div === "1/8" && e.lanes.KICK === "xX......" && e.ratchets.KICK === ".2......" && e.lanes.SNARE === "..x....." && e.flams.SNARE === "..f....."
+      && e.lanes.HAT === "...x...." && e.fills.HAT === "...N...." && e.fill === ".F......",
+      "sed: 1/16 -> 1/8: every other step kept in its place, its ratchet, flam, mark and condition with it, the 16ths between gone");
+    const g = S.setDiv(e, "1/16");
+    ok(g.steps === 16 && g.div === "1/16" && g.lanes.KICK === "x.X............." && g.ratchets.KICK === "..2............." && g.lanes.SNARE === "....x..........." && g.flams.SNARE === "....f..........."
+      && g.lanes.HAT === "......x........." && g.fills.HAT === "......N........." && g.fill === "..F.............", "sed: 1/8 -> 1/16: an empty step between, the hits where they were");
+    const t8 = S.setDiv(d, "8T");
+    ok(t8.steps === 12 && t8.lanes.KICK === "x..........." && t8.lanes.SNARE === "...x........" && !t8.lanes.HAT && S.setDiv(t8, "1/16").lanes.SNARE === "....x...........",
+      "sed: 1/16 -> 8T: the beats stay (12 steps), the rest goes; and back");
+    ok(S.setDiv(S.blank("L", 40), "1/32") === null && S.setDiv(S.blank("L", 32), "1/32").steps === 64 && S.setDiv(S.blank("L", 7), "1/8").steps === 4 && JSON.stringify(S.setDiv(d, "1/16")) === JSON.stringify(d),
+      "sed: over 64 steps refused; 32 -> 64 fits; 7 sixteenths: 4 eighths (rounded up); the same division: as it is");
+    let fb = S.fbAdd(S.setHit(d, "SNARE", 14, "x")); fb = S.ebSet(fb, "entry", 1); fb = S.ebSetHit(fb, "entry", "KICK", 4, "X"); fb = S.ebSetHit(fb, "entry", "KICK", 5, "x");
+    const h = S.setDiv(fb, "1/8");
+    ok(h.fillbar.steps === 8 && h.fillbar.lanes.SNARE === "..x....x" && h.fillbar.lanes.KICK === "xX......" && S.ebBars(h, "entry") === 1 && S.ebSteps(h, "entry") === 8 && h.entry.lanes.KICK === "..X.....",
+      "sed: the fill bar and the entry follow (the 16th between gone)");
+    {   /* a 2-bar pattern with a 4-bar fill bar (64 steps) onto 1/32: the pattern 64 steps, the fill bar the 2 bars that fit */
+      const w = S.setDiv(S.fbSet(S.blank("F", 32), 4), "1/32");
+      ok(S.fbBars(S.fbSet(S.blank("F", 32), 4)) === 4 && w.steps === 64 && w.fillbar.steps === 64 && S.fbBars(w) === 2, "sed: a 4-bar fill bar onto 1/32: the 2 bars that fit");
+    }
+    ok(/sedDivLong: "cannot change the division/.test(html) && /sedDivLong: "分割数を変えられません/.test(html) && /sedDivHelp: "Changing the division keeps the hits/.test(html) && /sedDivHelp: "分割数を変えても/.test(html)
+      && /sayK\("sedDivLong"\); sedRender\(\)/.test(html) && /dv\.title = t\("sedDivHelp"\)/.test(html), "sed: the message and the help in both languages, the handler refuses");
+  }
   ok(S.setSteps(sec, 16).lanes.KICK === "x.......X......." && S.setSteps(sec, 48).lanes.KICK.length === 48, "sed: steps cut and pad the strings");
   const bars = [{ lanes: { KICK: "x...x...x...x...", HAT: "x.x.x.x.x.x.x.x." } }, { lanes: { KICK: "x...x...x.x.x...", SNARE: "....x.......x..." }, ratchets: { SNARE: "............2..." } }];
   const fb = S.fromBars(bars, "CHORUS");

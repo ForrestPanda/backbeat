@@ -210,10 +210,14 @@ static uint32_t trk_len(const track_t *t) { return t->p[P_SLEN] > 0 ? (uint32_t)
 static struct {
     uint8_t valid, undone, trk;
     int16_t len;
+    int16_t div;                 /* its DIV (2026-10-29: a DIV change re-grids the pattern, pattern_rediv; the undo
+                                  * takes the grid back first) */
     uint32_t sess;
     dstep_t st[NSTEP];
 } undo;
 static uint32_t undo_sess = 1;           /* UI sessions (seq.c: recording passes use the track's pass) */
+static volatile uint8_t div_req;         /* a DIV from MIDI (a learned CC: midi_cc_set, the ISR) + 1, for the UI to apply
+                                          * in the main loop (ui_input.c: pattern_div_set, the pattern re-gridded); 0 none */
 static void undo_mark(const track_t *t, uint32_t sess)
 {
     uint32_t i = trk_index(t);
@@ -221,6 +225,7 @@ static void undo_mark(const track_t *t, uint32_t sess)
         return;                                          /* (this session is marked already) */
     memcpy(undo.st, t->dstep, sizeof undo.st);
     undo.len = t->p[P_SLEN];
+    undo.div = t->p[P_SDIV];
     undo.trk = (uint8_t)i;
     undo.sess = sess;
     undo.valid = 1;
@@ -469,6 +474,12 @@ static void drum_marks_move(uint32_t to, uint32_t from)   /* a step's marks go w
     drum_fno[to % NSTEP] = drum_fno[from % NSTEP];
     drum_flam[to % NSTEP] = drum_flam[from % NSTEP];
 }
+static void drum_marks_clear(uint32_t i)                  /* a step emptied (pattern_rediv): no marks */
+{
+    drum_fonly[i % NSTEP] = 0;
+    drum_fno[i % NSTEP] = 0;
+    drum_flam[i % NSTEP] = 0;
+}
 static void drum_marks_rotate(uint32_t len, int32_t d)   /* the first len steps' marks one later (d > 0) / earlier */
 {
     uint32_t i, last = len - 1u;
@@ -492,6 +503,7 @@ static uint32_t drum_fill_mask(uint32_t idx) { (void)idx; return 0; }
 static void drum_fill_masks_clear(void) {}
 static const dstep_t *drum_src(const track_t *t, uint32_t abs, uint32_t idx, uint32_t *fb) { (void)abs; *fb = 0; return &t->dstep[idx % NSTEP]; }
 static void drum_marks_move(uint32_t to, uint32_t from) { (void)to; (void)from; }
+static void drum_marks_clear(uint32_t i) { (void)i; }
 static void drum_marks_rotate(uint32_t len, int32_t d) { (void)len; (void)d; }
 #endif
 /* a hit of the drum pattern cleared: its mark goes with it (a hit set there later plays as any other) */
@@ -881,6 +893,131 @@ static uint8_t arrset_dirty;                       /* the pedal settings changed
 static char sng_ui_name[13];                       /* the section playing: the song's name for it */
 static char sng_ui_song[13];                       /* the song loaded, or empty */
 static char sng_ui_next[13];                       /* the section the pedal asked for, until it starts (empty: none) */
+/* ---- the division changed (2026-10-29: the SEQ layer's DIV knob, the PATTERN page's, the editor's SET; the user: "moving
+ * from 1/16 to 1/8 deletes every other 16th note, but keeps the hits in the same position on the beat"). The pattern is
+ * re-gridded: the new grid's step j takes the old step at the same time, when there is one (j x the new step's units =
+ * i x the old's), else it is empty. So 1/16 -> 1/8 keeps every other step, 1/8 -> 1/16 puts an empty step between,
+ * 1/16 -> 8T keeps the beats (the rest goes); the pattern's length in time is kept, rounded up to a step. The steps'
+ * nudges, locks and conditions, the song's marks (fonly, fno, flam) and the section's fill bar go with their steps (its
+ * entry and break at the save: sng.c sng_pack_rediv, the same rule on the packed steps). A pattern that would not fit
+ * (over NSTEP steps) keeps its division: pattern_rediv_ok says so first, the UI tells (ui.c pattern_div_set). A step is
+ * 1/48 of a beat or more (div_units), so the times compare as whole numbers. */
+static uint32_t div_u48(uint32_t div) { return div_units(div % NDIV_STEP) / (BEAT_U / 48u); }   /* a step, in 1/48 beat */
+static uint32_t rediv_len(uint32_t n, uint32_t uo, uint32_t un) { return (n * uo + un - 1u) / un; }   /* n steps of uo at un */
+/* the old step (uo units, n of them) at the new step j (un units): its index, or -1 (between old steps, or past them) */
+static int32_t rediv_src(uint32_t j, uint32_t n, uint32_t uo, uint32_t un)
+{
+    uint32_t t = j * un;
+    return t % uo == 0u && t / uo < n ? (int32_t)(t / uo) : -1;
+}
+/* n steps (and the flams beside them, if given) of uo units re-gridded in place at un units, m steps (m <= NSTEP);
+ * in place: a coarser grid reads at or past where it writes (j up), a finer one at or before (j down) */
+static void rediv_dsteps(dstep_t *d, uint16_t *flam, uint32_t n, uint32_t m, uint32_t uo, uint32_t un)
+{
+    uint32_t k;
+    for (k = 0; k < m; k++) {
+        uint32_t j = un >= uo ? k : m - 1u - k;
+        int32_t i = rediv_src(j, n, uo, un);
+        if (i < 0) {
+            memset(&d[j], 0, sizeof(dstep_t));
+            if (flam)
+                flam[j] = 0;
+        } else if ((uint32_t)i != j) {
+            d[j] = d[i];
+            if (flam)
+                flam[j] = flam[i];
+        }
+    }
+    for (k = m; k < n; k++) {                        /* shorter: the steps past the end cleared */
+        memset(&d[k], 0, sizeof(dstep_t));
+        if (flam)
+            flam[k] = 0;
+    }
+}
+static int pattern_rediv_ok(const track_t *t, uint32_t div)   /* the pattern fits at div (NSTEP steps at most) */
+{
+    return rediv_len(trk_len(t), div_u48(trk_div(t)), div_u48(div)) <= NSTEP;
+}
+#if FELUCCA_DRUMMER
+/* the fill bar's phrase: a bar of meter m in the steps of division div (whole, as packed; else the phrase is one bar) */
+static void fb_phrase(uint32_t div, uint32_t m)
+{
+    uint32_t u = div_u48(div), b = 12u * meter_b16(m);
+    uint32_t bs = u && b % u == 0u && b / u <= fb_len ? b / u : fb_len;
+    fb_bar = (uint8_t)bs;
+    fb_bars = (uint8_t)(bs ? (fb_len + bs - 1u) / bs : 0u);
+}
+static void fb_rediv(uint32_t uo, uint32_t un, uint32_t div)   /* the section's fill bar follows the pattern's division */
+{
+    uint32_t m;
+    if (!fb_len)
+        return;
+    m = rediv_len(fb_len, uo, un);
+    if (m > NSTEP) {                                 /* the whole bars that fit */
+        uint32_t b = 12u * meter_b16(clk_meter), bs = b % un == 0u ? b / un : 0u;
+        m = bs && bs <= NSTEP ? NSTEP - NSTEP % bs : NSTEP;
+    }
+    rediv_dsteps(fb_dstep, fb_flam, fb_len, m, uo, un);
+    fb_len = (uint8_t)m;
+    fb_phrase(div, clk_meter);
+}
+#else
+static void fb_rediv(uint32_t uo, uint32_t un, uint32_t div) { (void)uo; (void)un; (void)div; }
+#endif
+/* what goes beside the steps (the nudges, the conditions, the song's marks, the locks) re-gridded as rediv_dsteps does
+ * the steps: n steps of uo units onto m of un (the IRQ off: the caller's). Also ui.c undo_swap, after the steps and the
+ * length swapped with the snapshot (taken on the other grid): the snapshot's steps come back, these follow the grid */
+static void rediv_extras(track_t *t, uint32_t n, uint32_t m, uint32_t uo, uint32_t un)
+{
+    uint32_t k;
+    for (k = 0; k < m; k++) {
+        uint32_t j = un >= uo ? k : m - 1u - k;
+        int32_t i = rediv_src(j, n, uo, un);
+        if (i < 0) {
+            t->micro[j] = 0;
+            step_fill_set(t, j, FC_NORM);
+            drum_marks_clear(j);
+        } else if ((uint32_t)i != j) {
+            t->micro[j] = t->micro[(uint32_t)i];
+            step_fill_set(t, j, step_fill(t, (uint32_t)i));
+            drum_marks_move(j, (uint32_t)i);
+        }
+    }
+    for (k = m; k < n; k++) {
+        t->micro[k] = 0;
+        step_fill_set(t, k, FC_NORM);
+        drum_marks_clear(k);
+    }
+    for (k = 0; k < NLOCK; k++) {                    /* a lock goes with its step, or goes (one past the old length would
+                                                      * come alive on a longer grid: it goes too) */
+        uint32_t s = t->lock[k].step, u = s * uo;
+        if (s == LOCK_FREE)
+            continue;
+        t->lock[k].step = s < n ? (u % un || u / un >= m ? LOCK_FREE : (uint8_t)(u / un)) : s < m ? LOCK_FREE : (uint8_t)s;
+    }
+}
+/* the pattern of t onto the grid of div (the IRQ off meanwhile); 0: it would not fit, nothing changed. The caller marks
+ * the undo (undo_swap takes the grid back: ui.c) */
+static int pattern_rediv(track_t *t, uint32_t div)
+{
+    uint32_t old = trk_div(t), uo = div_u48(old), un, len = trk_len(t), m;
+    div %= NDIV_STEP;
+    un = div_u48(div);
+    if (div == old)
+        return 1;
+    m = rediv_len(len, uo, un);
+    if (!m || m > NSTEP)
+        return 0;
+    fm1_irq_off();
+    rediv_dsteps(t->dstep, 0, len, m, uo, un);
+    rediv_extras(t, len, m, uo, un);
+    t->p[P_SLEN] = (int16_t)m;
+    t->p[P_SDIV] = (int16_t)div;
+    fb_rediv(uo, un, div);
+    fm1_irq_on();
+    return 1;
+}
+
 static void sng_unload(void)                       /* no song (PC 127, a project restored over the song): the drum track
                                                     * keeps its pattern, no sections */
 {
@@ -1380,8 +1517,15 @@ static int ml_free_cc(uint32_t cc)
 static void midi_cc_set(track_t *t, uint32_t id, uint32_t value)
 {
     const param_desc_t *d = id >= P_E0 ? e_desc(t, id) : &TP[id % P_COUNT];
-    if (d->max > d->min)
-        t->p[id % P_COUNT] = (int16_t)(d->min + ((int32_t)(value & 127u) * (d->max - d->min) + 63) / 127);
+    int32_t v;
+    if (d->max <= d->min)
+        return;
+    v = d->min + ((int32_t)(value & 127u) * (d->max - d->min) + 63) / 127;
+    if (id == P_SDIV)                                /* the pattern's DIV re-grids the pattern (pattern_rediv): the main
+                                                      * loop's job, not the ISR's */
+        div_req = (uint8_t)(v + 1);
+    else
+        t->p[id % P_COUNT] = (int16_t)v;
 }
 /* 1: cc is learned (set here) or taken by MIDI LEARN waiting for one */
 static int __attribute__((noinline)) midi_learned(uint32_t cc, uint32_t value)

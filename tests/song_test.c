@@ -749,6 +749,65 @@ int main(int argc, char **argv)
     }
     printf("song: a section packed again from the drum track (EDIT, SAVE held): same bytes, an edit kept, no room refused PASS\n");
 
+    /* ---- the division changed on the device (2026-10-29, seq.c pattern_rediv): the hits keep their place on the beat,
+     * the section's fill bar in RAM follows, and the save packs its fill bar and entry on the new grid (sng_pack_rediv) */
+    {
+        static uint8_t out[SNG_MAX];
+        sng_t tmp;
+        uint32_t p, e, n, q, size;
+        const uint8_t *s;
+        const char *fbl[DRUM_LANES] = {"x.x.x.x.x.x.x.x.", 0, "....x.......x...", 0, "xxxxxxxxxxxxxxxx"};   /* kick, snare, hat */
+        const char *ebl[DRUM_LANES] = {"x...............", 0, ".X.X............"};
+        transport_req = 2; advance(CTL);
+        p = song_hdr(blob[8], "REDIV", 120, 0, 1);
+        e = song_sec(blob[8], p, "VERSE", 32, 2, 0, "x...x...x...x...x...x...x...x...", "....x.......x.......x.......x...",
+                     "x.x.x.x.x.x.x.x.x.x.x.x.x.x.x.x.", 0);
+        e = song_fb(blob[8], p, e, 16, fbl);
+        e = song_blk(blob[8], p, e, SNG_F_ENTRY, 16, ebl);
+        blob_n[8] = e;
+        pc(16, 8); advance(CTL); sng_poll();
+        fm1_irq_off(); sng_apply(0); live_sec = 0; fm1_irq_on();
+        assert(sng_cur == 8 && fb_len == 16u && fb_bar == 16u && fb_bars == 1u && TDRUM->p[P_SDIV] == 2 && TDRUM->p[P_SLEN] == 32);
+        assert(pattern_rediv_ok(TDRUM, 1) && pattern_rediv_ok(TDRUM, 3));   /* 16 steps of 1/8, 64 of 1/32: both fit */
+        assert(pattern_rediv(TDRUM, 1) && TDRUM->p[P_SDIV] == 1 && TDRUM->p[P_SLEN] == 16);
+        assert(lane_on(&TDRUM->dstep[0], 0) && lane_on(&TDRUM->dstep[2], 0) && lane_on(&TDRUM->dstep[2], 2) && !lane_on(&TDRUM->dstep[1], 2) &&
+               lane_on(&TDRUM->dstep[1], 4) && lane_on(&TDRUM->dstep[15], 4) && !lane_on(&TDRUM->dstep[1], 0));   /* every other 16th */
+        assert(fb_len == 8u && fb_bar == 8u && fb_bars == 1u && lane_on(&fb_dstep[2], 2) && lane_on(&fb_dstep[6], 2) && !lane_on(&fb_dstep[1], 2) &&
+               lane_on(&fb_dstep[7], 4) && lane_on(&fb_dstep[1], 0));   /* the fill bar: one bar of 1/8 */
+        n = sng_pack_section(0, out, sizeof out);
+        assert(n && !sng_check(out, n, &tmp) && n < blob_n[8]);
+        s = out + SNG_HDR;
+        size = sng_u16(s + 16);
+        assert(s[12] == 16u && s[13] == 1u && (s[14] & SNG_F_TAIL) == (SNG_F_FILLBAR | SNG_F_ENTRY));
+        q = sng_walk(s, SNG_SEC_HDR + (16u + 3u) / 4u, 16, size);
+        assert(q && s[q] == 8u && sng_u16(s + q + 1) == 0x11u && sng_u16(s + q + 1 + 4) == 0x11u && sng_u16(s + q + 1 + 8) == 0x15u);   /* the
+                                                       * fill bar: 8 steps, kick + hat each, the snare on 2 */
+        q = sng_walk(s, q + 1u, 8, size);
+        assert(q && s[q] == 8u && sng_u16(s + q + 1) == 0x01u && sng_u16(s + q + 1 + 3) == 0u && sng_u16(s + q + 1 + 5) == 0u);   /* the entry:
+                                                       * the kick on 0; the snare's 16ths 1 and 3 fall between 8ths: gone */
+        assert(sng_walk(s, q + 1u, 8, size) == size);
+        memcpy(blob[8], out, n); blob_n[8] = n;      /* loaded again: as packed */
+        pc(16, 8); advance(CTL); sng_poll();
+        fm1_irq_off(); sng_apply(0); fm1_irq_on();
+        assert(TDRUM->p[P_SDIV] == 1 && TDRUM->p[P_SLEN] == 16 && fb_len == 8u && fb_bar == 8u && fb_bars == 1u && lane_on(&fb_dstep[2], 2) && !lane_on(&fb_dstep[1], 2));
+        s = sng_sec(0); q = sng_block(s, SNG_F_ENTRY); assert(q && s[q] == 8u);
+        /* back to 1/16: an empty step between, the fill bar too (the hits dropped stay dropped) */
+        assert(pattern_rediv(TDRUM, 2) && TDRUM->p[P_SLEN] == 32 && lane_on(&TDRUM->dstep[4], 0) && lane_on(&TDRUM->dstep[4], 2) && !lane_on(&TDRUM->dstep[1], 4) &&
+               lane_on(&TDRUM->dstep[2], 4) && fb_len == 16u && fb_bar == 16u && !lane_on(&fb_dstep[1], 4) && lane_on(&fb_dstep[4], 2));
+        /* 1/16 -> 8T: the beats stay (steps 0, 4, 8..), the rest goes; 24 steps */
+        assert(pattern_rediv(TDRUM, 4) && TDRUM->p[P_SLEN] == 24 && lane_on(&TDRUM->dstep[0], 0) && lane_on(&TDRUM->dstep[3], 0) && lane_on(&TDRUM->dstep[3], 2) &&
+               !lane_on(&TDRUM->dstep[1], 4) && !lane_on(&TDRUM->dstep[2], 4) && lane_on(&TDRUM->dstep[3], 4) && fb_len == 12u && fb_bar == 12u);
+        /* a 4-bar fill bar (64 steps of 1/16) onto 1/32: the whole bars that fit, 2 (64 steps) */
+        assert(pattern_rediv(TDRUM, 2));
+        fb_len = 64; fb_phrase(2, 0); assert(fb_bar == 16u && fb_bars == 4u);
+        assert(pattern_rediv(TDRUM, 3) && TDRUM->p[P_SLEN] == 64 && fb_len == 64u && fb_bar == 32u && fb_bars == 2u);
+        assert(!pattern_rediv_ok(TDRUM, 5) == 0 && pattern_rediv(TDRUM, 2) && TDRUM->p[P_SLEN] == 32);   /* (64 of 1/32 -> 16T: 48, fits) */
+        pc(16, 32); advance(CTL); sng_poll();
+        assert(sng_cur == -1 && fb_len == 0u);
+        blob_n[8] = 0;
+    }
+    printf("song: the division changed on the device: the hits keep their beat, the fill bar follows, the save re-grids the blocks PASS\n");
+
     {   /* 16 sections a song (8 until 2026-10-14): sixteen 16-step sections fit; CC 20 / 27 reach 9..16; 17 refused */
         static const char *const NM[16] = {"INTRO", "VERSE", "CHORUS", "VERSE 2", "PRE CHORUS", "CHORUS 2", "SOLO",
                                            "BRIDGE", "BREAKDOWN", "CHORUS 3", "OUTRO JAM", "TAG", "HALF TIME",

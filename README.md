@@ -160,7 +160,8 @@ tempo and START / STOP, as the FM-1 does with SETUP > PEDAL > MIDI CLOCK IN; **C
 (a Bluetooth MIDI pedal or interface), so a phone
 with nothing installed can be the player: Chrome or Edge on Android, Windows or macOS, from https or
 localhost (Chrome on Linux keeps Web Bluetooth behind a flag; Firefox and Safari on the iPhone have none). Its **Section editor** card edits a song by hand: names, order,
-length (at most 64 steps, 4 bars at 1/16: a section is a groove that repeats, `docs/design.md` says why), the time signature, the outro, split and merge, the hits on a grid with levels, ratchets, flams (a grace note
+length (at most 64 steps, 4 bars at 1/16: a section is a groove that repeats, `docs/design.md` says why), the division (changing it keeps the hits in their place on the
+beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between, the fill bar, entry and break follow; a pattern that would pass 64 steps is refused), the time signature, the outro, split and merge, the hits on a grid with levels, ratchets, flams (a grace note
 before the hit) and fill marks, the fill
 conditions, columns copied and pasted, undo and redo (Ctrl+Z / Ctrl+Y), keys for the pen (n h s g x, r for the
 ratchet, l for the flam, m for the mark, [ ] between sections), a lane's sound on a click of its name, "Play this section" to
@@ -282,7 +283,7 @@ has been played from the pedal on an FM-1 (2026-10-19).
 | --- | --- | --- |
 | HOME | **LIVE**, the screen it starts on | |
 | SAVE | **SONGS** (from SONGS: LIVE again) | on LIVE or EDIT: the section into its song |
-| SEQ | **EDIT**, the drum grid of the section playing (again: GRID / KIT) | the step layer, as SLOOP |
+| SEQ | **EDIT**, the drum grid of the section playing (again: GRID / KIT) | the step layer, as SLOOP; its DIV knob (and the PATTERN page's) keeps the hits in their place on the beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between, the length follows (nudges, locks, conditions, marks and the section's fill bar with it; EDIT + OCT- undoes it; over 64 steps it is refused and the screen says so) |
 | GLO | **SETUP** (again, HOME or OCT-: closed) | |
 | SEL / ENV / LFO | on LIVE: **FILL**, **PREV**, **NEXT** (the pedal's CC 21, 25, 24; PREV / NEXT without a fill) | |
 | PLAY | start the section cued (the count-in first), or stop | |

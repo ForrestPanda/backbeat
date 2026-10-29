@@ -215,7 +215,18 @@ next bar). No named sections, one song, no fill tied to a section change.
    `mark` after every render, so a redraw is told from a change), keys for the pen, ratchet, flam, mark and
    sections, Delete / Ctrl+C / Ctrl+V on the selected columns, a lane's sound on its name, "Play this
    section"; the player counts in as the device's setting (mirrored from the pedal row, or picked on the
-   Play card), with a synthesised click.
+   Play card), with a synthesised click. (2026-10-29, the user: "moving from 1/16 to 1/8 deletes every other
+   16th note, but keeps the hits in the same position on the beat") The division select re-grids the section
+   (`SED.setDiv`): the new grid's step j takes the old step at the same time, when there is one, else it is empty,
+   so 1/16 to 1/8 keeps every other step, 1/8 to 1/16 puts an empty step between, 1/16 to 8T keeps the beats;
+   the length in time is kept (rounded up to a step); ratchets, flams, marks and conditions go with their
+   steps, the fill bar, entry and break follow (the whole bars that fit); over 64 steps the change is refused
+   with a message. The firmware does the same for the SEQ layer's DIV knob, the PATTERN page's and the
+   editor's SET (seq.c `pattern_rediv`: the steps, nudges, locks, conditions, the song's marks and the
+   section's fill bar in RAM; the save re-grids the packed fill bar, entry and break, sng.c `sng_pack_rediv`;
+   EDIT + OCT- undoes it: the snapshot's steps back and the extras re-gridded with them, `rediv_extras`).
+   Before, the steps stayed where they were and only played faster or slower. Verified by host tests
+   (ui_pages_test, song_test, test_web); not on the unit yet.
 5. **Authoring from Guitar Pro (decided and done 2026-10-11, first version).** The user writes songs in
    Guitar Pro 3 / 4. `tools/gp2song.py` (PyGuitarPro) takes the drum track of a .gp3 / .gp4: the measures between the
    score's section markers (Intro, Verse, Chorus...) become the sections, GM drum notes become the 16
@@ -1288,6 +1299,11 @@ no count-in). By hand (the user, 2026-10-27): SAVE's tap, SONGS' last row and SE
 held did nothing on LIVE, the hold was EDIT's only, so it is LIVE's too now (ui_input.c holds_input, ui_pages_test),
 and ABOUT names this repository (github.com/ForrestPanda/backbeat) above SLOOP's. Still to verify by hand: SAVE
 held on LIVE, a song through the pedal, a restore of an older backup.
+
+**2026-10-29: the division re-grids the pattern.** Milestone 5b's note above. On the unit, to verify by hand: the
+SEQ layer's DIV knob on a section with hits (the hits stay on their beats, the length halves or doubles, the
+message over 64 steps), EDIT + OCT- after it, SAVE held after it (the section's fill bar and entry still right
+when the song comes back), and the editor's PATTERN page DIV with the drum grid open (the grid re-reads).
 
 ## Open questions
 

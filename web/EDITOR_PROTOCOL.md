@@ -116,7 +116,7 @@ after an engine change.
 | --- | --- | --- |
 | 1 INFO | — | version string, NENGINES, P_COUNT, G_COUNT, NSTEP, P_E0, then NENGINES engine-name strings, then (v3) NTRK (4), then (v5) the protocol version (5); older firmware ends after the names / NTRK |
 | 2 GET | scope, id | scope, id, v14 |
-| 3 SET | scope, id, v14 | scope, id, v14 (the value after clamping). Setting global `G_ENGSEL` (id from DESC label "ENG") changes the engine with its defaults |
+| 3 SET | scope, id, v14 | scope, id, v14 (the value after clamping). Setting global `G_ENGSEL` (id from DESC label "ENG") changes the engine with its defaults. Setting the pattern's `DIV` (scope 0, `P_SDIV`; `TRACK_PARAM` the same, since 2026-10-29) re-grids the pattern on the device as the SEQ layer's knob does (seq.c `pattern_rediv`: the hits keep their place on the beat, `LEN` follows): the editor reads `LEN` and the drum steps again after it; a pattern that would pass 64 steps keeps its `DIV` (the reply says the old value) |
 | 4 DUMP | — | engine, preset, then P_COUNT × v14 (the selected track), then G_COUNT × v14 (globals) |
 | 5 DESC | scope, id | scope, id, fmt, min v14, max v14, def v14, label string, unit string, then for an enum (fmt 8) one name string per value (at most 64; firmware before SLOOP sent at most 16) |
 | 6 STEP_GET | index 0..NSTEP−1 | index, n (0..4 notes), note0..note3, time (0 NOTE, 1 TIE, 2 REST), flags (1 accent, 2 slide), vel, then (v5) lvl, hi, rat |

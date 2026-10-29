@@ -246,7 +246,10 @@ static void edit_param(uint32_t slot, int32_t steps)
         return;
     v = d->names == ESYNC_NAMES || d->names == N_IBITS || d->names == N_IRATE ? names_turn(d, *vp, steps)   /* (a name a detent) */
                                     : clamp(*vp + accel(EN_K1 + slot, steps, d->max - d->min), d->min, d->max);
-    *vp = (int16_t)v;
+    if (pg->scope != SC_GLOBAL && id == P_SDIV)
+        pattern_div_set(TDRUM, (uint32_t)v, 0);           /* the PATTERN page's DIV: the pattern follows (ui.c) */
+    else
+        *vp = (int16_t)v;
     if (pg->scope != SC_GLOBAL && p_lockable(id))
         ui.lock_par = (uint8_t)id;                        /* the SEQ layer's lock parameter: the last one touched */
     if (pg->scope != SC_GLOBAL)
@@ -544,6 +547,11 @@ static void ui_input(void)
         ui_input_ms = fm1_ms;
     pc_poll();                                          /* MIDI Program Change: a sound (2.6, ui.c) */
     ml_poll();                                          /* MIDI LEARN: a CC came for the picked parameter (2.6) */
+    if (div_req) {                                      /* a learned CC set DIV (seq.c midi_cc_set): the pattern follows */
+        uint32_t d = div_req - 1u;
+        div_req = 0;
+        pattern_div_set(TDRUM, d, 0);
+    }
     kb_grid = (uint8_t)(grid_keys_on() ? 1u : drummer_keys_on() ? 2u : 0u);   /* (seq.c: the keys are the grid's
                                                          * steps; 2: the song screen's) */
     if (ui.menu) {                                      /* SETUP (ui_menu.c): GLO, OCT- or HOME close it */

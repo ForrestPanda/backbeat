@@ -650,7 +650,10 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         if (na < 2u || !(d = ed_desc(a[0], a[1], &vp)))
             return;
         if (cmd == ED_SET && na >= 4u) {
-            if (d->max > d->min && !(a[0] == 1 && a[1] == G_ENGSEL))   /* (no engine to change: drums only) */
+            if (d->max > d->min && !a[0] && a[1] == P_SDIV)        /* the pattern's DIV: its steps follow (ui.c; LEN
+                                                                    * changes: the editor reads them again) */
+                pattern_div_set(TDRUM, (uint32_t)clamp(ed_rv(a + 2), d->min, d->max), 0);
+            else if (d->max > d->min && !(a[0] == 1 && a[1] == G_ENGSEL))   /* (no engine to change: drums only) */
                 *vp = (int16_t)clamp(ed_rv(a + 2), d->min, d->max);
             ui.force = 1;
             ed_w.v[a[0] ? P_COUNT + a[1] : a[1]] = *vp;   /* the editor's own change: no push */
@@ -879,7 +882,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         t = &trk[a[0]];
         d = ed_tdesc(t, a[1]);
         if (na >= 4u) {
-            if (d->max > d->min)                           /* as SET: clamped; a fixed value stays */
+            if (d->max > d->min && a[1] == P_SDIV)         /* (as SET: the pattern follows its DIV) */
+                pattern_div_set(t, (uint32_t)clamp(ed_rv(a + 2), d->min, d->max), 0);
+            else if (d->max > d->min)                      /* as SET: clamped; a fixed value stays */
                 t->p[a[1]] = (int16_t)clamp(ed_rv(a + 2), d->min, d->max);
             ed_known(a[0], a[1]);
             ui.force = 1;

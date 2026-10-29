@@ -1006,6 +1006,80 @@ int main(int argc, char **argv)
         release(B_SEQ); frames(2);
         TDRUM->p[P_SDIV] = 2; TDRUM->p[P_SLEN] = 16; memset(TDRUM->dstep, 0, sizeof TDRUM->dstep);
         go_home(); frame();
+        {   /* DIV re-grids the pattern (2026-10-29, seq.c pattern_rediv): 1/16 -> 1/8 keeps every other step, where it
+             * falls on the beat, its level, ratchet, nudge, lock, condition and marks with it; 1/8 -> 1/16 puts an empty
+             * step between; the hold is one undo; a pattern that would not fit keeps its division; the PATTERN page's
+             * knob does the same */
+            memset(TDRUM->micro, 0, sizeof TDRUM->micro); memset(TDRUM->fill, 0, sizeof TDRUM->fill);
+            for (i = 0; i < NLOCK; i++) TDRUM->lock[i].step = LOCK_FREE;
+            drum_fill_masks_clear();
+            dstep_set(&TDRUM->dstep[0], 0, LV_NORM, 0); dstep_set(&TDRUM->dstep[2], 0, LV_HARD, 2); dstep_set(&TDRUM->dstep[3], 2, LV_NORM, 0);
+            dstep_set(&TDRUM->dstep[14], 4, LV_GHOST, 0);
+            TDRUM->micro[2] = 5; step_fill_set(TDRUM, 2, FC_FILL); step_fill_set(TDRUM, 3, FC_NOFILL); drum_fonly[2] = 1u; drum_flam[14] = 1u << 4;
+            fm1_irq_off(); lock_set(TDRUM, 2, P_TFLT, 20); lock_set(TDRUM, 3, P_TFLT, -20); fm1_irq_on();
+            press(B_SEQ); frames(3);
+            encs[panel.enc[EN_K2]] = -1; frame();
+            check(TDRUM->p[P_SDIV] == 1 && TDRUM->p[P_SLEN] == 8, "SEQ layer: DIV 1/16 -> 1/8: 8 steps");
+            check(dstep_has(&TDRUM->dstep[0], 0) && dstep_lvl(&TDRUM->dstep[1], 0) == LV_HARD && dstep_rat(&TDRUM->dstep[1], 0) == 2u &&
+                  !dstep_mask(&TDRUM->dstep[2]) && !dstep_mask(&TDRUM->dstep[3]) && dstep_lvl(&TDRUM->dstep[7], 4) == LV_GHOST && !dstep_mask(&TDRUM->dstep[14]),
+                  "..every other 16th kept in its place on the beat, the one between gone");
+            check(TDRUM->micro[1] == 5 && !TDRUM->micro[2] && step_fill(TDRUM, 1) == FC_FILL && step_fill(TDRUM, 2) == FC_NORM && step_fill(TDRUM, 3) == FC_NORM &&
+                  drum_fonly[1] == 1u && !drum_fonly[2] && drum_flam[7] == (1u << 4) && !drum_flam[14], "..its nudge, condition and marks with it");
+            check(lock_find(TDRUM, 1, P_TFLT, 0) >= 0 && lock_find(TDRUM, 2, P_TFLT, 0) < 0 && lock_find(TDRUM, 3, P_TFLT, 0) < 0,
+                  "..its lock with it, the dropped step's gone");
+            encs[panel.enc[EN_K2]] = 1; frame();
+            check(TDRUM->p[P_SDIV] == 2 && TDRUM->p[P_SLEN] == 16 && dstep_lvl(&TDRUM->dstep[2], 0) == LV_HARD && !dstep_mask(&TDRUM->dstep[1]) &&
+                  !dstep_mask(&TDRUM->dstep[3]) && dstep_has(&TDRUM->dstep[14], 4) && TDRUM->micro[2] == 5 && step_fill(TDRUM, 2) == FC_FILL &&
+                  drum_fonly[2] == 1u && lock_find(TDRUM, 2, P_TFLT, 0) >= 0,
+                  "SEQ layer: DIV 1/8 -> 1/16: an empty step between, the hits where they were (the 16th dropped stays lost)");
+            release(B_SEQ); frames(2);
+            press(B_EDIT); frames(10);
+            edges_btn |= BT(B_OCTDN); fm1_in.buttons |= BT(B_OCTDN); frame(); fm1_in.buttons &= ~BT(B_OCTDN); frame();
+            release(B_EDIT); frames(2);
+            check(TDRUM->p[P_SDIV] == 2 && TDRUM->p[P_SLEN] == 16 && dstep_has(&TDRUM->dstep[3], 2) && dstep_lvl(&TDRUM->dstep[2], 0) == LV_HARD,
+                  "EDIT + OCT-: the hold's DIV turns undone, the lost 16th back");
+            press(B_SEQ); frames(3);
+            encs[panel.enc[EN_K2]] = -1; frame();
+            release(B_SEQ); frames(2);
+            press(B_EDIT); frames(10);
+            edges_btn |= BT(B_OCTDN); fm1_in.buttons |= BT(B_OCTDN); frame(); fm1_in.buttons &= ~BT(B_OCTDN); frame();
+            check(TDRUM->p[P_SDIV] == 2 && TDRUM->p[P_SLEN] == 16 && dstep_has(&TDRUM->dstep[3], 2) && TDRUM->micro[2] == 5 && lock_find(TDRUM, 2, P_TFLT, 0) >= 0 &&
+                  drum_fonly[2] == 1u, "EDIT + OCT-: a DIV change undone: the grid back with the nudge, lock and marks, the steps back");
+            edges_btn |= BT(B_OCTUP); fm1_in.buttons |= BT(B_OCTUP); frame(); fm1_in.buttons &= ~BT(B_OCTUP); frame();
+            check(TDRUM->p[P_SDIV] == 1 && TDRUM->p[P_SLEN] == 8 && dstep_lvl(&TDRUM->dstep[1], 0) == LV_HARD && !dstep_mask(&TDRUM->dstep[2]) && TDRUM->micro[1] == 5,
+                  "EDIT + OCT+: redone, onto 1/8 again");
+            edges_btn |= BT(B_OCTDN); fm1_in.buttons |= BT(B_OCTDN); frame(); fm1_in.buttons &= ~BT(B_OCTDN); frame();
+            release(B_EDIT); frames(2);
+            TDRUM->p[P_SLEN] = 64;
+            press(B_SEQ); frames(3);
+            encs[panel.enc[EN_K2]] = 1; frame();
+            check(TDRUM->p[P_SDIV] == 2 && TDRUM->p[P_SLEN] == 64 && !strcmp(ui.msg, "DIV: OVER 64 STEPS"), "SEQ layer: 64 steps of 1/16 -> 1/32 refused, said");
+            encs[panel.enc[EN_K2]] = -1; frame();
+            check(TDRUM->p[P_SDIV] == 1 && TDRUM->p[P_SLEN] == 32 && dstep_lvl(&TDRUM->dstep[1], 0) == LV_HARD, "..-> 1/8 fits: 32 steps");
+            release(B_SEQ); frames(2);
+            {   /* the PATTERN page (SEQ's family): KNOB 2 is DIV there too */
+                uint32_t j, hit = 0;
+                frames(20);                                   /* (the knobs are quiet a while after a layer: LY_QUIET_MS) */
+                open_family(FAM_SEQ); frame();
+                for (j = 0; j < 12u && !hit; j++) {
+                    if (!strcmp(PAGES[ui.page].title, "PATTERN")) hit = 1;
+                    else { encs[panel.enc[EN_SELECT]] = 1; frame(); }
+                }
+                encs[panel.enc[EN_K2]] = 1; frames(2);
+                check(hit && TDRUM->p[P_SDIV] == 2 && TDRUM->p[P_SLEN] == 64 && dstep_lvl(&TDRUM->dstep[2], 0) == LV_HARD && !dstep_mask(&TDRUM->dstep[1]),
+                      "PATTERN page, KNOB 2: DIV 1/8 -> 1/16, the pattern follows");
+                go_home(); frame();
+            }
+            div_req = 1u + 1u;                                /* a learned CC set DIV 1/8 (seq.c midi_cc_set defers it to the UI) */
+            frame();
+            check(TDRUM->p[P_SDIV] == 1 && TDRUM->p[P_SLEN] == 32 && !div_req && dstep_lvl(&TDRUM->dstep[1], 0) == LV_HARD,
+                  "a MIDI-learned CC on DIV: applied in the main loop, the pattern follows");
+            TDRUM->p[P_SDIV] = 2; TDRUM->p[P_SLEN] = 16; memset(TDRUM->dstep, 0, sizeof TDRUM->dstep);
+            memset(TDRUM->micro, 0, sizeof TDRUM->micro); memset(TDRUM->fill, 0, sizeof TDRUM->fill);
+            for (i = 0; i < NLOCK; i++) TDRUM->lock[i].step = LOCK_FREE;
+            drum_fill_masks_clear();
+            go_home(); frame();
+        }
     }
 
     {   /* 2.6, after Felucca 1.4 / 1.5 (Leo Kuroshita): STEP LEN, SEQ VEL, the drum mutes (EDIT + a black key), MIDI

@@ -318,8 +318,10 @@ static void layer_knobs(uint32_t layer)
                     steps_held_edit(k, s);
             } else if (k == 0u) {
                 pen_lane_move(s);
-            } else if (k == 1u) {
-                t->p[P_SDIV] = (int16_t)clamp(t->p[P_SDIV] + s, 0, (int32_t)NDIV_STEP - 1);   /* (up to 2BAR) */
+            } else if (k == 1u) {                   /* DIV (up to 2BAR): the hits keep their place on the beat, the
+                                                     * length follows (seq.c pattern_rediv, 2026-10-29) */
+                layer_undo_mark(t);
+                pattern_div_set(t, (uint32_t)clamp(t->p[P_SDIV] + s, 0, (int32_t)NDIV_STEP - 1), ui.step_sess);
             } else if (k == 2u) {
                 t->p[P_SSWING] = (int16_t)clamp(t->p[P_SSWING] + accel(EN_K3, s, 100), 0, 100);
             } else {
