@@ -122,6 +122,7 @@ static volatile uint8_t kb_grid;
 /* the keys of the layers the UI handles (steps, key, mix): key k down / up, in order */
 #define LKQ 16u
 #define KB_OCTUP 32u                                   /* a KB_GRID key's entry: OCT+ was held (k uses bits 0..4) */
+#define KB_OCTDN 64u                                   /* ..OCT- was held (the grid page: a ghost hit; OCT+ a hard one) */
 static volatile uint16_t lk_q[LKQ];
 static volatile uint32_t lk_w, lk_r;
 static void lk_push(uint32_t layer, uint32_t k, uint32_t down)
@@ -695,8 +696,9 @@ static void key_down(uint32_t k)
     if (layer == LY_PLAY && kb_grid) {                /* the DRUMS grid page: a step key (2: the song screen's) */
         kb_kind[k] = KS_UI;
         kb_nt[k] = (uint8_t)KB_GRID;
-        lk_push(KB_GRID, k | ((fm1_in.buttons & dyn_bit[1]) ? KB_OCTUP : 0u), 1);   /* (OCT+ held as the key went
-                                                       * down: the song screen's "on the next bar") */
+        lk_push(KB_GRID, k | ((fm1_in.buttons & dyn_bit[1]) ? KB_OCTUP : 0u) | ((fm1_in.buttons & dyn_bit[0]) ? KB_OCTDN : 0u), 1);
+                                                      /* (OCT+ held as the key went down: the song screen's "on the next
+                                                       * bar", the grid's hard hit; OCT-: the grid's ghost) */
         return;
     }
     lvl = key_lvl();                                  /* the key's lane, at the level OCT- / OCT+ give */

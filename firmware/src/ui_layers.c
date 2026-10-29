@@ -6,7 +6,8 @@
  *   EDIT  erase that sound (seq.c)         knobs: SHIFT  LENGTH x2 / half   OCT- undo  OCT+ redo
  *   ARP   note repeat (seq.c roll)         knobs: RATE
  *   SEQ   steps 1..16 of the page          knobs: SOUND  DIV  SWING  LENGTH;  a step key held:
- *         (black keys 1..4: pages)                SOUND  LEVEL  RATCHET  NUDGE, PRESETS the value of a
+ *         (black keys 1..4: pages)                SOUND  HIT  RATCHET  NUDGE (HIT: off, ghost, soft, norm,
+ *                                                 hard, one knob since 2026-10-29), PRESETS the value of a
  *                                                 parameter lock, ALGORITHM its parameter (the sound parameter
  *                                                 last touched first); OCT+ cycles the step's fill condition
  *                                                 (normal, fill only, no fill), OCT- clears its nudge, locks and
@@ -137,8 +138,9 @@ static void pen_lane_move(int32_t s)
         audition_lane(l);
     pen_lane = l;
 }
-/* KNOB 1..4 with step keys held: their sound (the lane), level, ratchet, nudge (1/64 of a step, - early + late).
- * knob 4 = PRESETS: a lock of ui.lock_par on them, made at the track's value, then moved */
+/* KNOB 1..4 with step keys held: their sound (the lane), hit (off, ghost, soft, norm, hard: ui_studio.c HIT_NAME),
+ * ratchet, nudge (1/64 of a step, - early + late). knob 4 = PRESETS: a lock of ui.lock_par on them, made at the
+ * track's value, then moved */
 static void steps_held_edit(uint32_t knob, int32_t s)
 {
     track_t *t = TDRUM;
@@ -167,13 +169,21 @@ static void steps_held_edit(uint32_t knob, int32_t s)
         }
         {
             dstep_t *d = &t->dstep[idx];
-            uint32_t lv = dstep_lvl(d, pen_lane), rt = dstep_rat(d, pen_lane);
-            if (!dstep_has(d, pen_lane))
+            uint32_t has = dstep_has(d, pen_lane), lv = dstep_lvl(d, pen_lane), rt = dstep_rat(d, pen_lane);
+            if (knob == 1u) {                             /* HIT: off .. hard (turned down to off: the hit goes) */
+                int32_t r = clamp((int32_t)hit_rank(d, pen_lane) + s, 0, 4);
+                if (!r) {
+                    if (has)
+                        drum_hit_clr(t, idx, pen_lane);
+                    continue;
+                }
+                dstep_set(d, pen_lane, LV_UP[r - 1], has ? rt : 0u);
+                t->seq_active = 1;
                 continue;
-            if (knob == 1u)
-                lv = LV_UP[clamp((int32_t)lvl_rank(lv) + s, 0, 3)];
-            else
-                rt = (uint32_t)clamp((int32_t)rt + s, 0, 3);
+            }
+            if (!has)
+                continue;
+            rt = (uint32_t)clamp((int32_t)rt + s, 0, 3);
             dstep_set(d, pen_lane, lv, rt);
         }
     }
@@ -539,8 +549,8 @@ static void layer_screen_draw(void)
             for (w = 0; w < 16u && !((ui.step_held >> w) & 1u); w++)
                 ;
             idx = (page * 16u + w) % NSTEP;
-            lab[1] = "level", lab[2] = "ratchet", lab[3] = "nudge";
-            str_cpy(v[1], "-  +", 8);
+            lab[1] = "hit", lab[2] = "ratchet", lab[3] = "nudge";
+            str_cpy(v[1], HIT_NAME[hit_rank(&t->dstep[idx], pen_lane)], 8);
             str_cpy(v[2], "x1 x4", 8);
             {
                 int32_t m = t->micro[idx];

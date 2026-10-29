@@ -16,7 +16,7 @@
  *   REC     held: the clear ring, to the end: cleared (undo brings it back); live recording is gone
  *   SAVE    tapped: SONGS (from SONGS, LIVE); held on the drum grid: the save ring, the section into its song (no
  *           layer since 2026-10-27: SLOOP's sections A..D went with JAM)
- *   DRUMS   the grid: sound / step / hit / level knobs, GRID <-> KIT
+ *   DRUMS   the grid: sound / step / hit (off .. hard) / ratchet knobs, OCT taps (flam, mark), GRID <-> KIT
  * then 20000 frames of random use: every draw stays on the screen. */
 #define FELUCCA_DRUMMER 1
 #define main hostsim_main
@@ -650,8 +650,31 @@ int main(int argc, char **argv)
         check(!strcmp(ui.msg, "NO SONG TO SAVE INTO") && sec_saves == s0 + 1u, "EDIT, no song: SAVE held: nothing to save into (JAM's slots went)");
         studio_open(SC_DRUM); ui.msg_t = 0; frames(16);
     }
-    encs[panel.enc[EN_K3]] = 1; frame(); check(dstep_has(&TDRUM->dstep[0], 0), "DRUMS: KNOB 3 adds the kick on step 1");
-    encs[panel.enc[EN_K4]] = -1; frame(); check(dstep_lvl(&TDRUM->dstep[0], 0) == LV_SOFT, "DRUMS: KNOB 4 softer");
+    /* the HIT knob (2026-10-29): off, ghost, soft, norm, hard on KNOB 3; the ratchet on KNOB 4; OCT- tapped a flam,
+     * OCT+ tapped the hit's mark (always, fill only, not in a fill); OCT held with a key still a ghost / hard hit */
+    encs[panel.enc[EN_K3]] = 1; frame(); check(dstep_has(&TDRUM->dstep[0], 0) && dstep_lvl(&TDRUM->dstep[0], 0) == LV_GHOST, "DRUMS: KNOB 3 up from off: a ghost kick on step 1");
+    encs[panel.enc[EN_K3]] = 2; frame(); check(dstep_lvl(&TDRUM->dstep[0], 0) == LV_NORM, "DRUMS: KNOB 3 two more: norm");
+    encs[panel.enc[EN_K3]] = -1; frame(); check(dstep_lvl(&TDRUM->dstep[0], 0) == LV_SOFT, "DRUMS: KNOB 3 down: soft");
+    encs[panel.enc[EN_K4]] = 2; frame(); check(dstep_rat(&TDRUM->dstep[0], 0) == 2u && dstep_lvl(&TDRUM->dstep[0], 0) == LV_SOFT, "DRUMS: KNOB 4: ratchet x3, the level kept");
+    encs[panel.enc[EN_K3]] = 5; frame(); check(dstep_lvl(&TDRUM->dstep[0], 0) == LV_HARD && dstep_rat(&TDRUM->dstep[0], 0) == 2u, "DRUMS: KNOB 3 bounded at hard, the ratchet kept");
+    tap(B_OCTDN); frame();
+    check((drum_flam[0] & 1u) && !strcmp(ui.msg, "FLAM ON"), "DRUMS: OCT- tapped: the hit's flam on");
+    tap(B_OCTUP); frame(); check((drum_fonly[0] & 1u) && !strcmp(ui.msg, "MARK: FILL ONLY"), "DRUMS: OCT+ tapped: the mark FILL ONLY");
+    tap(B_OCTUP); frame(); check(!(drum_fonly[0] & 1u) && (drum_fno[0] & 1u), "DRUMS: OCT+ again: NOT IN A FILL");
+    tap(B_OCTUP); frame(); check(!(drum_fno[0] & 1u) && !strcmp(ui.msg, "MARK: ALWAYS"), "DRUMS: OCT+ again: ALWAYS");
+    press(B_OCTDN); key(key_of_white(2)); release(B_OCTDN); frame();
+    check(dstep_has(&TDRUM->dstep[2], 0) && dstep_lvl(&TDRUM->dstep[2], 0) == LV_GHOST && (drum_flam[0] & 1u) && !(drum_flam[2] & 1u),
+          "DRUMS: OCT- held + a key: a ghost hit, no flam toggled");
+    press(B_OCTUP); key(key_of_white(3)); release(B_OCTUP); frame();
+    check(dstep_lvl(&TDRUM->dstep[3], 0) == LV_HARD && !(drum_fonly[3] & 1u) && !(drum_fno[3] & 1u), "DRUMS: OCT+ held + a key: a hard hit, no mark cycled");
+    drum_hit_clr(TDRUM, 2, 0); drum_hit_clr(TDRUM, 3, 0); drum_cursor = 0;   /* (the key moved the cursor) */
+    tap(B_OCTDN); frame(); check(!(drum_flam[0] & 1u), "DRUMS: OCT- tapped again: the flam off");
+    drum_cursor = 1; tap(B_OCTDN); frame(); check(!strcmp(ui.msg, "NO HIT ON THIS STEP"), "DRUMS: OCT- on an empty step: says so");
+    drum_cursor = 0;
+    encs[panel.enc[EN_K3]] = -9; frame(); check(!dstep_has(&TDRUM->dstep[0], 0), "DRUMS: KNOB 3 down to off: the hit goes");
+    encs[panel.enc[EN_K3]] = 3; frame(); check(dstep_lvl(&TDRUM->dstep[0], 0) == LV_NORM && dstep_rat(&TDRUM->dstep[0], 0) == 0u, "DRUMS: ..and back: a plain norm hit, no ratchet");
+    encs[panel.enc[EN_K3]] = -2; frame(); check(dstep_lvl(&TDRUM->dstep[0], 0) == LV_GHOST, "DRUMS: KNOB 3: ghost (as the old KNOB 4 softer)");
+    encs[panel.enc[EN_K3]] = 1; frame(); check(dstep_lvl(&TDRUM->dstep[0], 0) == LV_SOFT, "DRUMS: KNOB 3: soft");
     encs[panel.enc[EN_K1]] = 100; encs[panel.enc[EN_K2]] = 100; frame();
     check(drum_lane == 15 && drum_cursor == 15, "DRUMS: KNOB 1 / 2 bounded (16 sounds, 16 steps)");
     {   /* a scene to look at */
@@ -666,7 +689,9 @@ int main(int argc, char **argv)
             if (BEAT[j] & 0x20u) dstep_set(&TDRUM->dstep[j], 5, LV_NORM, 0);
         }
         drum_lane = 4; drum_cursor = 6; drum_page = 0; ui.force = 1; ui.msg_t = 0;
+        drum_flam[4] |= 1u << 2; drum_fonly[14] |= 1u << 4; drum_fno[12] |= 1u << 4;   /* (a flam, the marks: drawn) */
         drums.hits = 1u | 1u << 4; frame(); ppm("live-grid");
+        drum_flam[4] = 0; drum_fonly[14] = 0; drum_fno[12] = 0;
         drum_page = 1; ui.force = 1; drums.hits = 1u | 1u << 4; frame(); ppm("live-kit");
         drum_page = 0; go_home(); ui.force = 1;
         transport_req = 1; frames(30); ui.force = 1; frame(); ppm("live-tracks");

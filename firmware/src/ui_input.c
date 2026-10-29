@@ -372,7 +372,7 @@ static int layers_input(uint32_t note_edges, uint32_t *pressed, uint32_t home)
             lk_r++;
             if ((e >> 8) == KB_GRID) {                    /* the DRUMS grid page: a step key */
                 if (((e >> 7) & 1u) && grid_keys_on())
-                    grid_key(e & 31u);
+                    grid_key(e & 31u, (e & KB_OCTDN) ? LV_GHOST : (e & KB_OCTUP) ? LV_HARD : LV_NORM);
                 else if (((e >> 7) & 1u) && drummer_keys_on())
                     drummer_key(e & 31u, (e & KB_OCTUP) != 0u);
             } else if (!((e >> 7) & 1u)) {

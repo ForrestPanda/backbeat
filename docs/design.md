@@ -366,6 +366,25 @@ next bar). No named sections, one song, no fill tied to a section change.
    16-section song through PC, CC 20 15, CC 27 12, NEXT, a section saved back; 17 refused), the web tests, and
    on fm1-emu (`tests/emu_sixteen.sh`). To verify on hardware: OCT+ held with a key while playing, the 4-row tiles
    read from the floor.
+6e. **Drafting songs on the device (decided 2026-10-29, three steps).** Asked for parity with the web editor, then cut
+   with the user to a notebook, not an authoring tool: capture an idea at rehearsal, finish it in the editor. Full
+   parity (time signatures, the entry, fill bar and break as grids, split and merge, copy and paste, typed names)
+   stays in the web editor: slow on a 240 px screen and most of the 15 KB of flash left, which the device-only work
+   (the battery, the feel) also needs. (1, done 2026-10-29) **The HIT knob**: on the EDIT grid KNOB 3 is one knob for
+   the hit and its level, off, ghost, soft, norm, hard (`ui_studio.c` HIT_NAME, hit_rank; turned to off the hit
+   goes and an emptied step loses its lock, nudge and condition), KNOB 4 the ratchet (x1..x4; the grid had no
+   ratchet); the SEQ layer with a step held has the same HIT knob in LEVEL's place (`steps_held_edit`). OCT- held
+   with a key gives a ghost hit on the grid, OCT+ a hard one (the SEQ layer had it, the grid set NORM: `KB_OCTDN` in
+   the lk_q entry, `grid_key(k, lvl)`); tapped alone, OCT- gives the cursor's hit a flam or takes it, OCT+ turns its
+   mark (always, fill only, not in a fill: the song's per-hit marks, `drum_fonly` / `drum_fno`), the tap counted
+   on the release when no key came meanwhile (`grid_oct_input`). The grid draws them: a black notch at the hit's
+   left for a flam, an amber or red corner for the marks (ui_pages_test `live-grid`). (2) SAVE held saves the
+   song's header too: tempo, kit, swing, drum level and reverb as they are (today the old header is copied, so a
+   tempo set on LIVE never reaches the song). (3) A SECTIONS screen (EDIT tapped, a button with no page): the song's
+   sections as LIVE's tiles, one picked and cued so the grid edits it; its steps, division and outro on the knobs;
+   duplicate, delete, move; and on SONGS an empty slot plus EDIT makes a new song with the pattern playing as its
+   first section. To verify on hardware, step 1: the HIT knob from off through hard and back, the ratchet, OCT taps
+   and OCT held with a key on the grid.
 7. **Hardware.** Everything above on a real FM-1: the TRS jack, the cable type, the UART driver, the
    speaker. Before the first install: `sh tests/run_tests.sh` green (but for the known `fm1_alnk0_irq`
    budget failure, identical on untouched SLOOP 2.6), then SLOOP's installer page with `build/felucca.fwsc`.

@@ -207,6 +207,11 @@ static void swing_str(char *b, int32_t v)            /* 0 straight .. 100 the mo
 /* ---------------------------------------------------------------- DRUMS --- */
 static const char *const LV_NAME[4] = {"norm", "ghost", "soft", "hard"};
 static uint32_t lvl_rank(uint32_t lvl);                 /* (below) ghost 0, soft 1, norm 2, hard 3 */
+/* the HIT knob (2026-10-29, the user: one knob for the hit and its level, "off, ghost, soft..."): 0 off, then the
+ * levels in lvl_rank order; the step's ratchet is KNOB 4 */
+static const char *const HIT_NAME[5] = {"off", "ghost", "soft", "norm", "hard"};
+static uint32_t hit_rank(const dstep_t *s, uint32_t l) { return dstep_has(s, l) ? lvl_rank(dstep_lvl(s, l)) + 1u : 0u; }
+static uint8_t grid_oct_used;                           /* OCT- / OCT+ held with a key (ghost / hard): no tap */
 static uint16_t lvl_col(uint32_t lvl)                   /* a hit's colour by its level */
 {
     return lvl == LV_GHOST ? TE_DIM[3] : lvl == LV_SOFT ? TE_MID[3] : lvl == LV_HARD ? C_WHITE : TE_DRUM;
@@ -267,6 +272,9 @@ static void drum_screen_draw(void)
         sig = sig * 31u + dstep_mask(s);
         sig = sig * 31u + s->lvl[0] + s->lvl[1] * 7u + s->lvl[2] * 49u + s->lvl[3] * 343u;
         sig = sig * 31u + s->rat[0] + s->rat[1] * 7u + s->rat[2] * 49u + s->rat[3] * 343u;
+#if FELUCCA_DRUMMER
+        sig = sig * 31u + drum_flam[i] + drum_fonly[i] * 7u + drum_fno[i] * 49u;   /* (the song's marks: drawn) */
+#endif
     }
     if (ui.force || sig != body_sig) {
         body_sig = sig;
@@ -288,6 +296,17 @@ static void drum_screen_draw(void)
                         for (r = 0; r < dstep_rat(s, i); r++)
                             cv_rect(13 + (int32_t)j * 14 + (int32_t)r * 3, y + 2, 2, 1, C_BLACK);
                     }
+#if FELUCCA_DRUMMER
+                    if (dstep_has(s, i)) {                  /* the song's marks on the hit: a flam, a black notch at the
+                                                             * left; fill only, an amber corner; not in a fill, a red one */
+                        if ((drum_flam[p] >> i) & 1u)
+                            cv_rect(12 + (int32_t)j * 14, y, 1, 5, C_BLACK);
+                        if ((drum_fonly[p] >> i) & 1u)
+                            cv_rect(21 + (int32_t)j * 14, y, 3, 2, C_AMB);
+                        else if ((drum_fno[p] >> i) & 1u)
+                            cv_rect(21 + (int32_t)j * 14, y, 3, 2, TE_RED);
+                    }
+#endif
                     if (p == drum_cursor && i == drum_lane) {
                         cv_rect(11 + (int32_t)j * 14, y - 1, 14, 1, C_WHITE);
                         cv_rect(11 + (int32_t)j * 14, y + 5, 14, 1, C_WHITE);
@@ -306,19 +325,25 @@ static void drum_screen_draw(void)
     {
         static char v[4][12];
         const char *val[4] = {v[0], v[1], v[2], v[3]};
-        static const char *const LG[4] = {"sound", "step", "hit", "level"}, *const LK[4] = {"kit", "level", "reverb", "pan"};
+        static const char *const LG[4] = {"sound", "step", "hit", "ratchet"}, *const LK[4] = {"kit", "level", "reverb", "pan"};
         int32_t ratio[4];
         if (!drum_page) {
             const dstep_t *s = &TDRUM->dstep[drum_cursor];
+            uint32_t hr = hit_rank(s, drum_lane);
             str_cpy(v[0], LANE_SHORT[drum_lane], 8);
             fmt_int(v[1], drum_cursor + 1);
-            str_cpy(v[2], dstep_has(s, drum_lane) ? "on" : "--", 4);
-            str_cpy(v[3], dstep_has(s, drum_lane) ? LV_NAME[dstep_lvl(s, drum_lane)] : "--", 8);
+            str_cpy(v[2], HIT_NAME[hr], 8);                 /* off, ghost, soft, norm, hard: one knob */
+            if (hr) {
+                v[3][0] = 'x';
+                v[3][1] = (char)('1' + dstep_rat(s, drum_lane));
+                v[3][2] = 0;
+            } else {
+                str_cpy(v[3], "--", 3);
+            }
             ratio[0] = (int32_t)drum_lane * 1000 / (DRUM_LANES - 1);
             ratio[1] = (int32_t)drum_cursor * 1000 / (int32_t)(len > 1u ? len - 1u : 1u);
-            ratio[2] = v[2][0] == 'o' ? 1000 : 0;
-            ratio[3] = dstep_has(s, drum_lane) ? (int32_t)lvl_rank(dstep_lvl(s, drum_lane)) * 333 : 0;   /* ghost left ..
-                                                                     * hard right (2.5: it followed the stored order) */
+            ratio[2] = (int32_t)hr * 250;                   /* off left .. hard right */
+            ratio[3] = hr ? (int32_t)dstep_rat(s, drum_lane) * 333 : 0;
             te_dials(184, LG, val, ratio, 1u, &footer);
         } else {
             fmt_int(v[0], (int32_t)kit + 1);
@@ -341,9 +366,10 @@ static uint32_t lvl_rank(uint32_t lvl) { return lvl == LV_GHOST ? 0u : lvl == LV
 /* the GRID page shown, no layer held: its keys are steps (seq.c kb_grid) */
 static int grid_keys_on(void) { return on_drum_page() && !drum_page && !ui.menu; }
 /* a key down on the GRID page: the white keys are the 16 steps of this page of steps for the sound of
- * KNOB 1 — an empty one is set (NORM, the sound heard), a set one cleared; the first four black keys
- * pick the page (steps 1-16, 17-32, 33-48, 49-64), as in the SEQ layer. The cursor follows */
-static void grid_key(uint32_t k)
+ * KNOB 1 — an empty one is set (NORM, the sound heard; OCT- held a ghost, OCT+ a hard one, as the SEQ layer, since
+ * 2026-10-29), a set one cleared; the first four black keys pick the page (steps 1-16, 17-32, 33-48, 49-64), as in
+ * the SEQ layer. The cursor follows */
+static void grid_key(uint32_t k, uint32_t lvl)
 {
     static const int8_t PG[12] = {-1, 0, -1, 1, -1, 2, -1, -1, 3, -1, -1, -1};
     uint32_t len = trk_len(TDRUM), idx;
@@ -360,6 +386,8 @@ static void grid_key(uint32_t k)
     idx = drum_cursor / 16u * 16u + (uint32_t)w;
     if (idx >= len)
         return;
+    if (lvl != LV_NORM)
+        grid_oct_used = 1;                              /* (OCT held for a ghost / hard hit: no tap of its own) */
     drum_cursor = (uint8_t)idx;
     undo_mark(TDRUM, ui.step_sess ? ui.step_sess : (ui.step_sess = (undo_sess += 4u) | 3u));
     st = &TDRUM->dstep[idx];
@@ -372,7 +400,7 @@ static void grid_key(uint32_t k)
             step_fill_set(TDRUM, idx, FC_NORM);
         }
     } else {
-        dstep_set(st, drum_lane, LV_NORM, 0);
+        dstep_set(st, drum_lane, lvl, 0);
         TDRUM->seq_active = 1;
     }
     fm1_irq_on();
@@ -380,6 +408,52 @@ static void grid_key(uint32_t k)
         audition_lane(drum_lane);
     sync_reload = 1;
 }
+
+#if FELUCCA_DRUMMER
+/* OCT- tapped on the grid: the cursor's hit gets a flam, or loses it; OCT+ tapped: its mark goes round (always, only
+ * during a fill, not during one: the song's marks, sng.c). Held with a key they still give a ghost / hard hit (seq.c
+ * kb_grid): the tap counts on the release, when no key came meanwhile (grid_oct_used) and it was short */
+static void grid_oct_tap(uint32_t up)
+{
+    uint32_t idx = drum_cursor % NSTEP, bit = 1u << drum_lane;
+    if (!dstep_has(&TDRUM->dstep[idx], drum_lane)) {
+        ui_message("NO HIT ON THIS STEP");
+        return;
+    }
+    if (!up) {
+        drum_flam[idx] ^= (uint16_t)bit;
+        ui_message((drum_flam[idx] & bit) ? "FLAM ON" : "FLAM OFF");
+    } else if (drum_fonly[idx] & bit) {
+        drum_fonly[idx] &= (uint16_t)~bit;
+        drum_fno[idx] |= (uint16_t)bit;
+        ui_message("MARK: NOT IN A FILL");
+    } else if (drum_fno[idx] & bit) {
+        drum_fno[idx] &= (uint16_t)~bit;
+        ui_message("MARK: ALWAYS");
+    } else {
+        drum_fonly[idx] |= (uint16_t)bit;
+        ui_message("MARK: FILL ONLY");
+    }
+    sync_reload = 1;
+}
+static void grid_oct_input(uint32_t pressed)
+{
+    static uint32_t t0[2], prev;
+    uint32_t i;
+    for (i = 0; i < 2u; i++) {
+        uint32_t bit = 1u << panel.btn[i ? B_OCTUP : B_OCTDN], down = (fm1_in.buttons & bit) != 0u;
+        if (pressed & bit) {
+            t0[i] = fm1_ms;
+            grid_oct_used = 0;
+        } else if (!down && (prev & bit) && !grid_oct_used && fm1_ms - t0[i] < 450u && !drum_page) {   /* (TAP_MS, ui_layers.c) */
+            grid_oct_tap(i);
+        }
+        prev = (prev & ~bit) | (down ? bit : 0u);
+    }
+}
+#else
+static void grid_oct_input(uint32_t pressed) { (void)pressed; }
+#endif
 
 static void drum_screen_input(uint32_t pressed, uint32_t home)
 {
@@ -389,6 +463,7 @@ static void drum_screen_input(uint32_t pressed, uint32_t home)
         go_home();
         return;
     }
+    grid_oct_input(pressed);
     for (k = 0; k < NB; k++) if ((pressed >> panel.btn[k]) & 1u) {
         b = k;
         if (b == B_PLAY) {
@@ -424,12 +499,22 @@ static void drum_screen_input(uint32_t pressed, uint32_t home)
             if (k >= 2) {
                 undo_mark(TDRUM, ui.step_sess ? ui.step_sess : (ui.step_sess = (undo_sess += 4u) | 3u));
                 fm1_irq_off();
-                if (k == 2) {
-                    if (s > 0) dstep_set(st, drum_lane, LV_NORM, 0);
-                    else drum_hit_clr(TDRUM, drum_cursor, drum_lane);
-                } else if (dstep_has(st, drum_lane)) {
-                    uint32_t r = (uint32_t)clamp((int32_t)lvl_rank(dstep_lvl(st, drum_lane)) + (s > 0 ? 1 : -1), 0, 3);
-                    dstep_set(st, drum_lane, LV_UP[r], dstep_rat(st, drum_lane));
+                if (k == 2) {                          /* HIT: off, ghost, soft, norm, hard (the ratchet kept) */
+                    uint32_t r = (uint32_t)clamp((int32_t)hit_rank(st, drum_lane) + s, 0, 4);
+                    if (!r) {
+                        drum_hit_clr(TDRUM, drum_cursor, drum_lane);
+                        if (!dstep_mask(st)) {          /* (an empty step keeps no lock, no nudge, no condition) */
+                            lock_del(TDRUM, drum_cursor, P_COUNT);
+                            TDRUM->micro[drum_cursor] = 0;
+                            step_fill_set(TDRUM, drum_cursor, FC_NORM);
+                        }
+                    } else {
+                        dstep_set(st, drum_lane, LV_UP[r - 1u], dstep_has(st, drum_lane) ? dstep_rat(st, drum_lane) : 0u);
+                        TDRUM->seq_active = 1;
+                    }
+                } else if (dstep_has(st, drum_lane)) { /* RATCHET: x1 .. x4 */
+                    uint32_t r = (uint32_t)clamp((int32_t)dstep_rat(st, drum_lane) + s, 0, 3);
+                    dstep_set(st, drum_lane, dstep_lvl(st, drum_lane), r);
                 }
                 fm1_irq_on();
                 sync_reload = 1;

@@ -317,7 +317,11 @@ The LIVE header names the song's bank: "song 3" or "factory 3". EDIT's SAVE held
 <p align="center"><img src="assets/screens/backbeat-songs.png" alt="SONGS: your 16 slots; LIVE with no song loaded, the white keys load one; a song loaded, its intro cued" width="720"></p>
 
 **EDIT.** SLOOP's drum grid and kit page for the section playing; its header names the section and, stopped,
-the song. Change hits, levels and ratchets as SLOOP does, then hold SAVE (stopped, on EDIT or on LIVE): a ring fills
+the song. The white keys set and clear the steps of the sound picked (OCT- held: a ghost hit, OCT+: a hard one), the
+knobs are SOUND, STEP, HIT (off, ghost, soft, norm, hard: one knob for the hit and its level) and RATCHET (x1 to x4);
+OCT- tapped gives the hit under the cursor a flam, OCT+ tapped turns its mark (always, fill only, not in a fill: the
+web editor's marks, drawn as a black notch and an amber or red corner). The SEQ layer with a step held has the same
+HIT knob. Then hold SAVE (stopped, on EDIT or on LIVE): a ring fills
 for a second and the section is written back into its song in flash ("SAVED INTO THE SONG"; "SONG FULL" past 3800
 bytes; nudges and parameter locks are not kept, SNG2 has no room for them, and the screen says so). With no song
 loaded SAVE held has nothing to save into and says so. A tap of SAVE opens SONGS (from SONGS, LIVE).
