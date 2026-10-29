@@ -281,7 +281,7 @@ has been played from the pedal on an FM-1 (2026-10-19); SECTIONS is in the host 
 
 | Button | Tapped | Held |
 | --- | --- | --- |
-| HOME | **LIVE**, the screen it starts on | |
+| HOME | **LIVE**, the screen it starts on; on LIVE: its other layout, the beat big (kept across power-offs) | |
 | SAVE | **SONGS** (from SONGS: LIVE again) | on LIVE, SECTIONS or EDIT: the section into its song, with the song's tempo, kit, swing, drum level and reverb as the knobs left them |
 | EDIT | **SECTIONS**, the song's shape (from SECTIONS: the grid); on SONGS: that row's song and its SECTIONS, or on an empty slot a new song | SLOOP's erase / mute / undo layer |
 | SEQ | **EDIT**, the drum grid of the section playing (again: GRID / KIT) | the step layer, as SLOOP; its DIV knob (and the PATTERN page's) keeps the hits in their place on the beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between, the length follows (nudges, locks, conditions, marks and the section's fill bar with it; EDIT + OCT- undoes it; over 64 steps it is refused and the screen says so) |
@@ -296,7 +296,11 @@ count-in); what comes next, in colour (NEXT: CHORUS, FILL, FILL NEXT BAR, FILL >
 ENDING); the song's sections as tiles, four to a row as the white keys 1..16, as many rows as the song needs (up
 to 4 sections the whole names, up to 8 a name each, 9..16 a line each: the number and the name cut; the one
 playing lit, the one cued framed and blinking, the outro and any meter but 4/4 marked); and a footer with the kit, the pedal channel and a dot that lights when the pedal sends. The pedal's
-messages ("SONG: BLACK", "NEXT: SOLO") show in the footer. The white keys 1..16 change section when the one
+messages ("SONG: BLACK", "NEXT: SOLO") show in the footer. HOME tapped on LIVE turns its other layout, **the beat
+big**: no beat lights, no tiles; the section in large letters, the beat of the bar as "2/4" in digits five times the
+small font's size (amber during the count-in, with its count at the right; dim when stopped) beside "BAR 3/8", the
+progress under them, and what comes in two lines, the word then the section in large letters (NEXT / CHORUS, FILL > /
+CHORUS). The white keys still change section; the layout is kept in the settings. HOME again: the tiles. The white keys 1..16 change section when the one
 playing ends, with OCT+ held on the next bar (the state line says KEY: ON THE NEXT BAR), with no fill of their own; the first black key (F#3) asks for a fill (as CC 21:
 the rest of the bar with a fill bar of its own, else to the section's end; with OCT+ held the whole next bar), the second (G#3) the fill on the whole next bar,
 the fourth (C#4) the break (as CC 28: the section playing comes in again through its break when it ends); the last (F#5) the

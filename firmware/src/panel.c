@@ -91,9 +91,13 @@ static const uint16_t LIGHTS_NS[LIGHTS_N] = {0u, 500u, 1000u, 2000u};   /* the b
 static uint8_t usb_serial;                      /* menu USB SERIAL: 1 = the serial console presented (usb.c) */
 enum { SCR_NEVER, SCR_1MIN, SCR_5MIN, SCR_15MIN, SCR_N };
 static uint8_t scr_off;                         /* SETUP > SCREEN > SCREEN OFF (screen.c) */
+static uint8_t live_view;                       /* LIVE's layout: 0 the sections as tiles, 1 the beat big (ui_drummer.c;
+                                                 * HOME tapped on LIVE turns it; 2026-10-29) */
 static uint32_t lights_word(void)
 {
     return (uint32_t)lights_lvl | (uint32_t)lights_keys << 4 | (uint32_t)(lights_notes != 0u) << 8 |
+           (uint32_t)(live_view != 0u) << 9 |   /* LIVE's layout (2026-10-29; SLOOP's REC MODE bit, which BackBeat
+                                                 * never wrote: the tiles) */
            (uint32_t)(usb_full != 0u) << 11 |
            (uint32_t)(lights_sync % 3u) << 12 | (uint32_t)(lights_mout != 0u) << 14 | (uint32_t)(lights_min == 1u) << 15 |
            (uint32_t)(usb_serial != 0u) << 16 |   /* (17..20: the visualiser's style, gone) */
@@ -108,6 +112,7 @@ static void lights_from_word(uint32_t w)
     lights_lvl = (uint8_t)((w & 15u) < LIGHTS_N ? (w & 15u) : LIGHTS_OFF);
     lights_keys = (uint8_t)(((w >> 4) & 15u) < KEYS_N ? ((w >> 4) & 15u) : KEYS_OFF);
     lights_notes = (uint8_t)((w >> 8) & 1u);
+    live_view = (uint8_t)((w >> 9) & 1u);
     usb_full = (uint8_t)((w >> 11) & 1u);       /* menu USB AUDIO (fx.c) */
     lights_sync = (uint8_t)(((w >> 12) & 3u) % 3u);
     lights_mout = (uint8_t)((w >> 14) & 1u);    /* SETUP > MIDI > OUT (seq.c) */

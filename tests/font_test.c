@@ -69,7 +69,7 @@ int main(int argc, char **argv)
 {
     uint32_t hs = render_all(&FONT_S, 255u), hl = render_all(&FONT_L, 95u), wsum = 0, c;
     for (c = 0; c < 224u; c++) wsum = wsum * 31u + FONT_S.adv[c] * 7u + FONT_S.bw[c];
-    for (c = 0; c < 64u; c++) wsum = wsum * 31u + FONT_L.adv[c] * 7u + FONT_L.bw[c];
+    for (c = 0; c < 64u; c++) wsum = wsum * 31u + FONT_L.adv[c] * FONT_L.sc * 7u + FONT_L.bw[c] * FONT_L.sc;   /* (2026-10-29: S's tables at the scale) */
     if (argc > 1) {
         printf("%08x %08x %08x %u\n", hs, hl, wsum, (unsigned)sizeof FONT_S_DATA);
         return 0;

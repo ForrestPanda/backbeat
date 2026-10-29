@@ -26,7 +26,8 @@ FONTS = Path(__file__).resolve().parents[1] / "assets" / "fonts"
 # SLOOP 2.6: Terminus Bold (the same 8 x 16 cell and advances as the regular one: no layout moves), drawn in
 # capitals only (gfx.c glyph); the regular ter-u16n.bdf stays for the web editor's font (gen_webfont.py)
 SIZES = [("S", "ter-u16b.bdf", 16, 1, True, 32, 255),   # Latin-1 (Hügelton needs the umlaut)
-         ("L", "ter-u16b.bdf", 16, 2, True, 32, 95)]   # values / titles: digits, signs, capitals
+         ("L", "ter-u16b.bdf", 16, 2, True, 32, 95),   # values / titles: digits, signs, capitals
+         ("XL", "ter-u16b.bdf", 16, 5, True, 32, 95)]  # LIVE's beat big (2026-10-29): S at 5x, the same way
 PAD = 2
 
 
@@ -130,17 +131,14 @@ def main(out):
         h, glyphs = render(ttf, px, scale, pixel, first, last)
         if scale > 1 and pixel and base is not None:
             # SLOOP 2.4: a pixel font at 2x is the 1x font's own bitmaps, enlarged while drawing (gfx.c
-            # cv_text): no second copy in flash (24 KB). Same glyphs, same pixels: checked here.
+            # cv_text): no second copy in flash (24 KB). Same glyphs, same pixels: checked here. Since 2026-10-29
+            # the advance and width tables are the 1x font's too, times the scale while drawing (XL at 5x the same).
             bname, bfirst, bh, bglyphs, bone = base
-            assert scale == 2 and first == bfirst and h == bh * 2, "L must be S at 2x, same first glyph"
+            assert scale >= 2 and first == bfirst and h == bh * scale, "a scaled font is S at its scale, same first glyph"
             for (adv, bw, g), (badv, bbw, bg) in zip(glyphs, bglyphs):
-                assert adv == badv * 2 and bw == bbw * 2 and g == upscale(bg, bbw, bh, 2)
-            lines.append(f"static const uint8_t FONT_{name}_ADV[{len(glyphs)}] = {{" +
-                         ", ".join(str(a) for a, _, _ in glyphs) + "};")
-            lines.append(f"static const uint8_t FONT_{name}_BW[{len(glyphs)}] = {{" +
-                         ", ".join(str(b) for _, b, _ in glyphs) + "};")
-            lines.append(f"static const felucca_font_t FONT_{name} = {{ {h}, {PAD * scale}, {first}, {last}, 1, "
-                         f"FONT_{name}_ADV, FONT_{name}_BW, FONT_{bname}_OFF, FONT_{bname}_DATA, {1 if bone else 0} }};")
+                assert adv == badv * scale and bw == bbw * scale and g == upscale(bg, bbw, bh, scale)
+            lines.append(f"static const felucca_font_t FONT_{name} = {{ {h}, {PAD * scale}, {first}, {last}, {scale}, "
+                         f"FONT_{bname}_ADV, FONT_{bname}_BW, FONT_{bname}_OFF, FONT_{bname}_DATA, {1 if bone else 0} }};")
             lines.append("")
             print(f"font {name}: {ttf} {px}px h {h}, digit adv {glyphs[ord('0') - first][0]}, "
                   f"the {bname} bitmaps at {scale}x (0 B)")
@@ -173,7 +171,7 @@ def main(out):
                      ", ".join(str(a) for a, _, _ in glyphs) + "};")
         lines.append(f"static const uint8_t FONT_{name}_BW[{len(glyphs)}] = {{" +
                      ", ".join(str(b) for _, b, _ in glyphs) + "};")
-        lines.append(f"static const felucca_font_t FONT_{name} = {{ {h}, {PAD * scale}, {first}, {last}, 0, "
+        lines.append(f"static const felucca_font_t FONT_{name} = {{ {h}, {PAD * scale}, {first}, {last}, 1, "
                      f"FONT_{name}_ADV, FONT_{name}_BW, FONT_{name}_OFF, FONT_{name}_DATA, {1 if one else 0} }};")
         lines.append("")
         if scale == 1:

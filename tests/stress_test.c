@@ -27,15 +27,18 @@ static double st_ns(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t
 /* ---- font ---- */
 static uint8_t big_data[64 * 24 * 32 / 2 + 64];   /* the old FONT_L: S enlarged and stored (reference only) */
 static uint16_t big_off[64];
+static uint8_t big_adv[64], big_bw[64];               /* (2026-10-29: FONT_L's tables are S's, at the scale) */
 static felucca_font_t FONT_L2X;
 
 static void font_ref_build(void)
 {
     uint32_t gi, o = 0;
     for (gi = 0; gi < 64u; gi++) {
-        uint32_t ws = FONT_S.bw[gi], wb = FONT_L.bw[gi], bs = (ws + 1u) / 2u, bb = (wb + 1u) / 2u, x, y;
+        uint32_t ws = FONT_S.bw[gi], wb = ws * 2u, bs = (ws + 1u) / 2u, bb = (wb + 1u) / 2u, x, y;
         const uint8_t *s = FONT_S.data + FONT_S.off[gi];
         big_off[gi] = (uint16_t)o;
+        big_adv[gi] = (uint8_t)(FONT_S.adv[gi] * 2u);
+        big_bw[gi] = (uint8_t)wb;
         for (y = 0; y < 32u; y++)
             for (x = 0; x < wb; x++) {
                 uint32_t sx = x / 2u, v;
@@ -53,10 +56,12 @@ static void font_ref_build(void)
         assert(o <= sizeof big_data);
     }
     FONT_L2X = FONT_L;
-    FONT_L2X.sh = 0;
+    FONT_L2X.sc = 1;
     FONT_L2X.bits = 0;                                /* (the reference: 4-bit, stored at 2x) */
     FONT_L2X.off = big_off;
     FONT_L2X.data = big_data;
+    FONT_L2X.adv = big_adv;
+    FONT_L2X.bw = big_bw;
 }
 
 static void t_font(void)
@@ -65,8 +70,9 @@ static void t_font(void)
     uint32_t c, i, bad = 0, n = 0;
     char s[48];
     font_ref_build();
-    scheck(FONT_L.data == FONT_S.data && FONT_L.sh == 1u && FONT_L.h == 2u * FONT_S.h && FONT_L.first == FONT_S.first,
-           "font: FONT_L draws FONT_S's bitmaps at 2x");
+    scheck(FONT_L.data == FONT_S.data && FONT_L.sc == 2u && FONT_L.h == 2u * FONT_S.h && FONT_L.first == FONT_S.first &&
+           FONT_XL.data == FONT_S.data && FONT_XL.sc == 5u && FONT_XL.h == 5u * FONT_S.h,
+           "font: FONT_L draws FONT_S's bitmaps at 2x, FONT_XL at 5x");
     for (c = 32; c < 128u; c++) {                     /* every character, lower case folding to capitals */
         s[0] = (char)c; s[1] = 0;
         cv_begin(40, 40, C_BLACK); cv_text(6, 3, &FONT_L2X, s, C_HI);

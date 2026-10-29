@@ -30,6 +30,10 @@
  *   SEL ENV LFO       fill (CC 21; with OCT+ held, the next bar); previous, next (as CC 25, 24, without their fill)
  *   PLAY              stopped: the section cued (the count-in first); playing: stop
  *   KNOB 1..4         tempo, kit, drums level, swing (SELECT: tempo; PRESETS: kit)
+ *   HOME              on LIVE: the other layout (2026-10-29, asked: "a large number regarding the current beat of the
+ *                     total beats in the measure", and only the section playing, not all of them): the beat of the
+ *                     bar as "2/4" five times the small font's size beside the bar count, no beat lights, no tiles,
+ *                     what comes next in large letters (live_big); kept in the settings (panel.c live_view)
  * With no song loaded the white keys 1..16 load the page's songs 1..16 (LIVE shows them; ENV / LFO the page). On
  * SONGS (9 rows at a time, following the row picked): KNOB 1 / SELECT a row, REC or OCT+ loads it (and LIVE again),
  * a white key 1..16 loads that song of the page. */
@@ -234,8 +238,14 @@ static void drummer_input(uint32_t pressed, uint32_t home)
 {
     int32_t s;
     uint32_t id;
-    if (home == 1u) {                               /* BT_TAP: LIVE (from SONGS too) */
-        go_home();
+    if (home == 1u) {                               /* BT_TAP: LIVE (from SONGS and SECTIONS); on LIVE, the other layout */
+        if (sng_view == DV_LIVE) {
+            live_view ^= 1u;
+            settings_later = 1;                     /* (kept; saved when quiet) */
+            ui.force = 1;
+        } else {
+            go_home();
+        }
         return;
     }
     for (id = 0; id < 14u; id++) {
@@ -348,19 +358,20 @@ static void meter_str(char *b, uint32_t m)          /* "7/8" */
     fmt_int(b + str_len(b), (int32_t)meter_den(m));
 }
 
-/* the header: the song (its slot under it), the tempo big, the transport, the beat lights of the bar's meter */
-static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, const char *songname)
+/* the header: the song (its slot under it), the tempo big, the transport, the beat lights of the bar's meter (52 px;
+ * without the lights, the beat big below them, 40) */
+static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, const char *songname, uint32_t lights)
 {
     static uint32_t cache;
     char b[16];
     uint32_t k, sig = studio_hash((uint32_t)song.g[G_BPM] * 7u + playing * 3u + beat * 131u + beats * 1009u +
-                                  (ui.bpm_t != 0) * 104729u + (uint32_t)(sng_cur + 1) * 37u + (uint32_t)mclk_on() * 11u,
-                                  songname);
+                                  (ui.bpm_t != 0) * 104729u + (uint32_t)(sng_cur + 1) * 37u + (uint32_t)mclk_on() * 11u +
+                                  lights * 15485863u, songname);
     int32_t x, w, cw;
     if (!ui.force && sig == cache)
         return;
     cache = sig;
-    cv_begin(240, 52, C_BLACK);
+    cv_begin(240, lights ? 52u : 40u, C_BLACK);
     cut_name(b, songname[0] ? songname : "NO SONG", &FONT_S, 140);
     cv_text(4, 4, &FONT_S, b, songname[0] ? C_WHITE : TE_G3);
     if (sng_cur >= 0) {
@@ -376,9 +387,62 @@ static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, const cha
     te_play_icon(x - 24, 4, (int)playing);
     w = 232 / (int32_t)beats;                        /* the beats of the bar, as wide as the screen */
     cw = w - (beats > 8u ? 2 : 4);
-    for (k = 0; k < beats; k++)
+    for (k = 0; lights && k < beats; k++)
         cv_rect(4 + (int32_t)k * w, 42, cw, 6, k == beat ? (k ? C_WHITE : TE_RED) : TE_G2);
     cv_blit(0, 0);
+}
+
+/* the beat big (LIVE's other layout, HOME on LIVE; 2026-10-29): under the header, the section in large letters, the
+ * beat of the bar as "2/4" five times the small font's size (the count-in's beats amber; stopped, the first beat dim)
+ * with the bar count at its right, then the progress ticked per bar; the state line follows (live_state, two lines) */
+static void live_big(uint32_t playing, const char *sec, uint32_t beat, uint32_t beats, uint32_t bar, uint32_t bars,
+                     uint32_t ci, uint32_t ci_n)
+{
+    static uint32_t cache;
+    char b[24];
+    uint32_t k, sig = studio_hash(playing * 3u + beat * 131u + beats * 1009u + bar * 17u + bars * 7919u + ci * 31u +
+                                  ci_n * 37u + (sng_cur < 0) * lib_page() * 104729u, sec);
+    int32_t x;
+    if (!ui.force && sig == cache)
+        return;
+    cache = sig;
+    cv_begin(240, 124, C_BLACK);
+    if (sng_cur < 0 && !sec[0]) {                   /* no song, no section: how to get one (the keys: the page's) */
+        cv_text(4, 4, &FONT_L, "PICK A SONG", TE_G3);
+        cv_text(4, 44, &FONT_S, lib_page() ? "FACTORY: keys 1-16, ENV: user" : "USER: keys 1-16, LFO: factory",
+                TE_G4);
+        cv_blit(0, 40);
+        return;
+    }
+    cut_name(b, sec[0] ? sec : "-", &FONT_L, 232);
+    cv_text(4, 2, &FONT_L, b, playing ? C_WHITE : TE_G4);
+    fmt_int(b, (int32_t)(beat == 0xFFu ? 1u : beat + 1u));
+    str_cpy(b + str_len(b), "/", 2);
+    fmt_int(b + str_len(b), (int32_t)beats);
+    cv_text(4, 36, &FONT_XL, b, beat == 0xFFu ? TE_G2 : ci ? C_AMB : C_WHITE);
+    if (ci) {                                       /* the count-in: the beat of its bar big, its count at the right */
+        fmt_int(b, (int32_t)ci);
+        str_cpy(b + str_len(b), "/", 2);
+        fmt_int(b + str_len(b), (int32_t)ci_n);
+        cv_text(236 - text_w(&FONT_S, "COUNT"), 56, &FONT_S, "COUNT", C_AMB);
+        cv_text(236 - text_w(&FONT_L, b), 72, &FONT_L, b, C_AMB);
+    } else if (playing) {
+        fmt_int(b, (int32_t)bar + 1);
+        str_cpy(b + str_len(b), "/", 2);
+        fmt_int(b + str_len(b), (int32_t)bars);
+        cv_text(236 - text_w(&FONT_S, "BAR"), 56, &FONT_S, "BAR", TE_G3);
+        cv_text(236 - text_w(&FONT_L, b), 72, &FONT_L, b, TE_G4);
+    } else {
+        x = 236 - text_w(&FONT_S, "CUED:");
+        cv_text(x, 56, &FONT_S, "CUED:", TE_G3);
+        cv_text(x, 72, &FONT_S, "PLAY", TE_G3);
+    }
+    cv_rect(4, 116, 232, 6, TE_G1);                 /* the progress through the pattern's bars */
+    if (playing && bars)
+        cv_rect(4, 116, (int32_t)(232u * (bar + 1u) / bars), 6, TE_DRUM);
+    for (k = 1; bars <= 32u && k < bars; k++)       /* a tick between bars */
+        cv_rect(4 + (int32_t)(232u * k / bars), 114, 1, 10, C_BLACK);
+    cv_blit(0, 40);
 }
 
 /* the section: its name big; the bar it is in with a progress ticked per bar; the count-in's beats */
@@ -424,16 +488,17 @@ static void live_main(uint32_t playing, const char *sec, uint32_t bar, uint32_t 
     cv_blit(0, 52);
 }
 
-/* what comes: the pedal's request, the fill, the ending (coloured); nothing: the section's meter and bars */
-static void live_state(uint32_t playing, const char *next)
+/* what comes: the pedal's request, the fill, the ending (coloured); nothing: the section's meter and bars. One line
+ * of 20 px at 124; with the beat big (big), two lines at 164: the word, then the section coming in large letters */
+static void live_state(uint32_t playing, const char *next, uint32_t big)
 {
     static uint32_t cache;
     char b[24];
     uint16_t c = C_AMB;
-    uint32_t fill = fill_now || pedal_fill, hold = pedal_fill_wait, end = pedal_end_req || pedal_end_bars;
+    uint32_t fill = fill_now || pedal_fill, hold = pedal_fill_wait, end = pedal_end_req || pedal_end_bars, np = 0;
     uint32_t oct = (fm1_in.buttons & dyn_bit[1]) != 0u;   /* OCT+ held: a white key now changes on the next bar */
     uint32_t sig = studio_hash(playing + fill * 3u + hold * 7u + end * 11u + fill_arm * 13u + oct * 17u + pedal_fill_wait * 19u +
-                               live_req_brk * 23u + midi_thru * 29u, next);
+                               live_req_brk * 23u + midi_thru * 29u + big * 43u, next);
     if (!ui.force && sig == cache)
         return;
     cache = sig;
@@ -447,12 +512,15 @@ static void live_state(uint32_t playing, const char *next)
         str_cpy(b, "FILL > ", 8);
         str_cpy(b + 7, next, 13);
         c = TE_DRUM;
+        np = 7;
     } else if (next[0] && live_req_brk) {         /* CC 28: the section through its break */
         str_cpy(b, "BREAK: ", 8);
         str_cpy(b + 7, next, 13);
+        np = 7;
     } else if (next[0]) {
         str_cpy(b, "NEXT: ", 7);
         str_cpy(b + 6, next, 13);
+        np = 6;
     } else if (pedal_fill_wait) {                 /* asked in the bar's last beat: the next bar, whole; a fill of
                                                    * several bars waiting for the section's end */
         str_cpy(b, pedal_fill_wait > 1u ? "FILL AT THE END" : "FILL NEXT BAR", sizeof b);
@@ -466,9 +534,26 @@ static void live_state(uint32_t playing, const char *next)
     } else if (midi_thru == THRU_ONLY) {          /* SETUP > MIDI 2 > TRS TO USB: the pedal reaches only the USB */
         str_cpy(b, "BRIDGE: PEDAL TO USB", sizeof b);
     }
-    cv_begin(240, 20, C_BLACK);
-    cv_text(4, 2, &FONT_S, b, c);
-    cv_blit(0, 124);
+    if (!big) {
+        cv_begin(240, 20, C_BLACK);
+        cv_text(4, 2, &FONT_S, b, c);
+        cv_blit(0, 124);
+        return;
+    }
+    cv_begin(240, 52, C_BLACK);
+    if (np) {                                     /* the word (without its sign), the section coming big */
+        char w[8], n[13];
+        uint32_t k = np;
+        while (k && (b[k - 1u] == ' ' || b[k - 1u] == ':' || b[k - 1u] == '>'))
+            k--;
+        str_cpy(w, b, k + 1u);
+        cut_name(n, b + np, &FONT_L, 232);
+        cv_text(4, 6, &FONT_S, w, c);
+        cv_text(4, 20, &FONT_L, n, c);
+    } else {
+        cv_text(4, 6, &FONT_S, b, c);
+    }
+    cv_blit(0, 164);
 }
 
 /* a tile of one line (a short tile): the number, then the name cut to what is left */
@@ -639,9 +724,16 @@ static void live_draw(void)
         bars = live_sec_bars();
         bar = live_bar == 0xFFFFFFFFu ? 0u : live_bar % bars;
     }
-    live_head(playing, beat, beats, songname);
+    if (live_view) {                                /* the beat big: no lights, no tiles */
+        live_head(playing, beat, beats, songname, 0);
+        live_big(playing, live_sec >= 0 ? sec : "", beat, beats, bar, bars, ci, ci_n);
+        live_state(playing, next, 1);
+        live_foot();
+        return;
+    }
+    live_head(playing, beat, beats, songname, 1);
     live_main(playing, live_sec >= 0 ? sec : "", bar, bars, ci, ci_n);
-    live_state(playing, next);
+    live_state(playing, next, 0);
     live_tiles(playing, req, 144);
     live_foot();
 }

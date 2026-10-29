@@ -7,9 +7,10 @@ typedef struct {               /* proportional, see tools/gen_font.py */
     uint8_t h;
     uint8_t pad;               /* bitmap starts this many pixels left of the pen */
     uint8_t first, last;
-    uint8_t sh;                /* 1: the bitmaps are another font's, drawn at 2x (L = S at 2x, no copy) */
-    const uint8_t *adv;        /* advance per glyph */
-    const uint8_t *bw;         /* bitmap width per glyph (starts FONT_PAD left of the pen) */
+    uint8_t sc;                /* the scale the bitmaps are drawn at: 1; 2 (L = S at 2x, no copy), 5 (XL, LIVE's beat
+                                * big, 2026-10-29): the tables below are the 1x font's, times sc while drawing */
+    const uint8_t *adv;        /* advance per glyph (at 1x) */
+    const uint8_t *bw;         /* bitmap width per glyph (at 1x; starts pad left of the pen) */
     const uint16_t *off;       /* byte offset of each glyph */
     const uint8_t *data;
     uint8_t bits;              /* SLOOP 2.6: 1 = 1 bit a pixel (a pixel font: glyph rows one after the other, high
@@ -135,38 +136,35 @@ static uint32_t glyph(const felucca_font_t *f, uint32_t ch)
     return ch - f->first;
 }
 
-/* text, alpha-blended onto black with colour c; returns the end x */
+/* text, alpha-blended onto black with colour c; returns the end x. A font at a scale (L, XL) draws each pixel of
+ * its 1x bitmaps as an sc x sc block */
 static int32_t cv_text(int32_t x, int32_t y, const felucca_font_t *f, const char *s, uint16_t c)
 {
     uint16_t ramp[16];
-    uint32_t r = c >> 11, g = (c >> 5) & 63u, b = c & 31u, a;
+    uint32_t r = c >> 11, g = (c >> 5) & 63u, b = c & 31u, a, sc = f->sc, h = f->h / sc;
     for (a = 0; a < 16u; a++)
         ramp[a] = (uint16_t)(((r * a / 15u) << 11) | ((g * a / 15u) << 5) | (b * a / 15u));
     for (; *s; s++) {
-        uint32_t gi = glyph(f, (uint8_t)*s), gx, gy, w, bpr;
-        const uint8_t *gd;
-        w = f->bw[gi];
-        gd = f->data + f->off[gi];
-        if (f->bits == 1u) {                           /* on / off pixels: full colour where a bit is set */
-            uint32_t sw = w >> f->sh;
-            for (gy = 0; gy < f->h; gy++)
-                for (gx = 0; gx < w; gx++) {
-                    uint32_t i = (gy >> f->sh) * sw + (gx >> f->sh);
-                    if ((gd[i >> 3] >> (7u - (i & 7u))) & 1u)
-                        cv_pset(x - f->pad + (int32_t)gx, y + (int32_t)gy, ramp[15]);
-                }
-            x += f->adv[gi];
-            continue;
-        }
-        bpr = ((w >> f->sh) + 1u) / 2u;
-        for (gy = 0; gy < f->h; gy++)
+        uint32_t gi = glyph(f, (uint8_t)*s), gx, gy, w = f->bw[gi], bpr = (w + 1u) / 2u;
+        const uint8_t *gd = f->data + f->off[gi];
+        for (gy = 0; gy < h; gy++)
             for (gx = 0; gx < w; gx++) {
-                uint32_t sx = gx >> f->sh, v = gd[(gy >> f->sh) * bpr + sx / 2u];
-                v = (sx & 1u) ? (v & 15u) : (v >> 4);
-                if (v)
+                uint32_t v;
+                if (f->bits == 1u) {                   /* on / off pixels: full colour where a bit is set */
+                    uint32_t i = gy * w + gx;
+                    v = (gd[i >> 3] >> (7u - (i & 7u))) & 1u ? 15u : 0u;
+                } else {
+                    v = gd[gy * bpr + gx / 2u];
+                    v = (gx & 1u) ? (v & 15u) : (v >> 4);
+                }
+                if (!v)
+                    continue;
+                if (sc == 1u)
                     cv_pset(x - f->pad + (int32_t)gx, y + (int32_t)gy, ramp[v]);
+                else
+                    cv_rect(x - f->pad + (int32_t)(gx * sc), y + (int32_t)(gy * sc), (int32_t)sc, (int32_t)sc, ramp[v]);
             }
-        x += f->adv[gi];
+        x += (int32_t)(f->adv[gi] * sc);
     }
     return x;
 }
@@ -175,7 +173,7 @@ static int32_t text_w(const felucca_font_t *f, const char *s)
 {
     int32_t w = 0;
     for (; *s; s++)
-        w += f->adv[glyph(f, (uint8_t)*s)];
+        w += (int32_t)(f->adv[glyph(f, (uint8_t)*s)] * f->sc);
     return w;
 }
 
