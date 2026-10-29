@@ -741,6 +741,15 @@ int main(int argc, char **argv)
         fm1_irq_off(); sng_apply(1); fm1_irq_on();
         assert(dstep_has(&TDRUM->dstep[2], 9) && dstep_lvl(&TDRUM->dstep[2], 9) == LV_HARD && dstep_rat(&TDRUM->dstep[2], 9) == 2u);
         assert(!sng_pack_section(1, out, 40));        /* no room: refused */
+        {   /* the header as the knobs left it (2026-10-29): tempo, kit, swing, drum level and reverb; the name and
+             * the swing grid kept */
+            int16_t b0 = song.g[G_BPM], k0 = TDRUM->p[P_E0], s0 = song.g[G_SWING], l0 = song.g[G_DRLVL], r0 = song.g[G_DRREV];
+            song.g[G_BPM] = 173; TDRUM->p[P_E0] = 3; song.g[G_SWING] = 61; song.g[G_DRLVL] = 99; song.g[G_DRREV] = 42;
+            n = sng_pack_section(1, out, sizeof out);
+            assert(n && !sng_check(out, n, &tmp) && tmp.bpm == 173u && tmp.kit == 3u && tmp.swing == 61u && tmp.drlvl == 99u && tmp.drrev == 42u &&
+                   !memcmp(out + 4, sng.xip + 4, SNG_NAME) && out[23] == sng.xip[23]);
+            song.g[G_BPM] = b0; TDRUM->p[P_E0] = k0; song.g[G_SWING] = s0; song.g[G_DRLVL] = l0; song.g[G_DRREV] = r0;
+        }
         assert(!sng_lossy());
         TDRUM->micro[5] = 3; assert(sng_lossy()); TDRUM->micro[5] = 0;
         TDRUM->p[P_SLEN] = 64;                        /* the longest section: still packs and checks */

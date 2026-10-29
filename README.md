@@ -282,7 +282,7 @@ has been played from the pedal on an FM-1 (2026-10-19).
 | Button | Tapped | Held |
 | --- | --- | --- |
 | HOME | **LIVE**, the screen it starts on | |
-| SAVE | **SONGS** (from SONGS: LIVE again) | on LIVE or EDIT: the section into its song |
+| SAVE | **SONGS** (from SONGS: LIVE again) | on LIVE or EDIT: the section into its song, with the song's tempo, kit, swing, drum level and reverb as the knobs left them |
 | SEQ | **EDIT**, the drum grid of the section playing (again: GRID / KIT) | the step layer, as SLOOP; its DIV knob (and the PATTERN page's) keeps the hits in their place on the beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between, the length follows (nudges, locks, conditions, marks and the section's fill bar with it; EDIT + OCT- undoes it; over 64 steps it is refused and the screen says so) |
 | GLO | **SETUP** (again, HOME or OCT-: closed) | |
 | SEL / ENV / LFO | on LIVE: **FILL**, **PREV**, **NEXT** (the pedal's CC 21, 25, 24; PREV / NEXT without a fill) | |
@@ -322,7 +322,8 @@ knobs are SOUND, STEP, HIT (off, ghost, soft, norm, hard: one knob for the hit a
 OCT- tapped gives the hit under the cursor a flam, OCT+ tapped turns its mark (always, fill only, not in a fill: the
 web editor's marks, drawn as a black notch and an amber or red corner). The SEQ layer with a step held has the same
 HIT knob. Then hold SAVE (stopped, on EDIT or on LIVE): a ring fills
-for a second and the section is written back into its song in flash ("SAVED INTO THE SONG"; "SONG FULL" past 3800
+for a second and the section is written back into its song in flash, with the song's tempo, kit, swing, drum level
+and reverb as the knobs left them ("SAVED INTO THE SONG"; "SONG FULL" past 3800
 bytes; nudges and parameter locks are not kept, SNG2 has no room for them, and the screen says so). With no song
 loaded SAVE held has nothing to save into and says so. A tap of SAVE opens SONGS (from SONGS, LIVE).
 

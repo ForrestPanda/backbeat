@@ -350,7 +350,8 @@ static uint32_t sng_pack_rediv(const uint8_t *q, uint32_t n, uint32_t uo, uint32
     out[0] = (uint8_t)m;
     return w;
 }
-/* the song loaded, packed again with section k taken from the drum track (its hits, levels, ratchets and marks, its
+/* the song loaded, packed again with its header as the knobs left it (tempo, kit, swing, drum level and reverb) and
+ * section k taken from the drum track (its hits, levels, ratchets and marks, its
  * length, division and fill conditions; its name, flags and meter kept; its fill bar of its own, entry and break kept
  * as they are, or on the new grid when the division changed: sng_pack_rediv), into out (room bytes): its size, 0 = it
  * does not fit (SNG_MAX). Nudges and locks are not kept: SNG2 has no room for them (sng_lossy says so) */
@@ -363,6 +364,14 @@ static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t room)
     if (sng_cur < 0 || k >= sng.nsec || room < SNG_HDR)
         return 0;
     memcpy(out, sng.xip, SNG_HDR);
+    out[16] = (uint8_t)song.g[G_BPM];                /* the song's header as the knobs left it (2026-10-29: LIVE's tempo,
+                                                      * kit, drum level and swing were never saved; the name and the
+                                                      * swing grid as they were) */
+    out[17] = (uint8_t)(song.g[G_BPM] >> 8);
+    out[18] = (uint8_t)clamp(TDRUM->p[P_E0], 0, DRUM_KITS - 1);
+    out[19] = (uint8_t)clamp(song.g[G_SWING], 0, 100);
+    out[20] = (uint8_t)clamp(song.g[G_DRLVL], 0, 127);
+    out[21] = (uint8_t)clamp(song.g[G_DRREV], 0, 127);
     for (j = 0; j < sng.nsec; j++) {
         const uint8_t *s = sng_sec(j);
         uint32_t size = sng_u16(s + 16), i, at = n;

@@ -378,9 +378,10 @@ next bar). No named sections, one song, no fill tied to a section change.
    the lk_q entry, `grid_key(k, lvl)`); tapped alone, OCT- gives the cursor's hit a flam or takes it, OCT+ turns its
    mark (always, fill only, not in a fill: the song's per-hit marks, `drum_fonly` / `drum_fno`), the tap counted
    on the release when no key came meanwhile (`grid_oct_input`). The grid draws them: a black notch at the hit's
-   left for a flam, an amber or red corner for the marks (ui_pages_test `live-grid`). (2) SAVE held saves the
-   song's header too: tempo, kit, swing, drum level and reverb as they are (today the old header is copied, so a
-   tempo set on LIVE never reaches the song). (3) A SECTIONS screen (EDIT tapped, a button with no page): the song's
+   left for a flam, an amber or red corner for the marks (ui_pages_test `live-grid`). (2, done 2026-10-29) SAVE held
+   saves the song's header too: tempo, kit, swing, drum level and reverb as the knobs left them (`sng_pack_section`;
+   before, the old header was copied, so a tempo set on LIVE never reached the song; the name and the swing grid
+   stay as they were; song_test). (3) A SECTIONS screen (EDIT tapped, a button with no page): the song's
    sections as LIVE's tiles, one picked and cued so the grid edits it; its steps, division and outro on the knobs;
    duplicate, delete, move; and on SONGS an empty slot plus EDIT makes a new song with the pattern playing as its
    first section. To verify on hardware, step 1: the HIT knob from off through hard and back, the ratchet, OCT taps
