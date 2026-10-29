@@ -887,6 +887,13 @@ static uint8_t sng_lib_dirty = 1;
 static void sng_lib_refresh(void);
 static int sng_save_section(void);               /* EDIT, SAVE held: the section into its song (project.c) */
 static int sng_lossy(void);                        /* the drum track holds nudges or locks (sng.c) */
+/* the SECTIONS screen (ui_drummer.c, 2026-10-29): the song's shape drafted on the device (sng.c packs, project.c writes) */
+enum { SE_DUP, SE_DEL, SE_LEFT, SE_RIGHT, SE_OUTRO };
+static int sng_edit(uint32_t op, uint32_t k);    /* op on section k of the song loaded, the grid saved with it
+                                                    * (sng_save_section's codes; 0: done, the drum track holds the
+                                                    * section at its new place) */
+static int sng_new(uint32_t slot);               /* a song of one section, the drum track's pattern, into slot; loaded */
+static int sng_same(uint32_t k);                 /* the drum track still is section k as packed */
 /* SETUP > PEDAL (ui_menu.c), kept with the pedal settings (sng.c arrset): the last song loaded comes back at start */
 static uint8_t sng_autoload;                       /* 1: load the last song at start */
 static uint8_t sng_last;                           /* that song + 1 (a groove: 17..32), 0 none */

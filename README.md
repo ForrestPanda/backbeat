@@ -276,18 +276,19 @@ shares the cable).
 
 ## On the device
 
-Four screens, a button each. Every one of them was checked on the fm1-emu emulator and in the host tests; LIVE
-has been played from the pedal on an FM-1 (2026-10-19).
+Five screens, a button each. Every one of them was checked on the fm1-emu emulator and in the host tests; LIVE
+has been played from the pedal on an FM-1 (2026-10-19); SECTIONS is in the host tests only so far.
 
 | Button | Tapped | Held |
 | --- | --- | --- |
 | HOME | **LIVE**, the screen it starts on | |
-| SAVE | **SONGS** (from SONGS: LIVE again) | on LIVE or EDIT: the section into its song, with the song's tempo, kit, swing, drum level and reverb as the knobs left them |
+| SAVE | **SONGS** (from SONGS: LIVE again) | on LIVE, SECTIONS or EDIT: the section into its song, with the song's tempo, kit, swing, drum level and reverb as the knobs left them |
+| EDIT | **SECTIONS**, the song's shape (from SECTIONS: the grid); on SONGS: that row's song and its SECTIONS, or on an empty slot a new song | SLOOP's erase / mute / undo layer |
 | SEQ | **EDIT**, the drum grid of the section playing (again: GRID / KIT) | the step layer, as SLOOP; its DIV knob (and the PATTERN page's) keeps the hits in their place on the beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between, the length follows (nudges, locks, conditions, marks and the section's fill bar with it; EDIT + OCT- undoes it; over 64 steps it is refused and the screen says so) |
 | GLO | **SETUP** (again, HOME or OCT-: closed) | |
 | SEL / ENV / LFO | on LIVE: **FILL**, **PREV**, **NEXT** (the pedal's CC 21, 25, 24; PREV / NEXT without a fill) | |
 | PLAY | start the section cued (the count-in first), or stop | |
-| FX, EDIT, ARP | FX: the filter, insert, delay and reverb pages | SLOOP's layers (throws, erase / mute / undo, roll) |
+| FX, ARP | FX: the filter, insert, delay and reverb pages | SLOOP's layers (throws, roll) |
 
 **LIVE.** What plays, readable from the floor: the song and its slot, the tempo, the beat lights in the bar's
 meter; the section in large letters with "BAR 3 / 8" and a progress ticked per bar ("COUNT 2 / 8" during the
@@ -328,6 +329,23 @@ bytes; nudges and parameter locks are not kept, SNG2 has no room for them, and t
 loaded SAVE held has nothing to save into and says so. A tap of SAVE opens SONGS (from SONGS, LIVE).
 
 <p align="center"><img src="assets/screens/backbeat-edit.png" alt="EDIT: the drum grid of the section playing, and the kit page" width="480"></p>
+
+**SECTIONS.** A notebook for a song's shape, to draft an idea at rehearsal and finish it in the web editor (the
+editor keeps the authoring: names, time signatures, the entry, fill bar and break as grids, split and merge).
+EDIT tapped on LIVE opens it: the song's sections as LIVE's tiles, the one picked framed, and above them its number
+and name big with its steps, division, bars, meter and outro mark. The picked section is the one the grid edits:
+stopped, KNOB 1 or a white key puts it in the drum track at once (a grid edited and not saved: the first move away
+says UNSAVED: AGAIN TO DROP, the next within 3 s drops the edits; "edited" shows in amber meanwhile); playing, it
+is cued for the section's end, as LIVE's keys cue. KNOB 2 sets its steps, KNOB 3 its division (the hits keep their
+place on the beat, as the SEQ layer's DIV), KNOB 4 the tempo. SEL copies the section after itself ("VERSE 2" when
+the name has room; the copy is not the outro), ENV and LFO move it a place left or right, OCT+ makes it the outro or
+takes the mark off (one outro at most), REC held for two seconds takes it out of the song (not the only one); each
+of these writes the song to flash at once, the grid's edits with it (SAVE held writes the grid alone). Stopped
+only, up to 16 sections, user songs only (a groove says FACTORY: READ-ONLY; add it to the set in the editor to
+change it). EDIT again opens the grid, HOME LIVE. **A new song**: on SONGS, pick an empty USER slot and tap EDIT: a
+song named SONG n with one section, PART 1, the pattern playing (whatever the grid holds, with its meter), at the
+tempo, kit, swing, drum level and reverb as the knobs stand; it is loaded and its SECTIONS opens. EDIT on a row
+with a song loads it and opens its SECTIONS.
 
 **SETUP.** SLOOP's menu, its GLO pages and its mix layer in one place, a section at a time (SELECT), up to four
 rows each on KNOB 1..4 (PRESETS moves the cursor, OCT+ acts): PEDAL (channel, count-in, load the last song at

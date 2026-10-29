@@ -16,6 +16,9 @@
  *   REC     held: the clear ring, to the end: cleared (undo brings it back); live recording is gone
  *   SAVE    tapped: SONGS (from SONGS, LIVE); held on the drum grid: the save ring, the section into its song (no
  *           layer since 2026-10-27: SLOOP's sections A..D went with JAM)
+ *   EDIT    tapped: SECTIONS (2026-10-29; from SONGS: the row's song, or a new one on an empty slot): the pick into
+ *           the grid or cued, the UNSAVED warning, the section / steps / div / tempo knobs, SEL copy, ENV / LFO
+ *           move, OCT+ outro, REC held out (the delete ring), the refusals, SAVE held, EDIT again the grid
  *   DRUMS   the grid: sound / step / hit (off .. hard) / ratchet knobs, OCT taps (flam, mark), GRID <-> KIT
  * then 20000 frames of random use: every draw stays on the screen. */
 #define FELUCCA_DRUMMER 1
@@ -80,6 +83,26 @@ static void sng_eb(uint32_t k, uint32_t brk) { (void)k; (void)brk; }
 static uint32_t sec_saves;
 static int sng_save_section(void) { if (song.playing) return 1; sec_saves++; return 0; }   /* (project.c's packs and writes) */
 static int sng_lossy(void) { return 0; }
+/* the SECTIONS screen's writes (project.c sng_edit, sng_new; sng.c sng_same): counted; t_same: the grid as the song */
+static uint32_t sec_edits, sec_news, sec_last_op = 99, t_same = 1;
+static int sng_edit(uint32_t op, uint32_t k)
+{
+    (void)k;
+    if (song.playing) return 1;
+    if (sng_cur >= (int8_t)SNG_FAC0) return 5;
+    sec_edits++; sec_last_op = op;
+    if (op == SE_DUP) t_nsec++;
+    if (op == SE_DEL) t_nsec--;
+    return 0;
+}
+static int sng_new(uint32_t slot)
+{
+    if (song.playing) return 1;
+    sec_news++; sng_cur = (int8_t)slot; t_nsec = 1; live_sec = 0;
+    str_cpy(sng_ui_song, "SONG 6", 13); str_cpy(sng_ui_name, "PART 1", 13);
+    return 0;
+}
+static int sng_same(uint32_t k) { (void)k; return (int)t_same; }
 static uint32_t t_user = 1;                        /* 0: the user's slots empty (SONGS opens on FACTORY) */
 static void sng_lib_refresh(void)                  /* (sng.c's reads the flash: here slot 1 TIME, slot 3 BLACK; the
                                                     * grooves 1, 2) */
@@ -623,6 +646,84 @@ int main(int argc, char **argv)
         }
         check(!song.playing, "LIVE: PLAY again: stop");
         sng_cur = -1; sng_ui_song[0] = 0; live_sec = -1; live_req = -1; sng_ui_name[0] = 0;
+    }
+
+    /* ---- SECTIONS (2026-10-29): EDIT tapped on LIVE with a song; the section picked goes to the grid (stopped) or is
+     * cued (playing); the knobs; the edits write the song (stubbed: counted); EDIT on SONGS: a song's sections, or a
+     * new song on an empty slot */
+    {
+        uint32_t e0 = sec_edits, s0;
+        int16_t l0, d0, b0;
+        go_home(); frames(2);
+        tap(B_EDIT); frames(2);
+        check(drummer_on() && sng_view == DV_LIB && !strcmp(ui.msg, "EMPTY SLOT + EDIT: NEW"), "EDIT tapped on LIVE with no song: SONGS, how to make one");
+        go_home(); sng_cur = 0; live_sec = 0; live_req = -1; t_nsec = 3; str_cpy(sng_ui_song, "TIME", sizeof sng_ui_song);
+        sng_name(0, sng_ui_name); song.playing = 0; transport_req = 0; ui.msg_t = 0; frames(2);
+        tap(B_EDIT); frames(16);
+        check(drummer_on() && sng_view == DV_SEC, "EDIT tapped on LIVE with a song: SECTIONS");
+        ui.force = 1; frame(); ppm("sections");
+        key(key_of_white(1)); frames(2);
+        check(live_sec == 1 && !strcmp(sng_ui_name, "VERSE"), "SECTIONS, stopped: white key 2 puts section 2 in the grid");
+        t_same = 0; encs[panel.enc[EN_K1]] = 1; frame();
+        check(live_sec == 1 && !strcmp(ui.msg, "UNSAVED: AGAIN TO DROP"), "SECTIONS: the grid edited: the first move away warns");
+        encs[panel.enc[EN_K1]] = 1; frame();
+        check(live_sec == 2, "SECTIONS: the next move within 3 s drops the edits: section 3");
+        t_same = 1; encs[panel.enc[EN_K1]] = 5; frame();
+        check(live_sec == 2, "SECTIONS: KNOB 1 stops at the last section");
+        l0 = TDRUM->p[P_SLEN]; encs[panel.enc[EN_K2]] = 1; frame();
+        check(TDRUM->p[P_SLEN] == (int16_t)clamp(l0 + 1, 1, NSTEP) && !strncmp(ui.msg, "STEPS ", 6), "SECTIONS: KNOB 2 the steps");
+        encs[panel.enc[EN_K2]] = -1; frame(); TDRUM->p[P_SLEN] = l0;   /* (the turn back accelerates: as before) */
+        d0 = TDRUM->p[P_SDIV]; l0 = TDRUM->p[P_SLEN]; encs[panel.enc[EN_K3]] = 1; frame();
+        check(TDRUM->p[P_SDIV] == d0 + 1 && !strncmp(ui.msg, "DIV ", 4) && TDRUM->p[P_SLEN] != l0, "SECTIONS: KNOB 3 the division (the pattern re-gridded)");
+        encs[panel.enc[EN_K3]] = -1; frame();
+        check(TDRUM->p[P_SDIV] == d0 && TDRUM->p[P_SLEN] == l0, "SECTIONS: KNOB 3 back: the length as before");
+        b0 = song.g[G_BPM]; encs[panel.enc[EN_K4]] = 1; frame();
+        check(song.g[G_BPM] == b0 + 1, "SECTIONS: KNOB 4 the tempo");
+        encs[panel.enc[EN_K4]] = -1; frame(); song.g[G_BPM] = b0;
+        tap(B_SCL); frames(2);
+        check(sec_edits == e0 + 1u && sec_last_op == SE_DUP && t_nsec == 4u && !strcmp(ui.msg, "COPIED AFTER IT"), "SECTIONS: SEL copies the section after itself (the song written)");
+        tap(B_LFO); frames(2);
+        check(sec_last_op == SE_RIGHT && !strcmp(ui.msg, "MOVED"), "SECTIONS: LFO moves it right");
+        tap(B_ENV); frames(2);
+        check(sec_last_op == SE_LEFT && sec_edits == e0 + 3u, "SECTIONS: ENV moves it left");
+        tap(B_OCTUP); frames(2);
+        check(sec_last_op == SE_OUTRO && !strcmp(ui.msg, "NOT THE OUTRO"), "SECTIONS: OCT+ turns the outro mark (the stub's song has none)");
+        press(B_REC); frames(50);
+        check(ui.hold_kind == 1u && drummer_on() && sng_view == DV_SEC, "SECTIONS: REC held 0.8 s: the ring");
+        ui.force = 1; frame(); ppm("hold-out-section");
+        frames(100);
+        check(sec_last_op == SE_DEL && t_nsec == 3u && !strcmp(ui.msg, "SECTION TAKEN OUT") && !ui.hold_kind, "SECTIONS: REC held to the end: the section out of the song");
+        release(B_REC); frames(2);
+        check(sng_view == DV_SEC, "SECTIONS: REC let go: still SECTIONS (no load)");
+        s0 = sec_edits; t_nsec = 1; live_sec = 0;
+        press(B_REC); frames(150); release(B_REC); frames(2);
+        check(sec_edits == s0 && !strcmp(ui.msg, "THE ONLY SECTION"), "SECTIONS: the only section: not taken out");
+        t_nsec = 16; tap(B_SCL); frames(2);
+        check(sec_edits == s0 && !strcmp(ui.msg, "16 SECTIONS ALREADY"), "SECTIONS: 16 sections: no copy");
+        t_nsec = 3; live_sec = 0; tap(B_ENV); frames(2);
+        check(sec_edits == s0 && !strcmp(ui.msg, "AT THE END ALREADY"), "SECTIONS: the first section: not moved left");
+        song.playing = 1; tap(B_SCL); frames(2);
+        check(sec_edits == s0 && !strcmp(ui.msg, "STOP TO EDIT"), "SECTIONS, playing: STOP TO EDIT");
+        key(key_of_white(2)); frames(2);
+        check(live_req == 2 && pedal_at_end && live_sec == 0, "SECTIONS, playing: a white key cues the section for the end, as LIVE");
+        live_req = -1; pedal_at_end = 0; sng_ui_next[0] = 0; song.playing = 0;
+        sng_cur = (int8_t)SNG_FAC0; tap(B_SCL); frames(2);
+        check(sec_edits == s0 && !strcmp(ui.msg, "FACTORY: READ-ONLY"), "SECTIONS on a groove: read-only");
+        sng_cur = 0;
+        s0 = sec_saves; press(B_SAVE); frames(120); release(B_SAVE); frames(2);
+        check(sec_saves == s0 + 1u && sng_view == DV_SEC && !strcmp(ui.msg, "SAVED INTO THE SONG"), "SECTIONS: SAVE held saves the grid into the song");
+        tap(B_EDIT); frames(2);
+        check(on_drum_page(), "SECTIONS: EDIT tapped again: the grid");
+        tap(B_SAVE); frames(2); sng_page = 0; sng_pick = 5; tap(B_EDIT); frames(2);
+        check(sec_news == 1u && sng_cur == 5 && sng_view == DV_SEC && !strcmp(ui.msg, "NEW SONG: PART 1"), "SONGS: EDIT on an empty slot: a new song there, its SECTIONS");
+        ui.force = 1; frame(); ppm("sections-new");
+        tap(B_SAVE); frames(2); sng_pick = 2; tap(B_EDIT); frames(2);
+        check(sng_req == 3u && sng_view == DV_SEC, "SONGS: EDIT on a song: loaded, its SECTIONS");
+        sng_req = 0;
+        tap(B_HOME); frames(2);
+        check(sng_view == DV_LIVE, "SECTIONS: HOME: LIVE");
+        sng_cur = -1; sng_ui_song[0] = 0; live_sec = -1; live_req = -1; sng_ui_name[0] = 0; t_nsec = 3; ui.msg_t = 0;
+        go_home(); frames(2);
     }
 
     /* ---- the drum screen */

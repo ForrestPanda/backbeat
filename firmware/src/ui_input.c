@@ -284,6 +284,10 @@ static void layer_tap(uint32_t layer)
         open_family(FAM_FX);
         break;
     case LY_ERASE:
+        if (drummer_on() && sections_tap())               /* fm1-drummer: EDIT tapped on LIVE or SONGS: SECTIONS
+                                                           * (2026-10-29, ui_drummer.c); on SECTIONS: the grid */
+            break;
+        /* fall through */
     case LY_STEP:
         if (on_drum_page()) {                             /* DRUMS: GRID <-> KIT */
             drum_page = (uint8_t)((drum_page + 1u) % 2u);
@@ -452,7 +456,7 @@ static int layers_input(uint32_t note_edges, uint32_t *pressed, uint32_t home)
  * LIVE); on LIVE or the drum grid (EDIT) held 0.7 s a ring fills, and held on to the end the section playing is
  * written into its song (no song loaded: it says so). LIVE too since 2026-10-27 (the user: held there, on the unit,
  * it did nothing; the section is the same one, LIVE is where it plays). SONGS: a long press does nothing. */
-static int on_live_page(void) { return drummer_on() && sng_view == DV_LIVE; }
+static int on_live_page(void) { return drummer_on() && sng_view != DV_LIB; }   /* LIVE or SECTIONS: SAVE held saves */
 static void section_keep(void)
 {
     static const char *const MSG[6] = {"SAVED INTO THE SONG", "STOP TO SAVE", "SONG FULL", "SAVE ERROR", "",
@@ -474,8 +478,9 @@ static void holds_input(uint32_t pressed, uint32_t now_ms)
     static uint32_t rec_t0, save_t0;
     uint32_t rb = 1u << panel.btn[B_REC], sb = 1u << panel.btn[B_SAVE];
     uint32_t rec_down = (fm1_in.buttons & rb) != 0u, save_down = (fm1_in.buttons & sb) != 0u;
-    if (on_song_page())
-        rec_down = 0, pressed &= ~rb;                     /* (the song page: REC stores a section) */
+    if (on_song_page() && sng_view != DV_SEC)
+        rec_down = 0, pressed &= ~rb;                     /* (the song page: REC loads a song; on SECTIONS, held, it
+                                                           * takes the section out) */
     /* REC */
     if (pressed & rb) {
         rec_t0 = now_ms;
@@ -489,11 +494,15 @@ static void holds_input(uint32_t pressed, uint32_t now_ms)
     }
     if (ui.hold_kind == 1u && rec_down && now_ms - ui.hold_t0 >= HOLD_CLEAR_MS) {
         track_t *t = TDRUM;
-        undo_mark(t, (undo_sess += 4u) | 3u);
-        fm1_irq_off();
-        track_defaults_steps(t);
-        fm1_irq_on();
-        ui_message("PATTERN CLEARED");
+        if (on_song_page()) {                             /* SECTIONS: the section picked out of its song */
+            sections_edit(SE_DEL);
+        } else {
+            undo_mark(t, (undo_sess += 4u) | 3u);
+            fm1_irq_off();
+            track_defaults_steps(t);
+            fm1_irq_on();
+            ui_message("PATTERN CLEARED");
+        }
         ui.hold_kind = 0;
         rec_on = 0;                                       /* (until REC is up: nothing more) */
         ui.force = 1;

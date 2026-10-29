@@ -331,11 +331,28 @@ static union {
  * (sng.c sng_pack_section); stopped only (a flash write stops the audio). The song's copy moves: indexed again
  * at once, the drum track keeps what it holds. 0 saved, 1 playing, 2 no room (SNG_MAX), 3 flash, 4 no song, 5 a
  * factory groove (read-only: the web editor copies one into a user slot) */
+/* the staging image (n bytes) into slot's song in flash; the song loaded: its index read back from the copy there */
+static int sng_write(uint32_t slot, uint32_t n)
+{
+    const uint8_t *p;
+    sng_t tmp;
+    if (sng_check((const uint8_t *)&proj_tmp, n, &tmp) || !flash_ok || st_save(sng_obj(slot), &proj_tmp, n))
+        return 3;
+    sng_lib_dirty = 1;                                  /* (the SONGS list: its tempo, sections) */
+    if ((int32_t)slot != sng_cur)
+        return 0;
+    p = sng_fetch(slot, &n);
+    if (!p || sng_check(p, n, &tmp))
+        return 3;
+    fm1_irq_off();
+    sng = tmp;
+    fm1_irq_on();
+    return 0;
+}
+/* 0 done, 1 playing, 2 no room, 3 a flash error, 4 no song or section, 5 a groove */
 static int sng_save_section(void)
 {
     uint32_t slot = (uint32_t)sng_cur, n;
-    const uint8_t *p;
-    sng_t tmp;
     if (song.playing || transport_req)
         return 1;
     if (sng_cur < 0 || live_sec < 0)
@@ -345,16 +362,52 @@ static int sng_save_section(void)
     n = sng_pack_section((uint32_t)live_sec, (uint8_t *)&proj_tmp, sizeof proj_tmp);
     if (!n)
         return 2;
-    if (sng_check((const uint8_t *)&proj_tmp, n, &tmp) || !flash_ok || st_save(sng_obj(slot), &proj_tmp, n))
-        return 3;
-    sng_lib_dirty = 1;                                  /* (the SONGS list: its tempo, sections) */
-    p = sng_fetch(slot, &n);
-    if (!p || sng_check(p, n, &tmp))
-        return 3;
+    return sng_write(slot, n);
+}
+/* the SECTIONS screen (ui_drummer.c, 2026-10-29): op (SE_*) on section k of the song loaded, with the grid's edits
+ * (the section playing is packed as the drum track holds it first); then the drum track holds the section at its
+ * new place (the copy, the one moved, the neighbour of the one taken out) */
+static int sng_edit(uint32_t op, uint32_t k)
+{
+    uint32_t slot = (uint32_t)sng_cur, n, at = k;
+    int r;
+    if (song.playing || transport_req)
+        return 1;
+    if (sng_cur < 0 || live_sec < 0)
+        return 4;
+    if (slot >= SNG_FAC0)
+        return 5;
+    n = sng_pack_section((uint32_t)live_sec, (uint8_t *)&proj_tmp, sizeof proj_tmp);
+    if (n)
+        n = sng_image_edit((uint8_t *)&proj_tmp, n, sizeof proj_tmp, op, k, &at);
+    if (!n)
+        return 2;
+    r = sng_write(slot, n);
+    if (r)
+        return r;
     fm1_irq_off();
-    sng = tmp;
+    sng_apply(at);
+    live_sec = (int8_t)at;
     fm1_irq_on();
     return 0;
+}
+/* SONGS, an empty USER slot, EDIT tapped: a song of one section, the drum track's pattern as it plays, written there
+ * and loaded (sng_save_section's codes) */
+static int sng_new(uint32_t slot)
+{
+    uint32_t n;
+    int r;
+    if (song.playing || transport_req)
+        return 1;
+    if (slot >= SNG_FAC0)
+        return 5;
+    n = sng_pack_new(slot, (uint8_t *)&proj_tmp, sizeof proj_tmp);
+    if (!n)
+        return 2;
+    r = sng_write(slot, n);
+    if (r)
+        return r;
+    return sng_load(slot) ? 3 : 0;
 }
 #endif
 #endif

@@ -355,26 +355,66 @@ static uint32_t sng_pack_rediv(const uint8_t *q, uint32_t n, uint32_t uo, uint32
  * length, division and fill conditions; its name, flags and meter kept; its fill bar of its own, entry and break kept
  * as they are, or on the new grid when the division changed: sng_pack_rediv), into out (room bytes): its size, 0 = it
  * does not fit (SNG_MAX). Nudges and locks are not kept: SNG2 has no room for them (sng_lossy says so) */
-static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t room)
+/* the song's header bytes 16..21 as the knobs left them (2026-10-29: LIVE's tempo, kit, drum level and swing were
+ * never saved; the name and the swing grid as they were) */
+static void sng_pack_knobs(uint8_t *out)
 {
-    const track_t *t = TDRUM;
-    uint32_t j, n = SNG_HDR, len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), nf = (len + 3u) / 4u;
-    if (room > SNG_MAX)
-        room = SNG_MAX;
-    if (sng_cur < 0 || k >= sng.nsec || room < SNG_HDR)
-        return 0;
-    memcpy(out, sng.xip, SNG_HDR);
-    out[16] = (uint8_t)song.g[G_BPM];                /* the song's header as the knobs left it (2026-10-29: LIVE's tempo,
-                                                      * kit, drum level and swing were never saved; the name and the
-                                                      * swing grid as they were) */
+    out[16] = (uint8_t)song.g[G_BPM];
     out[17] = (uint8_t)(song.g[G_BPM] >> 8);
     out[18] = (uint8_t)clamp(TDRUM->p[P_E0], 0, DRUM_KITS - 1);
     out[19] = (uint8_t)clamp(song.g[G_SWING], 0, 100);
     out[20] = (uint8_t)clamp(song.g[G_DRLVL], 0, 127);
     out[21] = (uint8_t)clamp(song.g[G_DRREV], 0, 127);
+}
+/* a hit's byte: its level, ratchet, and the song's marks (fill only, not in a fill, flam) */
+static uint32_t sng_pack_hit(const dstep_t *d, uint32_t i, uint32_t l)
+{
+    return dstep_lvl(d, l) | dstep_rat(d, l) << 2 | ((drum_fonly[i] >> l) & 1u) << 4 | ((drum_fno[i] >> l) & 1u) << 5 |
+           ((drum_flam[i] >> l) & 1u) << 6;
+}
+/* the drum track as a packed section at out + n (its name, flags and meter given): the header, the conditions, the
+ * steps; its size written (a caller appending a tail writes it again). The new end, 0: no room */
+static uint32_t sng_pack_track(uint8_t *out, uint32_t n, uint32_t room, const uint8_t *name, uint32_t flags, uint32_t meter)
+{
+    const track_t *t = TDRUM;
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), nf = (len + 3u) / 4u, at = n, i;
+    if (n + SNG_SEC_HDR + nf > room)
+        return 0;
+    memcpy(out + n, name, SNG_NAME);
+    out[n + 12] = (uint8_t)len;
+    out[n + 13] = (uint8_t)(t->p[P_SDIV] % NDIV_STEP);
+    out[n + 14] = (uint8_t)flags;
+    out[n + 15] = (uint8_t)meter;
+    memcpy(out + n + SNG_SEC_HDR, t->fill, nf);
+    n += SNG_SEC_HDR + nf;
+    for (i = 0; i < len; i++) {                  /* each step: its lanes, then a byte a hit */
+        const dstep_t *d = &t->dstep[i];
+        uint32_t on = dstep_mask(d), l;
+        if (n + 2u + (uint32_t)__builtin_popcount(on) > room)
+            return 0;
+        out[n++] = (uint8_t)on;
+        out[n++] = (uint8_t)(on >> 8);
+        for (l = 0; on; on >>= 1, l++)
+            if (on & 1u)
+                out[n++] = (uint8_t)sng_pack_hit(d, i, l);
+    }
+    out[at + 16] = (uint8_t)(n - at);
+    out[at + 17] = (uint8_t)((n - at) >> 8);
+    return n;
+}
+static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t room)
+{
+    const track_t *t = TDRUM;
+    uint32_t j, n = SNG_HDR;
+    if (room > SNG_MAX)
+        room = SNG_MAX;
+    if (sng_cur < 0 || k >= sng.nsec || room < SNG_HDR)
+        return 0;
+    memcpy(out, sng.xip, SNG_HDR);
+    sng_pack_knobs(out);
     for (j = 0; j < sng.nsec; j++) {
         const uint8_t *s = sng_sec(j);
-        uint32_t size = sng_u16(s + 16), i, at = n;
+        uint32_t size = sng_u16(s + 16), at = n;
         if (j != k) {                            /* the other sections as they are */
             if (n + size > room)
                 return 0;
@@ -382,27 +422,9 @@ static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t room)
             n += size;
             continue;
         }
-        if (n + SNG_SEC_HDR + nf > room)
+        n = sng_pack_track(out, n, room, s, s[14], s[15]);   /* its name, flags (the outro, the tail's) and meter */
+        if (!n)
             return 0;
-        memcpy(out + n, s, SNG_NAME);            /* name */
-        out[n + 12] = (uint8_t)len;
-        out[n + 13] = (uint8_t)(t->p[P_SDIV] % NDIV_STEP);
-        out[n + 14] = s[14];                     /* flags (the outro) */
-        out[n + 15] = s[15];                     /* meter */
-        memcpy(out + n + SNG_SEC_HDR, t->fill, nf);
-        n += SNG_SEC_HDR + nf;
-        for (i = 0; i < len; i++) {              /* each step: its lanes, then a byte a hit */
-            const dstep_t *d = &t->dstep[i];
-            uint32_t on = dstep_mask(d), l;
-            if (n + 2u + (uint32_t)__builtin_popcount(on) > room)
-                return 0;
-            out[n++] = (uint8_t)on;
-            out[n++] = (uint8_t)(on >> 8);
-            for (l = 0; on; on >>= 1, l++)
-                if (on & 1u)
-                    out[n++] = (uint8_t)(dstep_lvl(d, l) | dstep_rat(d, l) << 2 | ((drum_fonly[i] >> l) & 1u) << 4 |
-                                         ((drum_fno[i] >> l) & 1u) << 5 | ((drum_flam[i] >> l) & 1u) << 6);
-        }
         if (s[14] & SNG_F_TAIL) {                /* its fill bar of its own, entry and break, as they are (the device
                                                   * edits the pattern), or on the new grid */
             uint32_t from = sng_walk(s, SNG_SEC_HDR + ((uint32_t)s[12] + 3u) / 4u, s[12], size);
@@ -428,10 +450,134 @@ static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t room)
                 }
             }
         }
-        out[at + 16] = (uint8_t)(n - at);        /* its size */
+        out[at + 16] = (uint8_t)(n - at);        /* its size, the tail counted */
         out[at + 17] = (uint8_t)((n - at) >> 8);
     }
     return n;
+}
+/* the drum track still is section k as packed (the SECTIONS screen: a pick away from it would drop its edits;
+ * nudges and locks are not a section's, sng_lossy) */
+static int sng_same(uint32_t k)
+{
+    const track_t *t = TDRUM;
+    const uint8_t *s, *q;
+    uint32_t len, nf, i;
+    if (sng_cur < 0 || k >= sng.nsec)
+        return 1;
+    s = sng_sec(k);
+    len = s[12];
+    nf = (len + 3u) / 4u;
+    if (len != (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP) || s[13] % NDIV_STEP != (uint32_t)t->p[P_SDIV] % NDIV_STEP ||
+        memcmp(t->fill, s + SNG_SEC_HDR, nf))
+        return 0;
+    q = s + SNG_SEC_HDR + nf;
+    for (i = 0; i < len; i++) {
+        const dstep_t *d = &t->dstep[i];
+        uint32_t on = sng_u16(q), l;
+        if (on != dstep_mask(d))
+            return 0;
+        for (q += 2, l = 0; on; on >>= 1, l++)
+            if ((on & 1u) && *q++ != sng_pack_hit(d, i, l))
+                return 0;
+    }
+    return 1;
+}
+
+/* ---- the SECTIONS screen (ui_drummer.c, 2026-10-29): the song's shape drafted on the device. project.c sng_edit
+ * stages the song as packed (sng_pack_section: the section playing as the drum track holds it) and changes the image
+ * in place: a section copied after itself ("NAME 2" when that fits; the copy is not the outro), taken out (not the
+ * only one), moved a place left or right, made the outro or no longer (one at most). b: the image, n bytes in room;
+ * *at: the section's index after. The new size, 0: refused (no room, 16 sections, the ends) */
+static uint32_t sng_img_off(const uint8_t *b, uint32_t k)   /* section k's offset in an image */
+{
+    uint32_t pos = SNG_HDR;
+    while (k--)
+        pos += sng_u16(b + pos + 16);
+    return pos;
+}
+static void sng_img_rev(uint8_t *b, uint32_t i, uint32_t j)   /* b[i..j) reversed (two neighbours swapped: three of these) */
+{
+    while (i + 1u < j) {
+        uint8_t t = b[i];
+        b[i++] = b[j - 1u];
+        b[--j] = t;
+    }
+}
+static uint32_t sng_image_edit(uint8_t *b, uint32_t n, uint32_t room, uint32_t op, uint32_t k, uint32_t *at)
+{
+    uint32_t nsec = b[22], off, size, i;
+    if (room > SNG_MAX)
+        room = SNG_MAX;
+    if (k >= nsec || n > room)
+        return 0;
+    off = sng_img_off(b, k);
+    size = sng_u16(b + off + 16);
+    *at = k;
+    switch (op) {
+    case SE_DUP:
+        if (nsec >= SNG_SECTIONS || n + size > room)
+            return 0;
+        memmove(b + off + size, b + off, n - off);    /* (the section stays where it is: the copy is it, moved up) */
+        b[off + size + 14] &= (uint8_t)~SNG_F_OUTRO;
+        for (i = 0; i < SNG_NAME && b[off + size + i]; i++)
+            ;
+        if (i + 2u <= SNG_NAME) {
+            b[off + size + i] = ' ';
+            b[off + size + i + 1u] = '2';
+        }
+        b[22] = (uint8_t)(nsec + 1u);
+        *at = k + 1u;
+        return n + size;
+    case SE_DEL:
+        if (nsec < 2u)
+            return 0;
+        memmove(b + off, b + off + size, n - off - size);
+        b[22] = (uint8_t)(nsec - 1u);
+        *at = k + 1u < nsec ? k : nsec - 2u;
+        return n - size;
+    case SE_LEFT:
+    case SE_RIGHT:
+        if (op == SE_LEFT ? !k : k + 1u >= nsec)
+            return 0;
+        {
+            uint32_t a = op == SE_LEFT ? off - sng_u16(b + sng_img_off(b, k - 1u) + 16) : off;
+            uint32_t s0 = sng_u16(b + a + 16), s1 = sng_u16(b + a + s0 + 16);
+            sng_img_rev(b, a, a + s0);
+            sng_img_rev(b, a + s0, a + s0 + s1);
+            sng_img_rev(b, a, a + s0 + s1);
+        }
+        *at = op == SE_LEFT ? k - 1u : k + 1u;
+        return n;
+    case SE_OUTRO:
+        for (i = 0, off = SNG_HDR; i < nsec; off += sng_u16(b + off + 16), i++)
+            b[off + 14] = (uint8_t)(i == k ? b[off + 14] ^ SNG_F_OUTRO : b[off + 14] & ~SNG_F_OUTRO);
+        return n;
+    default:
+        return 0;
+    }
+}
+/* a new song for slot (SONGS, an empty slot, EDIT tapped): "SONG n", the header as the knobs stand, one section
+ * PART 1 of the drum track's pattern (the meter playing). The bytes, 0: no room */
+static uint32_t sng_pack_new(uint32_t slot, uint8_t *out, uint32_t room)
+{
+    uint8_t nm[SNG_NAME];
+    if (room > SNG_MAX)
+        room = SNG_MAX;
+    if (room < SNG_HDR)
+        return 0;
+    memset(out, 0, SNG_HDR);
+    out[0] = (uint8_t)SNG_MAGIC;
+    out[1] = (uint8_t)(SNG_MAGIC >> 8);
+    out[2] = (uint8_t)(SNG_MAGIC >> 16);
+    out[3] = (uint8_t)(SNG_MAGIC >> 24);
+    str_cpy((char *)out + 4, "SONG ", 6);
+    fmt_int((char *)out + 9, (int32_t)(slot % SNG_SLOTS) + 1);
+    sng_pack_knobs(out);
+    out[22] = 1;
+    out[23] = (uint8_t)(seq_swing8 ? SNG_H_SWING8 : 0u);
+    memset(nm, 0, sizeof nm);
+    memcpy(nm, "PART 1", 6);
+    return sng_pack_track(out, SNG_HDR, room, nm, 0, clk_meter);
 }
 static int sng_lossy(void)                       /* the drum track holds what a packed section cannot keep */
 {

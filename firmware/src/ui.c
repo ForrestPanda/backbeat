@@ -163,14 +163,14 @@ static void cursor_fix(void)                           /* LEN got shorter: onto 
 
 /* the pattern's DIV set (the SEQ layer's knob, the PATTERN page, the editor's SET): the hits keep their place on the
  * beat and the length follows (seq.c pattern_rediv); over 64 steps nothing changes and the screen says so. sess: the
- * undo session to mark (0: a new one) */
-static void pattern_div_set(track_t *t, uint32_t div, uint32_t sess)
+ * undo session to mark (0: a new one). 1: changed; 0: the same, or refused */
+static int pattern_div_set(track_t *t, uint32_t div, uint32_t sess)
 {
     if (div == trk_div(t))
-        return;
+        return 0;
     if (!pattern_rediv_ok(t, div)) {
         ui_say("DIV: OVER 64 STEPS", "");
-        return;
+        return 0;
     }
     undo_mark(t, sess ? sess : (undo_sess += 4u) | 3u);
     pattern_rediv(t, div);
@@ -179,6 +179,7 @@ static void pattern_div_set(track_t *t, uint32_t div, uint32_t sess)
     if ((uint32_t)ui.step_page * 16u >= trk_len(t))
         ui.step_page = (uint8_t)((trk_len(t) - 1u) / 16u);
     ui.force = 1;
+    return 1;
 }
 
 static void open_family(uint32_t fam)
@@ -228,8 +229,8 @@ static int page_walk(int32_t s)
 }
 
 #if FELUCCA_DRUMMER
-enum { DV_LIVE, DV_LIB };                        /* the SONG page's screens: LIVE, SONGS (ui_drummer.c; SLOOP's chain
-                                                  * page, JAM's, gone 2026-10-27) */
+enum { DV_LIVE, DV_LIB, DV_SEC };                /* the SONG page's screens: LIVE, SONGS, SECTIONS (ui_drummer.c;
+                                                  * SLOOP's chain page, JAM's, gone 2026-10-27; SECTIONS 2026-10-29) */
 static void drummer_open(uint32_t view);
 static int on_song_page(void) { return !ui.home && cur_page()->scope == SC_SONG; }   /* (LIVE or SONGS) */
 #endif

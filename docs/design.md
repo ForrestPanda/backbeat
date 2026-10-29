@@ -381,11 +381,29 @@ next bar). No named sections, one song, no fill tied to a section change.
    left for a flam, an amber or red corner for the marks (ui_pages_test `live-grid`). (2, done 2026-10-29) SAVE held
    saves the song's header too: tempo, kit, swing, drum level and reverb as the knobs left them (`sng_pack_section`;
    before, the old header was copied, so a tempo set on LIVE never reached the song; the name and the swing grid
-   stay as they were; song_test). (3) A SECTIONS screen (EDIT tapped, a button with no page): the song's
-   sections as LIVE's tiles, one picked and cued so the grid edits it; its steps, division and outro on the knobs;
-   duplicate, delete, move; and on SONGS an empty slot plus EDIT makes a new song with the pattern playing as its
-   first section. To verify on hardware, step 1: the HIT knob from off through hard and back, the ratchet, OCT taps
-   and OCT held with a key on the grid.
+   stay as they were; song_test). (3, done 2026-10-29) **The SECTIONS screen** (EDIT tapped on LIVE; `ui_drummer.c`
+   DV_SEC): the song's sections as LIVE's tiles, the one picked framed and named big with its steps, division, bars,
+   meter and outro mark. The picked section is what the grid edits: stopped it goes into the drum track at once
+   (`sections_pick`: `sng_apply`, not `pedal_section`, which would start the transport); a grid edited and not saved
+   warns on the first move away and drops on the next within 3 s (`sng_same`: the drum track compared with the
+   section as packed); playing, the pick cues for the section's end as LIVE's keys. KNOB 1 the section, KNOB 2 its
+   steps, KNOB 3 its division (`pattern_div_set`), KNOB 4 the tempo. SEL copies it after itself, ENV / LFO move it,
+   OCT+ turns the outro mark, REC held takes it out (the hold ring says DELETE): `sng_edit(op, k)` in project.c
+   packs the song with the drum track as the section playing (`sng_pack_section`), changes the image in place
+   (`sng.c sng_image_edit`: memmove for the copy and the removal, three reversals for a move, one outro at most) and
+   writes the slot (`sng_write`, shared with `sng_save_section`); then the drum track holds the section at its new
+   place. On SONGS, EDIT on an empty USER slot makes a song there (`sng_new`: `sng_pack_new`, "SONG n" with the
+   knobs' header and one section PART 1 from the drum track, `sng_pack_track` factored out of the section save) and
+   loads it; on a row with a song it loads that song; either way SECTIONS opens. `memmove` added to libc.c (the
+   firmware is freestanding). Checked: ui_pages_test (renders `sections`, `sections-new`, `hold-out-section`; the
+   pick, the warning, the knobs, every edit and refusal, the new song, SAVE held, EDIT to the grid, HOME) and
+   song_test (the image edits byte for byte, the refusals, a copy written and loaded again, `sng_same` on each kind
+   of edit, the new song packed, checked and loaded). Flash: 567 020 of 581 564 B (14.5 KB left). To verify on
+   hardware (nothing of 6e is on the unit yet): the HIT knob from off through hard and back, the ratchet, OCT taps
+   and OCT held with a key on the grid (step 1); SAVE held then the song reloaded with the tempo set on LIVE (step
+   2); EDIT tapped on LIVE, a section picked while stopped and while playing, SEL / ENV / LFO / OCT+ / REC held
+   each followed by a power cycle (the song back as changed), a new song from an empty slot and its PART 1 (step
+   3).
 7. **Hardware.** Everything above on a real FM-1: the TRS jack, the cable type, the UART driver, the
    speaker. Before the first install: `sh tests/run_tests.sh` green (but for the known `fm1_alnk0_irq`
    budget failure, identical on untouched SLOOP 2.6), then SLOOP's installer page with `build/felucca.fwsc`.
@@ -1324,6 +1342,10 @@ held on LIVE, a song through the pedal, a restore of an older backup.
 SEQ layer's DIV knob on a section with hits (the hits stay on their beats, the length halves or doubles, the
 message over 64 steps), EDIT + OCT- after it, SAVE held after it (the section's fill bar and entry still right
 when the song comes back), and the editor's PATTERN page DIV with the drum grid open (the grid re-reads).
+
+**2026-10-29: drafting songs on the device (milestone 6e, all three steps).** The HIT knob, the song's header
+saved with the section, and the SECTIONS screen with new songs from an empty slot. Host tests and renders only;
+the hardware checks are listed under 6e.
 
 ## Open questions
 

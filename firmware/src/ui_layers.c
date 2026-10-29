@@ -607,7 +607,9 @@ static void hold_screen_draw(void)
     static uint32_t cache;
     uint32_t span = ui.hold_kind == 1u ? HOLD_CLEAR_MS : HOLD_SAVE_MS, el = fm1_ms - ui.hold_t0;
     int32_t ratio = el >= span ? 1000 : (int32_t)(el * 1000u / span);
-    uint32_t sig = ui.hold_kind * 7u + (uint32_t)ratio / 20u;
+    const char *ttl = ui.hold_kind != 1u ? "save" : on_song_page() ? "delete" : "clear";   /* (SECTIONS: REC held takes
+                                                                                           * the section out, 2026-10-29) */
+    uint32_t sig = ui.hold_kind * 7u + (uint32_t)ratio / 20u + (uint32_t)on_song_page() * 3u;
     char b[24];
     if (!layer_shown) {
         lcd_fill(0, 0, 240, 240, C_BLACK);
@@ -618,8 +620,7 @@ static void hold_screen_draw(void)
         return;
     cache = sig;
     cv_begin(240, 124, C_BLACK);
-    cv_text(120 - text_w(&FONT_L, ui.hold_kind == 1u ? "clear" : "save") / 2, 4, &FONT_L,
-            ui.hold_kind == 1u ? "clear" : "save", ui.hold_kind == 1u ? TE_RED : C_WHITE);
+    cv_text(120 - text_w(&FONT_L, ttl) / 2, 4, &FONT_L, ttl, ui.hold_kind == 1u ? TE_RED : C_WHITE);
     {   /* the ring: 36 px, 7 thick, filling clockwise from the top */
         int32_t a, rr, end = ratio * 1024 / 1000;
         for (a = 0; a < 1024; a += 2) {
@@ -631,7 +632,14 @@ static void hold_screen_draw(void)
     }
     cv_blit(0, 20);
     cv_begin(240, 60, C_BLACK);
-    if (ui.hold_kind == 1u) {
+    if (ui.hold_kind == 1u && on_song_page()) {          /* SECTIONS: the section picked */
+        char nm[13];
+        fm1_irq_off();
+        str_cpy(nm, sng_ui_name, sizeof nm);
+        fm1_irq_on();
+        str_cpy(b, "section ", 9);
+        te_lower(b + 8, nm, 13);
+    } else if (ui.hold_kind == 1u) {
         str_cpy(b, "the pattern", sizeof b);
     } else if (sng_cur >= 0 && live_sec >= 0) {          /* fm1-drummer: the section into its song */
         char nm[13];

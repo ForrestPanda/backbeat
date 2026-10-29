@@ -852,5 +852,81 @@ int main(int argc, char **argv)
         cc(16, 23, 0); advance(bar_len() * 2u);
     }
     printf("song: 16 sections: packed, checked (17 refused), CC 20 15 / CC 27 12 / NEXT reach them, a section saved back PASS\n");
+
+    /* ---- the SECTIONS screen (2026-10-29): the song's shape changed in the staging image (sng_image_edit: a copy
+     * after, taken out, moved, the outro), the grid as the song (sng_same), a new song from the drum track
+     * (sng_pack_new) */
+    {
+        static uint8_t img[SNG_MAX], out[SNG_MAX];
+        uint32_t n, m, at, p, e, s0, s1, s2;
+        p = song_hdr(blob[9], "SHAPE", 100, 1, 3);
+        e = song_sec(blob[9], p, "INTRO", 16, 2, 0, "x...x...x...x...", "....x.......x...", "x.x.x.x.x.x.x.x.", 0);
+        s0 = e - p;
+        e = song_sec(blob[9], e, "VERSE", 8, 1, 0, "x...x...", "..x...x.", "xxxxxxxx", 0);
+        s1 = e - p - s0;
+        blob_n[9] = song_sec(blob[9], e, "END", 16, 2, SNG_F_OUTRO, "x...............", "........x.......", "x...x...x...x...", 0);
+        s2 = blob_n[9] - e;
+        assert(!sng_check(blob[9], blob_n[9], &tmp));
+        pc(16, 9); advance(CTL); sng_poll();
+        assert(sng_cur == 9 && live_sec == 0 && !song.playing && sng_same(0));
+        n = sng_pack_section(0, img, sizeof img);
+        assert(n == blob_n[9] && !memcmp(img, blob[9], n));
+        /* a copy after: INTRO, INTRO 2 (not the outro), VERSE, END */
+        m = sng_image_edit(img, n, SNG_MAX, SE_DUP, 0, &at);
+        assert(m == n + s0 && at == 1u && !sng_check(img, m, &tmp) && tmp.nsec == 4u && tmp.off[1] == SNG_HDR + s0 &&
+               !memcmp(img + tmp.off[1] + 12, blob[9] + SNG_HDR + 12, s0 - 12u) && !memcmp(img + tmp.off[1], "INTRO 2\0\0\0\0\0", 12) &&
+               !memcmp(img + tmp.off[2], blob[9] + SNG_HDR + s0, s1 + s2));
+        /* taken out: the copy; the bytes as before */
+        m = sng_image_edit(img, m, SNG_MAX, SE_DEL, 1, &at);
+        assert(m == n && at == 1u && !memcmp(img, blob[9], n));
+        /* moved right: VERSE, INTRO, END; left again: as before */
+        m = sng_image_edit(img, n, SNG_MAX, SE_RIGHT, 0, &at);
+        assert(m == n && at == 1u && !sng_check(img, n, &tmp) && !memcmp(img + tmp.off[0], blob[9] + SNG_HDR + s0, s1) &&
+               !memcmp(img + tmp.off[1], blob[9] + SNG_HDR, s0) && !memcmp(img + tmp.off[2], blob[9] + SNG_HDR + s0 + s1, s2));
+        m = sng_image_edit(img, n, SNG_MAX, SE_LEFT, 1, &at);
+        assert(m == n && at == 0u && !memcmp(img, blob[9], n));
+        /* the outro: VERSE made it (END no longer); VERSE again: none; END again: as before */
+        m = sng_image_edit(img, n, SNG_MAX, SE_OUTRO, 1, &at);
+        assert(m == n && at == 1u && !sng_check(img, n, &tmp) && (img[tmp.off[1] + 14] & SNG_F_OUTRO) &&
+               !(img[tmp.off[2] + 14] & SNG_F_OUTRO));
+        m = sng_image_edit(img, n, SNG_MAX, SE_OUTRO, 1, &at);
+        assert(m == n && !(img[tmp.off[1] + 14] & SNG_F_OUTRO) && !(img[tmp.off[2] + 14] & SNG_F_OUTRO));
+        m = sng_image_edit(img, n, SNG_MAX, SE_OUTRO, 2, &at);
+        assert(m == n && !memcmp(img, blob[9], n));
+        /* refused: the ends, no room, a section that is not there, 16 sections */
+        assert(!sng_image_edit(img, n, SNG_MAX, SE_LEFT, 0, &at) && !sng_image_edit(img, n, SNG_MAX, SE_RIGHT, 2, &at) &&
+               !sng_image_edit(img, n, n + s0 - 1u, SE_DUP, 0, &at) && !sng_image_edit(img, n, SNG_MAX, SE_DUP, 3, &at));
+        img[22] = 16; assert(!sng_image_edit(img, n, SNG_MAX, SE_DUP, 0, &at)); img[22] = 3;
+        /* taken out at the end: the one before it is picked; the last one left: refused */
+        m = sng_image_edit(img, n, SNG_MAX, SE_DEL, 2, &at); assert(m == n - s2 && at == 1u);
+        m = sng_image_edit(img, m, SNG_MAX, SE_DEL, 1, &at); assert(m == n - s2 - s1 && at == 0u && img[22] == 1u);
+        assert(!sng_image_edit(img, m, SNG_MAX, SE_DEL, 0, &at));
+        /* as the device does it: the image written into the slot and the song loaded again */
+        m = sng_pack_section(0, img, sizeof img);
+        m = sng_image_edit(img, m, SNG_MAX, SE_DUP, 2, &at);     /* END, END 2 */
+        assert(m == n + s2 && at == 3u);
+        memcpy(blob[9], img, m); blob_n[9] = m;
+        pc(16, 9); advance(CTL); sng_poll();
+        assert(sng_cur == 9 && sng.nsec == 4u && sng_outro() == 2u);
+        fm1_irq_off(); sng_apply(at); live_sec = (int8_t)at; fm1_irq_on();
+        assert(!strcmp(sng_ui_name, "END 2") && sng_same(3));
+        /* the grid as the song: a hit, a level, the length, the division, a mark, a condition: each a difference */
+        dstep_set(&TDRUM->dstep[1], 3, LV_NORM, 0); assert(!sng_same(3)); dstep_clr(&TDRUM->dstep[1], 3); assert(sng_same(3));
+        dstep_set(&TDRUM->dstep[0], 0, LV_HARD, 0); assert(!sng_same(3)); dstep_set(&TDRUM->dstep[0], 0, LV_NORM, 0); assert(sng_same(3));
+        TDRUM->p[P_SLEN] = 15; assert(!sng_same(3)); TDRUM->p[P_SLEN] = 16; assert(sng_same(3));
+        TDRUM->p[P_SDIV] = 1; assert(!sng_same(3)); TDRUM->p[P_SDIV] = 2; assert(sng_same(3));
+        drum_flam[0] = 1; assert(!sng_same(3)); drum_flam[0] = 0; assert(sng_same(3));
+        TDRUM->fill[0] = 1; assert(!sng_same(3)); TDRUM->fill[0] = 0; assert(sng_same(3));
+        /* a new song from the drum track (END 2 as it plays; 100 bpm, kit 1 from SHAPE): SONG 11, one section PART 1 */
+        m = sng_pack_new(10, out, sizeof out);
+        assert(m == SNG_HDR + s2 && !sng_check(out, m, &tmp) && tmp.nsec == 1u && tmp.bpm == 100u && tmp.kit == 1u &&
+               !memcmp(out + 4, "SONG 11\0\0\0\0\0", 12) && !memcmp(out + SNG_HDR, "PART 1\0\0\0\0\0\0", 12) &&
+               out[SNG_HDR + 14] == 0u && !memcmp(out + SNG_HDR + 12, blob[9] + sng.off[3] + 12, s2 - 12u));
+        assert(!sng_pack_new(10, out, 40));
+        memcpy(blob[10], out, m); blob_n[10] = m;
+        pc(16, 10); advance(CTL); sng_poll();
+        assert(sng_cur == 10 && !strcmp(sng_ui_song, "SONG 11") && !strcmp(sng_ui_name, "PART 1") && sng_same(0));
+    }
+    printf("song: the SECTIONS screen's image edits (copy, out, move, outro; refusals), the grid as the song, a new song PASS\n");
     return 0;
 }

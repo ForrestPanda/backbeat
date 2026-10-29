@@ -212,7 +212,7 @@ static void t_fuzz(uint32_t nframes)
         sframe();
         scr_seen |= drummer_on() ? (sng_view == DV_LIVE ? (sng_cur >= 0 ? 1u : 2u) : 4u) : on_drum_page() ? 8u : 0u;
         if (ui.menu && ++menu_frames % 300u == 0u) { ui.menu = 0; ui.force = 1; }
-        scheck(ui.page < NPAGES && sng_view <= DV_LIB && sng_pick <= SNG_SLOTS, "fuzz: UI state in range");
+        scheck(ui.page < NPAGES && sng_view <= DV_SEC && sng_pick <= SNG_SLOTS, "fuzz: UI state in range");
         if (sfails > 20) break;
     }
     nf = f;

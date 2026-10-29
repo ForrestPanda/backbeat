@@ -9,6 +9,14 @@
  *          write; FACTORY, the grooves in the firmware (read-only; the pedal's PC 16..31). ENV / LFO: the page.
  *          (Its last row, JAM, SLOOP's sections A..D with their chain page, is gone since 2026-10-27.)
  *          It opens on the loaded song's page; with none, on USER, or FACTORY while USER is empty.
+ *   SECTIONS  EDIT tapped (2026-10-29, docs/design.md 6e: a song drafted on the device): the song's shape. The
+ *          section picked (KNOB 1, the white keys) is the one the grid edits: stopped it goes into the drum track at
+ *          once (the grid's unsaved edits: the first move warns, the next drops them), playing it is cued for the
+ *          section's end as LIVE's keys cue. KNOB 2 its steps, KNOB 3 its division (the hits keep their beat),
+ *          KNOB 4 the tempo; SEL copies it after itself, ENV / LFO move it, OCT+ makes it the outro (or not), REC
+ *          held takes it out; each of these writes the song, the grid's edits with it (SAVE held saves the grid
+ *          alone). EDIT again: the grid; HOME: LIVE. On SONGS, EDIT on a row loads that song's SECTIONS; on an
+ *          empty USER row it makes a song there, the pattern playing as its PART 1.
  * The keys go through pedal.c's own calls (the host tests cover both). A change of section brings no fill of
  * its own (as the pedal's CC 20 / 27): a fill is asked for by itself, so one press changes, two fill into it:
  *   white keys 1..16  the song's sections, when the one playing ends; with OCT+ held, on the next bar
@@ -45,6 +53,7 @@ static void lib_turn(uint32_t page)                 /* ENV / LFO: USER / FACTORY
     sng_page = (int8_t)page;
 }
 static uint32_t str_hash(uint32_t h, const char *s);
+static void sections_pick(uint32_t k);               /* SECTIONS (below): the section picked */
 static int drummer_on(void) { return on_song_page(); }
 static int drummer_keys_on(void) { return drummer_on() && !ui.menu; }
 static void drummer_open(uint32_t view)             /* (ui.c go_home, studio_open: the page is the SONG page) */
@@ -89,6 +98,10 @@ static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.
             lib_load((uint32_t)w);
         return;
     }
+    if (sng_view == DV_SEC && w >= 0) {             /* SECTIONS: the section picked (into the grid, or cued) */
+        sections_pick((uint32_t)w);
+        return;
+    }
     fm1_irq_off();                                  /* (pedal.c runs in the audio ISR) */
     if (w >= 0) {                                   /* a section, no fill of its own: when the one playing ends;
                                                      * OCT+ held: on the next bar */
@@ -111,6 +124,112 @@ static void live_say(const char *a, int32_t v)      /* a knob turned: "SWING 54"
     ui_say(a, b);
 }
 
+/* ---- SECTIONS (EDIT tapped) */
+static uint32_t sec_count(void)                     /* the song's sections (0 with none) */
+{
+    uint32_t r = sng_ready(), n = 0;
+    for (; r & 1u; r >>= 1)
+        n++;
+    return n;
+}
+static uint32_t sec_drop_t;                         /* fm1_ms | 1 while "UNSAVED" was said: a pick within 3 s drops the
+                                                     * grid's edits; 0 none */
+/* section k picked: playing (or starting), cued for the section's end as LIVE's keys; stopped, into the drum track
+ * now, the grid editing it. A grid edited and not saved: the first pick away says so, the next within 3 s goes */
+static void sections_pick(uint32_t k)
+{
+    if (sng_cur < 0 || !((sng_ready() >> k) & 1u))
+        return;
+    if (song.playing || transport_req || ci_on) {
+        fm1_irq_off();
+        pedal_section(k, PS_END);
+        fm1_irq_on();
+        return;
+    }
+    if ((int32_t)k == live_sec)
+        return;
+    if (live_sec >= 0 && !sng_same((uint32_t)live_sec) && !(sec_drop_t && fm1_ms - (sec_drop_t & ~1u) < 3000u)) {
+        sec_drop_t = fm1_ms | 1u;
+        ui_message("UNSAVED: AGAIN TO DROP");
+        return;
+    }
+    sec_drop_t = 0;
+    fm1_irq_off();
+    sng_apply(k);
+    live_sec = (int8_t)k;
+    fm1_irq_on();
+    ui.force = 1;
+}
+/* a change of the song's shape (SE_*): sng_edit writes the song, the grid's edits with it; what it said */
+static void sections_edit(uint32_t op)
+{
+    static const char *const MSG[6] = {"", "STOP TO EDIT", "NO ROOM", "SAVE ERROR", "NO SONG", "FACTORY: READ-ONLY"};
+    uint32_t n = sec_count(), k = live_sec >= 0 ? (uint32_t)live_sec : 0u;
+    int r;
+    if (sng_cur < 0 || !n) {
+        ui_message("NO SONG");
+        return;
+    }
+    if (op == SE_DEL && n < 2u) {
+        ui_message("THE ONLY SECTION");
+        return;
+    }
+    if (op == SE_DUP && n >= SNG_SECTIONS) {
+        ui_message("16 SECTIONS ALREADY");
+        return;
+    }
+    if ((op == SE_LEFT && !k) || (op == SE_RIGHT && k + 1u >= n)) {
+        ui_message("AT THE END ALREADY");
+        return;
+    }
+    r = sng_edit(op, k);
+    if (r) {
+        ui_message(MSG[r % 6]);
+        return;
+    }
+    sec_drop_t = 0;
+    ui_message(op == SE_DUP ? "COPIED AFTER IT" : op == SE_DEL ? "SECTION TAKEN OUT" : op != SE_OUTRO ? "MOVED" :
+               sng_outro() == (uint32_t)live_sec ? "THE OUTRO" : "NOT THE OUTRO");
+    ui.force = 1;
+}
+/* EDIT tapped (ui_input.c layer_tap). LIVE with a song: SECTIONS; with none: SONGS, to pick a slot. SONGS: the row's
+ * song loaded and its SECTIONS; an empty USER row: a new song there (the pattern playing as PART 1) and SECTIONS.
+ * SECTIONS: 0, the caller opens the grid */
+static int sections_tap(void)
+{
+    if (sng_view == DV_SEC)
+        return 0;
+    if (sng_view == DV_LIB) {
+        uint32_t slot = lib_page() * SNG_SLOTS + sng_pick;
+        if (!sng_lib[slot].name[0]) {
+            static const char *const MSG[6] = {"", "STOP TO MAKE A SONG", "NO ROOM", "SAVE ERROR", "", "FACTORY: READ-ONLY"};
+            int r = sng_new(slot);
+            if (r) {
+                ui_message(MSG[r % 6]);
+                return 1;
+            }
+            ui_message("NEW SONG: PART 1");
+        } else if ((int32_t)slot != sng_cur) {
+            sng_req = (uint8_t)(slot + 1u);         /* (sng_poll loads it, as a PC) */
+        }
+    } else if (sng_cur < 0) {
+        drummer_open(DV_LIB);
+        ui_message("EMPTY SLOT + EDIT: NEW");
+        return 1;
+    }
+    sng_view = DV_SEC;
+    sec_drop_t = 0;
+    if (sng_cur >= 0 && live_sec < 0 && !song.playing && !transport_req) {   /* (loaded while playing, then stopped
+                                                                              * before a section landed: its first) */
+        fm1_irq_off();
+        sng_apply(0);
+        live_sec = 0;
+        fm1_irq_on();
+    }
+    ui.force = 1;
+    return 1;
+}
+
 static void drummer_input(uint32_t pressed, uint32_t home)
 {
     int32_t s;
@@ -131,6 +250,13 @@ static void drummer_input(uint32_t pressed, uint32_t home)
             else
                 pedal_cc(PEDAL_CC_SECTION, live_sec >= 0 ? (uint32_t)live_sec : 0u);
             fm1_irq_on();
+        } else if (sng_view == DV_SEC) {            /* SECTIONS: copy, move, the outro (REC held: holds_input) */
+            if (b == B_SCL)
+                sections_edit(SE_DUP);
+            else if (b == B_ENV || b == B_LFO)
+                sections_edit(b == B_LFO ? SE_RIGHT : SE_LEFT);
+            else if (b == B_OCTUP)
+                sections_edit(SE_OUTRO);
         } else if (sng_view == DV_LIB || (sng_cur < 0 && (b == B_ENV || b == B_LFO))) {
             if (b == B_REC || b == B_OCTUP)
                 lib_load(sng_pick);
@@ -153,6 +279,29 @@ static void drummer_input(uint32_t pressed, uint32_t home)
             ui.force = 1;
         }
         panel_enc(EN_K2); panel_enc(EN_K3); panel_enc(EN_K4);   /* (no hidden action) */
+        panel_enc(EN_ALGO); panel_enc(EN_PRESET);
+        return;
+    }
+    if (sng_view == DV_SEC) {                       /* SECTIONS: the section, its steps and division, the tempo */
+        track_t *t = TDRUM;
+        if ((s = panel_enc(EN_K1)) != 0 && sng_cur >= 0) {
+            int32_t from = song.playing && live_req >= 0 ? live_req : live_sec;
+            sections_pick((uint32_t)clamp(from + s, 0, (int32_t)sec_count() - 1));
+        }
+        if ((s = panel_enc(EN_K2)) != 0) {
+            t->p[P_SLEN] = (int16_t)clamp(t->p[P_SLEN] + accel(EN_K2, s, 63), 1, NSTEP);
+            cursor_fix();
+            live_say("STEPS ", t->p[P_SLEN]);
+        }
+        if ((s = panel_enc(EN_K3)) != 0) {
+            if (pattern_div_set(t, (uint32_t)clamp(t->p[P_SDIV] + s, 0, (int32_t)NDIV_STEP - 1), 0))
+                ui_say("DIV ", N_SDIV[t->p[P_SDIV] % NDIV_STEP]);   /* (refused over 64 steps: it said so) */
+        }
+        s = panel_enc(EN_K4) + panel_enc(EN_SELECT);
+        if (s) {
+            song.g[G_BPM] = (int16_t)clamp(song.g[G_BPM] + accel(EN_K4, s, 200), GP[G_BPM].min, GP[G_BPM].max);
+            ui.bpm_t = 40;
+        }
         panel_enc(EN_ALGO); panel_enc(EN_PRESET);
         return;
     }
@@ -359,7 +508,7 @@ static void name_split(const char *s, char *a, char *b)
  * name on one, 3 and 4 rows (9..16) a line each, the number then the name cut (the section playing and the one
  * cued show whole above). The one playing lit, the one cued framed amber, the outro marked (END, or its number
  * red), a meter other than 4/4 in the tall ones; no song: the page's 16 songs, as the white keys 1..16 load them */
-static void live_tiles(uint32_t playing, int32_t req)
+static void live_tiles(uint32_t playing, int32_t req, uint32_t top)   /* (top: LIVE 144, SECTIONS 72) */
 {
     static uint32_t cache;
     char nm[13], b[8];
@@ -382,7 +531,7 @@ static void live_tiles(uint32_t playing, int32_t req)
             tile_line(2 + 60 * (int32_t)(i & 3u), 1 + 18 * (int32_t)(i >> 2), 16, b, lib[i].name,
                       there ? TE_G1 : C_BLACK, C_WHITE, TE_G3);
         }
-        cv_blit(0, 144);
+        cv_blit(0, top);
         return;
     }
     for (n = 0; n < SNG_SECTIONS && ((ready >> n) & 1u); n++)
@@ -429,7 +578,7 @@ static void live_tiles(uint32_t playing, int32_t req)
             cv_rect(x, y, f, h, C_AMB); cv_rect(x + 56 - f, y, f, h, C_AMB);
         }
     }
-    cv_blit(0, 144);
+    cv_blit(0, top);
 }
 
 /* the footer: the kit, the pedal channel and its MIDI dot (lit 300 ms after a message); a message over it */
@@ -493,7 +642,7 @@ static void live_draw(void)
     live_head(playing, beat, beats, songname);
     live_main(playing, live_sec >= 0 ? sec : "", bar, bars, ci, ci_n);
     live_state(playing, next);
-    live_tiles(playing, req);
+    live_tiles(playing, req, 144);
     live_foot();
 }
 
@@ -557,11 +706,84 @@ static void lib_draw(void)
     cv_blit(0, 222);
 }
 
+/* SECTIONS: the header (the song; "edit: grid"), the section picked big with its steps, division, bars, meter, the
+ * outro mark and "edited" while the grid differs from the song; LIVE's tiles; the keys; the dials SECTION, STEPS,
+ * DIV, TEMPO (a message over them) */
+static void sections_draw(void)
+{
+    static uint32_t cache, dials;
+    static const char *const LAB[4] = {"section", "steps", "div", "tempo"};
+    char nm[13], b[40], v[4][8];
+    const char *val[4];
+    int32_t ratio[4];
+    const track_t *t = TDRUM;
+    uint32_t playing = song.playing, n = sec_count(), k = live_sec >= 0 ? (uint32_t)live_sec : 0u;
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), div = (uint32_t)t->p[P_SDIV] % NDIV_STEP, m = sng_meter(k);
+    uint32_t bb = 12u * meter_b16(m), bars = (len * div_u48(div) + bb - 1u) / bb, outro = sng_outro() == k;
+    uint32_t edited = sng_cur >= 0 && !playing && !sng_same(k), sig;
+    int32_t req = playing ? live_req : (int32_t)k;
+    nm[0] = 0;
+    if (sng_cur >= 0)
+        sng_name(k, nm);
+    sig = studio_hash((uint32_t)(sng_cur + 1) * 7u + n * 13u + k * 17u + len * 19u + div * 23u + m * 29u + bars * 31u +
+                      outro * 37u + edited * 41u, nm);
+    sig = studio_hash(sig, sng_ui_song);
+    if (ui.force || sig != cache) {
+        cache = sig;
+        cv_begin(240, 72, C_BLACK);
+        cv_text(4, 4, &FONT_S, "SECTIONS", C_WHITE);
+        cut_name(b, sng_ui_song[0] ? sng_ui_song : "no song", &FONT_S, 100);
+        cv_text(4 + text_w(&FONT_S, "SECTIONS") + 10, 4, &FONT_S, b, TE_G3);
+        cv_text(236 - text_w(&FONT_S, "edit: grid"), 4, &FONT_S, "edit: grid", TE_G3);
+        cv_rect(0, 23, 240, 1, TE_G1);
+        if (sng_cur < 0 || !n) {
+            cv_text(4, 28, &FONT_L, "NO SONG", TE_G3);
+        } else {
+            int32_t w;
+            fmt_int(b, (int32_t)k + 1);
+            w = text_w(&FONT_L, b);
+            cv_text(4, 24, &FONT_L, b, TE_G3);
+            cut_name(b, nm, &FONT_L, 232 - w - 8);
+            cv_text(4 + w + 8, 24, &FONT_L, b, edited ? C_AMB : C_WHITE);
+            fmt_int(b, (int32_t)len);                   /* "16 steps  1/16  1 bar  4/4  outro" */
+            str_cpy(b + str_len(b), " steps  ", 9);
+            str_cpy(b + str_len(b), N_SDIV[div], 5);
+            str_cpy(b + str_len(b), "  ", 3);
+            fmt_int(b + str_len(b), (int32_t)bars);
+            str_cpy(b + str_len(b), bars == 1u ? " bar  " : " bars  ", 8);
+            meter_str(b + str_len(b), m);
+            if (outro)
+                str_cpy(b + str_len(b), "  outro", 8);
+            cv_text(4, 56, &FONT_S, b, outro ? TE_RED : TE_G4);
+            if (edited)
+                cv_text(236 - text_w(&FONT_S, "edited"), 56, &FONT_S, "edited", C_AMB);
+        }
+        cv_blit(0, 0);
+        cv_begin(240, 40, C_BLACK);                     /* the keys */
+        cv_text(4, 4, &FONT_S, "sel: copy   env/lfo: move", TE_G3);
+        cv_text(4, 22, &FONT_S, "oct+: outro   rec held: out", TE_G3);
+        cv_blit(0, 144);
+    }
+    live_tiles(playing, req, 72);
+    fmt_int(v[0], (int32_t)k + 1);
+    ratio[0] = n > 1u ? (int32_t)(k * 1000u / (n - 1u)) : 0;
+    fmt_int(v[1], (int32_t)len);
+    ratio[1] = (int32_t)(len * 1000u / NSTEP);
+    str_cpy(v[2], N_SDIV[div], sizeof v[2]);
+    ratio[2] = (int32_t)(div * 1000u / (NDIV_STEP - 1u));
+    fmt_int(v[3], song.g[G_BPM]);
+    ratio[3] = (song.g[G_BPM] - GP[G_BPM].min) * 1000 / (GP[G_BPM].max - GP[G_BPM].min);
+    val[0] = v[0]; val[1] = v[1]; val[2] = v[2]; val[3] = v[3];
+    te_dials(184, LAB, val, ratio, 5u, &dials);
+}
+
 static void drummer_draw(void)
 {
     sng_lib_refresh();                              /* (only after a load or a write: sng.c) */
     if (sng_view == DV_LIB)
         lib_draw();
+    else if (sng_view == DV_SEC)
+        sections_draw();
     else
         live_draw();
 }
