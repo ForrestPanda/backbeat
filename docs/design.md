@@ -470,6 +470,31 @@ next bar). No named sections, one song, no fill tied to a section change.
    still "Felucca MIDI 1". **Left and back the same day**: V15 (M-VAVE's `FM-1.fwsc`) installed from 985, `FM-1_015`;
    then the site's `backbeat-0.9.fwsc` (the 985 package) from V15, `FM-1_985` again, both written to 100 %. To verify
    on hardware: an install unplugged while writing and resumed (the hub's last check).
+8. **More flash for the kit (proposed 2026-10-29, not started).** The user asked whether the samples could be
+   compressed and loaded into RAM for better sound, since RAM is free and flash is not. Measured that day: the kit is
+   IMA ADPCM, 4 bits a sample at 22 kHz (11 KB a second; 399 478 B, 36 s), played in place from the memory-mapped
+   flash (`samples.c` indexes `SMP_DATA` directly), so a RAM copy frees nothing by itself; ADPCM barely compresses
+   further (zlib 9: 335 045 B, xz: 310 212 B, 16 to 22 %); and the app's free RAM (about 37 KB of the static area
+   and 150 KB of the pool, 187 KB) holds 17 s of ADPCM or 4 s of 16-bit PCM, under half the kit. A perceptual codec
+   would be the lever for quality per byte, but twelve voices of it per sample are beyond this core and decoding
+   once at load lands on the RAM limit. So: not RAM. **The room is the data region**: the user sample slots USR3
+   (0xC8000..0xDBFFF) and USR4 (0xE7000..0xFAFFF), 80 KB each, which user kits already play from in place
+   (`SMP_USER_XIP`, `usr_zone` rebased onto `SMP_DATA`), plus the holes (0xC4000..0xC7FFF, 0xDC000..0xDFFFF,
+   0xE5000..0xE6FFF). The factory kit spilling into the two slots gives about 160 KB, 15 s more ADPCM, at the cost
+   of the user's own kit pair (their call; `tools/mkkit.py` and the editor's kit upload would go, or keep one slot).
+   The build: `tools/gen_samples.py` emits the set REAL in two parts, the first in the image, the second as a slot
+   image (the FSMP header, zones with offsets) written by the installer or by `tools/fm1_sample_upload.py` with the
+   package; `samples.c` rebases the second part's zones as a user slot's; the fit in `tools/gen_realkit.py`
+   (`realkit.json` budget 412000) raised by what the slots hold, minus the headers. Three ways to spend the 15 s,
+   to pick after listening to the kit on the unit (what 22 kHz ADPCM hurts most is the top octave of the hats and
+   cymbals, and the hiss on long tails): (a) the hats and cymbals at 44 kHz (`realkit.json` per-lane rate; the
+   closed hat, open hat, ride and crash lanes are about 7 s, so 7 s more); (b) a second velocity layer or
+   round-robin takes on the snare and the hats (the machine-gun on 16th hats is what a listener hears first);
+   (c) longer crash and ride tails (3.2 and 2.0 s now, cut with a fade). The host renders (`tests/golden.txt`)
+   change with any of them: `GOLDEN_UPDATE=1`, reviewed by ear. Verify on hardware: a slot image survives a
+   song save next to it (the slots and the songs are different sectors), and the install order (the package first,
+   the slot image after: the kit must not reference the slot before it is written, so `samples.c` falls back to the
+   first part's zones when the FSMP magic is missing).
 
 The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log
