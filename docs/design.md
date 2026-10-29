@@ -1347,17 +1347,19 @@ when the song comes back), and the editor's PATTERN page DIV with the drum grid 
 saved with the section, and the SECTIONS screen with new songs from an empty slot. Host tests and renders only;
 the hardware checks are listed under 6e.
 
-**2026-10-29: LIVE's other layout, the beat big.** Asked: "a large number regarding the current beat of the total
+**2026-10-29: LIVE's other layout, the bar big.** Asked: "a large number regarding the current beat of the total
 beats in the measure like 1/4, 2/4, 3/4" and "only the current section, not all of them at once"; of five mock-ups
 (the tiles as now; the beat big under the header; the section only with the next one big; the beat and the section
 with the next one big; the beat filling the top in place of the header) the user picked the fourth with the beat
-lights taken out for bigger digits, and both layouts kept, HOME cycling them. `ui_drummer.c live_big` and
-`live_state`'s two-line form, `panel.c live_view` (bit 9 of the settings word, SLOOP's REC MODE bit, which BackBeat
-never wrote), `gfx.c`: the font's shift became a scale, the L and the new XL font (S at 5x, 80 px digits) share S's
-bitmaps and tables, so XL costs no flash of its own (`tools/gen_font.py`). ui_pages_test renders live-big,
-live-big-countin, live-big-cued. Not on the unit yet: to check by eye that the 5x digits draw within a frame at
-the beat (cv_text draws each pixel as a block; a bar of 4/4 at 120 redraws the strip twice a second), and that the
-layout comes back after a power-off.
+lights taken out for bigger digits, and both layouts kept, HOME cycling them. Seen rendered, they turned it round:
+"switch the beat counter with the bar in section counter as that's what's most useful for me for transitions", and
+the beat lights back "when there's no cue": the bar of the section is the big number (the count-in's count), the
+beat of the bar beside it, and the state area shows the lights (tall) while no section is coming. `ui_drummer.c
+live_big` and `live_state`'s big form, `panel.c live_view` (bit 9 of the settings word, SLOOP's REC MODE bit, which
+BackBeat never wrote), `gfx.c`: the font's shift became a scale, the L and the new XL font (S at 5x, 80 px digits)
+share S's bitmaps and tables, so XL costs no flash of its own (`tools/gen_font.py`). ui_pages_test renders live-big,
+live-big-nocue, live-big-countin, live-big-cued. Not on the unit yet: to check by eye that the 5x digits draw
+within a frame at a bar change, and that the layout comes back after a power-off.
 
 ## Open questions
 

@@ -533,7 +533,9 @@ int main(int argc, char **argv)
             settings_later = 0;
             tap(B_HOME); frame();
             check(live_view == 1u && sng_view == DV_LIVE && settings_later, "LIVE: HOME: the beat big (to be saved)");
-            ui.force = 1; frame(); ppm("live-big");             /* VERSE, 1/4, bar 1/x, NEXT CHORUS */
+            ui.force = 1; frame(); ppm("live-big");             /* VERSE, bar 1/2 big, beat 1/4, NEXT CHORUS */
+            sng_ui_next[0] = 0; ui.force = 1; frame(); ppm("live-big-nocue");   /* nothing coming: the beat lights */
+            str_cpy(sng_ui_next, "CHORUS", sizeof sng_ui_next);
             check((keys_lit() >> key_of_white(1)) & 1u, "LIVE, the beat big: the keys still the sections");
             tap(B_SAVE); frame(); tap(B_HOME); frame();
             check(sng_view == DV_LIVE && live_view == 1u, "SONGS: HOME: LIVE, the layout kept");
@@ -657,11 +659,11 @@ int main(int argc, char **argv)
             tap(B_PLAY); frames(3);
             ci_on = 1; ci_pedal = 8; ci_beat = 2; ci_meter = 0; pedal_seen_ms = fm1_ms;
             ui.force = 1; frame(); ppm("live-countin");
-            live_view = 1; ui.force = 1; frame(); ppm("live-big-countin");   /* the count big, amber */
+            live_view = 1; ui.force = 1; frame(); ppm("live-big-countin");   /* the count big, amber, the beat beside */
             ci_on = 0; ci_pedal = 0;
         }
         check(!song.playing, "LIVE: PLAY again: stop");
-        ui.force = 1; frame(); ppm("live-big-cued");             /* stopped: 1/4 dim, CUED: PLAY */
+        ui.force = 1; frame(); ppm("live-big-cued");             /* stopped: the bar dim, CUED: PLAY */
         live_view = 0;
         sng_cur = -1; sng_ui_song[0] = 0; live_sec = -1; live_req = -1; sng_ui_name[0] = 0;
     }
