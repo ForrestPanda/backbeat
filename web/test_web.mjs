@@ -681,6 +681,10 @@ function editorSed() {
       const w = S.setDiv(S.fbSet(S.blank("F", 32), 4), "1/32");
       ok(S.fbBars(S.fbSet(S.blank("F", 32), 4)) === 4 && w.steps === 64 && w.fillbar.steps === 64 && S.fbBars(w) === 2, "sed: a 4-bar fill bar onto 1/32: the 2 bars that fit");
     }
+    ok(S.divLoss(d, "1/8") === 1 && S.divLoss(d, "8T") === 3 && S.divLoss(d, "1/32") === 0 && S.divLoss(d, "1/16") === 0 && S.divLoss(fb, "1/8") === 2 && S.divLoss(S.blank("L", 40), "1/32") === 0,
+      "sed: the hits a change would drop counted (1/8: the hat on 16th 3; 8T: 3 of 5; finer: none; the fill bar's hat and the entry's kick too)");
+    ok(/sedDivLoss: "Changing to \{div\} drops \{n\} hit/.test(html) && /sedDivLoss: "\{div\} に変えると/.test(html) && /loss && !confirm\(t\("sedDivLoss"\)/.test(html),
+      "sed: the warning before hits are dropped, both languages, a confirm in the handler");
     ok(/sedDivLong: "cannot change the division/.test(html) && /sedDivLong: "分割数を変えられません/.test(html) && /sedDivHelp: "Changing the division keeps the hits/.test(html) && /sedDivHelp: "分割数を変えても/.test(html)
       && /sayK\("sedDivLong"\); sedRender\(\)/.test(html) && /dv\.title = t\("sedDivHelp"\)/.test(html), "sed: the message and the help in both languages, the handler refuses");
   }
