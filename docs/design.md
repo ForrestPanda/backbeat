@@ -207,7 +207,16 @@ next bar). No named sections, one song, no fill tied to a section change.
    every bar as strings at 1/16 and each section's range), 1 to 4 bars picked as the pattern, one as
    the fill by the importer's rule; Play, Send to a slot, Save JSON. The operations are a pure module
    (`SED`: norm, setHit, setCond, setSteps, split, merge, fromBars, withFill...) tested in
-   `web/test_web.mjs`; the page only draws and calls them. (2026-10-21) "Keep the song in the editor" (the
+   `web/test_web.mjs`; the page only draws and calls them. (2026-10-30, the user: "a button in the UI that merges the
+   fill bars into the pattern using the fill annotations. It will calculate the difference and apply only-fill, not in a
+   fill, always accordingly") Merge into the pattern, beside the Fill select: `SED.fbMerge`, the inverse of `fbAdd`, over
+   the pattern's last bars (the fill bar's): a hit in both plays always, one in the pattern only is marked N, one in the
+   fill bar only is written in as F (level, ratchet and flam with it); a pattern hit marked F there was never heard with a
+   fill bar (outside a fill it is out, in one the fill bar played instead), so the fill bar's step replaces it; the marks
+   before those bars stay; the fill bar goes, so CC 21 then plays the marks to the section's end. A hit in both at another
+   level, ratchet or flam keeps the pattern's, listed in the status; a fill bar longer than the pattern (a 2-bar fill on a
+   1-bar section) cannot land its first bars, their hits listed as dropped. `fbMerge(fbAdd(sec))` gives the marked section
+   back (test_web). (2026-10-21) "Keep the song in the editor" (the
    import card, on by default): with a song in the editor a Guitar Pro or MIDI file brings only its bars and
    ranges, a song JSON keeps the bars there, so a saved JSON and its file are worked on together (the saved
    JSON carries no bars). (2026-10-12) The import card opens a song JSON

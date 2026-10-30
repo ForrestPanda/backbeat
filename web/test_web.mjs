@@ -817,6 +817,30 @@ function editorFillBar() {
       ok(wf2.sec.fillbar.steps === 32 && wf2.sec.fillbar.lanes.SNARE === "x" + ".".repeat(31) && wf2.sec.fillbar.ratchets.HITOM[31] === "2" && D.fbBars(wf2.sec) === 2,
         "sed: two bars of the file as a 2-bar fill");
     }
+    {   /* the fill bar folded back into the pattern as marks (2026-10-30), the inverse of fbAdd: over the pattern's
+           last bars, a hit in both always, in the pattern only N, in the fill bar only written in as F; the fill bar
+           gone. fbMerge(fbAdd(m)) gives m back; e2's edits (the crash, the tom's ratchet) land as F hits */
+      const canon = (o) => JSON.stringify(o, (k, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort()) : v));
+      const back = D.fbMerge(a), r = D.fbMerge(e2);
+      ok(canon(back.sec) === canon(m) && !back.differ.length && !back.dropped.length && back.n.F === 2 && back.n.N === 2 && back.n.A === 8,
+        "sed: the fill bar merged into the pattern as marks gives the marked pattern it was added from (2 F, 2 N, 8 in both)");
+      ok(!("fillbar" in r.sec) && r.sec.lanes.HITOM === ".".repeat(28) + "x.x." && r.sec.ratchets.HITOM === ".".repeat(28) + "3.2." && r.sec.fills.HITOM === ".".repeat(28) + "F.F."
+        && r.sec.lanes.CRASH === ".".repeat(31) + "X" && r.sec.fills.CRASH === ".".repeat(31) + "F" && r.sec.fills.HAT === ".".repeat(28) + "N.N." && r.sec.lanes.HAT === m.lanes.HAT
+        && r.sec.fills.KICK === "N" + ".".repeat(31) && r.sec.lanes.KICK === m.lanes.KICK && r.n.F === 3 && r.n.N === 2 && r.n.A === 8 && D.fbMerge(m).sec === m,
+        "sed: ..the fill bar's own hits written in as F with their ratchets, the pattern's hits it leaves out N, the ones in both unmarked, the marks before its bars kept; nothing to merge without one");
+      const q = D.norm({ name: "Q", steps: 16, div: "1/16", lanes: { SNARE: "....x.......x...", KICK: "x..............." }, fills: { SNARE: "............F..." }, flams: { KICK: "f..............." },
+                         fillbar: { steps: 16, lanes: { SNARE: "....X...........", KICK: "x..............." } } });
+      const rq = D.fbMerge(q);
+      ok(rq.sec.lanes.SNARE === "....x..........." && !rq.sec.fills && rq.sec.flams.KICK === "f..............." && rq.differ.join() === "SNARE 5,KICK 1" && rq.n.A === 2 && !rq.n.F && !rq.n.N,
+        "sed: a hit in both at another level or flam keeps the pattern's and is listed; the pattern's F hit the fill bar does not play is gone");
+      const w = D.norm({ name: "W", steps: 16, div: "1/16", lanes: { KICK: "x..............." }, fillbar: { steps: 32, lanes: { CRASH: "X" + ".".repeat(31), KICK: ".".repeat(16) + "x..............." } } });
+      const rw = D.fbMerge(w);
+      ok(rw.sec.lanes.KICK === "x..............." && !("CRASH" in rw.sec.lanes) && rw.dropped.join() === "CRASH 1" && rw.n.A === 1,
+        "sed: a fill bar longer than the pattern: its first bars cannot land, their hits listed as dropped");
+      ok(/<button id="sed-fbmerge" data-t="sedFbMerge" hidden>/.test(html) && /SED\.fbMerge\(sec\)/.test(html) && /\$\("sed-fbmerge"\)\.hidden = !sec\.fillbar/.test(html)
+        && /sedFbMerge: "Merge into the pattern"/.test(html) && /sedFbMerged: "/.test(html) && /sayK\("sedFbMerged"/.test(html),
+        "sed: the page has the Merge button beside the Fill select, shown with a fill bar, calling fbMerge and saying the counts");
+    }
     ok(/<select id="sed-fillbar">/.test(html) && /sedFill: "Fill"/.test(html) && /SED\.fbSet\(sec, \+\$\("sed-fillbar"\)\.value\)/.test(html) && /cls: "fb", what: "fill"/.test(html) && /cls = `c \$\{b\.cls\}`/.test(html) && /\.sedgrid \.sep\.fb::before/.test(html) && /SED\.fbSetHit\(sec, l, i, h, r, f\)/.test(html),
       "sed: the page has the fill's bars select, its columns after the gap, its cells on the pen");
   }

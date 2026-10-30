@@ -163,7 +163,9 @@ localhost (Chrome on Linux keeps Web Bluetooth behind a flag; Firefox and Safari
 length (at most 64 steps, 4 bars at 1/16: a section is a groove that repeats, `docs/design.md` says why), the division (changing it keeps the hits in their place on the
 beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between, the fill bar, entry and break follow; a pattern that would pass 64 steps is refused), the time signature, the outro, split and merge, the hits on a grid with levels, ratchets, flams (a grace note
 before the hit) and fill marks, the fill
-conditions, columns copied and pasted, undo and redo (Ctrl+Z / Ctrl+Y), keys for the pen (n h s g x, r for the
+conditions, the section's fill of its own (the Fill select, 1 to 4 bars, started as the pattern's last bars the way a fill plays them;
+**Merge into the pattern** folds it back into those bars as fill marks and removes it: a hit in both plays always, one in the pattern only is marked
+not in a fill, one in the fill only is written in as only in a fill, so the fill then plays the marks to the section's end), columns copied and pasted, undo and redo (Ctrl+Z / Ctrl+Y), keys for the pen (n h s g x, r for the
 ratchet, l for the flam, m for the mark, [ ] between sections), a lane's sound on a click of its name, "Play this section" to
 loop it, and, for a song read from Guitar Pro, the file's bars to pick as a section's pattern or its fill (with a song
 already in the editor, a Guitar Pro or MIDI file brings only its bars, and a song JSON opened keeps them: work from a
