@@ -2,25 +2,28 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Felucca UI drawing: status bar (top), columns + gauges, graphs, focus readout,
  * footer (steps + the drum kit / page). */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 static void draw_menu(void);
 static uint32_t str_hash(uint32_t h, const char *s);
 
 /* --------------------------------------------------------- drawing --- */
 /* at most 5 characters, and no wider than maxw */
-static void fit(char *d, const char *src, const felucca_font_t *f, int32_t maxw)
+UI_SMALL static void fit(char *d, const char *src, const felucca_font_t *f, int32_t maxw)
 {
     str_cpy(d, src, 6);
     while (d[0] && text_w(f, d) > maxw)
         d[str_len(d) - 1u] = 0;
 }
 
-static int32_t batt_level(void)                         /* ADC ch3 thresholds */
+UI_SMALL static int32_t batt_level(void)                         /* ADC ch3 thresholds */
 {
     return song.batt_raw >= 591 ? 3 : song.batt_raw >= 561 ? 2 : song.batt_raw >= 531 ? 1 : 0;
 }
 /* charging (a USB host powers us; there is no charger status line): bars fill 1, 2, 3
  * every 0.6 s, so the header is redrawn twice a second at most; else the level */
-static int32_t batt_shown(void)
+UI_SMALL static int32_t batt_shown(void)
 {
     if (usb.config && !usb.suspended)
         return 1 + (int32_t)((fm1_ms / 600u) % 3u);
@@ -28,7 +31,7 @@ static int32_t batt_shown(void)
 }
 
 /* top bar: transport, BPM, octave | USB, battery, CPU; messages replace it */
-static void draw_head(void)
+UI_SMALL static void draw_head(void)
 {
     char b[16];
     uint32_t i;
@@ -116,7 +119,7 @@ static void draw_head(void)
 }
 /* full redraw: the strips (head, columns, graph, foot) cover the rest, so only
  * the space between them is cleared, then the rules are drawn */
-static void draw_frame(void)
+UI_SMALL static void draw_frame(void)
 {
     uint32_t i;
     lcd_fill(0, H_HEAD, 240, Y_LABEL - H_HEAD, C_BLACK);
@@ -133,7 +136,7 @@ static void draw_frame(void)
 /* one column: [icon] LABEL / value unit / gauge, redrawn only when it changed.
  * ratio: 0..1000 for the gauge, -1 = no gauge. icon: ICON_* (icons.c), ICON_AUTO = by label */
 #define LABEL_X (FELUCCA_ICONS ? ICON_CELL + ICON_GAP : 0)
-static void draw_column(uint32_t c, const char *label, const char *val, const char *unit, uint16_t vc,
+UI_SMALL static void draw_column(uint32_t c, const char *label, const char *val, const char *unit, uint16_t vc,
                         int32_t ratio, uint32_t icon)
 {
     char l[8], v[8], u[8], key[32];
@@ -188,7 +191,7 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
 /* Matches voice.c: attack is linear, decay and release are exponential
  * (env += (target - env) * k each tick, ~99 % after the set time). Time
  * axis is the parameter value (the times themselves are exponential). */
-static void graph_steps(const track_t *t, uint16_t c)
+UI_SMALL static void graph_steps(const track_t *t, uint16_t c)
 {
     uint32_t i, len = (uint32_t)t->p[P_SLEN];
     for (i = 0; i < NSTEP; i++) {                    /* 4 rows of 16 thin bars */
@@ -203,7 +206,7 @@ static void graph_steps(const track_t *t, uint16_t c)
             cv_rect(x - 1, y + 16, 3, 3, C_WHITE);
     }
 }
-static uint32_t steps_hash(const track_t *t)          /* the pattern's lanes, levels and ratchets */
+UI_SMALL static uint32_t steps_hash(const track_t *t)          /* the pattern's lanes, levels and ratchets */
 {
     uint32_t h = 2166136261u, i;
     const uint8_t *b = (const uint8_t *)t->dstep;
@@ -212,7 +215,7 @@ static uint32_t steps_hash(const track_t *t)          /* the pattern's lanes, le
     return h;
 }
 
-static uint32_t str_hash(uint32_t h, const char *s)
+UI_SMALL static uint32_t str_hash(uint32_t h, const char *s)
 {
     while (*s)
         h = (h ^ (uint8_t)*s++) * 16777619u;
@@ -220,11 +223,11 @@ static uint32_t str_hash(uint32_t h, const char *s)
 }
 
 /* a page drawn with its values large (graph_big) */
-static int big_page(const page_t *pg)            /* (2.6: the INSERT pages too: their middle stayed empty) */
+UI_SMALL static int big_page(const page_t *pg)            /* (2.6: the INSERT pages too: their middle stayed empty) */
 {
     return (pg->graph == GR_NONE || pg->graph == GR_INS) && pg->scope != SC_SONG && pg->scope != SC_DRUM;
 }
-static uint32_t graph_signature(void)
+UI_SMALL static uint32_t graph_signature(void)
 {
     const page_t *pg = cur_page();
     const track_t *t = TDRUM;
@@ -248,7 +251,7 @@ static uint32_t graph_signature(void)
 /* SLOOP 2.4: a page without a graph (EDIT, VOICE, the DEST pages, GLOBAL, MASTER, SYSTEM...): its values
  * large in the empty space, 2 x 2 as the knobs (KNOB 1 2 / KNOB 3 4), the one turned in white; one value
  * alone (FILTER) across the width. The columns (draw_columns, drawn first) fill ui.big_* */
-static void graph_big(void)
+UI_SMALL static void graph_big(void)
 {
     uint32_t c, n = 0;
     for (c = 0; c < 4u; c++)
@@ -272,7 +275,7 @@ static void graph_big(void)
     }
 }
 
-static void draw_graph(void)
+UI_SMALL static void draw_graph(void)
 {
     const page_t *pg = cur_page();
     const track_t *t = TDRUM;
@@ -312,7 +315,7 @@ static void draw_graph(void)
     ui.graph_top = (uint8_t)top;
 }
 
-static void draw_foot(void)
+UI_SMALL static void draw_foot(void)
 {
     char s[48], pn[16], en[10], ti[20];
     const track_t *t = TDRUM;
@@ -386,7 +389,7 @@ static void draw_foot(void)
     cv_text(236 - text_w(&FONT_S, ti), 20, &FONT_S, ti, C_GRAY);
     cv_blit(0, Y_FOOT);
 }
-static void draw_columns(void)
+UI_SMALL static void draw_columns(void)
 {
     uint32_t c;
     char val[12];
@@ -428,7 +431,7 @@ static void draw_columns(void)
 
 /* the UI's timers, once a frame whatever the screen (a message, the BPM highlight, an armed GO, the
  * white value of the knob just turned) */
-static void ui_timers(void)
+UI_SMALL static void ui_timers(void)
 {
     if (ui.msg_t)
         ui.msg_t--;
@@ -440,7 +443,7 @@ static void ui_timers(void)
         ui.hot_t--;
 }
 
-static void ui_draw(void)
+UI_SMALL static void ui_draw(void)
 {
     ui.frame++;
     pads_tick();

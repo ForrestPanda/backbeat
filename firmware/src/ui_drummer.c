@@ -39,10 +39,13 @@
  * With no song loaded the white keys 1..16 load the page's songs 1..16 (LIVE shows them; ENV / LFO the page). On
  * SONGS (9 rows at a time, following the row picked): KNOB 1 / SELECT a row, REC or OCT+ loads it (and LIVE again),
  * a white key 1..16 loads that song of the page. */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 static uint8_t sng_view = DV_LIVE;                  /* DV_* (ui.c) */
 static uint8_t sng_pick;                            /* SONGS: the row of the page (0..15) */
 static int8_t sng_page = -1;                        /* 0 USER, 1 FACTORY; -1 not chosen yet: lib_page */
-static uint32_t lib_page(void)                      /* the page shown: the one chosen, or FACTORY while USER is empty */
+UI_SMALL static uint32_t lib_page(void)                      /* the page shown: the one chosen, or FACTORY while USER is empty */
 {
     uint32_t i;
     if (sng_page >= 0)
@@ -52,7 +55,7 @@ static uint32_t lib_page(void)                      /* the page shown: the one c
             return 0;
     return 1;
 }
-static void lib_turn(uint32_t page)                 /* ENV / LFO: USER / FACTORY */
+UI_SMALL static void lib_turn(uint32_t page)                 /* ENV / LFO: USER / FACTORY */
 {
     if (page != lib_page())
         ui.force = 1;
@@ -62,7 +65,7 @@ static uint32_t str_hash(uint32_t h, const char *s);
 static void sections_pick(uint32_t k);               /* SECTIONS (below): the section picked */
 static int drummer_on(void) { return on_song_page(); }
 static int drummer_keys_on(void) { return drummer_on() && !ui.menu; }
-static void drummer_open(uint32_t view)             /* (ui.c go_home, studio_open: the page is the SONG page) */
+UI_SMALL static void drummer_open(uint32_t view)             /* (ui.c go_home, studio_open: the page is the SONG page) */
 {
     sng_view = (uint8_t)view;
     sng_pick = (uint8_t)(sng_cur >= 0 ? (uint32_t)sng_cur % SNG_SLOTS : 0u);
@@ -76,12 +79,12 @@ static void drummer_load(uint32_t k)                /* a song (0..31); then LIVE
     sng_view = DV_LIVE;
     ui.force = 1;
 }
-static void lib_load(uint32_t row)                  /* a row of the page shown: its song */
+UI_SMALL static void lib_load(uint32_t row)                  /* a row of the page shown: its song */
 {
     drummer_load(lib_page() * SNG_SLOTS + (row % SNG_SLOTS));
 }
 
-static int32_t key_black(uint32_t k)             /* a key (0..26, from F3) -> its black key index 0.., -1 = a white key */
+UI_SMALL static int32_t key_black(uint32_t k)             /* a key (0..26, from F3) -> its black key index 0.., -1 = a white key */
 {
     static const int8_t B[12] = {-1, 0, -1, 1, -1, 2, -1, -1, 3, -1, 4, -1};   /* from F: F# G# A# C# D# */
     int32_t i = B[k % 12u];
@@ -123,7 +126,7 @@ static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.
     fm1_irq_on();
 }
 
-static void live_say(const char *a, int32_t v)      /* a knob turned: "SWING 54" in the footer */
+UI_SMALL static void live_say(const char *a, int32_t v)      /* a knob turned: "SWING 54" in the footer */
 {
     char b[8];
     fmt_int(b, v);
@@ -131,7 +134,7 @@ static void live_say(const char *a, int32_t v)      /* a knob turned: "SWING 54"
 }
 
 /* ---- SECTIONS (EDIT tapped) */
-static uint32_t sec_count(void)                     /* the song's sections (0 with none) */
+UI_SMALL static uint32_t sec_count(void)                     /* the song's sections (0 with none) */
 {
     uint32_t r = sng_ready(), n = 0;
     for (; r & 1u; r >>= 1)
@@ -142,7 +145,7 @@ static uint32_t sec_drop_t;                         /* fm1_ms | 1 while "UNSAVED
                                                      * grid's edits; 0 none */
 /* section k picked: playing (or starting), cued for the section's end as LIVE's keys; stopped, into the drum track
  * now, the grid editing it. A grid edited and not saved: the first pick away says so, the next within 3 s goes */
-static void sections_pick(uint32_t k)
+UI_SMALL static void sections_pick(uint32_t k)
 {
     if (sng_cur < 0 || !((sng_ready() >> k) & 1u))
         return;
@@ -167,7 +170,7 @@ static void sections_pick(uint32_t k)
     ui.force = 1;
 }
 /* a change of the song's shape (SE_*): sng_edit writes the song, the grid's edits with it; what it said */
-static void sections_edit(uint32_t op)
+UI_SMALL static void sections_edit(uint32_t op)
 {
     static const char *const MSG[6] = {"", "STOP TO EDIT", "NO ROOM", "SAVE ERROR", "NO SONG", "FACTORY: READ-ONLY"};
     uint32_t n = sec_count(), k = live_sec >= 0 ? (uint32_t)live_sec : 0u;
@@ -201,7 +204,7 @@ static void sections_edit(uint32_t op)
 /* EDIT tapped (ui_input.c layer_tap). LIVE with a song: SECTIONS; with none: SONGS, to pick a slot. SONGS: the row's
  * song loaded and its SECTIONS; an empty USER row: a new song there (the pattern playing as PART 1) and SECTIONS.
  * SECTIONS: 0, the caller opens the grid */
-static int sections_tap(void)
+UI_SMALL static int sections_tap(void)
 {
     if (sng_view == DV_SEC)
         return 0;
@@ -236,7 +239,7 @@ static int sections_tap(void)
     return 1;
 }
 
-static void drummer_input(uint32_t pressed, uint32_t home)
+UI_SMALL static void drummer_input(uint32_t pressed, uint32_t home)
 {
     int32_t s;
     uint32_t id;
@@ -339,7 +342,7 @@ static void drummer_input(uint32_t pressed, uint32_t home)
 }
 
 /* ------------------------------------------------------------------ draw --- */
-static void cut_name(char *d, const char *s, const felucca_font_t *f, int32_t w)   /* s cut to w pixels */
+UI_SMALL static void cut_name(char *d, const char *s, const felucca_font_t *f, int32_t w)   /* s cut to w pixels */
 {
     uint32_t n = 0;
     d[0] = 0;
@@ -353,7 +356,7 @@ static void cut_name(char *d, const char *s, const felucca_font_t *f, int32_t w)
         n++;
     }
 }
-static void meter_str(char *b, uint32_t m)          /* "7/8" */
+UI_SMALL static void meter_str(char *b, uint32_t m)          /* "7/8" */
 {
     fmt_int(b, (int32_t)meter_num(m));
     str_cpy(b + str_len(b), "/", 2);
@@ -362,7 +365,7 @@ static void meter_str(char *b, uint32_t m)          /* "7/8" */
 
 /* the header: the song (its slot under it), the tempo big, the transport, the beat lights of the bar's meter (52 px;
  * without the lights, the beat big below them, 40) */
-static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, const char *songname, uint32_t lights)
+UI_SMALL static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, const char *songname, uint32_t lights)
 {
     static uint32_t cache;
     char b[16];
@@ -397,7 +400,7 @@ static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, const cha
 /* the bar big (LIVE's other layout, HOME on LIVE; 2026-10-29): under the header, the section in large letters, the
  * bar of the section as "3/8" five times the small font's size (the count-in's count amber; stopped, the first bar
  * dim) with the beat of the bar at its right, then the progress ticked per bar; the state follows (live_state) */
-static void live_big(uint32_t playing, const char *sec, uint32_t beat, uint32_t beats, uint32_t bar, uint32_t bars,
+UI_SMALL static void live_big(uint32_t playing, const char *sec, uint32_t beat, uint32_t beats, uint32_t bar, uint32_t bars,
                      uint32_t ci, uint32_t ci_n)
 {
     static uint32_t cache;
@@ -442,7 +445,7 @@ static void live_big(uint32_t playing, const char *sec, uint32_t beat, uint32_t 
 }
 
 /* the section: its name big; the bar it is in with a progress ticked per bar; the count-in's beats */
-static void live_main(uint32_t playing, const char *sec, uint32_t bar, uint32_t bars, uint32_t ci, uint32_t ci_n)
+UI_SMALL static void live_main(uint32_t playing, const char *sec, uint32_t bar, uint32_t bars, uint32_t ci, uint32_t ci_n)
 {
     static uint32_t cache;
     char b[24];
@@ -487,7 +490,7 @@ static void live_main(uint32_t playing, const char *sec, uint32_t bar, uint32_t 
 /* what comes: the pedal's request, the fill, the ending (coloured); nothing: the section's meter and bars. One line
  * of 20 px at 124; with the bar big (big), 52 px at 164: the word, then the section coming in large letters; while
  * no section is coming, the beat lights of the bar's meter (tall) under the line */
-static void live_state(uint32_t playing, const char *next, uint32_t big, uint32_t beat, uint32_t beats)
+UI_SMALL static void live_state(uint32_t playing, const char *next, uint32_t big, uint32_t beat, uint32_t beats)
 {
     static uint32_t cache;
     char b[24];
@@ -557,7 +560,7 @@ static void live_state(uint32_t playing, const char *next, uint32_t big, uint32_
 }
 
 /* a tile of one line (a short tile): the number, then the name cut to what is left */
-static void tile_line(int32_t x, int32_t y, int32_t h, const char *num, const char *name, uint16_t bg, uint16_t fg,
+UI_SMALL static void tile_line(int32_t x, int32_t y, int32_t h, const char *num, const char *name, uint16_t bg, uint16_t fg,
                       uint16_t numc)
 {
     char cut[13];
@@ -570,7 +573,7 @@ static void tile_line(int32_t x, int32_t y, int32_t h, const char *num, const ch
     }
 }
 /* a name of up to 12 on two lines of 6: broken at the last space of its first 7 characters, else at 6 */
-static void name_split(const char *s, char *a, char *b)
+UI_SMALL static void name_split(const char *s, char *a, char *b)
 {
     uint32_t n = str_len(s), k = n <= 6u ? n : 6u, i, skip = 0;
     if (n > 6u)
@@ -593,7 +596,7 @@ static void name_split(const char *s, char *a, char *b)
  * name on one, 3 and 4 rows (9..16) a line each, the number then the name cut (the section playing and the one
  * cued show whole above). The one playing lit, the one cued framed amber, the outro marked (END, or its number
  * red), a meter other than 4/4 in the tall ones; no song: the page's 16 songs, as the white keys 1..16 load them */
-static void live_tiles(uint32_t playing, int32_t req, uint32_t top)   /* (top: LIVE 144, SECTIONS 72) */
+UI_SMALL static void live_tiles(uint32_t playing, int32_t req, uint32_t top)   /* (top: LIVE 144, SECTIONS 72) */
 {
     static uint32_t cache;
     char nm[13], b[8];
@@ -667,7 +670,7 @@ static void live_tiles(uint32_t playing, int32_t req, uint32_t top)   /* (top: L
 }
 
 /* the footer: the kit, the pedal channel and its MIDI dot (lit 300 ms after a message); a message over it */
-static void live_foot(void)
+UI_SMALL static void live_foot(void)
 {
     static uint32_t cache;
     char b[16];
@@ -698,7 +701,7 @@ static void live_foot(void)
     cv_blit(0, 216);
 }
 
-static void live_draw(void)
+UI_SMALL static void live_draw(void)
 {
     char songname[13], sec[13], next[13];
     uint32_t playing = song.playing, p, m, beats, beat = 0xFFu, ci = 0, ci_n = 0, bar = 0, bars = 1;
@@ -739,7 +742,7 @@ static void live_draw(void)
 }
 
 /* SONGS: a page's 16 songs, the row picked white; the pages as tabs in the header (the one shown white) */
-static void lib_draw(void)
+UI_SMALL static void lib_draw(void)
 {
     static uint32_t cache;
     char b[16];
@@ -801,7 +804,7 @@ static void lib_draw(void)
 /* SECTIONS: the header (the song; "edit: grid"), the section picked big with its steps, division, bars, meter, the
  * outro mark and "edited" while the grid differs from the song; LIVE's tiles; the keys; the dials SECTION, STEPS,
  * DIV, TEMPO (a message over them) */
-static void sections_draw(void)
+UI_SMALL static void sections_draw(void)
 {
     static uint32_t cache, dials;
     static const char *const LAB[4] = {"section", "steps", "div", "tempo"};
@@ -869,7 +872,7 @@ static void sections_draw(void)
     te_dials(184, LAB, val, ratio, 5u, &dials);
 }
 
-static void drummer_draw(void)
+UI_SMALL static void drummer_draw(void)
 {
     sng_lib_refresh();                              /* (only after a load or a write: sng.c) */
     if (sng_view == DV_LIB)

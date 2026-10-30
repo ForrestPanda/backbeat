@@ -2,9 +2,12 @@
 /* Application-level recovery, not a second firmware bank. The intact app's
  * startup, RAM flash driver and USB stack are still required. TIMER5, audio,
  * settings, samples, projects, editor and normal UI are never started here. */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 static uint32_t recovery_last, recovery_fraction, recovery_usb_last;
 
-static void recovery_poll(void)
+UI_SMALL static void recovery_poll(void)
 {
     uint32_t now = fm1_ticks(), elapsed = now - recovery_last;
     recovery_last = now;
@@ -20,7 +23,7 @@ static void recovery_poll(void)
     }
 }
 
-static void recovery_step(void)
+UI_SMALL static void recovery_step(void)
 {
     recovery_poll();
     usb_retry(fm1_ms);
@@ -38,9 +41,17 @@ static void recovery_step(void)
     }
 }
 
-static int recovery_key(void)
+/* the key matrix reads only while PA2, the backlight (active low), is driven low: the ROM and the boot loaders leave
+ * it undriven, and lcd_init comes after this scan, so OCT- held at power-on was never seen and the rescue screen never
+ * opened this way (SLOOP 2.6's bug, fixed in 2.7.2 and measured there on an FM-1; taken 2026-10-30). The backlight
+ * comes on ~50 ms earlier. The hosts' recovery test defines RECOVERY_KEYS_ON itself */
+#ifndef RECOVERY_KEYS_ON
+#define RECOVERY_KEYS_ON() fm1_lcd_backlight_on()
+#endif
+UI_SMALL static int recovery_key(void)
 {
     uint32_t start = fm1_ticks();
+    RECOVERY_KEYS_ON();
     fm1_input_init();
     do {
         fm1_wdt_feed();
@@ -49,7 +60,7 @@ static int recovery_key(void)
     return bootguard_manual(fm1_in.buttons);
 }
 
-static void recovery_main(void)
+UI_SMALL static void recovery_main(void)
 {
     recovery_active = 1;
     bootguard.pending = 2;                   /* WDT/exception here falls back to ROM */

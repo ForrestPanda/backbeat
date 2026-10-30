@@ -1581,13 +1581,37 @@ static void __attribute__((noinline)) midi_cc(track_t *t, uint32_t cc, uint32_t 
  * (the delay and arp follow it). START restarts from the top, CONTINUE carries on where it
  * stopped, STOP stops. With no pulse for 0.5 s, the internal tempo takes over (PLAY works as ever). */
 #define MCLK_PULSE_U (BEAT_U / 24u)
+#define MCLK_NB 8u                  /* the tempo: the mean of the last 8 beats (SLOOP 2.7.2, taken 2026-10-30) */
 static struct {
     uint32_t pos, done;          /* units: the master's position (pulses since START), ours */
     uint32_t last_ms, iv_ms;     /* the last pulse, the interval between pulses (smoothed) */
     uint32_t beat_ms;            /* when pulse 0 of the last 24 came: the tempo */
     uint8_t have, n24;           /* a pulse since START; pulses towards the next tempo reading */
     uint8_t alive;               /* pulses are coming (from the SYNC source) */
+    uint8_t nb, bi;              /* the last beats' lengths (bdt[], up to MCLK_NB, bi the next) */
+    uint16_t bdt[MCLK_NB];
 } mclk;
+
+/* the tempo shown and played from the clock (SLOOP 2.8's "steadier external MIDI clock"): the mean of the last
+ * MCLK_NB beats, in tenths, taken when it moved 0.8 BPM or more (or while the window fills), so a master whose beats
+ * jitter a few ms no longer flickers BPM; a beat 5 BPM or more away from the tempo set starts the window over (a real
+ * tempo change lands on the next beat, not eight later). dt: the beat's length in ms, 250 .. 1500 */
+static void mclk_tempo(uint32_t dt)
+{
+    uint32_t k, sum = 0, t10;
+    int32_t one = (int32_t)((60000u + dt / 2u) / dt), cur = song.g[G_BPM];
+    if (mclk.nb && (one - cur >= 5 || cur - one >= 5))
+        mclk.nb = 0;
+    mclk.bdt[mclk.bi] = (uint16_t)dt;
+    mclk.bi = (uint8_t)((mclk.bi + 1u) % MCLK_NB);
+    if (mclk.nb < MCLK_NB)
+        mclk.nb++;
+    for (k = 0; k < mclk.nb; k++)
+        sum += mclk.bdt[(mclk.bi + MCLK_NB - 1u - k) % MCLK_NB];
+    t10 = (600000u * mclk.nb + sum / 2u) / sum;    /* (<= 8 x 600000 + 6000: fits 32 bits) */
+    if (mclk.nb < MCLK_NB || (int32_t)t10 - cur * 10 >= 8 || cur * 10 - (int32_t)t10 >= 8)
+        song.g[G_BPM] = (int16_t)clamp((int32_t)((t10 + 5u) / 10u), 40, 240);
+}
 
 static int mclk_on(void)                          /* the clock drives the sequencer */
 {
@@ -1620,13 +1644,14 @@ static void mclk_event(uint32_t st, uint32_t src)  /* a realtime message; src 1 
     }
     if (!mclk.alive || now - mclk.last_ms >= 500u) {   /* (re)started: count a fresh beat */
         mclk.n24 = 0;
+        mclk.nb = 0;
         mclk.beat_ms = now;
-    } else if (++mclk.n24 == 24u) {                /* a beat: the tempo */
+    } else if (++mclk.n24 == 24u) {                /* a beat: the tempo (the mean of the last beats) */
         uint32_t dt = now - mclk.beat_ms;
         mclk.n24 = 0;
         mclk.beat_ms = now;
         if (dt >= 250u && dt <= 1500u)             /* 40..240 BPM */
-            song.g[G_BPM] = (int16_t)clamp((int32_t)((60000u + dt / 2u) / dt), 40, 240);
+            mclk_tempo(dt);
     }
     mclk.alive = 1;
     mclk.last_ms = now;
@@ -1669,6 +1694,39 @@ static uint32_t seq_quiet(void)             /* the audio gate (fx.c): stopped, n
         if (roll[r].on)
             return 0;
     return 1;
+}
+
+/* SETUP > MIDI 2 > MIDI CLOCK OUT (SLOOP 2.7's CLK OUT, taken 2026-10-30): BackBeat the clock master on USB, for a
+ * looper or a DAW on the cable. The MIDI clock, 24 pulses a beat at the tempo, sent stopped too (the other gear knows
+ * the tempo before PLAY); START as the sequencer starts (after a count-in: when it starts), with the pulse of its
+ * downbeat; STOP when it stops (the setting or SYNC changed while playing: STOP too). Only while MIDI CLOCK IN is INT:
+ * a BackBeat that follows a clock never sends one back (no loop through a computer). A pulse goes out in the block it
+ * falls in: < 1 ms late. The setting is the FM-1's (project.c midi_part, byte 2 x ML_N + 5; ui_menu.c MI_CLKOUT) */
+static uint8_t midi_clkout;
+static uint32_t mco_u;                            /* units since the last pulse */
+static uint8_t mco_play;                          /* the other gear was told START */
+static void clkout_block(uint32_t n)
+{
+    if (!midi_clkout || song.g[G_SYNC]) {
+        if (mco_play)
+            midi_out_event(0x0Fu | 0xFCu << 8);       /* STOP */
+        mco_play = 0;
+        mco_u = 0;
+        return;
+    }
+    if (song.playing && !mco_play) {
+        midi_out_event(0x0Fu | 0xFAu << 8);           /* START, then the downbeat's pulse */
+        midi_out_event(0x0Fu | 0xF8u << 8);
+        mco_u = 0;
+    } else if (!song.playing && mco_play) {
+        midi_out_event(0x0Fu | 0xFCu << 8);           /* STOP */
+    }
+    mco_play = (uint8_t)(song.playing != 0);
+    mco_u += n * (uint32_t)song.g[G_BPM];
+    while (mco_u >= MCLK_PULSE_U) {
+        mco_u -= MCLK_PULSE_U;
+        midi_out_event(0x0Fu | 0xF8u << 8);           /* a pulse */
+    }
 }
 
 static void events_block(uint32_t n)
@@ -1717,6 +1775,7 @@ static void events_block(uint32_t n)
         }
     }
     adv = mclk_on() && song.playing ? mclk_adv(n) : n * (uint32_t)song.g[G_BPM];   /* (after a START) */
+    clkout_block(n);                                /* SETUP > MIDI 2 > MIDI CLOCK OUT */
 #if FELUCCA_DRUMMER
     if (song.playing)
         live_block();

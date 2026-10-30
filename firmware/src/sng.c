@@ -33,6 +33,9 @@
  * tools/fm1_song.py writes one from a JSON file and sends it (EDITOR_PROTOCOL.md: BK_PUT object 16 + slot).
  * The pedal settings (the channel) are a small object of their own (OBJ_ARRSET, backup object 24).
  * Included from project.c (the firmware), or directly by the host tests. */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 #define SNG_MAGIC 0x32474E53u                    /* "SNG2" (SNG_SLOTS, SNG_SECTIONS: seq.c) */
 #define SNG_NAME 12u
 #define SNG_HDR 32u
@@ -55,7 +58,7 @@ static sng_t sng;
 
 static uint32_t sng_u16(const uint8_t *b) { return (uint32_t)b[0] | (uint32_t)b[1] << 8; }
 /* n steps at q (each its lanes u16, then a byte a hit) walked: the offset after them; 0 when they run past end */
-static uint32_t sng_walk(const uint8_t *b, uint32_t q, uint32_t n, uint32_t end)
+UI_SMALL static uint32_t sng_walk(const uint8_t *b, uint32_t q, uint32_t n, uint32_t end)
 {
     uint32_t i;
     for (i = 0; i < n; i++) {
@@ -70,7 +73,7 @@ static uint32_t sng_walk(const uint8_t *b, uint32_t q, uint32_t n, uint32_t end)
 }
 
 /* the packed song b (n bytes) checked and indexed into *out: 0 ok, else which check failed */
-static int sng_check(const uint8_t *b, uint32_t n, sng_t *out)
+UI_SMALL static int sng_check(const uint8_t *b, uint32_t n, sng_t *out)
 {
     uint32_t k, pos = SNG_HDR;
     if (n < SNG_HDR || n > SNG_MAX)
@@ -122,7 +125,7 @@ static int sng_check(const uint8_t *b, uint32_t n, sng_t *out)
 
 static const uint8_t *sng_sec(uint32_t k) { return sng.xip + sng.off[k % SNG_SECTIONS]; }
 /* the block (flag f: SNG_F_FILLBAR, _ENTRY, _BREAK) of section s, checked: its offset in s (its steps byte), 0 none */
-static uint32_t sng_block(const uint8_t *s, uint32_t f)
+UI_SMALL static uint32_t sng_block(const uint8_t *s, uint32_t f)
 {
     uint32_t size = sng_u16(s + 16), q = sng_walk(s, SNG_SEC_HDR + ((uint32_t)s[12] + 3u) / 4u, s[12], size), i;
     for (i = SNG_F_FILLBAR; q && i <= SNG_F_BREAK; i <<= 1)
@@ -134,7 +137,7 @@ static uint32_t sng_block(const uint8_t *s, uint32_t f)
     return 0;
 }
 /* n packed steps at q into d (and their flams), as written (a hit's mark bits, if any, mean nothing there) */
-static void sng_steps(const uint8_t *q, uint32_t n, dstep_t *d, uint16_t *flam)
+UI_SMALL static void sng_steps(const uint8_t *q, uint32_t n, dstep_t *d, uint16_t *flam)
 {
     uint32_t i, l;
     for (i = 0; i < n && i < NSTEP; i++) {
@@ -151,7 +154,7 @@ static void sng_steps(const uint8_t *q, uint32_t n, dstep_t *d, uint16_t *flam)
         }
     }
 }
-static uint32_t sng_ready(void)
+UI_SMALL static uint32_t sng_ready(void)
 {
     return sng_cur >= 0 ? (1u << sng.nsec) - 1u : 0u;
 }
@@ -173,7 +176,7 @@ static uint32_t sng_bars(uint32_t k)             /* the bars its pattern takes, 
     bars = (len * u + b - 1u) / b;
     return !bars ? 1u : bars > 64u ? 64u : bars;
 }
-static void sng_name(uint32_t k, char *out)      /* (the names are ASCII, 0-padded in the packed form) */
+UI_SMALL static void sng_name(uint32_t k, char *out)      /* (the names are ASCII, 0-padded in the packed form) */
 {
     const uint8_t *s = sng_cur >= 0 && k < sng.nsec ? sng_sec(k) : 0;
     uint32_t i;
@@ -182,7 +185,7 @@ static void sng_name(uint32_t k, char *out)      /* (the names are ASCII, 0-padd
     out[i] = 0;
 }
 static int sng_pending(void) { return sng.pend != 0u; }
-static uint32_t sng_outro(void)
+UI_SMALL static uint32_t sng_outro(void)
 {
     uint32_t k;
     if (sng_cur >= 0)
@@ -192,7 +195,7 @@ static uint32_t sng_outro(void)
     return 0xFFu;
 }
 
-static void sng_globals(void)                    /* the song's tempo, kit, swing, drum level and reverb */
+UI_SMALL static void sng_globals(void)                    /* the song's tempo, kit, swing, drum level and reverb */
 {
     song.g[G_BPM] = (int16_t)clamp((int32_t)sng.bpm, GP[G_BPM].min, GP[G_BPM].max);
     song.g[G_SWING] = (int16_t)clamp((int32_t)sng.swing, GP[G_SWING].min, GP[G_SWING].max);
@@ -205,7 +208,7 @@ static void sng_globals(void)                    /* the song's tempo, kit, swing
 
 /* section k into the drum track: at an audio-block boundary (live_block, on the bar), or from the main
  * loop with the IRQ off (sng_poll, stopped). The synth tracks are not touched. */
-static void sng_apply(uint32_t k)
+UI_SMALL static void sng_apply(uint32_t k)
 {
     track_t *t = TDRUM;
     const uint8_t *s, *q;
@@ -295,7 +298,7 @@ static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len)
 #elif !defined(SNG_HOST_FETCH)
 static const uint8_t *sng_fetch(uint32_t slot, uint32_t *len) { (void)slot; *len = 0; return 0; }
 #endif
-static void sng_lib_refresh(void)                /* seq.c sng_lib: every song read again (the UI's loop) */
+UI_SMALL static void sng_lib_refresh(void)                /* seq.c sng_lib: every song read again (the UI's loop) */
 {
     uint32_t k, n, i;
     sng_t tmp;
@@ -324,7 +327,7 @@ static void sng_lib_refresh(void)                /* seq.c sng_lib: every song re
  * pattern_rediv: the pattern's own steps were re-gridded in RAM, the same rule: the new grid's step j takes the old
  * step at its time, else it is empty); the whole bars that fit (bar: a bar's steps at un, 0 when not whole). The bytes
  * written, 0: no room */
-static uint32_t sng_pack_rediv(const uint8_t *q, uint32_t n, uint32_t uo, uint32_t un, uint32_t bar, uint8_t *out, uint32_t room)
+UI_SMALL static uint32_t sng_pack_rediv(const uint8_t *q, uint32_t n, uint32_t uo, uint32_t un, uint32_t bar, uint8_t *out, uint32_t room)
 {
     uint16_t off[NSTEP];
     uint32_t i, j, m = rediv_len(n, uo, un), w = 1;
@@ -357,7 +360,7 @@ static uint32_t sng_pack_rediv(const uint8_t *q, uint32_t n, uint32_t uo, uint32
  * does not fit (SNG_MAX). Nudges and locks are not kept: SNG2 has no room for them (sng_lossy says so) */
 /* the song's header bytes 16..21 as the knobs left them (2026-10-29: LIVE's tempo, kit, drum level and swing were
  * never saved; the name and the swing grid as they were) */
-static void sng_pack_knobs(uint8_t *out)
+UI_SMALL static void sng_pack_knobs(uint8_t *out)
 {
     out[16] = (uint8_t)song.g[G_BPM];
     out[17] = (uint8_t)(song.g[G_BPM] >> 8);
@@ -367,14 +370,14 @@ static void sng_pack_knobs(uint8_t *out)
     out[21] = (uint8_t)clamp(song.g[G_DRREV], 0, 127);
 }
 /* a hit's byte: its level, ratchet, and the song's marks (fill only, not in a fill, flam) */
-static uint32_t sng_pack_hit(const dstep_t *d, uint32_t i, uint32_t l)
+UI_SMALL static uint32_t sng_pack_hit(const dstep_t *d, uint32_t i, uint32_t l)
 {
     return dstep_lvl(d, l) | dstep_rat(d, l) << 2 | ((drum_fonly[i] >> l) & 1u) << 4 | ((drum_fno[i] >> l) & 1u) << 5 |
            ((drum_flam[i] >> l) & 1u) << 6;
 }
 /* the drum track as a packed section at out + n (its name, flags and meter given): the header, the conditions, the
  * steps; its size written (a caller appending a tail writes it again). The new end, 0: no room */
-static uint32_t sng_pack_track(uint8_t *out, uint32_t n, uint32_t room, const uint8_t *name, uint32_t flags, uint32_t meter)
+UI_SMALL static uint32_t sng_pack_track(uint8_t *out, uint32_t n, uint32_t room, const uint8_t *name, uint32_t flags, uint32_t meter)
 {
     const track_t *t = TDRUM;
     uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), nf = (len + 3u) / 4u, at = n, i;
@@ -402,7 +405,7 @@ static uint32_t sng_pack_track(uint8_t *out, uint32_t n, uint32_t room, const ui
     out[at + 17] = (uint8_t)((n - at) >> 8);
     return n;
 }
-static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t room)
+UI_SMALL static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t room)
 {
     const track_t *t = TDRUM;
     uint32_t j, n = SNG_HDR;
@@ -457,7 +460,7 @@ static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t room)
 }
 /* the drum track still is section k as packed (the SECTIONS screen: a pick away from it would drop its edits;
  * nudges and locks are not a section's, sng_lossy) */
-static int sng_same(uint32_t k)
+UI_SMALL static int sng_same(uint32_t k)
 {
     const track_t *t = TDRUM;
     const uint8_t *s, *q;
@@ -488,14 +491,14 @@ static int sng_same(uint32_t k)
  * in place: a section copied after itself ("NAME 2" when that fits; the copy is not the outro), taken out (not the
  * only one), moved a place left or right, made the outro or no longer (one at most). b: the image, n bytes in room;
  * *at: the section's index after. The new size, 0: refused (no room, 16 sections, the ends) */
-static uint32_t sng_img_off(const uint8_t *b, uint32_t k)   /* section k's offset in an image */
+UI_SMALL static uint32_t sng_img_off(const uint8_t *b, uint32_t k)   /* section k's offset in an image */
 {
     uint32_t pos = SNG_HDR;
     while (k--)
         pos += sng_u16(b + pos + 16);
     return pos;
 }
-static void sng_img_rev(uint8_t *b, uint32_t i, uint32_t j)   /* b[i..j) reversed (two neighbours swapped: three of these) */
+UI_SMALL static void sng_img_rev(uint8_t *b, uint32_t i, uint32_t j)   /* b[i..j) reversed (two neighbours swapped: three of these) */
 {
     while (i + 1u < j) {
         uint8_t t = b[i];
@@ -503,7 +506,7 @@ static void sng_img_rev(uint8_t *b, uint32_t i, uint32_t j)   /* b[i..j) reverse
         b[--j] = t;
     }
 }
-static uint32_t sng_image_edit(uint8_t *b, uint32_t n, uint32_t room, uint32_t op, uint32_t k, uint32_t *at)
+UI_SMALL static uint32_t sng_image_edit(uint8_t *b, uint32_t n, uint32_t room, uint32_t op, uint32_t k, uint32_t *at)
 {
     uint32_t nsec = b[22], off, size, i;
     if (room > SNG_MAX)
@@ -558,7 +561,7 @@ static uint32_t sng_image_edit(uint8_t *b, uint32_t n, uint32_t room, uint32_t o
 }
 /* a new song for slot (SONGS, an empty slot, EDIT tapped): "SONG n", the header as the knobs stand, one section
  * PART 1 of the drum track's pattern (the meter playing). The bytes, 0: no room */
-static uint32_t sng_pack_new(uint32_t slot, uint8_t *out, uint32_t room)
+UI_SMALL static uint32_t sng_pack_new(uint32_t slot, uint8_t *out, uint32_t room)
 {
     uint8_t nm[SNG_NAME];
     if (room > SNG_MAX)
@@ -579,7 +582,7 @@ static uint32_t sng_pack_new(uint32_t slot, uint8_t *out, uint32_t room)
     memcpy(nm, "PART 1", 6);
     return sng_pack_track(out, SNG_HDR, room, nm, 0, clk_meter);
 }
-static int sng_lossy(void)                       /* the drum track holds what a packed section cannot keep */
+UI_SMALL static int sng_lossy(void)                       /* the drum track holds what a packed section cannot keep */
 {
     const track_t *t = TDRUM;
     uint32_t i;
@@ -594,7 +597,7 @@ static int sng_lossy(void)                       /* the drum track holds what a 
 
 /* a song (0..15 a user slot, 16..31 a groove) loaded, or none (SNG_ALL and on): the main loop, for sng_req; also
  * the host tests */
-static int sng_load(uint32_t slot)
+UI_SMALL static int sng_load(uint32_t slot)
 {
     sng_t tmp;
     const uint8_t *p;
@@ -644,7 +647,7 @@ static int sng_load(uint32_t slot)
     pedal_say(PU_SONG, sng_ui_song);
     return 0;
 }
-static void sng_poll(void)                       /* main loop */
+UI_SMALL static void sng_poll(void)                       /* main loop */
 {
     uint32_t r;
     if (!sng_req)
@@ -666,11 +669,11 @@ typedef struct {
     uint8_t last;                                /* that song + 1 (a groove 17..32), 0 none */
     uint8_t rsv[8];
 } arrset_t;
-static int arrset_valid(const arrset_t *a)
+UI_SMALL static int arrset_valid(const arrset_t *a)
 {
     return a->magic == ARRSET_MAGIC && a->pedal_ch <= PEDAL_CH_OMNI && a->count_in <= PEDAL_COUNT_MAX;
 }
-static void arrset_fill(arrset_t *a)
+UI_SMALL static void arrset_fill(arrset_t *a)
 {
     memset(a, 0, sizeof *a);
     a->magic = ARRSET_MAGIC;
@@ -679,7 +682,7 @@ static void arrset_fill(arrset_t *a)
     a->autoload = sng_autoload;
     a->last = sng_last;
 }
-static void arrset_take(const arrset_t *a)
+UI_SMALL static void arrset_take(const arrset_t *a)
 {
     pedal.ch = a->pedal_ch;
     pedal.count = a->count_in;
@@ -695,7 +698,7 @@ static void arrset_boot(void)                    /* the pedal settings; the last
     if (sng_autoload && sng_last)
         sng_req = sng_last;
 }
-static void arrset_save(void)                    /* main loop, stopped (project.c sections_flush) */
+UI_SMALL static void arrset_save(void)                    /* main loop, stopped (project.c sections_flush) */
 {
     arrset_t a;
     arrset_fill(&a);

@@ -8,9 +8,12 @@
  * (song.g, as the GLO pages had them) or the drum track's parameter. The pedal's settings are saved with the songs
  * (sng.c arrset_save, once stopped: arrset_dirty), the others as before (settings_save, the project). */
 /* ------------------------------------------------------------ menu --- */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 enum { MI_PCH, MI_PCOUNT, MI_AUTO, MI_LEARN, MI_LCLEAR, MI_COLOR, MI_ZOOM, MI_LIGHTS, MI_KEYS, MI_NOTES, MI_LOWCUT,
        MI_USB, MI_SERIAL, MI_PANEL, MI_ABOUT, MI_HUMAN, MI_CLOCK, MI_LOAD, MI_WORST, MI_LATE, MI_VOICES,
-       MI_THRU, MI_SCROFF, MI_N };
+       MI_THRU, MI_SCROFF, MI_CLKOUT, MI_N };
 enum { RK_MI, RK_G, RK_P };                        /* a row: a setting (MI_*), song.g[id], TDRUM->p[id] */
 typedef struct { const char *name; uint8_t kind, id; } mrow_t;
 static const mrow_t MROW[] = {
@@ -18,6 +21,7 @@ static const mrow_t MROW[] = {
     {"MIDI CLOCK IN", RK_MI, MI_CLOCK},          /* (G_SYNC: was LEARN's SYNC, INT USB TRS) */
     {"DRUMS CHANNEL", RK_G, G_DRCH}, {"IN", RK_G, G_ROUTE}, {"OTHER CHANNELS", RK_G, G_CHOTH}, {"OUT", RK_G, G_MIDI},
     {"MIDI LEARN", RK_MI, MI_LEARN}, {"MIDI LEARN CLEAR", RK_MI, MI_LCLEAR}, {"TRS TO USB", RK_MI, MI_THRU},
+    {"MIDI CLOCK OUT", RK_MI, MI_CLKOUT},        /* (2026-10-30: the clock and START / STOP out on USB, seq.c clkout_block) */
     {"TEMPO", RK_G, G_BPM}, {"CLICK", RK_G, G_CLOCK}, {"TUNE", RK_G, G_TUNE},
     {"SWING", RK_G, G_SWING}, {"HUMANIZE", RK_MI, MI_HUMAN},
     {"LEVEL", RK_G, G_DRLVL}, {"REVERB", RK_G, G_DRREV}, {"DELAY", RK_G, G_DRDLY}, {"PAN", RK_P, P_PAN},
@@ -38,17 +42,17 @@ enum { MS_PEDAL, MS_MIDI, MS_LEARN, MS_TEMPO, MS_FEEL, MS_DRUMS, MS_MASTER, MS_T
 static const char *const MS_NAME[MS_COUNT] = {"PEDAL", "MIDI", "MIDI 2", "TEMPO", "FEEL", "DRUMS", "MASTER", "TEXTURE",
                                               "TEXTURE 2", "SCREEN", "LIGHTS", "AUDIO", "LOAD",
                                               "SYSTEM"};
-static const uint8_t MS_FIRST[MS_COUNT + 1] = {0, 4, 8, 11, 14, 16, 20, 24, 28, 31, 34, 37, 40, 44,
+static const uint8_t MS_FIRST[MS_COUNT + 1] = {0, 4, 8, 12, 15, 17, 21, 25, 29, 32, 35, 38, 41, 45,
                                                 MI_COUNT};   /* rows of
                                                                                                           * each */
-_Static_assert(MI_COUNT == 46, "MS_FIRST follows MROW");
+_Static_assert(MI_COUNT == 47, "MS_FIRST follows MROW");
 static const char *const LIGHTS_NAME[LIGHTS_N] = {"OFF", "LOW", "MID", "HIGH"};   /* every button lit, the labels readable */
 static const char *const KEYS_NAME[KEYS_N] = {"OFF", "C KEYS", "WHITE KEYS", "ALL KEYS"};      /* keys lit too, at the LIGHTS level */
 static const char *const SCR_NAME[SCR_N] = {"NEVER", "1 MIN", "5 MIN", "15 MIN"};   /* stopped, untouched that long */
 #define MI_Y0 24                                   /* the first row, under the section line */
 #define MI_DY 48                                   /* a row: the label, the value in large type */
 
-static uint32_t mi_sec(uint32_t i)                 /* the section of row i */
+UI_SMALL static uint32_t mi_sec(uint32_t i)                 /* the section of row i */
 {
     uint32_t k = 0;
     while (k + 1u < MS_COUNT && i >= MS_FIRST[k + 1u])
@@ -57,7 +61,7 @@ static uint32_t mi_sec(uint32_t i)                 /* the section of row i */
 }
 
 static uint32_t mi_row(uint32_t i) { return i - MS_FIRST[mi_sec(i)]; }   /* its row: KNOB 1 + row sets it */
-static uint32_t mi_find(uint32_t id)               /* the row of setting MI_* id */
+UI_SMALL static uint32_t mi_find(uint32_t id)               /* the row of setting MI_* id */
 {
     uint32_t i;
     for (i = 0; i < MI_COUNT && !(MROW[i].kind == RK_MI && MROW[i].id == id); i++)
@@ -71,7 +75,7 @@ static uint32_t mi_find(uint32_t id)               /* the row of setting MI_* id
  * that found none free (drums.c drum_voice: a quieter one cut). OCT+ on any row resets them, to measure one song. Read
  * four times a second, so the screen does not redraw every frame for the average's last digit */
 static struct { uint32_t t, load, worst, late, late0, peak, full; } meter;
-static void meter_read(void)
+UI_SMALL static void meter_read(void)
 {
     if (meter.t && fm1_ms - meter.t < 250u)
         return;
@@ -82,7 +86,7 @@ static void meter_read(void)
     meter.peak = drums.vpeak;
     meter.full = drums.full;
 }
-static void meter_reset(void)
+UI_SMALL static void meter_reset(void)
 {
     audio_max_us = 0;
     meter.late0 = felucca_dbg.late;
@@ -142,6 +146,9 @@ static const char *mi_value(uint32_t i, uint16_t *c)
                                                        * ONLY: out over USB, and the FM-1 leaves them alone */
         *c = midi_thru ? C_HI : C_DIM;
         return midi_thru == THRU_ONLY ? "BRIDGE ONLY" : midi_thru ? "ON" : "OFF";
+    case MI_CLKOUT:                                   /* the MIDI clock and START / STOP out on USB (seq.c clkout_block) */
+        *c = midi_clkout ? C_HI : C_DIM;
+        return midi_clkout ? "ON" : "OFF";
     case MI_LOAD:
     case MI_WORST:
         meter_read();
@@ -186,7 +193,7 @@ static const char *mi_value(uint32_t i, uint16_t *c)
     }
 }
 
-static void draw_about(void)
+UI_SMALL static void draw_about(void)
 {
     uint32_t i;
     cv_text(4, 4, &FONT_L, "BACKBEAT", C_WHITE);
@@ -209,7 +216,7 @@ static void draw_about(void)
     cv_text(4, 206, &FONT_S, "+ SONIC PI (CC0)", C_DIM);
 }
 
-static void draw_menu(void)
+UI_SMALL static void draw_menu(void)
 {
     uint32_t i, pass, sec = mi_sec(ui.menu_sel % MI_COUNT);
     uint32_t sig = ui.menu * 7u + ui.menu_sel * 131u + ml_count() * 2654435u + mlu.on * 5u;
@@ -284,7 +291,7 @@ static void draw_menu(void)
     }
 }
 
-static void enc_drop(void)                             /* knob turns nobody takes */
+UI_SMALL static void enc_drop(void)                             /* knob turns nobody takes */
 {
     uint32_t k;
     for (k = 0; k < NE; k++)
@@ -292,7 +299,7 @@ static void enc_drop(void)                             /* knob turns nobody take
 }
 
 static void layer_unlock(void);                        /* ui_input.c */
-static void menu_open(void)                            /* GLO tapped: SETUP, where it was left */
+UI_SMALL static void menu_open(void)                            /* GLO tapped: SETUP, where it was left */
 {
     layer_unlock();
     ui.menu = 1;
@@ -302,7 +309,7 @@ static void menu_open(void)                            /* GLO tapped: SETUP, whe
     song.seq_mode = 0;
 }
 
-static void menu_close(void)
+UI_SMALL static void menu_close(void)
 {
     if (song.playing || transport_req)
         settings_later = 1;                            /* (a flash write stops the audio: once stopped) */
@@ -314,7 +321,7 @@ static void menu_close(void)
 }
 
 /* row i: a knob turned s (> 0 right, < 0 left), or 0: OCT+ (steps round, toggles, or opens) */
-static void mi_set(uint32_t i, int32_t s)
+UI_SMALL static void mi_set(uint32_t i, int32_t s)
 {
     const mrow_t *r = &MROW[i % MI_COUNT];
     if (r->kind != RK_MI) {                            /* a value: the knob (OCT+ nothing) */
@@ -377,6 +384,9 @@ static void mi_set(uint32_t i, int32_t s)
     case MI_NOTES:
         lights_notes = (uint8_t)(s > 0 ? 1u : s < 0 ? 0u : !lights_notes);
         break;
+    case MI_CLKOUT:                                    /* OFF / ON (kept with the settings: the MIDI part) */
+        midi_clkout = (uint8_t)(s > 0 ? 1u : s < 0 ? 0u : !midi_clkout);
+        break;
     case MI_THRU:                                      /* OFF, ON, BRIDGE ONLY: the knob along (stops at the ends), OCT+
                                                         * round (kept with the settings) */
         midi_thru = (uint8_t)(s ? clamp((int32_t)midi_thru + (s > 0 ? 1 : -1), 0, THRU_ONLY) : (midi_thru + 1u) % (THRU_ONLY + 1u));
@@ -429,7 +439,7 @@ static void mi_set(uint32_t i, int32_t s)
 
 /* SETUP: SELECT the section, KNOB 1..4 its rows, PRESETS the cursor, OCT+ ok, OCT- / GLO / HOME close (ABOUT ->
  * the section) */
-static void menu_input(uint32_t pressed, uint32_t home)
+UI_SMALL static void menu_input(uint32_t pressed, uint32_t home)
 {
     int32_t s;
     uint32_t k, ok = (pressed >> panel.btn[B_OCTUP]) & 1u;

@@ -19,6 +19,9 @@
  * The keys' part runs in the audio ISR (seq.c layer_now: no lag, no lost press); the SEQ and SAVE
  * keys come to the UI through seq.c lk_q. HOLD: REC held clears the track, SAVE held on the drum grid saves
  * the section into its song (a ring fills; let go before and nothing happens). */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 static const uint8_t LAYER_BTN[LY_COUNT] = {NB, B_FX, B_EDIT, B_ARP, B_SEQ, B_SCL, B_GLO};   /* (SAVE: no layer since
                                                          * 2026-10-27, JAM's sections A..D went: ui_input.c holds_input) */
 static const char *const LAYER_NAME[LY_COUNT] = {"", "fx", "erase", "roll", "steps", "key", "mix"};
@@ -26,7 +29,7 @@ static const char *const LAYER_NAME[LY_COUNT] = {"", "fx", "erase", "roll", "ste
 #define SHOW_MS 140u                                    /* the layer shows after this (a tap does not flash it) */
 
 /* the ISR's view of the panel: the layers' buttons, OCT- / OCT+, REC / PLAY of a free take */
-static void layers_init(void)
+UI_SMALL static void layers_init(void)
 {
     uint32_t l;
     for (l = LY_FX; l < LY_COUNT; l++)
@@ -41,13 +44,13 @@ static uint32_t key_of_white(uint32_t w) { return key_of_lane(w & 15u); }   /* w
 
 /* ------------------------------------------------------------ tools --- */
 /* EDIT layer knobs; each a step of one undo (the layer's hold) */
-static void layer_undo_mark(track_t *t)
+UI_SMALL static void layer_undo_mark(track_t *t)
 {
     if (!ui.step_sess)
         ui.step_sess = (undo_sess += 4u) | 3u;
     undo_mark(t, ui.step_sess);
 }
-static void pattern_rotate(track_t *t, int32_t d)       /* every step one later (d > 0) / earlier */
+UI_SMALL static void pattern_rotate(track_t *t, int32_t d)       /* every step one later (d > 0) / earlier */
 {
     uint32_t len = trk_len(t), i;
     dstep_t keep;
@@ -67,7 +70,7 @@ static void pattern_rotate(track_t *t, int32_t d)       /* every step one later 
     drum_marks_rotate(len, d);                          /* (the song's marks go round with the hits) */
     fm1_irq_on();
 }
-static void pattern_length(track_t *t, int32_t d)       /* x2 (the pattern again after itself), or half */
+UI_SMALL static void pattern_length(track_t *t, int32_t d)       /* x2 (the pattern again after itself), or half */
 {
     uint32_t len = trk_len(t), i;
     layer_undo_mark(t);
@@ -93,7 +96,7 @@ static void pattern_length(track_t *t, int32_t d)       /* x2 (the pattern again
  * a set one goes when its key is let go, unless a knob changed it meanwhile (level, ratchet) */
 static uint16_t step_pend_off;                         /* the step keys that clear their step when let go */
 static int step_is_on(const track_t *t, uint32_t idx) { return dstep_has(&t->dstep[idx], pen_lane); }
-static void step_down(uint32_t w)
+UI_SMALL static void step_down(uint32_t w)
 {
     track_t *t = TDRUM;
     uint32_t idx = ui.step_page * 16u + w;
@@ -110,7 +113,7 @@ static void step_down(uint32_t w)
     fm1_irq_on();
     sync_reload = 1;
 }
-static void step_up(uint32_t w)
+UI_SMALL static void step_up(uint32_t w)
 {
     track_t *t = TDRUM;
     uint32_t idx = ui.step_page * 16u + w;
@@ -131,7 +134,7 @@ static void step_up(uint32_t w)
     sync_reload = 1;
 }
 /* the drum sound the SEQ layer sets (KNOB 1): heard when it changes */
-static void pen_lane_move(int32_t s)
+UI_SMALL static void pen_lane_move(int32_t s)
 {
     uint8_t l = (uint8_t)clamp(pen_lane + s, 0, DRUM_LANES - 1);
     if (l != pen_lane)
@@ -141,7 +144,7 @@ static void pen_lane_move(int32_t s)
 /* KNOB 1..4 with step keys held: their sound (the lane), hit (off, ghost, soft, norm, hard: ui_studio.c HIT_NAME),
  * ratchet, nudge (1/64 of a step, - early + late). knob 4 = PRESETS: a lock of ui.lock_par on them, made at the
  * track's value, then moved */
-static void steps_held_edit(uint32_t knob, int32_t s)
+UI_SMALL static void steps_held_edit(uint32_t knob, int32_t s)
 {
     track_t *t = TDRUM;
     uint32_t w;
@@ -192,7 +195,7 @@ static void steps_held_edit(uint32_t knob, int32_t s)
 }
 /* ALGORITHM with step keys held: the lock parameter, through the lockable ones (the drum track: not the
  * engine parameters it has no use for), wrapping round */
-static void lock_par_step(int32_t s)
+UI_SMALL static void lock_par_step(int32_t s)
 {
     const track_t *t = TDRUM;
     uint32_t id = ui.lock_par % P_COUNT, guard = P_COUNT;
@@ -203,7 +206,7 @@ static void lock_par_step(int32_t s)
     ui.lock_par = (uint8_t)id;
 }
 /* OCT- with step keys held: their nudge, locks and fill condition go */
-static void steps_held_clear(void)
+UI_SMALL static void steps_held_clear(void)
 {
     track_t *t = TDRUM;
     uint32_t w, n = 0;
@@ -224,7 +227,7 @@ static void steps_held_clear(void)
     ui_message(n ? "NUDGE, LOCKS, FILL CLEARED" : "NO NUDGE, LOCK OR FILL");
 }
 /* OCT+ with step keys held: their fill condition, round: normal -> fill only -> no fill (the first one's next) */
-static void steps_held_fill(void)
+UI_SMALL static void steps_held_fill(void)
 {
     track_t *t = TDRUM;
     static const char *const MSG[3] = {"FILL: NORMAL", "FILL ONLY", "NO FILL"};
@@ -247,7 +250,7 @@ static void steps_held_fill(void)
 }
 
 /* a key of the layers the UI runs (seq.c lk_q): SEQ steps, SAVE sections */
-static void layer_key(uint32_t layer, uint32_t k, uint32_t down)
+UI_SMALL static void layer_key(uint32_t layer, uint32_t k, uint32_t down)
 {
     int32_t w = key_white(k);
     if (layer >= LY_COUNT)
@@ -277,7 +280,7 @@ static void layer_key(uint32_t layer, uint32_t k, uint32_t down)
 }
 
 /* KNOB 1..4 while a layer is held: what the layer gives them (the page does not see them) */
-static void layer_knobs(uint32_t layer)
+UI_SMALL static void layer_knobs(uint32_t layer)
 {
     uint32_t k;
     int32_t s;
@@ -356,7 +359,7 @@ typedef struct {
     uint8_t cond;                /* top left: the step's fill condition (FC_FILL an "F", FC_NOFILL an "x"), 0 = none */
 } tile_t;
 
-static void tiles_draw(const tile_t *tl, uint32_t *cache)
+UI_SMALL static void tiles_draw(const tile_t *tl, uint32_t *cache)
 {
     uint32_t r, c, sig = 7u;
     for (r = 0; r < 16u; r++)
@@ -395,7 +398,7 @@ static void tiles_draw(const tile_t *tl, uint32_t *cache)
     }
 }
 
-static void layer_title(const char *name, const char *sub, uint16_t col, uint32_t *cache)
+UI_SMALL static void layer_title(const char *name, const char *sub, uint16_t col, uint32_t *cache)
 {
     uint32_t locked = ly_lock != LY_PLAY;
     uint32_t sig = studio_hash(studio_hash(col, name), sub) + (ui.msg_t ? studio_hash(3u, ui.msg) : 0u) + locked * 7919u;
@@ -423,7 +426,7 @@ static const char *lock_label(const track_t *t, uint32_t id)   /* the lock param
 
 static uint8_t layer_shown;                              /* the screen holds a layer (or a hold) */
 static const char *layer_sub_shown = "";                 /* the sub line last drawn (the host tests read it) */
-static void layer_screen_draw(void)
+UI_SMALL static void layer_screen_draw(void)
 {
     static uint32_t head, tiles, foot;
     static tile_t tl[16];
@@ -602,7 +605,7 @@ static void layer_screen_draw(void)
 /* HOLD to confirm: a ring fills while REC (clear the track) or SAVE (save the project) is held */
 #define HOLD_CLEAR_MS 1300u                             /* after the 0.7 s that make REC a hold */
 #define HOLD_SAVE_MS 1000u
-static void hold_screen_draw(void)
+UI_SMALL static void hold_screen_draw(void)
 {
     static uint32_t cache;
     uint32_t span = ui.hold_kind == 1u ? HOLD_CLEAR_MS : HOLD_SAVE_MS, el = fm1_ms - ui.hold_t0;

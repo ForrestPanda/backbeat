@@ -4,9 +4,12 @@
 /* ----------------------------------------------------------- LEDs --- */
 /* The LED picture is built off-line and copied one byte per column: clearing
  * and relighting would let the 10 kHz scan catch the dark gap and flicker. */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 static uint8_t led_pos[41];                        /* (col << 3) | row bit, 0xFF = none */
 
-static void led_pos_init(void)
+UI_SMALL static void led_pos_init(void)
 {
     uint32_t id, p, r;
     for (id = 0; id < 41u; id++) {
@@ -18,7 +21,7 @@ static void led_pos_init(void)
     }
 }
 
-static void led_put(uint8_t *nl, uint32_t id, int on)
+UI_SMALL static void led_put(uint8_t *nl, uint32_t id, int on)
 {
     uint8_t q = led_pos[id];
     if (q != 0xFF && on)
@@ -29,7 +32,7 @@ static const uint8_t FAM_BTN[FAM_COUNT] = {B_HOME, B_ENV, B_LFO, B_FX, B_SCL, B_
                                            B_ARP, B_SEQ, B_HOME};   /* button of each page family (FAM_TRK, DRUMS: HOME) */
 
 static uint32_t cur_fam(void) { return ui.home ? FAM_HOME : cur_page()->fam; }
-static uint32_t cur_btn(void)                      /* the button of the screen shown */
+UI_SMALL static uint32_t cur_btn(void)                      /* the button of the screen shown */
 {
     if (!ui.home && cur_page()->scope == SC_SONG)
         return B_SAVE;
@@ -39,7 +42,7 @@ static uint32_t cur_btn(void)                      /* the button of the screen s
 }
 
 /* PLAY flashes on every beat, as heard (the sound leaves ~9 ms after it is rendered) */
-static int play_led(void)
+UI_SMALL static int play_led(void)
 {
     uint32_t p = clk_pos, lat = HALF_FRAMES * 3u / 2u * (uint32_t)song.g[G_BPM];
     if (!song.playing)
@@ -50,7 +53,7 @@ static int play_led(void)
 /* the tap tempo key's light (the last black key, F#5, on the song screen: ui_drummer.c KEY_TAP): the tempo, a flash on
  * each beat (2026-10-22, asked): playing, PLAY's flash (the beat as heard); the count-in, its clicks; stopped, free at
  * the tempo, so a tap, a MIDI clock or a song loaded shows at once */
-static int tempo_led(void)
+UI_SMALL static int tempo_led(void)
 {
     uint32_t bpm = (uint32_t)song.g[G_BPM], per;
     if (ci_on)
@@ -66,7 +69,7 @@ static int tempo_led(void)
 /* the keys' lights: what the layer held does, else the keys down and the drum hits */
 /* what sounds on the drum track, as keys: the drum hits (each lights its key a few frames). Shown at once with
  * menu NOTES on, on every screen and layer (keys_notes_dim) */
-static uint32_t keys_sounding(const track_t *t)
+UI_SMALL static uint32_t keys_sounding(const track_t *t)
 {
     uint32_t i, m = 0;
     (void)t;
@@ -76,7 +79,7 @@ static uint32_t keys_sounding(const track_t *t)
     return m;
 }
 
-static uint32_t erase_lanes(const track_t *t)   /* EDIT erase, drum track: the sounds the pattern holds */
+UI_SMALL static uint32_t erase_lanes(const track_t *t)   /* EDIT erase, drum track: the sounds the pattern holds */
 {
     uint32_t i, m = 0;
     if (is_drum(t))
@@ -89,7 +92,7 @@ static uint32_t erase_lanes(const track_t *t)   /* EDIT erase, drum track: the s
     return m;
 }
 
-static uint32_t keys_lit(void)
+UI_SMALL static uint32_t keys_lit(void)
 {
     uint32_t m = 0, i, blink = (fm1_ms / 125u) & 1u;
     track_t *t = TDRUM;
@@ -144,7 +147,7 @@ static uint32_t keys_lit(void)
 /* menu NOTES, on the layers whose keys are tiles (FX effects, SEQ steps, GLO mute / solo): what
  * sounds glows dimly under the tiles, which keep their full light. SEL (the scale) and EDIT on the
  * drum track (the sounds of the pattern): those glow, and what sounds is lit (keys_lit) */
-static uint32_t keys_notes_dim(void)
+UI_SMALL static uint32_t keys_notes_dim(void)
 {
     if (!lights_notes)
         return 0u;
@@ -161,7 +164,7 @@ static uint32_t keys_notes_dim(void)
 
 /* the keys' landmarks, dim: the first key of each row of the 4 x 4 grid on screen (white keys
  * 1, 5, 9, 13) while a layer is held, and on the drum track (its 16 sounds, 4 x 4 as on KIT) */
-static uint32_t keys_guide(void)
+UI_SMALL static uint32_t keys_guide(void)
 {
     if (ui.layer == LY_PLAY && !is_drum(TDRUM))
         return 0u;
@@ -169,7 +172,7 @@ static uint32_t keys_guide(void)
 }
 
 /* the keys the backlight lights (menu KEYS): the Cs, every white key, or every key; bit k = key k (0 = F3) */
-static uint32_t lights_keys_mask(void)
+UI_SMALL static uint32_t lights_keys_mask(void)
 {
     uint32_t k, m = 0;
     if (!lights_lvl || !lights_keys)
@@ -182,7 +185,7 @@ static uint32_t lights_keys_mask(void)
     return m;
 }
 
-static void ui_leds(void)
+UI_SMALL static void ui_leds(void)
 {
     uint8_t nl[FM1_NCOL] = {0}, dl[FM1_NCOL] = {0}, bl[FM1_NCOL] = {0};
     uint32_t k, c, keys, guide, back;
@@ -225,16 +228,36 @@ static void ui_leds(void)
 }
 
 /* ---------------------------------------------------------- input --- */
-static int32_t accel(uint32_t role, int32_t s, int32_t range)
+/* Knob acceleration (SLOOP 2.7, taken 2026-10-30; after JIANT FM by juanjiant-bit, github.com/juanjiant-bit/JIANT,
+ * GPL-3.0, its ui_input.c accel): a slow turn is fine tuning, one value a detent; the faster the turn the wider the
+ * sweep, progressively: the speed is the time per detent, ACC_RATE / ms -> 40 ms x2, 27 ms x3, 20 ms x4, 10 ms x8,
+ * 5 ms x16, capped by the range (x2 up to 32 values, x4 up to 64, x8 up to 100, x16 above: the tempo). Only the longer
+ * of this read's and the previous read's time counts, and only while the turn goes on in one direction (both under
+ * ACC_GAP ms): a slow turn, the first two detents of a turn, a single quick detent and a reversal are one value a
+ * detent, so turning back to correct never jumps. Ranges of 16 values or fewer, and lists of names (callers pass 0),
+ * never accelerate. (Until then: x3 or x6 at once past 60 ms a detent, SLOOP 2.6's.)
+ * ui.enc_t[role]: bits 0..23 the ms of its last read, bit 24 its direction (+1), 25..31 its ms per detent (127 slow) */
+#define ACC_GAP 60u
+#define ACC_RATE 80u
+UI_SMALL static int32_t accel(uint32_t role, int32_t s, int32_t range)
 {
-    uint32_t now = fm1_ticks(), dt = now - ui.enc_t[role];
-    ui.enc_t[role] = now;
-    if (range > 40 && dt < 60u * 1000u * FM1_TICKS_PER_US)
-        return s * (range > 150 ? 6 : 3);
-    return s;
+    uint32_t now = fm1_ms & 0xFFFFFFu, st = ui.enc_t[role], up = s > 0, pi = st >> 25, a, i, m = 1;
+    if (range <= 16 || !s)
+        return s;
+    a = (uint32_t)(s < 0 ? -s : s);
+    i = ((now - st) & 0xFFFFFFu) / a;                   /* ms per detent of this read */
+    if (!st || ((st >> 24) & 1u) != up || i >= ACC_GAP)
+        i = 127u;                                       /* a new turn, or reversed */
+    else if (pi < ACC_GAP) {
+        m = ACC_RATE / (i > pi ? i : pi ? pi : 1u);
+        a = range > 100 ? 16u : range > 64 ? 8u : range > 32 ? 4u : 2u;   /* (the cap) */
+        m = m < 1u ? 1u : m > a ? a : m;
+    }
+    ui.enc_t[role] = now | up << 24 | (i ? i : 1u) << 25;
+    return s * (int32_t)m;
 }
 
-static void edit_param(uint32_t slot, int32_t steps)
+UI_SMALL static void edit_param(uint32_t slot, int32_t steps)
 {
     int16_t *vp;
     const page_t *pg = cur_page();
@@ -259,7 +282,7 @@ static void edit_param(uint32_t slot, int32_t steps)
 /* HOME: tap on release, hold 0.7 s fires once. t0 = press time | 1,
  * bit 1 = fired (or swallowed: then the release is no tap either) */
 enum { BT_NONE, BT_TAP, BT_HOLD };
-static uint32_t btn_hold(uint32_t *t0, uint32_t label, uint32_t now, int hold_ok)
+UI_SMALL static uint32_t btn_hold(uint32_t *t0, uint32_t label, uint32_t now, int hold_ok)
 {
     uint32_t tap;
     if ((fm1_in.buttons >> panel.btn[label]) & 1u) {
@@ -277,7 +300,7 @@ static uint32_t btn_hold(uint32_t *t0, uint32_t label, uint32_t now, int hold_ok
 }
 
 /* a layer button tapped (pressed and let go, nothing touched): its pages, as before the layers */
-static void layer_tap(uint32_t layer)
+UI_SMALL static void layer_tap(uint32_t layer)
 {
     switch (layer) {
     case LY_FX:
@@ -308,7 +331,7 @@ static void layer_tap(uint32_t layer)
  * hands free for the keys and the knobs); any other button but PLAY, REC and OCT- / OCT+ lets it go
  * (and does only that: its press is eaten) */
 static uint8_t home_eat;                                  /* HOME pressed to unlock: its tap is eaten */
-static void layer_unlock(void)
+UI_SMALL static void layer_unlock(void)
 {
     if (ly_lock != LY_PLAY) {
         ly_lock = LY_PLAY;
@@ -320,7 +343,7 @@ static void layer_unlock(void)
  * turning as the button comes up is the layer's, not the page's under it). fm1_ms | 1, 0 = none */
 #define LY_QUIET_MS 250u
 static uint32_t ly_quiet_t;
-static int ly_quiet(void)
+UI_SMALL static int ly_quiet(void)
 {
     if (ly_quiet_t && fm1_ms - (ly_quiet_t & ~1u) >= LY_QUIET_MS)
         ly_quiet_t = 0;
@@ -328,7 +351,7 @@ static int ly_quiet(void)
 }
 /* the layers, once a frame: which one is held (or locked), the taps on release, its keys and knobs.
  * Returns 1 while one is held or locked (the page does not take the knobs then) */
-static int layers_input(uint32_t note_edges, uint32_t *pressed, uint32_t home)
+UI_SMALL static int layers_input(uint32_t note_edges, uint32_t *pressed, uint32_t home)
 {
     static uint8_t down[LY_COUNT], used[LY_COUNT];
     static uint32_t t0[LY_COUNT];
@@ -457,7 +480,7 @@ static int layers_input(uint32_t note_edges, uint32_t *pressed, uint32_t home)
  * written into its song (no song loaded: it says so). LIVE too since 2026-10-27 (the user: held there, on the unit,
  * it did nothing; the section is the same one, LIVE is where it plays). SONGS: a long press does nothing. */
 static int on_live_page(void) { return drummer_on() && sng_view != DV_LIB; }   /* LIVE or SECTIONS: SAVE held saves */
-static void section_keep(void)
+UI_SMALL static void section_keep(void)
 {
     static const char *const MSG[6] = {"SAVED INTO THE SONG", "STOP TO SAVE", "SONG FULL", "SAVE ERROR", "",
                                        "FACTORY: READ-ONLY"};
@@ -472,7 +495,7 @@ static void section_keep(void)
     else
         ui_message(MSG[r % 6]);
 }
-static void holds_input(uint32_t pressed, uint32_t now_ms)
+UI_SMALL static void holds_input(uint32_t pressed, uint32_t now_ms)
 {
     static uint8_t rec_on, save_on;                       /* *_on: pressed, *_t0 its time */
     static uint32_t rec_t0, save_t0;
@@ -545,7 +568,7 @@ static void holds_input(uint32_t pressed, uint32_t now_ms)
     }
 }
 
-static void ui_input(void)
+UI_SMALL static void ui_input(void)
 {
     uint32_t pressed = fm1_input_edges(0), notes = fm1_input_note_edges(), now = fm1_ticks(), id, b, k;
     uint32_t home = btn_hold(&ui.home_t0, B_HOME, now, 1);
@@ -671,7 +694,7 @@ static void ui_input(void)
 /* ---------------------------------------------------- panel setup --- */
 /* 30 s without input: give up and keep the old table (a stuck key cannot hang the boot) */
 #define SETUP_IDLE_MS 30000u
-static void panel_setup(void)
+UI_SMALL static void panel_setup(void)
 {
     uint32_t i, used = 0, t0 = fm1_ms;
     const panel_t old = panel;

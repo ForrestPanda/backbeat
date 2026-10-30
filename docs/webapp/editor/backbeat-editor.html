@@ -3794,6 +3794,23 @@ const key = (s, id) => s + ":" + id;
 const pSlen = () => { const i = dev.pdesc.findIndex((d) => d && d.fmt === F.STEPS); return i >= 0 ? i : P.SLEN; };
 
 /* -------------------------------------------------------------- MIDI --- */
+/* the FM-1's MIDI ports (SLOOP, taken 2026-10-30). Every FM-1 firmware has the same USB IDs, so Windows and macOS often
+ * keep the port name of the first firmware they saw ("X0X FM-1", "USB-MIDI"...): the names the installer accepts
+ * (fm1ota.js FM1_PORT, the same list), as in/out pairs of one name, "Felucca" / "SLOOP" first (BackBeat's port keeps the
+ * Felucca name), then FM-1, then the generic names. connect() keeps the first pair that answers INFO, so a generic name
+ * of other gear is tried and left */
+const FM1_PORT = /fm-1|felucca|sloop|clipper|ota|composite|sinco|usb-midi/i;
+function fm1Ports(access) {
+  const live = (p) => p.state !== "disconnected" && FM1_PORT.test(p.name || "");
+  const ins = [...access.inputs.values()].filter(live), outs = [...access.outputs.values()].filter(live);
+  const rank = (n) => (/felucca|sloop/i.test(n) ? 0 : /fm-1/i.test(n) ? 1 : 2);
+  const pairs = [];
+  for (const input of ins) {
+    const output = outs.find((o) => o.name === input.name) || (outs.length === 1 ? outs[0] : null);
+    if (output) pairs.push({ input, output });
+  }
+  return pairs.sort((a, b) => rank(a.input.name || "") - rank(b.input.name || ""));
+}
 async function connect() {
   wantConnected = true;
   const missing = MOCK ? null : midiMissing();
@@ -3809,19 +3826,29 @@ async function connect() {
       }
       access.onstatechange = onState;
     }
-    const isF = (p) => /felucca/i.test(p.name || "") && p.state !== "disconnected";
-    const input = [...access.inputs.values()].find(isF);
-    const output = [...access.outputs.values()].find(isF);
-    if (!input || !output) { sayK("nodevice"); return; }
-    const link = new Link((d) => output.send(d), {
-      timeout: 300,
-      onUnknown: (f) => console.debug("ignored reply", f),
-      onTimeout: () => sayK("noreply"),
-      onPush: (f) => onPush(f),
-      onGap: () => { rewatch = true; },
-    });
-    input.onmidimessage = (e) => link.receive(e.data);
-    if (input.open) await input.open().catch(() => {});
+    const pairs = fm1Ports(access);
+    if (!pairs.length) { sayK("nodevice"); return; }
+    let link = null, input = null, output = null;
+    for (const pr of pairs) {                        /* the first pair that answers (a generic name may be other gear) */
+      const l = new Link((d) => pr.output.send(d), {
+        timeout: 300,
+        onUnknown: (f) => console.debug("ignored reply", f),
+        onTimeout: () => sayK("noreply"),
+        onPush: (f) => onPush(f),
+        onGap: () => { rewatch = true; },
+      });
+      pr.input.onmidimessage = (e) => l.receive(e.data);
+      if (pr.input.open) await pr.input.open().catch(() => {});
+      try {
+        await l.request(req.info(), { timeout: 500, retries: 3, quiet: true });   /* (the first frame can be lost) */
+        link = l, input = pr.input, output = pr.output;
+        break;
+      } catch (e) {
+        l.close();
+        pr.input.onmidimessage = null;
+      }
+    }
+    if (!link) { sayK("noreply"); return; }
     dev = { link, input, output, info: null, pdesc: [], gdesc: [], kitNames: null, dump: null, dsteps: [], watch: false };
     sets.clear();                                    /* (another FM-1, maybe) */
     setLabel($("connect"), t("disconnect"));
@@ -3858,7 +3885,7 @@ function disconnect(reasonKey = "disconnected") {
 
 function onState(e) {
   const p = e.port;
-  if (!p || !/felucca/i.test(p.name || "")) return;
+  if (!p || !FM1_PORT.test(p.name || "")) return;
   if (dev && p.state === "disconnected" && (p.id === dev.input.id || p.id === dev.output.id)) {
     disconnect("lost");
   } else if (!dev && wantConnected && p.state === "connected" && p.type === "output") {
@@ -5221,7 +5248,7 @@ async function pinAccess() {
 function pinPorts() {                                      /* the Bluetooth device connected, then every Web MIDI input,
                                                               the FM-1's own last: what its TRS jack receives, with its
                                                               SETUP > MIDI 2 > TRS TO USB on (2026-10-22) */
-  const sel = $("pin-port"), was = sel.value, fm1 = (p) => /felucca/i.test(p.name || "");
+  const sel = $("pin-port"), was = sel.value, fm1 = (p) => FM1_PORT.test(p.name || "");
   const ins = PIN.access ? [...PIN.access.inputs.values()].filter((p) => p.state !== "disconnected")
     .sort((a, b) => fm1(a) - fm1(b)) : [];
   const opts = (BLE.dev ? [el("option", { value: "ble", text: "Bluetooth: " + (BLE.dev.name || "BLE") })] : [])

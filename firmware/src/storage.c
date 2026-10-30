@@ -11,6 +11,9 @@
  * Flash access goes through three hooks (also used by the host test):
  *   st_read(off, dst, n)   st_erase(off)   st_prog(off, src, n)
  */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 #define ST_MAGIC 0x554C4546u                   /* "FELU" */
 #define ST_SECTOR 4096u
 #define ST_PAYLOAD_OFF 256u
@@ -47,7 +50,7 @@ static int st_read(uint32_t off, void *dst, uint32_t n);
 static int st_erase(uint32_t off);
 static int st_prog(uint32_t off, const void *src, uint32_t n);
 
-static uint32_t st_crc32(const void *p, uint32_t n)   /* zlib CRC-32, 4 bits per step */
+UI_SMALL static uint32_t st_crc32(const void *p, uint32_t n)   /* zlib CRC-32, 4 bits per step */
 {
     static const uint32_t T[16] = {
         0x00000000u, 0x1DB71064u, 0x3B6E20C8u, 0x26D930ACu, 0x76DC4190u, 0x6B6B51F4u, 0x4DB26158u, 0x5005713Cu,
@@ -62,7 +65,7 @@ static uint32_t st_crc32(const void *p, uint32_t n)   /* zlib CRC-32, 4 bits per
     return ~c;
 }
 
-static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
+UI_SMALL static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
 {
     if (obj == OBJ_SETTINGS)
         return 0xFC000u + copy * ST_SECTOR;
@@ -77,7 +80,7 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
 
 static uint8_t st_buf[ST_PAYLOAD_MAX] __attribute__((aligned(4)));
 
-static int st_head(uint32_t obj, uint32_t copy, st_hdr_t *h)   /* commit record valid: 0 */
+UI_SMALL static int st_head(uint32_t obj, uint32_t copy, st_hdr_t *h)   /* commit record valid: 0 */
 {
     if (!st_obj_ok(obj) || copy > 1u)
         return -1;
@@ -90,7 +93,7 @@ static int st_head(uint32_t obj, uint32_t copy, st_hdr_t *h)   /* commit record 
     return 0;
 }
 
-static int st_body(uint32_t obj, uint32_t copy, const st_hdr_t *h)   /* payload -> st_buf, CRC ok: 0 */
+UI_SMALL static int st_body(uint32_t obj, uint32_t copy, const st_hdr_t *h)   /* payload -> st_buf, CRC ok: 0 */
 {
     if (st_read(st_sector(obj, copy) + ST_PAYLOAD_OFF, st_buf, h->len) || st_crc32(st_buf, h->len) != h->crc)
         return -1;
@@ -100,7 +103,7 @@ static int st_body(uint32_t obj, uint32_t copy, const st_hdr_t *h)   /* payload 
 /* the current copy: the valid one with the highest seq (A on a tie), -1 when
  * neither is valid. Headers first, so only the winner's payload is read (it
  * is left in st_buf); *h gets its header. */
-static int st_current(uint32_t obj, st_hdr_t *h)
+UI_SMALL static int st_current(uint32_t obj, st_hdr_t *h)
 {
     st_hdr_t a, b;
     int va = st_head(obj, 0, &a) == 0, vb = st_head(obj, 1, &b) == 0;
@@ -123,7 +126,7 @@ static int st_current(uint32_t obj, st_hdr_t *h)
 }
 
 /* load object into dst (up to max bytes); returns the length, or -1 */
-static int st_load(uint32_t obj, void *dst, uint32_t max)
+UI_SMALL static int st_load(uint32_t obj, void *dst, uint32_t max)
 {
     uint32_t i;
     st_hdr_t h;
@@ -138,7 +141,7 @@ static int st_load(uint32_t obj, void *dst, uint32_t max)
 
 /* an object in up to three parts, src then src2 then src3 (SLOOP 2.5: the settings and the SYN kits after them;
  * 2.6: then the MIDI LEARN map) */
-static int st_save3(uint32_t obj, const void *src, uint32_t len, const void *src2, uint32_t len2, const void *src3,
+UI_SMALL static int st_save3(uint32_t obj, const void *src, uint32_t len, const void *src2, uint32_t len2, const void *src3,
                     uint32_t len3)
 {
     uint32_t seq, base, off;
@@ -182,7 +185,7 @@ static int st_save3(uint32_t obj, const void *src, uint32_t len, const void *src
     }
     return 0;
 }
-static int st_save2(uint32_t obj, const void *src, uint32_t len, const void *src2, uint32_t len2)
+UI_SMALL static int st_save2(uint32_t obj, const void *src, uint32_t len, const void *src2, uint32_t len2)
 {
     return st_save3(obj, src, len, src2, len2, 0, 0);
 }

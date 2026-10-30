@@ -3,6 +3,9 @@
 /* Felucca user interface. Four columns map to KNOB 1..4. Rendering is lazy:
  * every element remembers what it last drew and is redrawn only on change. */
 #ifndef FELUCCA_VERSION
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 #define FELUCCA_VERSION "BACKBEAT 0.9"  /* the drummer firmware for the FM-1 (a fork of SLOOP, based on Felucca) */
 #endif
 static void panel_setup(void);
@@ -75,7 +78,7 @@ static void layer_screen_draw(void);                            /* ui_layers.c *
 static void hold_screen_draw(void);
 static uint8_t layer_shown;
 
-static uint32_t page_first(uint32_t fam)
+UI_SMALL static uint32_t page_first(uint32_t fam)
 {
     uint32_t i;
     for (i = 0; i < NPAGES; i++)
@@ -85,7 +88,7 @@ static uint32_t page_first(uint32_t fam)
 }
 
 /* transient message in the top bar: a + b */
-static void ui_say(const char *a, const char *b)
+UI_SMALL static void ui_say(const char *a, const char *b)
 {
     uint32_t n;
     str_cpy(ui.msg, a, sizeof ui.msg);
@@ -96,7 +99,7 @@ static void ui_say(const char *a, const char *b)
 
 static void ui_message(const char *s) { ui_say(s, ""); }
 
-static void page_entered(void)
+UI_SMALL static void page_entered(void)
 {
     const page_t *pg = cur_page();
     song.seq_mode = !ui.home && pg->fam == FAM_SEQ;
@@ -109,7 +112,7 @@ static void page_entered(void)
 static int trk_step_on(const track_t *t, uint32_t i) { return dstep_mask(&t->dstep[i % NSTEP]) != 0u; }
 
 /* undo / redo (EDIT + OCT- / OCT+): the marked pattern and the one now swap places */
-static int undo_swap(int redo)
+UI_SMALL static int undo_swap(int redo)
 {
     track_t *t;
     int16_t len, div;
@@ -147,7 +150,7 @@ static int undo_swap(int redo)
 }
 
 /* SEQ cursor: wraps inside the pattern length, the bank follows, a step entry ends */
-static void cursor_set(int32_t c)
+UI_SMALL static void cursor_set(int32_t c)
 {
     int32_t len = TDRUM->p[P_SLEN] > 0 ? TDRUM->p[P_SLEN] : 1;
     ui.cursor = (uint8_t)((c % len + len) % len);
@@ -155,7 +158,7 @@ static void cursor_set(int32_t c)
     ui.entry_open = 0;
 }
 
-static void cursor_fix(void)                           /* LEN got shorter: onto the last step */
+UI_SMALL static void cursor_fix(void)                           /* LEN got shorter: onto the last step */
 {
     if (ui.cursor >= (uint32_t)TDRUM->p[P_SLEN])
         cursor_set(TDRUM->p[P_SLEN] - 1);
@@ -164,7 +167,7 @@ static void cursor_fix(void)                           /* LEN got shorter: onto 
 /* the pattern's DIV set (the SEQ layer's knob, the PATTERN page, the editor's SET): the hits keep their place on the
  * beat and the length follows (seq.c pattern_rediv); over 64 steps nothing changes and the screen says so. sess: the
  * undo session to mark (0: a new one). 1: changed; 0: the same, or refused */
-static int pattern_div_set(track_t *t, uint32_t div, uint32_t sess)
+UI_SMALL static int pattern_div_set(track_t *t, uint32_t div, uint32_t sess)
 {
     if (div == trk_div(t))
         return 0;
@@ -182,7 +185,7 @@ static int pattern_div_set(track_t *t, uint32_t div, uint32_t sess)
     return 1;
 }
 
-static void open_family(uint32_t fam)
+UI_SMALL static void open_family(uint32_t fam)
 {
     if (PAGES[page_first(fam)].fam != fam)
         return;                                         /* (drums only: ENV, LFO, SEL, EDIT, ARP have no page) */
@@ -202,7 +205,7 @@ static void open_family(uint32_t fam)
 /* SELECT on a page: the previous / next page of its family, as tapping the button again but both ways,
  * stopping at the ends. Not the screens of their own (SONG, DRUMS) nor a family of one page:
  * 0 then, and SELECT is the tempo there */
-static int page_walk(int32_t s)
+UI_SMALL static int page_walk(int32_t s)
 {
     const page_t *pg = cur_page();
     uint32_t i, fam = pg->fam, n = 0;
@@ -234,7 +237,7 @@ enum { DV_LIVE, DV_LIB, DV_SEC };                /* the SONG page's screens: LIV
 static void drummer_open(uint32_t view);
 static int on_song_page(void) { return !ui.home && cur_page()->scope == SC_SONG; }   /* (LIVE or SONGS) */
 #endif
-static void go_home(void)                        /* fm1-drummer: the LIVE screen (the SONG page) */
+UI_SMALL static void go_home(void)                        /* fm1-drummer: the LIVE screen (the SONG page) */
 {
 #if FELUCCA_DRUMMER
     uint32_t i;
@@ -258,7 +261,7 @@ static void go_home(void)                        /* fm1-drummer: the LIVE screen
 
 static void track_defaults_steps(track_t *t) { steps_clear(t); }
 
-static void track_defaults(track_t *t)
+UI_SMALL static void track_defaults(track_t *t)
 {
     uint32_t i;
     for (i = 0; i < P_E0; i++)
@@ -269,7 +272,7 @@ static void track_defaults(track_t *t)
 /* MIDI Program Change (2.6, after Felucca 1.5.1, PR #179 by @renebohne): seq.c queues it per track; here, in the main
  * loop: the drum track takes kit n. A number past the last kit does nothing (no wrap); drums only: the other tracks
  * have no sound to load */
-static void pc_poll(void)
+UI_SMALL static void pc_poll(void)
 {
     uint32_t i;
     for (i = 0; i < NTRK; i++) {
@@ -307,13 +310,13 @@ static const param_desc_t *home_param(uint32_t k, int16_t **vp)
  * One CC sets one parameter, a parameter has one CC: learning one again replaces both. The settings keep the map */
 static struct { uint8_t on, pick, trk, id; } mlu;
 static uint32_t ml_code(uint32_t id) { return id >= P_E0 ? ML_E0 + id - P_E0 : id + 1u; }
-static void ml_put(uint32_t i, uint32_t e)       /* (the ISR reads the entry: never half of one) */
+UI_SMALL static void ml_put(uint32_t i, uint32_t e)       /* (the ISR reads the entry: never half of one) */
 {
     fm1_irq_off();
     ml_tab[i % ML_N] = (uint16_t)e;
     fm1_irq_on();
 }
-static uint32_t ml_count(void)
+UI_SMALL static uint32_t ml_count(void)
 {
     uint32_t i, n = 0;
     for (i = 0; i < ML_N; i++)
@@ -321,7 +324,7 @@ static uint32_t ml_count(void)
     return n;
 }
 /* cc -> parameter id of track k, in place of what either had; 0 = no room, 2 = a CC that is never learned */
-static uint32_t ml_learn(uint32_t cc, uint32_t k, uint32_t id)
+UI_SMALL static uint32_t ml_learn(uint32_t cc, uint32_t k, uint32_t id)
 {
     uint32_t i, e;
     if (!ml_free_cc(cc) || k >= NTRK || id >= P_COUNT)
@@ -345,7 +348,7 @@ static int ml_clear_all(void)                    /* SETUP > MIDI 2 > MIDI LEARN 
         settings_later = 1;                      /* (saved when quiet) */
     return n != 0u;
 }
-static void ml_toggle(void)                      /* SETUP > MIDI 2 > MIDI LEARN */
+UI_SMALL static void ml_toggle(void)                      /* SETUP > MIDI 2 > MIDI LEARN */
 {
     mlu.on = (uint8_t)!mlu.on;
     mlu.pick = 0;
@@ -355,7 +358,7 @@ static void ml_toggle(void)                      /* SETUP > MIDI 2 > MIDI LEARN 
     ui.force = 1;
 }
 /* a knob turned parameter id of track t: picked while learning (ui_input.c) */
-static void ml_knob(const track_t *t, uint32_t id)
+UI_SMALL static void ml_knob(const track_t *t, uint32_t id)
 {
     char b[16];
     if (!mlu.on || id >= P_COUNT)
@@ -374,7 +377,7 @@ static void ml_knob(const track_t *t, uint32_t id)
     ml_arm = 1;
 }
 /* each frame: a CC heard for the picked parameter is learned */
-static void ml_poll(void)
+UI_SMALL static void ml_poll(void)
 {
     uint32_t cc = ml_heard, r;
     char a[16], b[16];

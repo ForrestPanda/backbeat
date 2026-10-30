@@ -61,7 +61,11 @@ comes back (below).
 
 The installer takes M-VAVE's own package: download FM-1 V15 from m-vave.com (Downloads, PC
 Firmware) and install `FM-1.fwsc` as you installed BackBeat. The installer checks it is exactly
-V15 before it sends it.
+V15 before it sends it. M-VAVE publishes **V16** now (2026-10-30): the installer refuses it (it
+knows V15 by its hash); use M-VAVE's own updater, M-UPGRADE (Downloads, PC Software), with any
+official version, closing every other program that uses MIDI first. SLOOP dropped its in-browser
+return to stock as not reliable on every system and points at M-UPGRADE too. The dump and the
+dongle below are the way back that needs neither.
 
 ## When something goes wrong
 
@@ -75,7 +79,11 @@ where it stopped.
 ### BackBeat does not start, or crashes at start
 
 - After **two failed starts in a row**, BackBeat opens its **BACKBEAT USB RESCUE** screen by itself.
-- Or force it: hold **OCT-** alone while switching on.
+- Or force it: hold **OCT-** alone while switching on. (Until 2026-10-30 this never worked, in
+  SLOOP 2.6 and in BackBeat alike: the key matrix only reads while the backlight pin is driven, and
+  the early key scan ran before the screen was set up, so the key was never seen; SLOOP 2.7.2 found
+  and fixed it, BackBeat took the fix; verified on the first unit the same day: OCT- held while
+  switching on brings the BACKBEAT USB RESCUE screen up.)
 
 The rescue screen runs nothing but USB and the updater (no audio, no songs, no settings). Open the
 installer and install BackBeat again, or the official V15. It reports itself as `FM-1_000`.

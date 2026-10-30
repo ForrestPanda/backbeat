@@ -8,13 +8,16 @@
  * Program Change or MIDI LEARN goes on in the dark too. Waking, a frame at a time (never a wait in the loop): 120 ms
  * after the SLPIN, SLPOUT; 120 ms after that one frame redraws everything (ui.force), then DISPON and the light.
  * The panel keeps drawing while it sleeps (its RAM works in sleep), so nothing waits for the wake. */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 enum { SCR_ON, SCR_ASLEEP, SCR_WAKING, SCR_SHOWING };
 static const uint32_t SCR_MS[SCR_N] = {0u, 60000u, 300000u, 900000u};
 static uint8_t scr_state, scr_eat, scr_want;
 static uint32_t scr_t, scr_seen_ms, scr_pedal;
 
 /* in place of ui_input (main.c): while dark, waking or eating, the panel's input is taken and dropped */
-static void scr_input(void)
+UI_SMALL static void scr_input(void)
 {
     uint32_t e, any;
     if (scr_state == SCR_ON && !scr_eat) {
@@ -34,7 +37,7 @@ static void scr_input(void)
 }
 
 /* once a frame, after ui_draw */
-static void scr_poll(void)
+UI_SMALL static void scr_poll(void)
 {
     uint32_t now = fm1_ms, t = SCR_MS[scr_off % SCR_N], idle;
     if (song.playing || ui.msg_t || fm1_in.buttons || fm1_in.notes || pedal_seen_ms != scr_pedal || !t) {
@@ -77,7 +80,7 @@ static void scr_poll(void)
 }
 
 /* UBOOT, an update: the panel on at once (blocking, ~240 ms) before they draw */
-static void scr_wake_now(void)
+UI_SMALL static void scr_wake_now(void)
 {
     if (scr_state == SCR_ON)
         return;

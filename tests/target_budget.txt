@@ -40,5 +40,12 @@ drums_mix 6492
 # a backward branch, and the compiler inlines differently around it (27 divides counted in its loops, none added:
 # the per-sample loops have no divide). The host CPU check (regress.c, callgrind) is within budget on every entry;
 # stopped and silent the whole mix is skipped (tests/gate_test.c).
-mix_block 49466
+# The master rounded (2026-10-30, SLOOP 2.8.4's MULQ12R in dsp.c, on the master's two channels and DUST's drive):
+# mix_block 37128 as the day's other changes had laid it out (-25 %) -> 82466 (+67 % against the budget). The loops hold
+# 26 instructions more (2963 -> 2989, the four macros' low-bit terms), one call fewer, the same 29 divides; the rest is
+# the weighting: the compiler lays the master's loop out inside a span closed by a backward branch, two levels deep
+# (x16). The host CPU check (regress.c, callgrind) says what it costs a sample: mix/idle 420, mix/idle_drums 690 -> 700
+# (+1.4 %), drums/busy 2428 -> 2430, every entry in budget. UI_SMALL (the same day) changes nothing here: the audio
+# path is not marked, and mix_block counts the same with and without it.
+mix_block 82466
 fm1_alnk0_irq 30

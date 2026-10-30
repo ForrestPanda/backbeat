@@ -43,7 +43,8 @@ or one that sends MIDI over USB; a plain stereo 3.5 mm cable; Chrome or Edge on 
 
 **Before you install.** This is a replacement firmware, installed at your own risk. The FM-1 is hard to
 brick (the installer never touches its boot code, and BackBeat has a rescue screen), and the way back to the
-official firmware is the same installer with M-VAVE's FM-1 V15 file (m-vave.com, Downloads, PC Firmware).
+official firmware is the same installer with M-VAVE's FM-1 V15 file, or M-VAVE's own updater M-UPGRADE with any version
+(m-vave.com, Downloads; the installer checks for V15 exactly, and M-VAVE publishes V16 now).
 [docs/recovery.md](docs/recovery.md) has a one-minute backup of your unit to take first (Linux), and every way back.
 
 **Install.** Open the installer at <https://forrestpanda.github.io/backbeat/> in Chrome or Edge, plug in the
@@ -264,6 +265,9 @@ interface (verified on the first unit, 2026-10-22, with the Ampero II Stage and 
      fill, stop or clock), a plain TRS-to-USB MIDI interface. LIVE says **BRIDGE: PEDAL TO USB**; the FM-1's own keys
      still work (PLAY stops a song that was playing when you switched).
    - **OFF** (the default): nothing goes out.
+   **SETUP > MIDI 2 > MIDI CLOCK OUT** (KNOB 4) makes the FM-1 the clock master on USB instead: the MIDI clock at
+   its tempo, sent stopped too, START as the drums start (after a count-in: then) and STOP as they stop, for a looper
+   or a DAW on the cable; off while MIDI CLOCK IN is USB or TRS (a BackBeat that follows a clock never sends one back).
 2. The tablet on the FM-1's USB (an OTG cable on Android; the tablet powers the FM-1), the editor open in Chrome or Edge.
 3. On the Play card: **MIDI in from** = **FM-1: its TRS jack**, **Listen to the pedal**, and **Follow its MIDI clock**
    when the pedalboard sends one (the Ampero: Global > MIDI > CLOCK OUT(TRS) on), so the player keeps the FM-1's tempo.
@@ -310,7 +314,8 @@ the fourth (C#4) the break (as CC 28: the section playing comes in again through
 **tap tempo** (as CC 26, song loaded or not), its light flashing the tempo (with PLAY while playing; stopped, at the
 tempo, so a tap or a MIDI clock shows at once); the other black keys as the first. So a plain change is one press, and a fill into the change is a black key then a white one,
 as the pedal's CC 21 sent with its CC 20. SEL is a fill too, ENV and LFO the previous and next section
-(without a fill). KNOB 1 (and SELECT) the tempo, KNOB 2 (and PRESETS) the kit, KNOB 3 the drums' level, KNOB 4 the
+(without a fill). KNOB 1 (and SELECT) the tempo (turned fast it sweeps wider, a detent at a time when turned slowly;
+so every knob with a wide range), KNOB 2 (and PRESETS) the kit, KNOB 3 the drums' level, KNOB 4 the
 swing. With no song loaded it says PICK A SONG and shows the 16 songs of the SONGS page shown (USER or FACTORY;
 ENV / LFO switch), and the white keys 1..16 load them.
 

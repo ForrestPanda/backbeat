@@ -5,6 +5,9 @@
  * slow IIR; the bar on the screen: ui_draw.c), with what the minute was like: playing at the reading, played during
  * the minute, the screen dark, a USB host alive, the audio gate closed, the first minute after a boot. BL_N minutes
  * (17 h), the oldest overwritten; a reset or UBOOT keeps it (a power-off leaves garbage: the magic clears it). */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 #define BL_N 1024u
 #define BL_MAGIC 0x314C4142u                     /* "BAL1" */
 #define BL_PERIOD_MS 60000u
@@ -17,13 +20,13 @@ static struct {
 static uint32_t bl_last_ms;
 static uint8_t bl_seen;                          /* flags gathered over the minute */
 
-static void battlog_clear(void)
+UI_SMALL static void battlog_clear(void)
 {
     battlog.magic = BL_MAGIC;
     battlog.n = 0;
 }
 
-static void battlog_boot(void)                   /* main.c, once: a reset keeps the log, a power-on starts it */
+UI_SMALL static void battlog_boot(void)                   /* main.c, once: a reset keeps the log, a power-on starts it */
 {
     if (battlog.magic != BL_MAGIC || battlog.n > 0x01000000u)
         battlog_clear();
@@ -31,7 +34,7 @@ static void battlog_boot(void)                   /* main.c, once: a reset keeps 
     bl_seen = BLF_BOOT;
 }
 
-static void battlog_tick(void)                   /* main.c, every frame */
+UI_SMALL static void battlog_tick(void)                   /* main.c, every frame */
 {
     uint32_t i;
     if (song.playing)

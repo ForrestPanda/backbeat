@@ -48,6 +48,8 @@ static void draw_text_box(int x, int y, int w, const void *f, const char *s, int
 { (void)x;(void)y;(void)w;(void)f;(void)s;(void)c;(void)a; }
 static void lcd_sync(void) {}
 static void usb_start(void) {}
+static int bl_calls;
+#define RECOVERY_KEYS_ON() (bl_calls++)        /* the backlight driven before the scan (hal/fm1_lcd_hw.h on the unit) */
 #include "../firmware/src/recovery.c"
 
 int main(void)
@@ -66,7 +68,7 @@ int main(void)
     assert(bootguard_begin(&b) == BOOT_NORMAL && b.failed == 0);
     assert(bootguard_manual(1) && !bootguard_manual(0) && !bootguard_manual(2) && !bootguard_manual(3));
 
-    input_buttons = 1; assert(recovery_key());
+    input_buttons = 1; assert(recovery_key()); assert(bl_calls == 1);   /* the key matrix powered before the scan */
     input_buttons = 3; assert(!recovery_key());
     input_buttons = 0; assert(!recovery_key());
     assert(scans >= 150);

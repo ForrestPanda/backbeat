@@ -6,6 +6,9 @@
  * table lives in .noinit and, with FELUCCA_FLASH, in flash with the settings
  * (project.c). */
 /* (B_SCL: the button printed SEL, the key / scale button between FX and ENV) */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 enum { B_FX, B_SCL, B_ENV, B_LFO, B_EDIT, B_GLO, B_HOME, B_SAVE, B_ARP, B_SEQ, B_PLAY, B_REC,
        B_OCTDN, B_OCTUP, NB };
 enum { EN_SELECT, EN_ALGO, EN_PRESET, EN_K1, EN_K2, EN_K3, EN_K4, NE };
@@ -30,7 +33,7 @@ static const panel_t PANEL_DEFAULT = {
     {1, 1, 1, 1, 1, 1, 1},
 };
 
-static void panel_init(void)                     /* also after a flash load: ids are used as array indexes and shifts */
+UI_SMALL static void panel_init(void)                     /* also after a flash load: ids are used as array indexes and shifts */
 {
     uint32_t i, ok = panel.magic == PANEL_MAGIC;
     for (i = 0; ok && i < NB; i++)
@@ -41,7 +44,7 @@ static void panel_init(void)                     /* also after a flash load: ids
         panel = PANEL_DEFAULT;
 }
 
-static uint32_t panel_btn_of(uint32_t matrix_id)        /* label of a matrix button, NB if none */
+UI_SMALL static uint32_t panel_btn_of(uint32_t matrix_id)        /* label of a matrix button, NB if none */
 {
     uint32_t b;
     for (b = 0; b < NB; b++)
@@ -57,7 +60,7 @@ static uint32_t ui_input_ms;                    /* the last button, key or knob 
 /* the knobs (roles, bit per EN_*) not to be read again in this UI pass (ui_input: a layer took them, #102 of
  * Felucca): panel_enc returns 0 and leaves their detents for the next pass */
 static uint32_t enc_hold;
-static int32_t panel_enc(uint32_t role)
+UI_SMALL static int32_t panel_enc(uint32_t role)
 {
     int32_t s;
     if ((enc_hold >> role) & 1u)
@@ -93,7 +96,7 @@ enum { SCR_NEVER, SCR_1MIN, SCR_5MIN, SCR_15MIN, SCR_N };
 static uint8_t scr_off;                         /* SETUP > SCREEN > SCREEN OFF (screen.c) */
 static uint8_t live_view;                       /* LIVE's layout: 0 the sections as tiles, 1 the beat big (ui_drummer.c;
                                                  * HOME tapped on LIVE turns it; 2026-10-29) */
-static uint32_t lights_word(void)
+UI_SMALL static uint32_t lights_word(void)
 {
     return (uint32_t)lights_lvl | (uint32_t)lights_keys << 4 | (uint32_t)(lights_notes != 0u) << 8 |
            (uint32_t)(live_view != 0u) << 9 |   /* LIVE's layout (2026-10-29; SLOOP's REC MODE bit, which BackBeat
@@ -107,7 +110,7 @@ static uint32_t lights_word(void)
            (uint32_t)(midi_thru == THRU_ONLY) << 29 |   /* .. BRIDGE ONLY */
            (uint32_t)(scr_off % SCR_N) << 30;   /* SCREEN OFF (2026-10-24; bits no older firmware wrote: NEVER) */
 }
-static void lights_from_word(uint32_t w)
+UI_SMALL static void lights_from_word(uint32_t w)
 {
     lights_lvl = (uint8_t)((w & 15u) < LIGHTS_N ? (w & 15u) : LIGHTS_OFF);
     lights_keys = (uint8_t)(((w >> 4) & 15u) < KEYS_N ? ((w >> 4) & 15u) : KEYS_OFF);
@@ -128,7 +131,7 @@ static void lights_from_word(uint32_t w)
 static void settings_save(void);              /* project.c: flash copy (FELUCCA_FLASH) */
 static uint8_t settings_later;                 /* changed while playing: saved once stopped (project.c) */
 
-static void settings_init(void)
+UI_SMALL static void settings_init(void)
 {
     if (settings.magic != SETTINGS_MAGIC || settings.palette >= NPALETTES) {
         settings.magic = SETTINGS_MAGIC;

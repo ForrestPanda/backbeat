@@ -540,6 +540,7 @@ the only big lever is `SMP_DATA`, and the acoustic kit is in it.
 | MULDJORD's crash (two takes, 3.2 s) and the snare, open hat and ride at their recipe lengths, 2026-10-15 evening: 385288 B of ADPCM (`tools/realkit.json` budget 412000); round-robin hats from the Muldjord hi-hat tried and reverted (the user prefers Black Pearl's) | 549360 B: **32204 B left** |
 | With entries and breaks (CC 28, 2026-10-18; the flams and the fills to the section's end before it) | 550984 B: **30580 B left**; static RAM 61312 B |
 | The ride 2.0 s (399478 B of ADPCM), the voice pick (at most four of a note, the quietest given way) and SETUP > LOAD, 2026-10-22 | 566616 B: **14948 B left**; static RAM 61344 B |
+| SLOOP 2.7 to 2.8.4 looked through (2026-10-30, below): the mix rounded, the rescue key, the clock's mean tempo, the knobs' acceleration, MIDI CLOCK OUT, the crash screen's stack and the stacks painted; then the non-audio functions compiled for size (`UI_SMALL`, clang minsize, SLOOP 2.7's) | 568460 B with the changes, **563116 B** with UI_SMALL: **18448 B left**; static RAM 61568 B |
 | Data region (0x93000..0xE0000): projects, the user sample slots of 80 KB (USR1 and USR2 now hold the songs: USR3 and USR4 are the user's; free: 0xC4000..0xC7FFF, the old user preset banks 0xDC000..0xDFFFF, the FM6 bank 0xE5000..0xE6FFF, 0xFB000) | about 308 KB |
 | Songs 1..8 (0xA0000..0xAFFFF, A/B) and the pedal settings (0xB0000 / 0xB1000); songs 9..16 (0xB4000..0xC3FFF, A/B, since 2026-10-14) | 72 KB of USR1's 80 KB, 64 KB of USR2's; the kit pair USR3+4 stays the user's |
 | ADPCM sample audio | about 11 KB per second (mono 22 kHz, 4 bit) |
@@ -1394,6 +1395,66 @@ BackBeat never wrote), `gfx.c`: the font's shift became a scale, the L and the n
 share S's bitmaps and tables, so XL costs no flash of its own (`tools/gen_font.py`). ui_pages_test renders live-big,
 live-big-nocue, live-big-countin, live-big-cued. Not on the unit yet: to check by eye that the 5x digits draw
 within a frame at a bar change, and that the layout comes back after a power-off.
+
+## SLOOP 2.7 to 2.8.4, what was taken (2026-10-30)
+
+Asked "are there any updates from sloop that make sense in the context of backbeat?": the 14 upstream commits since
+the fork point (cb6dedc, SLOOP 2.6 of 2026-10-11) read against BackBeat's own code, then "do all of these points".
+Taken:
+
+- **The rescue key never worked.** The key matrix reads only while PA2, the backlight (active low), is driven low;
+  `recovery_key` (recovery.c) scanned before `lcd_init`, so OCT- at power-on was never seen, in SLOOP 2.6 and here.
+  SLOOP 2.7.2 measured it on an FM-1 and drove the backlight first: `fm1_lcd_backlight_on` in hal/fm1_lcd_hw.h,
+  called before the scan (`RECOVERY_KEYS_ON`, the host test counts it). The automatic rescue after two failed starts
+  and OCT- + OCT+ held 5 s never depended on it. **Verified on the unit 2026-10-30:** OCT- held while switching on
+  brought the BACKBEAT USB RESCUE screen up (identity FM-1_000 on USB, seen from the computer), the first time that
+  route ever worked on this unit; off and on again, BackBeat back.
+- **The master rounded** (SLOOP 2.8.4, "clean fades", SLOOP Pro #4): `(x >> 2) * m >> 10` floored the output to
+  steps of 4 LSB times the MASTER, signal-correlated distortion that stays as loud while a hit fades, on the jack and
+  USB; dsp.c `MULQ12R` keeps the low bits (~6 ops), used by the master and DUST's drive (fx.c). The drums' own LEVEL
+  is a Q15 multiply without a pre-shift and was never affected. Golden renders updated (every render moves by an LSB
+  here and there).
+- **A user kit zone's root clamped** (drums.c, SLOOP after 2.8.3): a typed root of 300 shifted the pitch by 2^20.
+- **The installer finds the update loader by its handshake** (web/fm1ota.js, SLOOP 2.8): Windows often names the
+  re-enumerated loader generically ("USB MIDI Device"), so the name filter missed it and the install stalled at "the
+  loader did not appear". `find(filter, deep)`: the named ports first, then, hunting the loader only, every other port,
+  accepted solely when it answers the FM-1 handshake (other gear returns no identity); `probe` pairs an input with the
+  output of the same or a containing name first ("MIDIOUT2 (Felucca)"), else any; 60 s for the loader and the way
+  back. test_web: the loader under a generic name installed and resumed, an unnamed port probed only deep.
+- **The editor matches the FM-1's port names** as the installer does (editor.html `FM1_PORT`, `fm1Ports`, SLOOP
+  d315ad8): Windows and macOS keep the port name of the first FM-1 firmware they saw ("X0X FM-1", "USB-MIDI"), and
+  BackBeat's editor looked for "felucca" only. The pairs in rank (Felucca / SLOOP, FM-1, the generic names), the first
+  that answers INFO kept; the state watcher and the Pedal card's port list take the same names.
+- **The clock's tempo is the mean of the last 8 beats** (seq.c `mclk_tempo`, SLOOP 2.7.2 / 2.8): taken when it moved
+  0.8 BPM or more, a beat 5 BPM off starts the window over, so a master whose beats jitter no longer flickers BPM.
+- **Knob acceleration** (ui_input.c `accel`, SLOOP 2.7 after JIANT FM): progressive by the time per detent, capped by
+  the range (x16 on the tempo), only while the turn goes on in one direction, so a reversal never jumps; SLOOP 2.6's
+  x3 / x6 step before. Always on (no menu entry: BackBeat's knobs are few).
+- **MIDI CLOCK OUT** (SETUP > MIDI 2, KNOB 4; seq.c `clkout_block`, SLOOP 2.7's CLK OUT): BackBeat the clock master
+  on USB, 24 pulses a beat at the tempo, sent stopped too, START with the downbeat's pulse as the sequencer starts
+  (after a count-in: then), STOP as it stops or the setting turns off; only while MIDI CLOCK IN is INT. A setting of
+  the FM-1, kept in the MIDI part's spare byte (project.c `midi_part`, 2 x ML_N + 5; a part saved before reads 0:
+  off), no global id, so the editor protocol and the projects are unchanged. **Verified on the unit 2026-10-30**
+  (aseqdump on the FM-1's port): pulses while stopped, START then its pulse at PLAY, 380 pulses and 63 drum notes
+  over four bars, STOP at STOP, pulses on after. (The Ampero's looper over TRS stays the other way round,
+  docs/ampero-setup.md: the Ampero the master.) Installed on the unit the same day (the whole set below it too).
+- **The crash screen** shows the stack pointer too and stays 10 s (main.c `fm1_fault`, SLOOP 2.7.1: time for a
+  photo), and **the two stacks are painted at boot** (`stack_paint`, 24 KB main and 8 KB supervisor, hal
+  `fm1_sp / fm1_ssp / fm1_usp`): the console's `status` says `stack_main_free`, `stack_sup_free` and `stack_sp`, the
+  bytes above each guard band never reached since boot and which region the main loop runs on. What they say decides
+  whether `_guard0` may move up and the pool grow (milestone 8's RAM).
+- **Compiled for size off the audio path** (core.h `UI_SMALL`, clang's minsize attribute, SLOOP 2.7's way): the
+  pages, menus, panel, songs' packing, projects, updater, console, 289 functions in 21 files (not seq.c, fx.c,
+  drums.c, gfx.c, lcd.c, usb.c, midi_uart.c, samples.c, voice.c). 5344 B back, nothing taken out; each file guards
+  the macro for the host tests and the loader. The flash table above.
+- **Docs:** M-VAVE publishes V16 now; the installer's return to stock knows V15 by its hash and refuses V16, SLOOP
+  removed that path as unreliable and points at M-UPGRADE (README, recovery.md).
+
+Left where it was: the 2.8.3 drum voice stealing (BackBeat's own rule of 2026-10-22, the quietest voice by the sample
+left, 12 voices, is finer; a kick is rarely the quietest), everything synth-side (the NOTES editor, UNISON, PHYS, the
+arp, KBD HOLD, held notes, favourites, themes, the two cores, the browser's wasm preview, the stuck-note fix for held
+MIDI notes), TUNE and DECAY per drum sound and the FX filter on the drums (flash and the song format), the OCT+
+per-step sheet (OCT+ is the mark here), REMOTE and DR MAP (the pedal map covers them), Match levels on the kit page.
 
 ## Open questions
 

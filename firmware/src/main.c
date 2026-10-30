@@ -2,6 +2,9 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* FELUCCA boot and main loop. Boot order: WDT first, boot-loop guard, fatal
  * vectors, guards; then LCD, input (TIMER5 IRQ, 10 kHz), audio (ALNK0 IRQ). */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 extern uint32_t _data_start[], _data_end[], _data_load[], _bss_start[], _bss_end[];
 extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
 
@@ -56,7 +59,7 @@ void fm1_timer5_irq(void)
 }
 extern void isr_timer5(void);
 
-static void timer5_start(void)                 /* OSC /4 = 6 MHz, PRD 600 -> 10 kHz */
+UI_SMALL static void timer5_start(void)                 /* OSC /4 = 6 MHz, PRD 600 -> 10 kHz */
 {
     /* above ALNK0 (3): the tick may nest into the audio render (a few us; plain registers, the
      * MIDI rings are single-producer / single-consumer). Below it, a tick waited for the render
@@ -65,7 +68,7 @@ static void timer5_start(void)                 /* OSC /4 = 6 MHz, PRD 600 -> 10 
     fm1_timer5_start(isr_timer5, 4);
 }
 
-static void hexs(char *b, uint32_t v)
+UI_SMALL static void hexs(char *b, uint32_t v)
 {
     uint32_t i;
     for (i = 0; i < 8u; i++)
@@ -73,7 +76,7 @@ static void hexs(char *b, uint32_t v)
     b[8] = 0;
 }
 
-static void fm1_fault(const fm1_crash_t *c)
+UI_SMALL static void fm1_fault(const fm1_crash_t *c)
 {
     char b[12];
     uint32_t t0;
@@ -90,14 +93,46 @@ static void fm1_fault(const fm1_crash_t *c)
     draw_text_box(10, 102, 220, &FONT_S, b, C_WHITE, 0);
     hexs(b, c->rets);
     draw_text_box(10, 120, 220, &FONT_S, b, C_WHITE, 0);
+    hexs(b, c->sp);                                     /* (SLOOP 2.7.1) more to read on a photo of it: the stack */
+    draw_text_box(10, 144, 220, &FONT_S, b, C_WHITE, 0);
     t0 = fm1_ticks();
-    while ((uint32_t)(fm1_ticks() - t0) < 4000u * 1000u * FM1_TICKS_PER_US)
+    while ((uint32_t)(fm1_ticks() - t0) < 10000u * 1000u * FM1_TICKS_PER_US)   /* (10 s: time for a photo) */
         ;
     fm1_reboot();
 }
 
+/* core 0's two stacks (app.ld: 24 KB from _ustack_lo, 8 KB from _sstack_lo), never measured before (SLOOP 2.7.1,
+ * taken 2026-10-30): painted at boot with a mark up to 512 B below whichever of sp / ssp / usp sits in each region
+ * (the live frames), so the console's status can say how deep each has gone since (stack_main_free, stack_sup_free:
+ * bytes above the guard band never reached) and which region the main loop runs on (stack_sp). What they say decides
+ * whether _guard0 may move up and the pool grow (design.md, milestone 8) */
+extern char _ustack_lo[], _ustack_top[], _sstack_lo[], _sstack_top[];
+#define STACK_MARK 0x4B4D5453u                  /* "STMK" */
+UI_SMALL static void stack_paint(char *lo, char *top)
+{
+    uint32_t a = (uint32_t)(uintptr_t)lo, lim = (uint32_t)(uintptr_t)top, p[3], i, *d;
+    p[0] = fm1_sp();                            /* (fm1_guard.h) */
+    p[1] = fm1_ssp();
+    p[2] = fm1_usp();
+    for (i = 0; i < 3u; i++)
+        if (p[i] >= a + 512u && p[i] < lim + 512u && p[i] - 512u < lim)
+            lim = p[i] - 512u;
+    for (d = (uint32_t *)lo; (uint32_t)(uintptr_t)d < lim; d++)
+        *d = STACK_MARK;
+}
+UI_SMALL static uint32_t stack_free(const char *lo, const char *top)   /* bytes of marks still in place, from the guard band up */
+{
+    const uint32_t *d = (const uint32_t *)lo;
+    while ((const char *)d < top && *d == STACK_MARK)
+        d++;
+    return (uint32_t)((const char *)d - lo);
+}
+static uint32_t stack_main_free(void) { return stack_free(_ustack_lo, _ustack_top); }   /* console.c */
+static uint32_t stack_sup_free(void) { return stack_free(_sstack_lo, _sstack_top); }
+static uint32_t stack_sp(void) { return fm1_sp(); }
+
 /* power-on: the tracks' defaults, the default kit, empty patterns */
-static void felucca_init(void)
+UI_SMALL static void felucca_init(void)
 {
     uint32_t i;
     for (i = 0; i < G_COUNT; i++)
@@ -120,10 +155,12 @@ static void felucca_init(void)
     ui.force = 1;
 }
 
-static void fm1_main(void)
+UI_SMALL static void fm1_main(void)
 {
     int32_t knob = 512 * 16;
     uint32_t healthy_since;
+    stack_paint(_ustack_lo, _ustack_top);           /* (the console's stack_main_free / stack_sup_free) */
+    stack_paint(_sstack_lo, _sstack_top);
     persist_boot();
 #if FELUCCA_OTA
     if (flash_ok)

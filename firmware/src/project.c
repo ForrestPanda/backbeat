@@ -15,6 +15,9 @@
  *
  * Built on the host too (tests/project_test.c, -DPROJ_HOST): the part above the #ifndef
  * PROJ_HOST needs core.h, params.c (TP, e_desc) and drums.c. */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 #define PROJ_MAGIC 0x44524D31u                 /* "DRM1": the drum track */
 #define PROJ_MAGIC_V6 0x46554E36u              /* "FUN6": SLOOP 2.6, four tracks; read only */
 #define PROJ_MAGIC_V5 0x46554E35u              /* "FUN5": SLOOP 2.4 .. 2.5; read only */
@@ -49,11 +52,11 @@ typedef struct {                               /* DRM1 */
     proj_trk_t t;                              /* the drum track */
     uint32_t sum;
 } project_t;
-static int16_t pt_get(const proj_trk_t *t, uint32_t id)   /* p[id] of a stored track */
+UI_SMALL static int16_t pt_get(const proj_trk_t *t, uint32_t id)   /* p[id] of a stored track */
 {
     return id < PROJ_NC6 ? t->p[id] : id < P_E0 ? (int16_t)t->x[id - PROJ_NC6] : t->e[(id - P_E0) & 7u];
 }
-static void pt_set(proj_trk_t *t, uint32_t id, int32_t v)
+UI_SMALL static void pt_set(proj_trk_t *t, uint32_t id, int32_t v)
 {
     if (id < PROJ_NC6)
         t->p[id] = (int16_t)v;
@@ -64,7 +67,7 @@ static void pt_set(proj_trk_t *t, uint32_t id, int32_t v)
 }
 static int32_t pt_micro(const proj_trk_t *t, uint32_t i) { int32_t m = t->mf[i] & 63; return m >= 32 ? m - 64 : m; }
 static uint32_t pt_fill(const proj_trk_t *t, uint32_t i) { return (uint32_t)t->mf[i] >> 6; }
-static void pt_set_mf(proj_trk_t *t, uint32_t i, int32_t micro, uint32_t fill)
+UI_SMALL static void pt_set_mf(proj_trk_t *t, uint32_t i, int32_t micro, uint32_t fill)
 {
     t->mf[i] = (uint8_t)(((uint32_t)micro & 63u) | (fill & 3u) << 6);
 }
@@ -112,7 +115,7 @@ _Static_assert(sizeof(project_v4_t) == 3112u && sizeof(project_v5_t) == 3840u &&
                "formats 4 / 5 / 6 as they were stored");
 _Static_assert(sizeof(project_t) <= 3840u, "a project fits one flash object (storage.c ST_PAYLOAD_MAX)");
 
-static uint32_t proj_hash(const void *p, uint32_t n)   /* FNV-1a over n bytes */
+UI_SMALL static uint32_t proj_hash(const void *p, uint32_t n)   /* FNV-1a over n bytes */
 {
     const uint8_t *b = (const uint8_t *)p;
     uint32_t i, s = 0x811C9DC5u;
@@ -125,7 +128,7 @@ static int proj_ok(const project_t *q) { return q->magic == PROJ_MAGIC && q->siz
 
 /* ---- formats 4..6 -> DRM1: the drum track and the globals */
 /* no nudge, no lock, no condition (format 4); the 2.6 parameters at their defaults (formats 4, 5) */
-static void proj_trk_plain(proj_trk_t *d)
+UI_SMALL static void proj_trk_plain(proj_trk_t *d)
 {
     uint32_t k;
     memset(d->mf, 0, sizeof d->mf);
@@ -137,7 +140,7 @@ static void proj_trk_plain(proj_trk_t *d)
         d->lock[k].val = 0;
     }
 }
-static void proj_new(project_t *q, const int16_t *g)   /* q: DRM1, the globals g, an empty drum track (then filled) */
+UI_SMALL static void proj_new(project_t *q, const int16_t *g)   /* q: DRM1, the globals g, an empty drum track (then filled) */
 {
     memset(q, 0, sizeof *q);
     q->magic = PROJ_MAGIC;
@@ -147,7 +150,7 @@ static void proj_new(project_t *q, const int16_t *g)   /* q: DRM1, the globals g
 }
 
 /* format 6 (n bytes in *v6) -> q: the drum track as it was, the globals, G_DRDLY and the TEXTURE */
-static int proj_from_v6(project_t *q, const project_v6_t *v6, int n)
+UI_SMALL static int proj_from_v6(project_t *q, const project_v6_t *v6, int n)
 {
     if (n != (int)sizeof *v6 || v6->magic != PROJ_MAGIC_V6 || v6->size != sizeof *v6 ||
         v6->sum != proj_hash(v6, sizeof *v6 - 4u))
@@ -164,7 +167,7 @@ static int proj_from_v6(project_t *q, const project_v6_t *v6, int n)
 
 /* format 5 -> q: by id, the 2.6 parameters at their defaults, each step's nudge and condition into its byte, the locks
  * as they were (a lock on P_E0.. follows its parameter's new id) */
-static int proj_from_v5(project_t *q, const project_v5_t *v5, int n)
+UI_SMALL static int proj_from_v5(project_t *q, const project_v5_t *v5, int n)
 {
     const proj_trk_v5_t *s = &v5->t[PROJ_DRUM_OLD];
     proj_trk_t *d = &q->t;
@@ -191,7 +194,7 @@ static int proj_from_v5(project_t *q, const project_v5_t *v5, int n)
 }
 
 /* format 4 -> q: the same, no nudge, no lock, no condition, the parameters added since at their defaults */
-static int proj_from_v4(project_t *q, const project_v4_t *v4, int n)
+UI_SMALL static int proj_from_v4(project_t *q, const project_v4_t *v4, int n)
 {
     const proj_trk_v4_t *s = &v4->t[PROJ_DRUM_OLD];
     uint32_t k;
@@ -209,7 +212,7 @@ static int proj_from_v4(project_t *q, const project_v4_t *v4, int n)
 }
 
 /* n bytes of a stored project (DRM1, or formats 4..6 converted) -> slot q; 0 = not a project */
-static int proj_import(project_t *q, const void *b, int n)
+UI_SMALL static int proj_import(project_t *q, const void *b, int n)
 {
     if (n == (int)sizeof *q && proj_ok((const project_t *)b)) {
         memcpy(q, b, sizeof *q);
@@ -224,7 +227,7 @@ static int proj_import(project_t *q, const void *b, int n)
  * applies (G_DRCH: a setting of the FM-1 now; G_INFO: the CPU readout) and the spare bytes. rsv[0]: 0x80 (there) | SRC
  * | WHEN << 4 | DUCK << 5, rsv[1]: RATE, g[G_DRCH]: LEVEL | (TONE + 64) << 7, g[G_INFO]: MOVE. Without the 0x80 (a
  * project before it, converted): the defaults, OFF */
-static void proj_tx_put(project_t *p)
+UI_SMALL static void proj_tx_put(project_t *p)
 {
     p->rsv[0] = (uint8_t)(0x80u | ((uint32_t)song.g[G_TXSRC] & 15u) | ((uint32_t)song.g[G_TXWHEN] & 1u) << 4 |
                           ((uint32_t)song.g[G_TXDUCK] & 1u) << 5);
@@ -232,7 +235,7 @@ static void proj_tx_put(project_t *p)
     p->g[G_DRCH] = (int16_t)((song.g[G_TXLVL] & 127) | ((song.g[G_TXTONE] + 64) & 127) << 7);
     p->g[G_INFO] = song.g[G_TXMOVE];
 }
-static void proj_tx_get(const project_t *p)
+UI_SMALL static void proj_tx_get(const project_t *p)
 {
     static const uint8_t ID[7] = {G_TXSRC, G_TXLVL, G_TXTONE, G_TXMOVE, G_TXRATE, G_TXWHEN, G_TXDUCK};
     int32_t v[7];
@@ -248,7 +251,7 @@ static void proj_tx_get(const project_t *p)
         song.g[ID[i]] = (int16_t)clamp(v[i], GP[ID[i]].min, GP[ID[i]].max);
 }
 
-static void proj_capture(project_t *p)        /* what is playing now, as a project */
+UI_SMALL static void proj_capture(project_t *p)        /* what is playing now, as a project */
 {
     const track_t *t = TDRUM;
     uint32_t i;
@@ -271,7 +274,7 @@ static void proj_capture(project_t *p)        /* what is playing now, as a proje
 /* a project's drum track (and its globals, all: a load; or only the drum level / reverb / delay: a song
  * section) into the working one, every value back inside its range. The audio ISR must not run
  * meanwhile (the song sections: called from it; a load: IRQ off) */
-static void proj_apply(const project_t *p, int all)
+UI_SMALL static void proj_apply(const project_t *p, int all)
 {
     track_t *t = TDRUM;
     const proj_trk_t *s = &p->t;
@@ -332,7 +335,7 @@ static union {
  * at once, the drum track keeps what it holds. 0 saved, 1 playing, 2 no room (SNG_MAX), 3 flash, 4 no song, 5 a
  * factory groove (read-only: the web editor copies one into a user slot) */
 /* the staging image (n bytes) into slot's song in flash; the song loaded: its index read back from the copy there */
-static int sng_write(uint32_t slot, uint32_t n)
+UI_SMALL static int sng_write(uint32_t slot, uint32_t n)
 {
     const uint8_t *p;
     sng_t tmp;
@@ -350,7 +353,7 @@ static int sng_write(uint32_t slot, uint32_t n)
     return 0;
 }
 /* 0 done, 1 playing, 2 no room, 3 a flash error, 4 no song or section, 5 a groove */
-static int sng_save_section(void)
+UI_SMALL static int sng_save_section(void)
 {
     uint32_t slot = (uint32_t)sng_cur, n;
     if (song.playing || transport_req)
@@ -367,7 +370,7 @@ static int sng_save_section(void)
 /* the SECTIONS screen (ui_drummer.c, 2026-10-29): op (SE_*) on section k of the song loaded, with the grid's edits
  * (the section playing is packed as the drum track holds it first); then the drum track holds the section at its
  * new place (the copy, the one moved, the neighbour of the one taken out) */
-static int sng_edit(uint32_t op, uint32_t k)
+UI_SMALL static int sng_edit(uint32_t op, uint32_t k)
 {
     uint32_t slot = (uint32_t)sng_cur, n, at = k;
     int r;
@@ -393,7 +396,7 @@ static int sng_edit(uint32_t op, uint32_t k)
 }
 /* SONGS, an empty USER slot, EDIT tapped: a song of one section, the drum track's pattern as it plays, written there
  * and loaded (sng_save_section's codes) */
-static int sng_new(uint32_t slot)
+UI_SMALL static int sng_new(uint32_t slot)
 {
     uint32_t n;
     int r;
@@ -414,7 +417,7 @@ static int sng_new(uint32_t slot)
 
 /* a project into the working one (the editor's restore of a backup): the transport stops, everything sounding is
  * released. (SLOOP's four project slots, JAM's sections A..D, are gone since 2026-10-27: docs/design.md) */
-static void project_apply(const project_t *p)
+UI_SMALL static void project_apply(const project_t *p)
 {
     transport_req = 2;
     drum_mute = 0;                                      /* (the live mutes: a performance's, not the project's) */
@@ -437,7 +440,7 @@ static void project_apply(const project_t *p)
 static project_t autosave_buf __attribute__((section(".pool")));
 static uint32_t autosave_hash, autosave_ms, autosave_checked;
 
-static int audio_quiet(void)
+UI_SMALL static int audio_quiet(void)
 {
     uint32_t i;
     for (i = 0; i < NDRUM; i++)
@@ -446,7 +449,7 @@ static int audio_quiet(void)
     return 1;
 }
 
-static void autosave_tick(void)                /* main loop */
+UI_SMALL static void autosave_tick(void)                /* main loop */
 {
 #if FELUCCA_FLASH
     uint32_t h, now = fm1_ms;
@@ -466,7 +469,7 @@ static void autosave_tick(void)                /* main loop */
 
 static uint8_t drch_seed;                           /* a settings object as 2.5 wrote it: the drum channel was the
                                                      * project's then (autosave_resume takes it from a 2.5 autosave) */
-static void autosave_resume(void)              /* power-on: the project as it was left (felucca_init) */
+UI_SMALL static void autosave_resume(void)              /* power-on: the project as it was left (felucca_init) */
 {
 #if FELUCCA_FLASH
     project_t *q = &autosave_buf;
@@ -516,7 +519,7 @@ static persist_t persist_saved;
 static void dsu_boot(void);
 #endif
 
-static void persist_boot(void)                    /* before settings_init / panel_init */
+UI_SMALL static void persist_boot(void)                    /* before settings_init / panel_init */
 {
 #if FELUCCA_FLASH
     persist_t p;
@@ -587,7 +590,7 @@ _Static_assert(sizeof(persist_t) + sizeof(dsu_bank_t) + MIDI_PART <= ST_PAYLOAD_
 static uint8_t midi_saved[MIDI_PART];
 static uint8_t drch_seed;                           /* a settings object as 2.5 wrote it: the drum channel was the
                                                      * project's then (autosave_resume takes it from a 2.5 autosave) */               /* the part as flash has it (settings_save: written when it differs) */
-static void midi_part_fill(uint8_t *b)
+UI_SMALL static void midi_part_fill(uint8_t *b)
 {
     uint32_t k;
     for (k = 0; k < ML_N; k++)
@@ -595,9 +598,10 @@ static void midi_part_fill(uint8_t *b)
     b[2u * ML_N] = midi_set[0], b[2u * ML_N + 1u] = midi_set[1], b[2u * ML_N + 2u] = midi_set[2];
     b[2u * ML_N + 3u] = (uint8_t)(midi_set[3] | midi_set[4] << 7);
     b[2u * ML_N + 4u] = midi_set[5];
-    b[2u * ML_N + 5u] = b[2u * ML_N + 6u] = b[2u * ML_N + 7u] = 0;
+    b[2u * ML_N + 5u] = midi_clkout;               /* MIDI CLOCK OUT (2026-10-30; 0 before it: off) */
+    b[2u * ML_N + 6u] = b[2u * ML_N + 7u] = 0;
 }
-static int midi_part_default(const uint8_t *b)
+UI_SMALL static int midi_part_default(const uint8_t *b)
 {
     static const uint8_t def[6] = MIDI_SET_DEF;
     uint32_t k;
@@ -605,11 +609,11 @@ static int midi_part_default(const uint8_t *b)
         if (b[k])
             return 0;
     return b[2u * ML_N] == def[0] && b[2u * ML_N + 1u] == def[1] && b[2u * ML_N + 2u] == def[2] &&
-           b[2u * ML_N + 3u] == (uint8_t)(def[3] | def[4] << 7) && b[2u * ML_N + 4u] == def[5];
+           b[2u * ML_N + 3u] == (uint8_t)(def[3] | def[4] << 7) && b[2u * ML_N + 4u] == def[5] && !b[2u * ML_N + 5u];
 }
 /* n: 32 (the map), 36 (and the channels) or MIDI_PART; every entry checked (a CC that learns, a parameter this knows, a
  * channel 0..16, a range 1..12) */
-static void midi_part_read(const uint8_t *b, uint32_t n)
+UI_SMALL static void midi_part_read(const uint8_t *b, uint32_t n)
 {
     uint32_t k, e;
     fm1_irq_off();                                  /* (the ISR reads the map and the channels: never half of them) */
@@ -628,10 +632,11 @@ static void midi_part_read(const uint8_t *b, uint32_t n)
     if (n >= MIDI_PART) {
         midi_set[5] = (uint8_t)(b[2u * ML_N + 4u] >= 1u && b[2u * ML_N + 4u] <= 12u ? b[2u * ML_N + 4u] : 2u);
         song.g[G_BEND] = midi_set[5];
+        midi_clkout = (uint8_t)(b[2u * ML_N + 5u] & 1u);
     }
     fm1_irq_on();
 }
-static int settings_write(const persist_t *p)
+UI_SMALL static int settings_write(const persist_t *p)
 {
     uint8_t mp[MIDI_PART];
     if (!dsu_valid(&dsu))
@@ -645,7 +650,7 @@ static int settings_write(const persist_t *p)
     memcpy(midi_saved, mp, sizeof midi_saved);
     return 0;
 }
-static void dsu_boot(void)                          /* the SYN kits (and the MIDI part) from the settings object, else */
+UI_SMALL static void dsu_boot(void)                          /* the SYN kits (and the MIDI part) from the settings object, else */
 {                                                   /* the defaults */
     st_hdr_t h;
     uint32_t len = sizeof(persist_t) + sizeof(dsu_bank_t), k;
@@ -667,7 +672,7 @@ static void dsu_boot(void)                          /* the SYN kits (and the MID
 }
 #endif
 
-static void persist_fill(persist_t *p)              /* the settings as they are now */
+UI_SMALL static void persist_fill(persist_t *p)              /* the settings as they are now */
 {
     memset(p, 0, sizeof *p);
     p->magic = PERSIST_MAGIC;
@@ -678,7 +683,7 @@ static void persist_fill(persist_t *p)              /* the settings as they are 
     p->lights = lights_word();
 }
 
-static void settings_save(void)
+UI_SMALL static void settings_save(void)
 {
 #if FELUCCA_FLASH
     persist_t p;
@@ -701,7 +706,7 @@ _Static_assert(sizeof(project_t) <= ST_PAYLOAD_MAX, "project does not fit one fl
 
 /* ---- backup restore (editor.c BK_PUT): each object checked as a load checks it, then written through the
  * same A/B commit as a save. rc: 0 ok, 2 not a valid object, 3 stop the song first, 4 flash */
-static int panel_valid(const panel_t *q)           /* a permutation of the buttons and of the knobs */
+UI_SMALL static int panel_valid(const panel_t *q)           /* a permutation of the buttons and of the knobs */
 {
     uint32_t i, b = 0, e = 0;
     if (q->magic != PANEL_MAGIC)
@@ -719,7 +724,7 @@ static int panel_valid(const panel_t *q)           /* a permutation of the butto
     return 1;
 }
 
-static uint32_t settings_restore(const void *raw, uint32_t n)
+UI_SMALL static uint32_t settings_restore(const void *raw, uint32_t n)
 {
     persist_t p;
     if (n != sizeof p && n != PERSIST_SIZE_V22)
@@ -750,7 +755,7 @@ static uint32_t settings_restore(const void *raw, uint32_t n)
 
 /* the working project (object 0 of a backup), loaded now. (The slots 2..5 of a backup, SLOOP's projects A..D, are
  * not restored since 2026-10-27: the editor leaves them out, editor.c refuses them) */
-static uint32_t project_restore(const void *raw, uint32_t n)
+UI_SMALL static uint32_t project_restore(const void *raw, uint32_t n)
 {
     if (song.playing || transport_req)
         return 3;
@@ -761,7 +766,7 @@ static uint32_t project_restore(const void *raw, uint32_t n)
 }
 #endif
 #if FELUCCA_DRUMMER
-static void settings_write_dirty(void)                  /* the settings changed while playing: into flash */
+UI_SMALL static void settings_write_dirty(void)                  /* the settings changed while playing: into flash */
 {
     if (settings_dirty) {
         settings_dirty = 0;
@@ -770,7 +775,7 @@ static void settings_write_dirty(void)                  /* the settings changed 
 }
 /* before an intentional reset (an update, UPDATE MODE, UBOOT from the host): the audio is stopped, so
  * whatever is only in RAM goes to flash now: the settings, the working project */
-static void persist_flush_now(void)
+UI_SMALL static void persist_flush_now(void)
 {
     settings_write_dirty();
 #if FELUCCA_FLASH

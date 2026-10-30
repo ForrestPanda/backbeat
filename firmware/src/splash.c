@@ -1,8 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* BackBeat boot splash: the logo (tools/gen_logo.py -> backbeat_logo.h: 16 colours, RLE runs of
  * (run - 1) << 4 | colour), drawn into the canvas in bands of at most 120 rows. */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 #include "backbeat_logo.h"
-static void logo_draw(uint32_t y0)
+UI_SMALL static void logo_draw(uint32_t y0)
 {
     uint32_t r0;
     for (r0 = 0; r0 < LOGO_SPLASH_H; r0 += 120u) {
@@ -21,7 +24,7 @@ static void logo_draw(uint32_t y0)
 }
 
 /* the boot screen: the logo, the version, where it comes from */
-static void logo_splash(void)
+UI_SMALL static void logo_splash(void)
 {
     lcd_fill(0, 0, 240, 240, C_BLACK);
     logo_draw(10);

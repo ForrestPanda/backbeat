@@ -4,6 +4,9 @@
  * diagnostics. Runs in the main loop (cdc_task); usb_poll moves the bytes.
  * The baud rate is ignored. Nothing here writes memory or flash (`batt clear`
  * empties the battery log, battlog.c); `uboot` does what the SysEx soft key does. */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 #define CON_LINE 64u
 
 static struct {
@@ -12,7 +15,7 @@ static struct {
     uint8_t dtr_seen, stalled;   /* stalled: the host stopped reading, drop the rest of this reply */
 } con;
 
-static void con_putc(char c)
+UI_SMALL static void con_putc(char c)
 {
     uint32_t t0 = fm1_ms;
     while (co_w - co_r >= CO_N) {                      /* full: wait for usb_poll, briefly */
@@ -27,19 +30,19 @@ static void con_putc(char c)
     co_w++;
 }
 
-static void con_puts(const char *s)
+UI_SMALL static void con_puts(const char *s)
 {
     while (*s)
         con_putc(*s++);
 }
 
-static void con_hex(uint32_t v, uint32_t digits)
+UI_SMALL static void con_hex(uint32_t v, uint32_t digits)
 {
     while (digits--)
         con_putc("0123456789ABCDEF"[(v >> (digits * 4u)) & 15u]);
 }
 
-static void con_dec(int32_t v)
+UI_SMALL static void con_dec(int32_t v)
 {
     char b[12];
     uint32_t n = 0, u = v < 0 ? (uint32_t)-v : (uint32_t)v;
@@ -52,7 +55,7 @@ static void con_dec(int32_t v)
         con_putc(b[--n]);
 }
 
-static void con_kv(const char *k, int32_t v)            /* "key value\r\n" */
+UI_SMALL static void con_kv(const char *k, int32_t v)            /* "key value\r\n" */
 {
     con_puts(k);
     con_putc(' ');
@@ -60,7 +63,7 @@ static void con_kv(const char *k, int32_t v)            /* "key value\r\n" */
     con_puts("\r\n");
 }
 
-static void con_kx(const char *k, uint32_t v)
+UI_SMALL static void con_kx(const char *k, uint32_t v)
 {
     con_puts(k);
     con_puts(" 0x");
@@ -68,7 +71,7 @@ static void con_kx(const char *k, uint32_t v)
     con_puts("\r\n");
 }
 
-static uint32_t con_num(const char **p, int *ok)        /* decimal or 0x hex */
+UI_SMALL static uint32_t con_num(const char **p, int *ok)        /* decimal or 0x hex */
 {
     const char *s = *p;
     uint32_t v = 0, base = 10, d, n = 0;
@@ -93,7 +96,7 @@ static uint32_t con_num(const char **p, int *ok)        /* decimal or 0x hex */
     return v;
 }
 
-static int con_word(const char **p, const char *w)       /* match a whole word */
+UI_SMALL static int con_word(const char **p, const char *w)       /* match a whole word */
 {
     const char *s = *p;
     while (*s == ' ')
@@ -106,7 +109,7 @@ static int con_word(const char **p, const char *w)       /* match a whole word *
     return 1;
 }
 
-static void con_memr(const char *p)
+UI_SMALL static void con_memr(const char *p)
 {
     int ok, ok2;
     uint32_t a = con_num(&p, &ok), n = con_num(&p, &ok2), i;
@@ -135,7 +138,7 @@ static void con_memr(const char *p)
 }
 
 #if FELUCCA_FLASH
-static void con_flr(const char *p)                  /* flash read over SPI (no XIP decryption) */
+UI_SMALL static void con_flr(const char *p)                  /* flash read over SPI (no XIP decryption) */
 {
     static uint8_t b[256];
     int ok, ok2;
@@ -167,7 +170,7 @@ static void con_flr(const char *p)                  /* flash read over SPI (no X
 }
 #endif
 
-static void con_batt(const char *p)                     /* the battery log (battlog.c): oldest first */
+UI_SMALL static void con_batt(const char *p)                     /* the battery log (battlog.c): oldest first */
 {
     uint32_t n = battlog.n, k = n < BL_N ? n : BL_N, i;
     if (con_word(&p, "clear")) {
@@ -189,7 +192,8 @@ static void con_batt(const char *p)                     /* the battery log (batt
     con_puts("end\r\n");
 }
 
-static void con_status(void)
+static uint32_t stack_main_free(void), stack_sup_free(void), stack_sp(void);   /* (main.c, after this file) */
+UI_SMALL static void con_status(void)
 {
     con_puts("felucca ");
     con_puts(FELUCCA_VERSION);
@@ -204,6 +208,9 @@ static void con_status(void)
     con_kv("audio_gated", audio_gated);                 /* the audio gate (fx.c): 1 = the mix is being skipped */
     con_kv("gate_blocks", (int32_t)audio_gate_blocks);
     con_kv("screen_dark", fm1_dark);
+    con_kv("stack_main_free", (int32_t)stack_main_free());   /* bytes of the 24 KB main stack never reached since boot */
+    con_kv("stack_sup_free", (int32_t)stack_sup_free());     /* .. of the 8 KB supervisor stack */
+    con_kv("stack_sp", (int32_t)stack_sp());                 /* the main loop's sp: which region it runs on */
     con_puts("kit ");
     con_puts(DRUM_KIT_NAMES[drum_kit()]);
     con_puts("\r\n");
@@ -224,7 +231,7 @@ static void con_status(void)
 #endif
 }
 
-static void con_dbg(void)
+UI_SMALL static void con_dbg(void)
 {
     const uint32_t *w = (const uint32_t *)&felucca_dbg;
     static const char *const NAMES[] = {"magic", "halves", "max_us", "nested", "in_audio", "late",
@@ -236,7 +243,7 @@ static void con_dbg(void)
         con_kx(NAMES[i], w[i]);
 }
 
-static void con_crash(void)
+UI_SMALL static void con_crash(void)
 {
     if (fm1_crash.magic != FM1_CRASH_MAGIC) {
         con_puts("no crash record\r\n");
@@ -253,7 +260,7 @@ static void con_crash(void)
     con_kv("early", (int32_t)fm1_crash.early);
 }
 
-static void con_params(void)
+UI_SMALL static void con_params(void)
 {
     uint32_t i;
     for (i = 0; i < P_COUNT; i++) {
@@ -264,7 +271,7 @@ static void con_params(void)
     }
 }
 
-static void con_exec(const char *p)
+UI_SMALL static void con_exec(const char *p)
 {
     if (con_word(&p, "help") || con_word(&p, "?"))
         con_puts("status  dbg  crash  params  batt [clear]  memr ADDR [LEN]  flr OFF [LEN]  uboot yes\r\n");
@@ -295,7 +302,7 @@ static void con_exec(const char *p)
         con_puts("? (help)\r\n");
 }
 
-static void cdc_task(void)                              /* main loop */
+UI_SMALL static void cdc_task(void)                              /* main loop */
 {
     if (cdc.dtr && !con.dtr_seen) {
         con_puts("\r\nFelucca ");

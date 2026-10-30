@@ -596,8 +596,8 @@ static void dust_process(int32_t *l, int32_t *r, uint32_t n)
         uint32_t nz = noise32(&dust.rnd);
         if (--dust.hn <= 0) {                           /* sample and hold, then the bits */
             dust.hn = hold;
-            dust.hl = softclip(((x >> 2) * drive) >> 10);
-            dust.hr = softclip(((y >> 2) * drive) >> 10);
+            dust.hl = softclip(MULQ12R(x, drive, 2));   /* (rounded, as the master: no step of 4 x the drive) */
+            dust.hr = softclip(MULQ12R(y, drive, 2));
             if (shift) {
                 dust.hl = crush_bits(dust.hl, shift);
                 dust.hr = crush_bits(dust.hr, shift);
@@ -991,8 +991,8 @@ static void mix_block(int32_t *out, uint32_t n)
         for (i = 0; i < n; i++) {
             int32_t m = m0 + (((m1 - m0) * (int32_t)i) >> CTL_LOG2);
             pk_mix |= (uint32_t)(mix_l[i] < 0 ? -mix_l[i] : mix_l[i]) | (uint32_t)(mix_r[i] < 0 ? -mix_r[i] : mix_r[i]);
-            ol[i] = ((mix_l[i] >> 2) * m) >> 10;
-            orr[i] = ((mix_r[i] >> 2) * m) >> 10;
+            ol[i] = MULQ12R(mix_l[i], m, 2);           /* (rounded; (x >> 2) * m >> 10 floored to 4 LSB: SLOOP 2.8.4) */
+            orr[i] = MULQ12R(mix_r[i], m, 2);
             master_pre(&ol[i], &orr[i]);
             if (usb_full_now) {                         /* USB AUDIO = FULL: MASTER all the way up (4096) */
                 ul[i] = (mix_l[i] >> 2) << 2, ur[i] = (mix_r[i] >> 2) << 2;

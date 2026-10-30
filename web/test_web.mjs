@@ -1959,9 +1959,9 @@ const UPGRADE = [0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7];
 
 /* an FM-1 on WebMIDI: identity, then "device asks, host answers" reads of the image */
 class FakeFM1 {
-  constructor(image, { unplugAfter = Infinity, finalIdentity = "FM-1_985", name = "FM-1", identity = "FM-1_015" } = {}) {
+  constructor(image, { unplugAfter = Infinity, finalIdentity = "FM-1_985", name = "FM-1", identity = "FM-1_015", loaderName = "Felucca Update" } = {}) {
     this.image = image; this.unplugAfter = unplugAfter; this.served = 0; this.bad = 0;
-    this.finalIdentity = finalIdentity;
+    this.finalIdentity = finalIdentity; this.loaderName = loaderName;   /* (loaderName: what the OS calls the loader; Windows: a generic name) */
     this.access = { inputs: new Map(), outputs: new Map() };
     this.boot(identity, name);
   }
@@ -1997,7 +1997,7 @@ class FakeFM1 {
       this.waiting = null;
       this.served++;
       if (this.served >= this.unplugAfter) { this.input.state = this.output.state = "disconnected"; return; }
-      if (addr === 0xE0000000) setTimeout(() => this.boot("ota-FM-1_985", "Felucca Update"), 300);
+      if (addr === 0xE0000000) setTimeout(() => this.boot("ota-FM-1_985", this.loaderName), 300);
       else if (addr === 0xF0000000) setTimeout(() => this.boot(this.finalIdentity, "Felucca"), 300);
       else this.next();
     }
@@ -2055,6 +2055,17 @@ async function updater() {
     ok(["FM-1", "Felucca", "Felucca Update", "Clipper", "SLOOP", "MIDIIN2 (Clipper)", "USB-MIDI"].every((n) => FM1_PORT.test(n)) &&
        !["Arturia KeyStep Pro", "loopMIDI Port", "Microsoft GS Wavetable Synth"].some((n) => FM1_PORT.test(n)),
        "fm1ota.js: FM1_PORT takes the FM-1's names (SLOOP, CLIPPER, the loader, the stock firmware), not other gear");
+    {   /* (SLOOP 2.8, 2026-10-30) Windows names the re-enumerated update loader generically ("USB MIDI Device"): hunted
+           deep, it is found by its handshake; the running firmware is still looked for by name only */
+      const gen = new FakeFM1(image, { loaderName: "USB MIDI Device" });
+      const g2 = await new Updater(gen.access).install(image, "FM-1_985");
+      ok(g2 === "FM-1_985" && gen.bad === 0, "fm1ota.js: the loader under a generic Windows name is found by its handshake");
+      const gen2 = new FakeFM1(image, { name: "USB MIDI Device", identity: "ota-FM-1_985" });
+      const r2 = await new Updater(gen2.access).resume(image);
+      ok(r2 === true && gen2.bad === 0, "fm1ota.js: ..and resumed after a replug");
+      const up = new Updater(new FakeFM1(image, { name: "Some Synth" }).access);
+      ok((await up.find(null)) === null && (await up.find(null, true)) !== null, "fm1ota.js: find() probes an unnamed port only when asked (deep)");
+    }
   }
   const stock = new FakeFM1(image);
   stock.boot("ota-FM-1_015", "FM-1 Update");

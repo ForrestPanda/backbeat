@@ -21,6 +21,9 @@
  *   ota_show(step, code)       progress / result for the screen
  *   ota_commit(parm)           write RAM record + reset (never returns on hardware)
  */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 #define OTA_AREA 0x000E0000u                     /* staged loader, 5 x 4 KiB */
 #define OTA_AREA_LEN 0x5000u
 #define OTA_RES (OTA_AREA + OTA_AREA_LEN - 0x100u)  /* 0xE4F00 = 4K boundary - 256: SPL scan */
@@ -46,7 +49,7 @@ static uint32_t ota_rd32(const uint8_t *p) { return ota_rd24(p) | (uint32_t)p[3]
 static void ota_wr16(uint8_t *p, uint32_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); }
 static void ota_wr32(uint8_t *p, uint32_t v) { ota_wr16(p, v); ota_wr16(p + 2, v >> 16); }
 
-static uint32_t ota_crc16(const uint8_t *p, uint32_t n, uint32_t c)   /* poly 0x1021, init 0 */
+UI_SMALL static uint32_t ota_crc16(const uint8_t *p, uint32_t n, uint32_t c)   /* poly 0x1021, init 0 */
 {
     uint32_t i;
     while (n--) {
@@ -58,7 +61,7 @@ static uint32_t ota_crc16(const uint8_t *p, uint32_t n, uint32_t c)   /* poly 0x
     return c;
 }
 
-static void ota_jl_enc(uint8_t *p, uint32_t n)   /* UFW header cipher, key 0xFFFF */
+UI_SMALL static void ota_jl_enc(uint8_t *p, uint32_t n)   /* UFW header cipher, key 0xFFFF */
 {
     uint32_t k = 0xFFFFu;
     while (n--) {
@@ -68,7 +71,7 @@ static void ota_jl_enc(uint8_t *p, uint32_t n)   /* UFW header cipher, key 0xFFF
 }
 
 /* 8-to-7, LSB first */
-static uint32_t ota_pack7(const uint8_t *in, uint32_t n, uint8_t *out)
+UI_SMALL static uint32_t ota_pack7(const uint8_t *in, uint32_t n, uint8_t *out)
 {
     uint32_t acc = 0, nb = 0, o = 0;
     while (n--) {
@@ -85,7 +88,7 @@ static uint32_t ota_pack7(const uint8_t *in, uint32_t n, uint8_t *out)
     return o;
 }
 
-static uint32_t ota_unpack7(const uint8_t *in, uint32_t n, uint8_t *out, uint32_t max)
+UI_SMALL static uint32_t ota_unpack7(const uint8_t *in, uint32_t n, uint8_t *out, uint32_t max)
 {
     uint32_t acc = 0, nb = 0, o = 0;
     while (n--) {
@@ -105,7 +108,7 @@ static uint32_t ota_unpack7(const uint8_t *in, uint32_t n, uint8_t *out, uint32_
 static uint8_t ota_msg[8 + 32], ota_wire[2 + 48];
 static uint8_t ota_dec[OTA_FRAME_MAX];           /* decoded host message */
 
-static int ota_send_msg(uint32_t cmd, const uint8_t *body, uint32_t n)   /* n <= 32 */
+UI_SMALL static int ota_send_msg(uint32_t cmd, const uint8_t *body, uint32_t n)   /* n <= 32 */
 {
     uint32_t i, s = 0, w;
     ota_msg[0] = 0;
@@ -125,7 +128,7 @@ static int ota_send_msg(uint32_t cmd, const uint8_t *body, uint32_t n)   /* n <=
     return ota_wire_send(ota_wire, w);
 }
 
-static void ota_reply_identity(void)
+UI_SMALL static void ota_reply_identity(void)
 {
 #ifdef OTA_IDENTITY
     const char *id_text = OTA_IDENTITY;
@@ -144,7 +147,7 @@ static void ota_reply_identity(void)
 }
 
 /* decode the pending frame; returns its decoded length (0 = not ours) */
-static uint32_t ota_take(void)
+UI_SMALL static uint32_t ota_take(void)
 {
     const uint8_t *p;
     uint32_t n, d, s = 0, i;
@@ -162,7 +165,7 @@ static uint32_t ota_take(void)
 }
 
 /* main loop, outside a session: answer handshakes */
-static void ota_service(void)
+UI_SMALL static void ota_service(void)
 {
     uint32_t d = ota_take();
     if (d == 7u && ota_dec[2] == 0x11)
@@ -172,7 +175,7 @@ static void ota_service(void)
 /* one read request (3 tries x 5 s); data -> dst */
 static uint32_t ota_deadline;                    /* 0 = none; else ota_now_ms() limit of the session */
 
-static int ota_read(uint32_t addr, uint8_t *dst, uint32_t len)
+UI_SMALL static int ota_read(uint32_t addr, uint8_t *dst, uint32_t len)
 {
     uint8_t q[8];
     uint32_t tries, t, d, i;
@@ -206,7 +209,7 @@ static int ota_read(uint32_t addr, uint8_t *dst, uint32_t len)
     return -1;
 }
 
-static int ota_memeq(const uint8_t *a, const uint8_t *b, uint32_t n)
+UI_SMALL static int ota_memeq(const uint8_t *a, const uint8_t *b, uint32_t n)
 {
     while (n--)
         if (*a++ != *b++)
@@ -215,7 +218,7 @@ static int ota_memeq(const uint8_t *a, const uint8_t *b, uint32_t n)
 }
 
 /* JLFS head "LOADER.BIN" in front of the staged loader (vm_update_defrag), written last */
-static int ota_stage_head(uint32_t len)
+UI_SMALL static int ota_stage_head(uint32_t len)
 {
     static const char NAME[16] = "LOADER.BIN";
     uint8_t h[32];
@@ -238,7 +241,7 @@ static int ota_stage_head(uint32_t len)
  * flash.bin (entry type 0) and ota.bin (type 100), 0 if absent, and the CRC16 the
  * package stores for flash.bin (the loader checks what it was served against it);
  * -1 read, -2 CRC */
-static int ota_ufw(uint8_t *hdr, uint32_t *fl_off, uint32_t *fl_len, uint32_t *ota_off, uint32_t *ota_len,
+UI_SMALL static int ota_ufw(uint8_t *hdr, uint32_t *fl_off, uint32_t *fl_len, uint32_t *ota_off, uint32_t *ota_len,
                    uint32_t *fl_crc)
 {
     uint32_t i, nent;
@@ -339,7 +342,7 @@ static int ota_stage(void)                       /* steps 1..6; 0 = host said su
     return -13;
 }
 
-static void ota_unstage(void)
+UI_SMALL static void ota_unstage(void)
 {
     uint32_t i;
     for (i = 0; i < OTA_AREA_LEN; i += 0x1000u)
@@ -347,7 +350,7 @@ static void ota_unstage(void)
 }
 
 /* returns only when nothing was committed (refused, failed, or dry run) */
-static int ota_session(void)
+UI_SMALL static int ota_session(void)
 {
     static uint8_t parm[112];
     uint8_t back[112];
@@ -392,7 +395,7 @@ static int ota_session(void)
 
 /* boot: a staging area left over (we are running, so the update finished or
  * never started): erase it so the SPL does not re-enter the loader */
-static int ota_boot_cleanup(void)
+UI_SMALL static int ota_boot_cleanup(void)
 {
     uint8_t a[4], r[8];
     uint32_t i, used = 0;

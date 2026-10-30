@@ -6,6 +6,9 @@
  * LAYERS (a function button held: what the 16 white keys and the knobs do now), HOLD (a hold to
  * confirm: clear, save), REC (armed / free take). Every band is drawn into the canvas only when its
  * signature changed. */
+#ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
+#define UI_SMALL
+#endif
 static uint8_t drum_page, drum_lane, drum_cursor;   /* drum_page: 0 GRID, 1 KIT */
 static int on_drum_page(void) { return !ui.home && cur_page()->scope == SC_DRUM; }
 
@@ -20,7 +23,7 @@ static const uint16_t TE_MID[4] = {RGB(26, 82, 170), RGB(20, 136, 76), RGB(170, 
 static const uint16_t TE_DIM[4] = {RGB(14, 40, 86), RGB(10, 66, 38), RGB(86, 66, 8), RGB(86, 32, 8)};
 #define TE_DRUM TE_COL[3]
 
-static void te_disc(int32_t cx, int32_t cy, int32_t r, uint16_t c)     /* filled circle */
+UI_SMALL static void te_disc(int32_t cx, int32_t cy, int32_t r, uint16_t c)     /* filled circle */
 {
     int32_t y, x;
     for (y = -r; y <= r; y++)
@@ -29,7 +32,7 @@ static void te_disc(int32_t cx, int32_t cy, int32_t r, uint16_t c)     /* filled
                 cv_pset(cx + x, cy + y, c);
 }
 /* a dial: a 270-degree ring (lit up to the value), a pointer; ratio 0..1000, -1 = a plain ring */
-static void te_dial(int32_t cx, int32_t cy, int32_t r, int32_t ratio, uint16_t c, uint16_t dim)
+UI_SMALL static void te_dial(int32_t cx, int32_t cy, int32_t r, int32_t ratio, uint16_t c, uint16_t dim)
 {
     int32_t i, end = ratio < 0 ? 768 : ratio * 768 / 1000;
     for (i = 0; i <= 768; i += 8) {
@@ -46,7 +49,7 @@ static void te_dial(int32_t cx, int32_t cy, int32_t r, int32_t ratio, uint16_t c
         te_disc(cx, cy, 2, C_WHITE);
     }
 }
-static void te_play_icon(int32_t x, int32_t y, int playing)
+UI_SMALL static void te_play_icon(int32_t x, int32_t y, int playing)
 {
     int32_t i;
     if (playing)
@@ -55,23 +58,23 @@ static void te_play_icon(int32_t x, int32_t y, int playing)
     else
         cv_rect(x, y + 1, 12, 12, TE_G3);
 }
-static uint32_t studio_hash(uint32_t h, const char *p)
+UI_SMALL static uint32_t studio_hash(uint32_t h, const char *p)
 { while (*p) h = h * 31u + (uint8_t)*p++; return h; }
-static void te_lower(char *d, const char *s, uint32_t n)
+UI_SMALL static void te_lower(char *d, const char *s, uint32_t n)
 {
     uint32_t i;
     for (i = 0; i + 1u < n && s[i]; i++)
         d[i] = s[i] >= 'A' && s[i] <= 'Z' ? (char)(s[i] + 32) : s[i];
     d[i] = 0;
 }
-static void te_text_c(int32_t cx, int32_t y, const char *s, uint16_t c)   /* centred on cx */
+UI_SMALL static void te_text_c(int32_t cx, int32_t y, const char *s, uint16_t c)   /* centred on cx */
 {
     cv_text(cx - text_w(&FONT_S, s) / 2, y, &FONT_S, s, c);
 }
 
 /* the dial strip: KNOB 1..4, label + value under each (a dial with no label: an empty column); a
  * message replaces it */
-static void te_dials(int32_t y0, const char *const lab[4], const char *const val[4], const int32_t ratio[4],
+UI_SMALL static void te_dials(int32_t y0, const char *const lab[4], const char *const val[4], const int32_t ratio[4],
                      uint32_t sig, uint32_t *cache)
 {
     uint32_t k;
@@ -104,7 +107,7 @@ static void te_dials(int32_t y0, const char *const lab[4], const char *const val
     cv_blit(0, (uint32_t)y0 + 40u);
 }
 
-static void studio_open(uint32_t scope)
+UI_SMALL static void studio_open(uint32_t scope)
 {
     uint32_t i;
     if (scope == SC_SONG)                               /* fm1-drummer: the SONGS list (ui_drummer.c) */
@@ -115,7 +118,7 @@ static void studio_open(uint32_t scope)
     }
 }
 /* the loop position of track t: "bar.beat" in its pattern (1.1 .. ) */
-static void loop_pos(const track_t *t, char *b)
+UI_SMALL static void loop_pos(const track_t *t, char *b)
 {
     uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), s = t->seq_idx % len, k;
     fmt_int(b, (int32_t)(s / 16u + 1u));
@@ -126,7 +129,7 @@ static void loop_pos(const track_t *t, char *b)
 }
 
 /* the header of the live screens: BPM, transport, the loop position, the beat lights, REC */
-static void te_header(const char *title, uint16_t tc, uint32_t *cache)
+UI_SMALL static void te_header(const char *title, uint16_t tc, uint32_t *cache)
 {
     char b[12];
     uint32_t beat = clk_beat, k, playing = song.playing;
@@ -199,7 +202,7 @@ static void te_header(const char *title, uint16_t tc, uint32_t *cache)
 }
 
 /* swing, MPC style: "62%" */
-static void swing_str(char *b, int32_t v)            /* 0 straight .. 100 the most (params.c F_SWING) */
+UI_SMALL static void swing_str(char *b, int32_t v)            /* 0 straight .. 100 the most (params.c F_SWING) */
 {
     fmt_int(b, clamp(v, 0, 100));
 }
@@ -212,12 +215,12 @@ static uint32_t lvl_rank(uint32_t lvl);                 /* (below) ghost 0, soft
 static const char *const HIT_NAME[5] = {"off", "ghost", "soft", "norm", "hard"};
 static uint32_t hit_rank(const dstep_t *s, uint32_t l) { return dstep_has(s, l) ? lvl_rank(dstep_lvl(s, l)) + 1u : 0u; }
 static uint8_t grid_oct_used;                           /* OCT- / OCT+ held with a key (ghost / hard): no tap */
-static uint16_t lvl_col(uint32_t lvl)                   /* a hit's colour by its level */
+UI_SMALL static uint16_t lvl_col(uint32_t lvl)                   /* a hit's colour by its level */
 {
     return lvl == LV_GHOST ? TE_DIM[3] : lvl == LV_SOFT ? TE_MID[3] : lvl == LV_HARD ? C_WHITE : TE_DRUM;
 }
 static uint16_t pad_lit[DRUM_LANES];                   /* pads and key LEDs: frames left lit */
-static void pads_tick(void)                             /* once a frame: the hits since the last one */
+UI_SMALL static void pads_tick(void)                             /* once a frame: the hits since the last one */
 {
     uint32_t i, hits;
     fm1_irq_off();
@@ -230,7 +233,7 @@ static void pads_tick(void)                             /* once a frame: the hit
     }
 }
 
-static void drum_screen_draw(void)
+UI_SMALL static void drum_screen_draw(void)
 {
     static uint32_t head, title_sig, body_sig, footer;
     uint32_t i, j, len = (uint32_t)clamp(TDRUM->p[P_SLEN], 1, 64), kit = drum_kit(), sig, bank;
@@ -369,7 +372,7 @@ static int grid_keys_on(void) { return on_drum_page() && !drum_page && !ui.menu;
  * KNOB 1 — an empty one is set (NORM, the sound heard; OCT- held a ghost, OCT+ a hard one, as the SEQ layer, since
  * 2026-10-29), a set one cleared; the first four black keys pick the page (steps 1-16, 17-32, 33-48, 49-64), as in
  * the SEQ layer. The cursor follows */
-static void grid_key(uint32_t k, uint32_t lvl)
+UI_SMALL static void grid_key(uint32_t k, uint32_t lvl)
 {
     static const int8_t PG[12] = {-1, 0, -1, 1, -1, 2, -1, -1, 3, -1, -1, -1};
     uint32_t len = trk_len(TDRUM), idx;
@@ -413,7 +416,7 @@ static void grid_key(uint32_t k, uint32_t lvl)
 /* OCT- tapped on the grid: the cursor's hit gets a flam, or loses it; OCT+ tapped: its mark goes round (always, only
  * during a fill, not during one: the song's marks, sng.c). Held with a key they still give a ghost / hard hit (seq.c
  * kb_grid): the tap counts on the release, when no key came meanwhile (grid_oct_used) and it was short */
-static void grid_oct_tap(uint32_t up)
+UI_SMALL static void grid_oct_tap(uint32_t up)
 {
     uint32_t idx = drum_cursor % NSTEP, bit = 1u << drum_lane;
     if (!dstep_has(&TDRUM->dstep[idx], drum_lane)) {
@@ -436,7 +439,7 @@ static void grid_oct_tap(uint32_t up)
     }
     sync_reload = 1;
 }
-static void grid_oct_input(uint32_t pressed)
+UI_SMALL static void grid_oct_input(uint32_t pressed)
 {
     static uint32_t t0[2], prev;
     uint32_t i;
@@ -455,7 +458,7 @@ static void grid_oct_input(uint32_t pressed)
 static void grid_oct_input(uint32_t pressed) { (void)pressed; }
 #endif
 
-static void drum_screen_input(uint32_t pressed, uint32_t home)
+UI_SMALL static void drum_screen_input(uint32_t pressed, uint32_t home)
 {
     uint32_t k, b;
     int32_t s;

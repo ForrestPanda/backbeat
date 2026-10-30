@@ -1,3 +1,14 @@
+/* UI_SMALL: the functions off the audio path (the pages, the menus, the panel, the songs' packing, the projects, the
+ * updater, the console) compiled for size (clang minsize, as -Oz), the audio and the drawing primitives as the build
+ * flags say (SLOOP 2.7's way, taken 2026-10-30: it bought back the flash the DRUMS SOUND page took there). The host
+ * tests: nothing */
+#ifndef UI_SMALL
+#if defined(__clang__)
+#define UI_SMALL __attribute__((minsize))
+#else
+#define UI_SMALL
+#endif
+#endif
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Felucca core types: the track, parameters, the clock.
