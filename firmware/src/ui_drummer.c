@@ -5,8 +5,9 @@
  *          instead while it clicks), what comes (NEXT, FILL, FILL > NEXT, ENDING), the song's sections (up to 16) as
  *          tiles, four to a row as the white keys 1..16, and a footer: the kit, the pedal channel and its MIDI dot,
  *          the last message.
- *   SONGS  SAVE tapped: two pages of 16 (name, tempo, sections): USER, the slots the editor and the tools
- *          write; FACTORY, the grooves in the firmware (read-only; the pedal's PC 16..31). ENV / LFO: the page.
+ *   SONGS  SEL tapped (SAVE's tap until 2026-10-30): two pages of 16 (name, tempo, sections): USER, the slots the
+ *          editor and the tools write; FACTORY, the grooves in the firmware (read-only; the pedal's PC 16..31). SEL
+ *          again: the other page (ENV / LFO: USER / FACTORY outright).
  *          (Its last row, JAM, SLOOP's sections A..D with their chain page, is gone since 2026-10-27.)
  *          It opens on the loaded song's page; with none, on USER, or FACTORY while USER is empty.
  *   SECTIONS  EDIT tapped (2026-10-29, docs/design.md 6e: a song drafted on the device): the song's shape. The
@@ -27,9 +28,11 @@
  *                     fourth: the break (CC 28 value 127: the section playing comes in again through its break
  *                     when it ends; stopped, the one cued starts through it). F#5, the last: the tap tempo (as CC 26;
  *                     its light flashes the tempo; 2026-10-22, asked), a song loaded or not. The other black keys as the first
- *   SEL ENV LFO       fill (CC 21; with OCT+ held, the next bar); previous, next (as CC 25, 24, without their fill)
+ *   ENV LFO           previous, next (as CC 25, 24, without their fill); SEL: SONGS (ui_input.c; it was a fill, CC 21,
+ *                     until 2026-10-30: the black keys fill)
  *   PLAY              stopped: the section cued (the count-in first); playing: stop
- *   KNOB 1..4         tempo, kit, drums level, swing (SELECT: tempo; PRESETS: kit)
+ *   KNOB 1..4         tempo, kit, drums level, swing (SELECT: tempo; PRESETS: kit); ALGORITHM: the songs of the
+ *                     page shown (USER or FACTORY) in turn, each loaded, empty slots skipped (2026-10-30)
  *   HOME              on LIVE: the other layout (2026-10-29, asked: "a large number regarding the current beat of the
  *                     total beats in the measure", and only the section playing, not all of them; then "switch the
  *                     beat counter with the bar in section counter as that's what's most useful for me for
@@ -55,7 +58,7 @@ UI_SMALL static uint32_t lib_page(void)                      /* the page shown: 
             return 0;
     return 1;
 }
-UI_SMALL static void lib_turn(uint32_t page)                 /* ENV / LFO: USER / FACTORY */
+UI_SMALL static void lib_turn(uint32_t page)                 /* SEL: the other page; ENV / LFO: USER / FACTORY */
 {
     if (page != lib_page())
         ui.force = 1;
@@ -275,15 +278,14 @@ UI_SMALL static void drummer_input(uint32_t pressed, uint32_t home)
         } else if (sng_view == DV_LIB || (sng_cur < 0 && (b == B_ENV || b == B_LFO))) {
             if (b == B_REC || b == B_OCTUP)
                 lib_load(sng_pick);
-            else if (b == B_ENV || b == B_LFO)      /* the page: USER, FACTORY (LIVE with no song: its keys' too) */
+            else if (b == B_SCL)                    /* the page: SEL the other one (2026-10-30) */
+                lib_turn(!lib_page());
+            else if (b == B_ENV || b == B_LFO)      /* ENV USER, LFO FACTORY outright (LIVE with no song: its keys' too) */
                 lib_turn(b == B_LFO);
-        } else if (b == B_SCL || b == B_ENV || b == B_LFO) {   /* FILL, PREV, NEXT (no fill of their own, as the
-                                                                 * white keys) */
+        } else if (b == B_ENV || b == B_LFO) {      /* PREV, NEXT (no fill of their own, as the white keys; SEL was
+                                                     * FILL until 2026-10-30, it opens SONGS now: ui_input.c) */
             fm1_irq_off();
-            if (b == B_SCL)                         /* (OCT+ held: the whole next bar, as the keys) */
-                pedal_cc(PEDAL_CC_FILL, (fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u);
-            else
-                pedal_step(b == B_LFO ? 1 : -1, PS_END);
+            pedal_step(b == B_LFO ? 1 : -1, PS_END);
             fm1_irq_on();
         }
     }
@@ -338,7 +340,27 @@ UI_SMALL static void drummer_input(uint32_t pressed, uint32_t home)
         song.g[G_SWING] = (int16_t)clamp(song.g[G_SWING] + accel(EN_K4, s, 100), GP[G_SWING].min, GP[G_SWING].max);
         live_say("SWING ", song.g[G_SWING]);
     }
-    panel_enc(EN_ALGO);
+    if ((s = panel_enc(EN_ALGO)) != 0) {            /* ALGORITHM: the page's songs in turn, each loaded (2026-10-30, the
+                                                     * user: "algorithm should scroll through the songs/grooves depending
+                                                     * on which is selected"); empty slots skipped, the ends stop */
+        uint32_t page = lib_page(), base = page * SNG_SLOTS;
+        int32_t cur = sng_req ? (int32_t)sng_req - 1 : sng_cur;   /* (a load still pending: from it) */
+        int32_t d = s > 0 ? 1 : -1, n = s > 0 ? s : -s, from, row;
+        sng_lib_refresh();
+        from = cur >= 0 && (uint32_t)cur / SNG_SLOTS == page ? (int32_t)((uint32_t)cur % SNG_SLOTS)
+                                                           : (d > 0 ? -1 : (int32_t)SNG_SLOTS);   /* (another page, or
+                                                                                                   * none: from the edge) */
+        for (row = from; n > 0; n--) {
+            int32_t r = row + d;
+            while (r >= 0 && r < (int32_t)SNG_SLOTS && !sng_lib[base + (uint32_t)r].name[0])
+                r += d;
+            if (r < 0 || r >= (int32_t)SNG_SLOTS)
+                break;
+            row = r;
+        }
+        if (row != from)
+            drummer_load(base + (uint32_t)row);
+    }
 }
 
 /* ------------------------------------------------------------------ draw --- */
@@ -414,7 +436,7 @@ UI_SMALL static void live_big(uint32_t playing, const char *sec, uint32_t beat, 
     cv_begin(240, 124, C_BLACK);
     if (sng_cur < 0 && !sec[0]) {                   /* no song, no section: how to get one (the keys: the page's) */
         cv_text(4, 4, &FONT_L, "PICK A SONG", TE_G3);
-        cv_text(4, 44, &FONT_S, lib_page() ? "FACTORY: keys 1-16, ENV: user" : "USER: keys 1-16, LFO: factory",
+        cv_text(4, 44, &FONT_S, lib_page() ? "FACTORY: keys 1-16, SEL: songs" : "USER: keys 1-16, SEL: songs",
                 TE_G4);
         cv_blit(0, 40);
         return;
@@ -457,7 +479,7 @@ UI_SMALL static void live_main(uint32_t playing, const char *sec, uint32_t bar, 
     cv_begin(240, 72, C_BLACK);
     if (sng_cur < 0 && !sec[0]) {                   /* no song, no section: how to get one (the keys: the page's) */
         cv_text(4, 4, &FONT_L, "PICK A SONG", TE_G3);
-        cv_text(4, 44, &FONT_S, lib_page() ? "FACTORY: keys 1-16, ENV: user" : "USER: keys 1-16, LFO: factory",
+        cv_text(4, 44, &FONT_S, lib_page() ? "FACTORY: keys 1-16, SEL: songs" : "USER: keys 1-16, SEL: songs",
                 TE_G4);
         cv_blit(0, 52);
         return;
@@ -757,7 +779,7 @@ UI_SMALL static void lib_draw(void)
     cv_text(4, 4, &FONT_S, "USER", page ? TE_G3 : C_WHITE);
     cv_text(52, 4, &FONT_S, "FACTORY", page ? C_WHITE : TE_G3);
     cv_rect(page ? 52 : 4, 20, page ? 56 : 32, 2, C_WHITE);   /* (the page shown, underlined) */
-    cv_text(236 - text_w(&FONT_S, "env/lfo: page"), 4, &FONT_S, "env/lfo: page", TE_G3);   /* (the keys that turn it) */
+    cv_text(236 - text_w(&FONT_S, "sel: page"), 4, &FONT_S, "sel: page", TE_G3);   /* (the key that turns it) */
     cv_rect(0, 23, 240, 1, TE_G1);
     cv_blit(0, 0);
     {   /* 9 rows of 22 px over the 16 slots: the window follows the row picked */

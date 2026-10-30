@@ -7,7 +7,7 @@ for, and the sound.
     tools/fm1_emu.py                                                # the demo script on the factory grooves
     tools/fm1_emu.py song_examples/back-porch.json                 # the demo script, that song in slot 1
     tools/fm1_emu.py song_examples/first-light.json song_examples/slow-tide.json --wav out.wav   # slots 1 and 2, and what it played
-    tools/fm1_emu.py song.json --keys "3000:SAVE,3800:n0,4600:PLAY,5600:midi:bf1401" --snap 3600,6000 --ms 7000
+    tools/fm1_emu.py song.json --keys "3000:SEL,3800:n0,4600:PLAY,5600:midi:bf1401" --snap 3600,6000 --ms 7000
 
 The emulator has no USB, so songs cannot be sent to it as to a device. Instead they are written into the flash
 image of a copy of build/felucca.fwsc (./build.sh first) as the device's storage writes them (storage.c: the
@@ -21,7 +21,7 @@ settings, put the song sectors into the image, and a song saved on the device (E
 in that run. With no songs given the image stops at the firmware: the user's slots are empty, SONGS opens on the
 FACTORY page and its grooves play (they are in the firmware; a groove is read-only on the device).
 
-The demo script: SAVE tapped (SONGS), white key 1 (the page's song 1 loaded: slot 1, or groove 1 with no songs
+The demo script: SEL tapped (SONGS), white key 1 (the page's song 1 loaded: slot 1, or groove 1 with no songs
 given; LIVE again), PLAY (its first section), the pedal's CC 20 1 (the second section when the first ends), A#3 (a
 fill), the pedal's CC 22 (the ending).
 Keys (fm1-emu --keys): t:NAME presses a button (PLAY, REC, SAVE, HOME...) for 150 ms; t:nK the key K (0..26 from
@@ -42,7 +42,7 @@ import fm1_song  # noqa: E402
 import fm1pkg_make  # noqa: E402
 
 EMU = ROOT.parent.parent / "fm1-emu" / "target" / "release" / "fm1-emu"
-DEMO_KEYS = "3000:SAVE,3800:n0,4600:PLAY,6000:midi:bf1401,9000:n5,11000:midi:bf167f"
+DEMO_KEYS = "3000:SEL,3800:n0,4600:PLAY,6000:midi:bf1401,9000:n5,11000:midi:bf167f"
 DEMO_SNAP = "3600,4400,6400,9400,11400,15000"
 # storage.c: the objects' numbers (OBJ_SONG0.., OBJ_ARRSET), sectors, the header
 ST_MAGIC, ST_SECTOR, ST_PAYLOAD_OFF = 0x554C4546, 4096, 256

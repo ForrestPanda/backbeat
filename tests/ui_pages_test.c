@@ -14,7 +14,8 @@
  *   SEL     held + a key: the key of the song
  *   GLO     tapped: SETUP (the pedal, MIDI, tempo, drums, master, texture, screen, lights, audio, system)
  *   REC     held: the clear ring, to the end: cleared (undo brings it back); live recording is gone
- *   SAVE    tapped: SONGS (from SONGS, LIVE); held on the drum grid: the save ring, the section into its song (no
+ *   SEL     tapped: SONGS (2026-10-30; SAVE's tap before); on SONGS the other page; on SECTIONS the copy
+ *   SAVE    tapped: nothing; held on the drum grid: the save ring, the section into its song (no
  *           layer since 2026-10-27: SLOOP's sections A..D went with JAM)
  *   EDIT    tapped: SECTIONS (2026-10-29; from SONGS: the row's song, or a new one on an empty slot): the pick into
  *           the grid or cued, the UNSAVED warning, the section / steps / div / tempo knobs, SEL copy, ENV / LFO
@@ -436,18 +437,22 @@ int main(int argc, char **argv)
     check(dstep_has(&TDRUM->dstep[3], 2), "REC let go before the end: nothing cleared");
     TDRUM->dstep[3] = (dstep_t){0};
 
-    /* ---- SAVE: no layer since 2026-10-27 (JAM's sections A..D went): a tap opens SONGS (from SONGS, LIVE); a long
-     * press on LIVE or EDIT saves the section (on SONGS it does nothing); the keys while it is held are LIVE's own */
+    /* ---- SAVE: no layer since 2026-10-27 (JAM's sections A..D went) and no tap since 2026-10-30 (SEL opens SONGS,
+     * the user: "sel should actually open the page instead of save"); a long press on LIVE or EDIT saves the
+     * section (on SONGS it does nothing); the keys while it is held are LIVE's own */
     go_home(); frame();
     song.playing = 0; live_sec = -1; live_req = -1; sng_cur = -1;
     press(B_SAVE); frames(15); check(ui.layer == LY_PLAY && drummer_on() && sng_view == DV_LIVE, "SAVE held on LIVE: no layer, LIVE still");
     key(key_of_white(2)); check(sng_req == 3u && sng_view == DV_LIVE, "SAVE held, no song: a white key loads a song, as without SAVE");
     sng_req = 0;
     release(B_SAVE); frames(2);
-    check(drummer_on() && sng_view == DV_LIB, "SAVE let go within 0.7 s: a tap, SONGS");
+    check(drummer_on() && sng_view == DV_LIVE, "SAVE let go within 0.7 s: a tap, nothing (LIVE still)");
+    tap(B_SCL); frames(2);
+    check(drummer_on() && sng_view == DV_LIB, "SEL tapped on LIVE: SONGS");
     press(B_SAVE); frames(60); release(B_SAVE); frames(2);
-    check(drummer_on() && sng_view == DV_LIB, "SAVE held ~1 s on SONGS and let go: not a tap, SONGS still");
-    tap(B_SAVE); check(drummer_on() && sng_view == DV_LIVE, "SAVE tapped on SONGS: LIVE");
+    check(drummer_on() && sng_view == DV_LIB, "SAVE held ~1 s on SONGS and let go: SONGS still");
+    tap(B_SAVE); check(drummer_on() && sng_view == DV_LIB, "SAVE tapped on SONGS: nothing, SONGS still");
+    tap(B_HOME); frame(); check(drummer_on() && sng_view == DV_LIVE, "HOME on SONGS: LIVE");
     {   /* held on LIVE to the end: the section into its song (the user, 2026-10-27: on the unit it did nothing there,
          * the hold was EDIT's only) */
         uint32_t s0 = sec_saves;
@@ -461,7 +466,7 @@ int main(int argc, char **argv)
               "LIVE: SAVE held to the end: the section into its song, LIVE still");
         sng_cur = -1; live_sec = -1; sng_ui_name[0] = 0; ui.msg_t = 0; frames(2);
     }
-    tap(B_SAVE); check(drummer_on() && sng_view == DV_LIB, "SAVE tapped on LIVE: SONGS");
+    tap(B_SCL); check(drummer_on() && sng_view == DV_LIB, "SEL tapped on LIVE: SONGS");
     {   /* fm1-drummer: SONGS lists the slots (cached), KNOB 1 picks, REC loads and goes back to LIVE (its last row,
          * JAM, SLOOP's chain page, went 2026-10-27); HOME: LIVE again; there, with a song, the keys are the pedal's */
         sng_lib_dirty = 1;
@@ -472,17 +477,17 @@ int main(int argc, char **argv)
         encs[panel.enc[EN_K1]] = 2; frame(); tap(B_REC); frame();
         check(sng_req == 3u && drummer_on() && sng_view == DV_LIVE, "SONGS: KNOB 1 to slot 3, REC: song 3 asked for, LIVE");
         sng_req = 0;
-        tap(B_SAVE); encs[panel.enc[EN_K1]] = 15; frame(); ui.force = 1; frame(); ppm("page-songs-16");
+        tap(B_SCL); encs[panel.enc[EN_K1]] = 15; frame(); ui.force = 1; frame(); ppm("page-songs-16");
         check(sng_pick == 15u, "SONGS: the 16th slot reached (the list scrolls)");
         tap(B_REC); frame();
         check(sng_req == 16u, "SONGS: REC on slot 16: song 16 asked for");
         sng_req = 0;
-        tap(B_SAVE); encs[panel.enc[EN_K1]] = 20; frame();
+        tap(B_SCL); encs[panel.enc[EN_K1]] = 20; frame();
         check(sng_pick == 15u && drummer_on() && sng_view == DV_LIB, "SONGS: KNOB 1 stops at slot 16 (no JAM row after it)");
         tap(B_REC); frame();
         check(sng_req == 16u && sng_view == DV_LIVE, "SONGS: REC there: song 16 asked for, LIVE");
         sng_req = 0;
-        tap(B_SAVE); frame();
+        tap(B_SCL); frame();
         tap(B_HOME); frame();
         check(drummer_on() && sng_view == DV_LIVE, "HOME: LIVE");
         ui.force = 1; frame(); ppm("live-nosong");
@@ -490,15 +495,23 @@ int main(int argc, char **argv)
         sng_req = 0;
         key(key_of_white(12)); check(sng_req == 13u, "LIVE, no song: white key 13 loads song 13 (16 songs)");
         sng_req = 0;
-        tap(B_SAVE); key(key_of_white(0)); check(sng_req == 1u && sng_view == DV_LIVE, "SONGS: white key 1 loads song 1, LIVE");
+        tap(B_SCL); key(key_of_white(0)); check(sng_req == 1u && sng_view == DV_LIVE, "SONGS: white key 1 loads song 1, LIVE");
         sng_req = 0;
         /* the FACTORY page: the grooves, songs 16..31 (as the pedal's PC 16..31) */
-        tap(B_SAVE); tap(B_LFO); frame();
+        tap(B_SCL); tap(B_LFO); frame();
         check(lib_page() == 1u && sng_view == DV_LIB, "SONGS: LFO: the FACTORY page");
         ui.force = 1; frame(); ppm("page-songs-factory");
+        /* SEL on SONGS: the other page (2026-10-30; it did nothing there); on LIVE with no song: SONGS, as with one */
+        tap(B_SCL); frame(); check(lib_page() == 0u && sng_view == DV_LIB, "SONGS: SEL on FACTORY: USER");
+        tap(B_SCL); frame(); check(lib_page() == 1u && sng_view == DV_LIB, "SONGS: SEL on USER: FACTORY");
+        tap(B_ENV); frame(); check(lib_page() == 0u, "SONGS: ENV: USER outright");
+        tap(B_ENV); frame(); check(lib_page() == 0u, "SONGS: ENV on USER: USER still");
+        tap(B_HOME); frame(); check(sng_view == DV_LIVE && sng_cur < 0, "HOME: LIVE, no song");
+        tap(B_LFO); frame(); check(lib_page() == 1u && sng_view == DV_LIVE, "LIVE, no song: LFO: the FACTORY page shown");
+        tap(B_SCL); frame(); check(lib_page() == 1u && sng_view == DV_LIB, "LIVE, no song: SEL: SONGS, the page kept");
         key(key_of_white(1)); check(sng_req == 18u && sng_view == DV_LIVE, "FACTORY: white key 2 loads groove 2 (PC 17)");
         sng_req = 0;
-        tap(B_SAVE); encs[panel.enc[EN_K1]] = -20; frame(); tap(B_REC); frame();
+        tap(B_SCL); encs[panel.enc[EN_K1]] = -20; frame(); tap(B_REC); frame();
         check(lib_page() == 1u && sng_req == 17u, "FACTORY: the page kept, REC on row 1: groove 1");
         sng_req = 0;
         ui.force = 1; frame(); ppm("live-nosong-factory");
@@ -512,7 +525,7 @@ int main(int argc, char **argv)
         check(lib_page() == 1u, "no user songs: the FACTORY page first");
         sng_page = -1; t_user = 1; sng_lib_dirty = 1; frame();
         check(lib_page() == 0u, "user songs: USER first");
-        sng_cur = (int8_t)(SNG_FAC0 + 4u); tap(B_SAVE); frame();
+        sng_cur = (int8_t)(SNG_FAC0 + 4u); tap(B_SCL); frame();
         check(lib_page() == 1u && sng_pick == 4u, "SONGS with groove 5 loaded: its page, its row");
         tap(B_HOME); frame(); ui.force = 1; frame(); ppm("live-factory-head");   /* "factory 5" */
         sng_cur = -1; sng_page = 0;
@@ -537,7 +550,7 @@ int main(int argc, char **argv)
             sng_ui_next[0] = 0; ui.force = 1; frame(); ppm("live-big-nocue");   /* nothing coming: the beat lights */
             str_cpy(sng_ui_next, "CHORUS", sizeof sng_ui_next);
             check((keys_lit() >> key_of_white(1)) & 1u, "LIVE, the beat big: the keys still the sections");
-            tap(B_SAVE); frame(); tap(B_HOME); frame();
+            tap(B_SCL); frame(); tap(B_HOME); frame();
             check(sng_view == DV_LIVE && live_view == 1u, "SONGS: HOME: LIVE, the layout kept");
             live_view = 1; lights_from_word(lights_word());
             check(live_view == 1u, "the layout in the settings word");
@@ -630,13 +643,12 @@ int main(int argc, char **argv)
         check(!song.playing, "LIVE: PLAY: stop");
         tap(B_PLAY); frames(3);
         check(song.playing && live_sec >= 0, "LIVE: PLAY: the section cued plays");
-        {   /* SEL / ENV / LFO: FILL, PREV, NEXT (CC 21, 25, 24) */
+        {   /* ENV / LFO: PREV, NEXT (CC 25, 24); SEL: SONGS, no fill (it was the fill, CC 21, until 2026-10-30) */
             pedal_fill_wait = 0; pedal_fill = 0; live_req = -1; pedal_at_end = 0;
             tap(B_SCL); frames(2);
-            check(pedal_fill || pedal_fill_wait, "LIVE: SEL: the fill (CC 21)");
-            pedal_fill_wait = 0; pedal_fill = 0; live_req = -1; pedal_at_end = 0;
-            press(B_OCTUP); tap(B_SCL); release(B_OCTUP); frames(2);
-            check(!pedal_fill && pedal_fill_wait, "LIVE: OCT+ held + SEL: the fill on the next bar (CC 21 value 1)");
+            check(!pedal_fill && !pedal_fill_wait && sng_view == DV_LIB, "LIVE, playing: SEL: SONGS, no fill");
+            tap(B_HOME); frames(2);
+            check(sng_view == DV_LIVE && song.playing, "HOME: LIVE, still playing");
             pedal_fill_wait = 0; pedal_fill = 0; live_req = -1; pedal_at_end = 0;
             tap(B_LFO); frames(2);
             check(live_req == (int8_t)(live_sec + 1) && !pedal_fill, "LIVE: LFO: the next section (as CC 24, no fill)");
@@ -644,6 +656,28 @@ int main(int argc, char **argv)
             tap(B_ENV); frames(2);
             check(live_req == (int8_t)(live_sec - 1) && !pedal_fill, "LIVE: ENV: the previous section (as CC 25, no fill)");
             live_req = -1; pedal_at_end = 0; pedal_fill = 0;
+        }
+        {   /* ALGORITHM: the page's songs in turn (2026-10-30); the stub's USER slots: 1 TIME, 3 BLACK, 13 THIRTEEN;
+             * FACTORY: 1 CLASSIC ROCK, 2 BLUES */
+            int8_t c0 = sng_cur, p0 = sng_page;
+            uint8_t r0 = sng_req;
+            sng_cur = -1; sng_req = 0; sng_page = 0;
+            encs[panel.enc[EN_ALGO]] = 1; frame(); check(sng_req == 1u, "LIVE, no song, USER: ALGORITHM up: song 1 loaded");
+            encs[panel.enc[EN_ALGO]] = 1; frame(); check(sng_req == 3u, "LIVE: ALGORITHM up again before it landed: song 3 (slot 2 empty, skipped)");
+            sng_req = 0; sng_cur = 2;
+            encs[panel.enc[EN_ALGO]] = 1; frame(); check(sng_req == 13u, "LIVE, song 3: ALGORITHM up: song 13 (4..12 empty)");
+            sng_req = 0; sng_cur = 12;
+            encs[panel.enc[EN_ALGO]] = 1; frame(); check(sng_req == 0u, "LIVE, song 13: ALGORITHM up: the last with a song, nothing");
+            encs[panel.enc[EN_ALGO]] = -1; frame(); check(sng_req == 3u, "LIVE, song 13: ALGORITHM down: song 3");
+            sng_req = 0; sng_cur = -1;
+            encs[panel.enc[EN_ALGO]] = -1; frame(); check(sng_req == 13u, "LIVE, no song: ALGORITHM down: the last song, 13");
+            sng_req = 0; sng_cur = -1; sng_page = 1;
+            encs[panel.enc[EN_ALGO]] = 1; frame(); check(sng_req == 17u, "LIVE, no song, FACTORY: ALGORITHM up: groove 1 (PC 16)");
+            sng_req = 0; sng_cur = (int8_t)SNG_FAC0;
+            encs[panel.enc[EN_ALGO]] = 1; frame(); check(sng_req == 18u, "LIVE, groove 1: ALGORITHM up: groove 2");
+            sng_req = 0; sng_cur = 2; sng_page = 1;
+            encs[panel.enc[EN_ALGO]] = 1; frame(); check(sng_req == 17u, "LIVE, song 3 loaded but FACTORY shown: ALGORITHM up: groove 1");
+            sng_cur = c0; sng_page = p0; sng_req = r0; frame();
         }
         {   /* the knobs: tempo, kit, drums level, swing */
             int16_t bpm = song.g[G_BPM], kit = TDRUM->p[P_E0], lv = song.g[G_DRLVL], sw = song.g[G_SWING];
@@ -734,11 +768,13 @@ int main(int argc, char **argv)
         check(sec_saves == s0 + 1u && sng_view == DV_SEC && !strcmp(ui.msg, "SAVED INTO THE SONG"), "SECTIONS: SAVE held saves the grid into the song");
         tap(B_EDIT); frames(2);
         check(on_drum_page(), "SECTIONS: EDIT tapped again: the grid");
-        tap(B_SAVE); frames(2); sng_page = 0; sng_pick = 5; tap(B_EDIT); frames(2);
+        tap(B_SCL); frames(2); sng_page = 0; sng_pick = 5; tap(B_EDIT); frames(2);
         check(sec_news == 1u && sng_cur == 5 && sng_view == DV_SEC && !strcmp(ui.msg, "NEW SONG: PART 1"), "SONGS: EDIT on an empty slot: a new song there, its SECTIONS");
         ui.force = 1; frame(); ppm("sections-new");
-        tap(B_SAVE); frames(2); sng_pick = 2; tap(B_EDIT); frames(2);
-        check(sng_req == 3u && sng_view == DV_SEC, "SONGS: EDIT on a song: loaded, its SECTIONS");
+        tap(B_SCL); frames(2);
+        check(sng_view == DV_SEC && sec_last_op == SE_DUP, "SECTIONS: SEL is the copy there, not SONGS");
+        tap(B_HOME); frames(2); tap(B_SCL); frames(2); sng_pick = 2; tap(B_EDIT); frames(2);
+        check(sng_req == 3u && sng_view == DV_SEC, "SONGS (HOME, SEL from SECTIONS): EDIT on a song: loaded, its SECTIONS");
         sng_req = 0;
         tap(B_HOME); frames(2);
         check(sng_view == DV_LIVE, "SECTIONS: HOME: LIVE");
@@ -749,11 +785,14 @@ int main(int argc, char **argv)
     /* ---- the drum screen */
     studio_open(SC_DRUM); ui.force = 1; frames(16);   /* (after SAVE: the knobs quiet, #39) */
     check(on_drum_page(), "the drum screen");
-    {   /* fm1-drummer: SAVE on the grid (EDIT): tapped, SONGS; held to the end, the section into its song (stopped) */
+    {   /* fm1-drummer: SAVE on the grid (EDIT): tapped, nothing (SEL: SONGS); held to the end, the section into its
+         * song (stopped) */
         uint32_t s0 = sec_saves;
         sng_cur = 1; live_sec = 1; str_cpy(sng_ui_name, "VERSE", sizeof sng_ui_name); song.playing = 0;
         tap(B_SAVE); frames(2);
-        check(drummer_on() && sng_view == DV_LIB && ui.layer == LY_PLAY, "EDIT: SAVE tapped: SONGS (no SONG layer on the grid)");
+        check(on_drum_page() && ui.layer == LY_PLAY, "EDIT: SAVE tapped: nothing (no SONG layer on the grid, no SONGS)");
+        tap(B_SCL); frames(2);
+        check(drummer_on() && sng_view == DV_LIB && ui.layer == LY_PLAY, "EDIT: SEL tapped: SONGS");
         studio_open(SC_DRUM); frames(16);
         press(B_SAVE); frames(50);
         check(ui.hold_kind == 2u && on_drum_page(), "EDIT: SAVE held 0.8 s: the save ring");

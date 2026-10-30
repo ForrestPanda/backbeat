@@ -35,7 +35,7 @@ static uint32_t cur_fam(void) { return ui.home ? FAM_HOME : cur_page()->fam; }
 UI_SMALL static uint32_t cur_btn(void)                      /* the button of the screen shown */
 {
     if (!ui.home && cur_page()->scope == SC_SONG)
-        return B_SAVE;
+        return B_SCL;                                   /* (SEL opens SONGS since 2026-10-30) */
     if (!ui.home && cur_page()->scope == SC_DRUM)
         return B_SEQ;
     return FAM_BTN[cur_fam()];
@@ -319,9 +319,9 @@ UI_SMALL static void layer_tap(uint32_t layer)
         }
         studio_open(SC_DRUM);                             /* fm1-drummer: the grid of the section playing */
         break;
-    /* (ARP, SEL: no pages, drums only; ENV, LFO: LIVE's PREV and NEXT, ui_drummer.c) */
-    /* (SAVE: no layer since 2026-10-27, JAM's went; tapped it opens SONGS, held on the drum grid it saves the
-     * section: holds_input) */
+    /* (ARP: no pages, drums only; SEL: SONGS, ui_input; ENV, LFO: LIVE's PREV and NEXT, ui_drummer.c) */
+    /* (SAVE: no layer since 2026-10-27, JAM's went, and no tap since 2026-10-30, SEL opens SONGS; held on the drum
+     * grid it saves the section: holds_input) */
     default:
         break;
     }
@@ -475,8 +475,8 @@ UI_SMALL static int layers_input(uint32_t note_edges, uint32_t *pressed, uint32_
 
 /* REC (live recording is gone, drums only): held 0.7 s a ring fills: held on to the end, the selected track is
  * cleared (EDIT + OCT- brings it back); let go before, nothing happens.
- * SAVE (fm1-drummer; SLOOP's SAVE layer, JAM's sections A..D, went 2026-10-27): tapped, the SONGS list (from SONGS,
- * LIVE); on LIVE or the drum grid (EDIT) held 0.7 s a ring fills, and held on to the end the section playing is
+ * SAVE (fm1-drummer; SLOOP's SAVE layer, JAM's sections A..D, went 2026-10-27; its tap opened SONGS until
+ * 2026-10-30, SEL does now): on LIVE or the drum grid (EDIT) held 0.7 s a ring fills, and held on to the end the section playing is
  * written into its song (no song loaded: it says so). LIVE too since 2026-10-27 (the user: held there, on the unit,
  * it did nothing; the section is the same one, LIVE is where it plays). SONGS: a long press does nothing. */
 static int on_live_page(void) { return drummer_on() && sng_view != DV_LIB; }   /* LIVE or SECTIONS: SAVE held saves */
@@ -537,7 +537,7 @@ UI_SMALL static void holds_input(uint32_t pressed, uint32_t now_ms)
         }
         rec_on = 0;
     }
-    /* SAVE: a tap anywhere opens SONGS (from SONGS, LIVE); the hold is LIVE's and the drum grid's */
+    /* SAVE: the hold is LIVE's and the drum grid's; a tap does nothing (SEL opens SONGS, ui_input) */
     if (pressed & sb) {
         save_t0 = now_ms;
         save_on = 1;
@@ -558,11 +558,6 @@ UI_SMALL static void holds_input(uint32_t pressed, uint32_t now_ms)
         if (ui.hold_kind == 2u) {
             ui.hold_kind = 0;                             /* let go before the end: nothing */
             ui.force = 1;
-        } else if (save_on && now_ms - save_t0 < 700u) {
-            if (drummer_on())                             /* a tap: SONGS (from SONGS: LIVE) */
-                drummer_open(sng_view == DV_LIB ? DV_LIVE : DV_LIB);
-            else
-                studio_open(SC_SONG);
         }
         save_on = 0;
     }
@@ -626,6 +621,12 @@ UI_SMALL static void ui_input(void)
         enc_hold |= 15u << EN_K1;
     }
 #if FELUCCA_DRUMMER
+    if (((pressed >> panel.btn[B_SCL]) & 1u) && !(drummer_on() && sng_view != DV_LIVE)) {
+        studio_open(SC_SONG);                           /* SEL tapped: SONGS (2026-10-30, the user: "sel should open the
+                                                         * page instead of save"; on SONGS it turns the page, on SECTIONS
+                                                         * it copies the section: drummer_input) */
+        return;
+    }
     if (drummer_on()) {
         drummer_input(pressed, home);
         return;

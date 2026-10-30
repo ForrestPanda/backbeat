@@ -288,11 +288,12 @@ has been played from the pedal on an FM-1 (2026-10-19); SECTIONS is in the host 
 | Button | Tapped | Held |
 | --- | --- | --- |
 | HOME | **LIVE**, the screen it starts on; on LIVE: its other layout, the bar big (kept across power-offs) | |
-| SAVE | **SONGS** (from SONGS: LIVE again) | on LIVE, SECTIONS or EDIT: the section into its song, with the song's tempo, kit, swing, drum level and reverb as the knobs left them |
+| SEL | **SONGS**, your songs and the grooves (on SONGS: the other page, USER / FACTORY; on SECTIONS: the section copied after itself) | |
+| SAVE | nothing | on LIVE, SECTIONS or EDIT: the section into its song, with the song's tempo, kit, swing, drum level and reverb as the knobs left them |
 | EDIT | **SECTIONS**, the song's shape (from SECTIONS: the grid); on SONGS: that row's song and its SECTIONS, or on an empty slot a new song | SLOOP's erase / mute / undo layer |
 | SEQ | **EDIT**, the drum grid of the section playing (again: GRID / KIT) | the step layer, as SLOOP; its DIV knob (and the PATTERN page's) keeps the hits in their place on the beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between, the length follows (nudges, locks, conditions, marks and the section's fill bar with it; EDIT + OCT- undoes it; over 64 steps it is refused and the screen says so) |
 | GLO | **SETUP** (again, HOME or OCT-: closed) | |
-| SEL / ENV / LFO | on LIVE: **FILL**, **PREV**, **NEXT** (the pedal's CC 21, 25, 24; PREV / NEXT without a fill) | |
+| ENV / LFO | on LIVE: **PREV**, **NEXT** (the pedal's CC 25, 24, without a fill; a fill is a black key); on SONGS, or LIVE with no song: USER, FACTORY | |
 | PLAY | start the section cued (the count-in first), or stop | |
 | FX, ARP | FX: the filter, insert, delay and reverb pages | SLOOP's layers (throws, roll) |
 
@@ -313,14 +314,16 @@ the rest of the bar with a fill bar of its own, else to the section's end; with 
 the fourth (C#4) the break (as CC 28: the section playing comes in again through its break when it ends); the last (F#5) the
 **tap tempo** (as CC 26, song loaded or not), its light flashing the tempo (with PLAY while playing; stopped, at the
 tempo, so a tap or a MIDI clock shows at once); the other black keys as the first. So a plain change is one press, and a fill into the change is a black key then a white one,
-as the pedal's CC 21 sent with its CC 20. SEL is a fill too, ENV and LFO the previous and next section
+as the pedal's CC 21 sent with its CC 20. ENV and LFO are the previous and next section
 (without a fill). KNOB 1 (and SELECT) the tempo (turned fast it sweeps wider, a detent at a time when turned slowly;
 so every knob with a wide range), KNOB 2 (and PRESETS) the kit, KNOB 3 the drums' level, KNOB 4 the
-swing. With no song loaded it says PICK A SONG and shows the 16 songs of the SONGS page shown (USER or FACTORY;
-ENV / LFO switch), and the white keys 1..16 load them.
+swing. ALGORITHM scrolls through the songs of the page shown on SONGS, USER or FACTORY, loading each one as it
+goes (empty slots skipped, the ends stop; with a song of the other page loaded it starts from that page's edge). With no song loaded it says PICK A SONG and shows the 16 songs of the SONGS page shown (USER or FACTORY;
+ENV / LFO switch, SEL opens SONGS), and the white keys 1..16 load them.
 
-**SONGS.** Two pages, as tabs in the header: **USER**, your 16 slots, and **FACTORY**, the 16 grooves (read-only). ENV
-shows USER, LFO FACTORY (the header's "env/lfo: page"; "rec: load" at the bottom). It opens on the loaded song's page; with no song, on USER, or on FACTORY while your slots are
+**SONGS.** SEL opens it (HOME: LIVE again). Two pages, as tabs in the header: **USER**, your 16 slots, and
+**FACTORY**, the 16 grooves (read-only). SEL again switches to the other (the header's "sel: page"; ENV goes to USER
+and LFO to FACTORY outright; "rec: load" at the bottom). It opens on the loaded song's page; with no song, on USER, or on FACTORY while your slots are
 all empty. Each page lists 16 songs (9 rows at a time, the list scrolling with the row picked) with their name, tempo
 and number of sections. KNOB 1 or
 SELECT picks a row, REC or OCT+ loads it and goes back to LIVE; a white key 1..16 loads that song of the page at once.
@@ -338,7 +341,7 @@ HIT knob. Then hold SAVE (stopped, on EDIT or on LIVE): a ring fills
 for a second and the section is written back into its song in flash, with the song's tempo, kit, swing, drum level
 and reverb as the knobs left them ("SAVED INTO THE SONG"; "SONG FULL" past 3800
 bytes; nudges and parameter locks are not kept, SNG2 has no room for them, and the screen says so). With no song
-loaded SAVE held has nothing to save into and says so. A tap of SAVE opens SONGS (from SONGS, LIVE).
+loaded SAVE held has nothing to save into and says so. SEL opens SONGS; HOME brings LIVE back.
 
 <p align="center"><img src="assets/screens/backbeat-edit.png" alt="EDIT: the drum grid of the section playing, and the kit page" width="480"></p>
 

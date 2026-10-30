@@ -15,7 +15,7 @@
  * Layers: a function button held turns the keys into something else (TE style: hold + touch):
  *   FX   the master filter, DUST, the throws  EDIT  erase that sound (while held, as it plays)
  *   ARP  note repeat (roll) at G_ROLL     SEQ   steps 1..16 (the UI: ui_layers.c)
- * (SAVE's layer, SLOOP's sections A..D, went with JAM 2026-10-27: a tap opens SONGS, a hold on the drum grid writes
+ * (SAVE's layer, SLOOP's sections A..D, went with JAM 2026-10-27: SEL opens SONGS, SAVE held on the drum grid writes
  * the section into its song. GLO's layer, mute / fill / tap tempo, is gone: GLO tapped opens SETUP, ui_menu.c.)
  * OCT- / OCT+ held play ghost / hard hits. */
 #define SEQ_NONE 0xFFFFFFFFu

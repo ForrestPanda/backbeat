@@ -330,7 +330,12 @@ next bar). No named sections, one song, no fill tied to a section change.
      meter, the section large with "BAR n / m" and a bar-ticked progress (the count-in's beats while it clicks),
      what comes next in colour, the 8 sections as tiles laid out as the white keys, a footer with the kit, the
      pedal channel and a MIDI dot (`pedal_seen_ms`, set in `pedal_msg`). SEL / ENV / LFO are FILL / PREV / NEXT
-     (CC 21 / 25 / 24); KNOB 1..4 tempo, kit, drums level, swing. ISR-written strings and the clock are read
+     (CC 21 / 25 / 24; since 2026-10-30 SEL opens SONGS instead, from every screen but SECTIONS, and turns its page
+     there, the user: "sel should actually open the page instead of save"; SAVE's tap does nothing now, its hold
+     saves; the black keys fill); KNOB 1..4 tempo, kit, drums level, swing; ALGORITHM (2026-10-30, the user:
+     "algorithm should scroll through the songs/grooves depending on which is selected") the songs of the page shown
+     in turn, each loaded as the pedal's PC would (`drummer_load`; empty slots skipped, the ends stop, a load still
+     pending counted from). ISR-written strings and the clock are read
      with the IRQ off.
      The keys (asked 2026-10-14, "I don't want to force a fill on every transition"): the white keys change section
      with no fill (`pedal_section` PS_END: when the section playing ends; 9..16 PS_BAR: on the next bar), every
@@ -343,7 +348,7 @@ next bar). No named sections, one song, no fill tied to a section change.
      command map); the web editor's player (`PLAY`) mirrors it. Found while doing it: the wait for the section's
      end (`pedal_at_end`) itself made the last bar a fill, so LIVE's first fill-free keys still filled into a
      section longer than a bar; `live_block` no longer does.
-   - **SONGS** (SAVE tapped): the 8 slots from a cache (`sng_lib`, refreshed after a load, an editor write or a
+   - **SONGS** (SAVE tapped; SEL since 2026-10-30): the 8 slots from a cache (`sng_lib`, refreshed after a load, an editor write or a
      section save: `sng_slot_name` read a whole copy for its CRC every frame) and, until 2026-10-27, JAM, SLOOP's
      A..D chain page.
    - **EDIT** (SEQ tapped: the drum grid): SAVE held 0.7 s + 1 s writes the section playing back into its song
@@ -1168,7 +1173,7 @@ hazard; what it found and what was done:
   its groove), so the grooves became a bank of their own: songs 16..31 (`SNG_FAC0`, `SNG_ALL` 32 in seq.c), read from
   the firmware image (sng_fetch), read-only; the user's 16 slots in flash are empty until written. The pedal: PC 0..15
   the user's slots, PC 16..31 the grooves, PC 32 and on no song (A..D). SONGS has two pages as header tabs, USER and
-  FACTORY (ENV / LFO; also on LIVE with no song, whose 16 tiles and white keys follow the page shown); it opens on the
+  FACTORY (SEL the other one since 2026-10-30, ENV / LFO USER / FACTORY outright; also on LIVE with no song, whose 16 tiles and white keys follow the page shown); it opens on the
   loaded song's page, else USER, or FACTORY while USER is empty. LIVE's header says "song n" or "factory n"; EDIT's
   SAVE held on a groove answers FACTORY: READ-ONLY (sng_save_section 5). The autoload keeps a groove (last 1..32). The
   editor protocol: objects 48..63 GET the grooves, a PUT is refused (rc 1). The web editor's Setlist tab lists the
