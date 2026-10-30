@@ -88,7 +88,7 @@ switches inside the patch are its sections. Starting a song is "go to intro".
   the default is 0 now, the songs were set to 0, and the web player swings as the device does.
   (2026-10-19: "I think the swing option might be broken".) It was not, but it moved the wrong steps for every song on the
   bench: all at 1/16 with the hats on the 8ths, so hardly a hit on an odd 16th, and the swing had nothing to move; the
-  user's case was Money, whose score is marked with the shuffle (two 8ths as a triplet's quarter and 8th, Guitar Pro's
+  user's case was a song whose score is marked with the shuffle (two 8ths as a triplet's quarter and 8th, Guitar Pro's
   eighth triplet feel on every measure). Now a song's swing has a grid, `"swing_grid"`: `"1/16"` (the default: every
   second step of the section's grid, as before) or `"1/8"` (the 8ths go long-short and the 16ths or 32nds inside each
   share its length evenly: `seq.c grid_den8`, chosen by `trk_grid` under 1/16 and 1/32 when the song says so; under
@@ -100,7 +100,7 @@ switches inside the patch are its sections. Starting a song is "go to intro".
   from a triplet feel on most measures, on the 8ths for an eighth feel. Tests: seq2_test t_swing8 (16ths 3:3:1:1 in
   each beat at swing 100), song_test (the flag read), test_web.mjs (the player's times, the packers, the editor).
   Not on the device yet: the FM-1 runs the bridge; the next BackBeat install carries it.
-- A section is a whole number of bars of its time signature (2026-10-14, asked when Back in Black's 4-step
+- A section is a whole number of bars of its time signature (2026-10-14, asked when a song's 4-step
   intro in 4/4 looped four times before the verse: the signature rules, the firmware keeps counting bars).
   `tools/fm1_song.py` (`bar_fit`, `tests/song_bars_test.py`) and the editor's section editor (`SED.barFit`) flag one
   that is not and offer the signature whose one bar is the pattern ("1/4" for that intro). A count-in before such a
@@ -251,9 +251,9 @@ next bar). No named sections, one song, no fill tied to a section change.
    common deviating bar at phrase ends when the match is strong; sections with the same pattern as an
    earlier one skipped; at most 8, the outro kept. A limit worth knowing: a step's fill condition
    covers all its lanes, so a fill hit that lands on a step where the pattern also hits is dropped
-   (listed by the tool): fills come out "additive". Tested on Pearl Jam and Pink Floyd tabs of the
+   (listed by the tool): fills come out "additive". Tested on a handful of tabs of the
    user's, and by `tests/gp2song_test.py` on a file written with PyGuitarPro. A file without markers
-   (Shine On You Crazy Diamond, 348 bars): the sections are found from the drums alone, as the runs of
+   (a 348-bar one): the sections are found from the drums alone, as the runs of
    bars that repeat a pattern of 1 to 4 bars with fills allowed; silence is dropped, short runs join
    their neighbour, equal neighbours merge; they are named PART n for the user to rename (`--auto`
    does the same for a file with markers). The sections found, from markers or from the drums, are a draft: the user's
@@ -428,8 +428,7 @@ next bar). No named sections, one song, no fill tied to a section change.
    and answers `FM-1_900`. A reinstall of the same package started the loader from BackBeat (step 1 works)
    but the loader dropped off USB a quarter of the way in; nothing was written (equal sectors are skipped)
    and BackBeat started again: cause open. The procedure, and every way back: `docs/recovery.md`. **Played 2026-10-19 afternoon** (the user):
-   the Ampero's MIDI OUT into the TRS jack over a plain stereo 3.5 mm cable (so Type A), Another Brick in the
-   Wall and Back in Black start to end, cued from the footswitches with fills and section changes, heard on the
+   the Ampero's MIDI OUT into the TRS jack over a plain stereo 3.5 mm cable (so Type A), two of the user's songs start to end, cued from the footswitches with fills and section changes, heard on the
    speaker and from the audio out into the Ampero. So the TRS jack, the cable type, the UART driver and the
    speaker are facts. Not yet tried on the unit: every other "verify on
    hardware" note above. **2026-10-22** (the user, Ampero firmware 1.6.5): CC 24 / 25 (next / previous) work; the
@@ -676,7 +675,7 @@ player, the docs):
 
 Asked 2026-10-18, after a day of playing with a footswitch a section (scenes 1..5, start and stop on 6 and 7): "for
 songs that have a silent bar or two requiring a separate section for the interval is not good". A section for the
-silence costs a switch and a second press on the bar. Shine On You Crazy Diamond's drum track (the GP4, bars 166-170
+silence costs a switch and a second press on the bar. One of the user's drum tracks (the GP4, bars 166-170
 and 204-208) showed the shape: P3-SYNTH's 3-bar phrase ends with its fill at 165 and the ride groove's starts at 170
 (its fills sit on 181, 187, 193, 199, 202: the phrase's last bar), so the way between them is **4 bars where the cycle
 counts 3** (the user, the same day: "there's an extra bar between the 3-bar pattern, specifically I think the extra
@@ -693,7 +692,7 @@ bar is 168"); 204-207 is a fill bar and a 3-bar break. So:
   (`drum_src`, by the absolute step).
 - **The entry** plays when the section comes in from another one or from stopped (after the count-in), whatever
   brought it (CC 20, 22, 24, 25, 27, LIVE's keys). Never when the section playing is asked for again: that stays a
-  no-op, which a switch sending a fill with its own section relies on (Another Brick: the crash fills in the chorus).
+  no-op, which a switch sending a fill with its own section relies on (one song's crash fills in the chorus).
 - **The break** is a command of its own, CC 28 (the user's choice over "press the section playing again"). CC 28 n
   waits as CC 20 does and composes with CC 21 the same way: the fill (its fill bar or its marks), then the break. CC 28
   with a value that is not a section is the section playing's break, so one BREAK switch serves every song; stopped,
@@ -716,7 +715,7 @@ bar is 168"); 204-207 is a fill bar and a 3-bar break. So:
   pattern from its top after a 4-bar entry into a 3-bar section and a change pressed during it at its end, not at the
   pattern's 3 bars, CC 28 on the section playing with the entry as
   fallback, a bar of rest, with a fill on one switch, from stopped after a count-in, a fill cutting one, SLOOP's A..D),
-  `tests/song_bars_test.py` (the JSON side). Rendered: the user's Shine On (P3-SYNTH's 4-bar break, bars 166-169,
+  `tests/song_bars_test.py` (the JSON side). Rendered: the user's song (P3-SYNTH's 4-bar break, bars 166-169,
   P3-GUITAR pressed during it) sounds as the GP4, the ride groove from its top at 170. To verify on hardware with the
   rest.
 - **The browser player** (stage 2): `SNG` packs, checks and unpacks both (in bars when whole: the same bytes as
@@ -726,7 +725,7 @@ bar is 168"); 204-207 is a fill bar and a 3-bar break. So:
 - **The section editor** (stage 3): **Entry** and **Break** selects beside the fill bar's button (none, or 1 to 4 bars of
   1/16 in 4/4, 64 steps at most), a new one silent; their columns after the fill bar's, each after a wide blue gap,
   blue dashed cells on the pen (level, ratchet, flam; no marks), bar lines inside; **Entry = selected bars** and
-  **Break = selected bars** in the file's bar strip (1 to 4 bars, as they are: Shine On's 166-169 and 205-207 in one
+  **Break = selected bars** in the file's bar strip (1 to 4 bars, as they are: the same song's 166-169 and 205-207 in one
   click each). Through split both go with the first part, through merge the first's (`SED.ebSet`, `ebSetHit`,
   `withBlock`, `norm` in bars). Tests: test_web.mjs (editorEntryBreak's sed part); looked at in headless Chrome.
   Copy and paste reach the blocks (asked 2026-10-18: "copy sequencer entries into fills, entries, and breaks"): the
@@ -750,7 +749,7 @@ then the pattern from its top or the section asked for); only the editor and the
   bars** takes 1 to 4 bars of the file (`withFill` through `fromBars`).
 - **The importer** (`gp2song.py make_section`): the bars that deviate at a section's end are its fill, up to 4 (the
   pattern's limit, 64 steps), only in a section that keeps to its pattern (`MATCH`) with a whole pattern before them;
-  else one bar as before. The user's files: Back In Black's chorus and solo, Sweet Child's solo, Eye of the Tiger's
+  else one bar as before. The user's files: a chorus, two solos and a song's
   last part got 2-bar fills.
 - **It ends on the section's last bar line** (asked the same day: "make the long fill end on the section's last bar
   line"; before, it ran its bars from the press, past the section's end). A fill bar of several bars asked for with
@@ -890,8 +889,14 @@ hazard; what it found and what was done:
   synthesised voice counts half), no longer the oldest (`drums.c drum_voice`, userkit_test). The ride 1.5 -> 2.0 s
   (16 KB; at 1.5 s it rang 16 dB under the hit). The CPU on the unit: SETUP > LOAD (ui_menu.c) shows what audio.c
   already measured (the average, the worst half buffer since OCT+, the late ones, the voices' peak and the hits
-  that found none free; the console's `status` too). To verify on hardware: the busiest song's worst block, and
-  whether 16 voices would fit (NDRUM; about 270 B of RAM a voice).
+  that found none free; the console's `status` too). **Read on the unit 2026-10-30:** the busiest song of the
+  user's thirteen (a 152 bpm verse of 32 steps at 1/16, 13 hits a second, 14 cymbal hits a bar; a simulation of
+  every section with the recipe's sample lengths wants up to 20 voices there, 10.6 on average; a ride-on-every-eighth
+  chorus of another song 12.8 on average) shows a worst half buffer of **40 %** on LOAD. So 16 voices would fit:
+  the voices' loop is roughly three quarters of the busy cost (the host's 1630 against the idle mix's 397), so four
+  more voices put the worst block near 50 %. Done the same day: NDRUM 12 -> 16 (about 270 B of RAM a voice, static RAM +1.1 KB, flash +48 B; the 44 golden renders
+  unchanged: none of them stole a voice). Read on the unit with 16, the same song: the worst half buffer **46 %**, so a
+  voice costs about 1.5 points of the block and the margin stays wide. Shipped in the 0.9.1 package the same evening.
 - **The drummer without the device** (lower priority, asked 2026-10-13): the PC, phone or tablet as the
   drummer, driven by the pedal, when no FM-1 is at hand, with higher-fidelity samples than the device
   can hold (longer samples, more velocity layers, round robins). Two routes: (a) the web editor's player,
@@ -1092,7 +1097,7 @@ hazard; what it found and what was done:
   "if I press the fill too early the current bar enters fill mode and the fill on the next bar does not play"): the
   whole next bar from anywhere in this one, as a press in the last beat; in a fill, the next bar a fill too; a section
   with it lands on the bar after the fill bar. Any other value is the fill from now. The case: a fill bar whose hits
-  lead off the bar (Another Brick in the Wall), which the cut from the front never reaches. On the device, OCT+ held
+  lead off the bar (one of the user's songs), which the cut from the front never reaches. On the device, OCT+ held
   with a black key or SEL (the hold the white keys use for "on the next bar"); in the editor, a Fill next bar
   button in the pedal's row (previous, fill, fill next bar, next; the user's layout for the tablet) and the key F,
   and the pedal in says FILL NEXT BAR. Considered first and parked: a rule that defers to the next bar by itself when the
@@ -1111,7 +1116,7 @@ hazard; what it found and what was done:
   fill is pending: chosen with the user), and so does an ending's stop. Asked before the last bar: from now to the
   pattern's end as before (through the next cycle when the fill hits are all behind). LIVE says FILL NEXT TIME
   ROUND while it waits. Checked: pedal_test and song_test (a one-bar section, fill with a change, the 2-bar D), the
-  web tests, and both engines on Time's verse and a 4-bar section.
+  web tests, and both engines on a one-bar verse and a 4-bar section.
 - (asked 2026-10-14; not started) **Per-drum fill marks on the device.** EDIT sets a whole step's fill
   condition (step keys held + OCT+: normal, fill only, no fill; OCT- clears it), but a lane's own marks (the
   song's `"fills"`: `F` only during a fill, `N` never during one; seq.c `drum_fonly` / `drum_fno`) come only
@@ -1121,20 +1126,18 @@ hazard; what it found and what was done:
   that hit's mark as OCT+ does a step's) and a mark on the grid where the selected lane's hit has one (the
   step tile's F / x corner, ui_layers.c, is the step's). To check: which lane the gesture means on a step with
   several hits (the selected sound, as SEQ's SOUND knob), the undo, and that the editor's live sync sees it.
-- (done 2026-10-14, the user's report on Time's verse; gone 2026-10-15 with the arranger model: no fill carries past
+- (done 2026-10-14, the user's report on a one-bar verse; gone 2026-10-15 with the arranger model: no fill carries past
   its bar line) **A fill carries into the next cycle only when it is too late for this one.** CC 21 (LIVE's black keys, SEL, the editor's f) made the fill last to the pattern's end, and through
-  the next cycle too when asked in the pattern's last bar: a one-bar pattern (Time's verse) therefore always filled
+  the next cycle too when asked in the pattern's last bar: a one-bar pattern therefore always filled
   twice. Now it carries only when the pattern's fill hits (a step's FILL ONLY, a hit's F mark) are all behind the
   request (pedal.c `pedal_fill_req` from the drum track's step, the editor's `PLAY.fillNext` / `fillHits` alike); a
   pattern with no fill hits keeps the last-bar rule. Checked: song_test (a one-bar section: before its tom, this bar;
-  after it, the next bar too), the web tests, and both engines on Time's verse (beats 1-3: this bar; beat 4: the next).
+  after it, the next bar too), the web tests, and both engines on the one-bar verse (beats 1-3: this bar; beat 4: the next).
 - (done 2026-10-14) **A mid tom instead of the conga.** The lanes renumbered, the toms together: ... SNARE2 8, LOWTOM 9, MIDTOM 10 (GM 45;
   "MID TOM", "tom m"), HITOM 11, CRASH 12, RIDE 13, SHAKER 14, COWBELL 15 (the synthesised kits' lanes likewise: TOMLO 5,
   MIDTOM 6, TOMHI 7 ... SHAKER 10); songs name their lanes, so the JSON stays as it is; the user's songs' tom hits
-  were moved onto MIDTOM where their Guitar Pro files play 45 or 47 (each bar matched to the file's: Time, Shine On,
-  Back in Black; 25 hits). Why:
-  the user's twelve Guitar Pro files had no conga, and five of them (Time, Money, Shine On, Hotel California,
-  Hurricane) move between three toms (Money: 33 of its 52 tom changes fell on one lane with two). Every kit: the GM
+  were moved onto MIDTOM where their Guitar Pro files play 45 or 47 (each bar matched to the file's; three songs, 25 hits). Why:
+  the user's twelve Guitar Pro files had no conga, and five of them move between three toms (one of them: 33 of its 52 tom changes fell on one lane with two). Every kit: the GM
   toms map 41 43 low, 45 47 mid, 48 50 high (drums.c LANE_OF_GM; congas 62..64 the mid tom, bongos the high: the
   nearest sound, as every note); the synthesised kits' lane 10 (DS_MAP, gen_drumkits.py `midtom`: the low tom's
   sound at the geometric mean of the two toms' pitches, their mean decay; level: the toms' mean trim, so no other
@@ -1236,7 +1239,7 @@ hazard; what it found and what was done:
   a beat. To check by hand with a real master (the mock has no clock): the lock at 60..200 BPM, a tempo ramp, and the
   output latency (the master's sound against the browser's; an offset setting if it shows).
 
-- (done 2026-10-19, the same evening) **Eye of the Tiger and Money refused by the device** (asked 2026-10-19, evening: both
+- (done 2026-10-19, the same evening) **Two songs refused by the device** (asked 2026-10-19, evening: both
   "issue errors when sending to device"). The cause: both songs were imported in the browser that day and both carry
   `"kit": 46`, where every song that sends has kit 0. 46 was MULDJORD's index before 2026-10-15, when the GM kits
   went and MULDJORD became kit 0; `gp2song.py convert()` still defaults `kit=46` (the command line's `--kit` default
@@ -1247,15 +1250,14 @@ hazard; what it found and what was done:
   device could clamp an old kit index instead of refusing the song (a song saved before 2026-10-15 has the same 46).
 - **Demo songs for newcomers** (asked 2026-10-20: do the songs in `songs/` show a guitarist how the tool is used? No).
   `songs/` cannot be the overview: it is never committed, and every song in it is a transcription of a commercial
-  record. It is also narrow (classic rock, mostly Pink Floyd, nearly all 4/4, two of eight finished) and a song file
+  record. It is also narrow (classic rock, mostly one band, nearly all 4/4, two of eight finished) and a song file
   shows sections, not how a guitarist plays them. The plan: (1) the factory grooves (`grooves/`, original, already
   shipped) as the range of styles; (2) two or three **original demo songs** built from them, written to show the
   workflow: a verse/chorus rock song with fills into changes, a break and an outro; a 12-bar blues shuffle; a 6/8
   ballad with a count-in; each committed with its **pedal plan** (switch, message, what happens), in the README or a
-  `docs/demos.md`, and in the Setlist tab like the grooves; (3) a short video or audio clip of the user playing Back
-  in Black from the Ampero (playing over a record is not publishing its transcription). Also noticed:
-  `songs/seven-nation(wip).json` holds a copy of Shine On (named SHINE ON YOU, sections P2/P3), not Seven Nation
-  Army. (2) done the same day: `songs/` emptied by the user and renamed `song_examples/`, which holds three original
+  `docs/demos.md`, and in the Setlist tab like the grooves; (3) a short video or audio clip of the user playing a song
+  from the Ampero (playing over a record is not publishing its transcription). Also noticed:
+  one `songs/` file held a copy of another song under its own name (sections P2/P3). (2) done the same day: `songs/` emptied by the user and renamed `song_examples/`, which holds three original
   demo songs (FIRST LIGHT, rock 4/4; BACK PORCH, a blues shuffle on 8T; SLOW TIDE, a 6/8 ballad) covering several
   sections, triplets, fill marks, fill bars, entries, breaks (a stop, the blues stop, a silent bar), flams, ratchets
   and outros, each rendered through the firmware's engine with its plan; the pedal plans are `docs/demos.md`. Not

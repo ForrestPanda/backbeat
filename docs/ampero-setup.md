@@ -52,7 +52,7 @@ arranger). Pressing the switch of the section already playing does nothing.
 
 **CC 21 with value 1 is the fill on the next bar** (since 2026-10-16): the whole next bar from anywhere in
 this one, as a press in the last beat; pressed during a fill, the next bar is a fill too. Use it for a song
-whose fill leads off its bar (the hits in the fill bar's first beat, as Another Brick in the Wall): a plain
+whose fill leads off its bar (the hits in the fill bar's first beat, as one of the user's songs): a plain
 CC 21 pressed early plays the back of the fill bar and never reaches them. Any other value is the fill
 from now. With a CC 20 on the same switch, the new section lands on the bar after the fill bar.
 
@@ -71,12 +71,12 @@ and 7 start and stop. A silent bar or a break between two sections needs no sect
 into the section that comes after it.
 
 - **The entry** (the editor's Entry select, or `"entry"` in the JSON) plays whenever the section comes in from another
-  one or from stopped: the switch stays a plain CC 20. Shine On You Crazy Diamond's way from P3-SYNTH into the ride
+  one or from stopped: the switch stays a plain CC 20. one song's way from P3-SYNTH into the ride
   groove (the GP file's bars 166-169: toms, a hit, a silent bar, the pickup: 4 bars between two 3-bar phrases) can be
   P3-GUITAR's 4-bar entry, or P3-SYNTH's break with P3-GUITAR pressed during it: the groove from its top at 170.
 - **The break** (`"break"`) is a second way into a section, for the same section too: **CC 28** with the section's
   number, or **CC 28 127** for the section playing, which serves every song from one switch. With CC 21 on the same
-  switch, the fill first, then the break (Shine On's bar 204 then 205-207). A section with no break plays its entry,
+  switch, the fill first, then the break (that song's bar 204 then 205-207). A section with no break plays its entry,
   and with neither a bar of rest.
 
 | Switch | Channel | Command | Data | What the FM-1 does |
@@ -86,7 +86,7 @@ into the section that comes after it.
 | 7 | 16 | CC 23 | 0 | stop |
 
 Pressing the switch of the section already playing still does nothing, so a switch with CC 21 and its own section's
-CC 20 is a fill in that section (Another Brick's crash fills in the chorus).
+CC 20 is a fill in that section (one song's crash fills in the chorus).
 
 ## Five switches
 

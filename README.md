@@ -14,7 +14,7 @@ them. No backing tracks: how long each section lasts is decided on stage.
 - **Songs from your pedal:** load a song, go to any section on the next bar line, ask for a fill, a
   break, the ending or a stop, tap the tempo, all with plain MIDI CC and PC messages.
 - **A real kit on board:** MULDJORD, a layered acoustic kit (up to four velocity layers a drum,
-  round-robin kicks and snares, twelve voices), plus a humanize setting so it never sounds quantized.
+  round-robin kicks and snares, sixteen voices), plus a humanize setting so it never sounds quantized.
 - **Songs from Guitar Pro or MIDI:** the web editor imports the drum track, finds the sections, and
   lets you fix them on a grid, hear them, and send them to one of 16 slots. 16 factory grooves to
   start with.
@@ -105,7 +105,7 @@ the loop starts with that section. CC 23 cancels it; another section pressed mea
 
 **Entries and breaks.** A section can carry an entry and a break: one to four bars (64 steps), silence too, played
 before its pattern as it comes in; after them the pattern starts from its top, and a section pressed meanwhile comes in
-at their end (Shine On's 4 bars between two 3-bar phrases: the next section on the 5th bar, not the 4th). The entry
+at their end (a song's 4 bars between two 3-bar phrases: the next section on the 5th bar, not the 4th). The entry
 plays when the section comes in from another section or from stopped; pressing the section already playing still does
 nothing, so a switch with a fill and its own section plays just the fill. The break plays on CC 28, at the end of
 the section playing (as CC 20). A fill pressed during one cuts it; CC 21 value 1 in its last bar (or a plain CC 21

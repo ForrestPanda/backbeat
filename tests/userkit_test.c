@@ -232,11 +232,11 @@ int main(void)
         }
         check(ok && seen == (1u << RK_LANE[sn].nt[0]) - 1u, "MULDJORD: 60 snares: every take, never the same twice running");
         quiet();
-        for (k = 0; k < 12u; k++)                  /* twelve voices: a crash rings under eleven hits */
+        for (k = 0; k < NDRUM; k++)                /* sixteen voices: a crash rings under fifteen hits */
             drum_on(k ? LANE_NOTE[k % 2u ? 0u : 2u] : LANE_NOTE[12], 127);   /* (lane 12: the crash) */
         for (k = 0, ok = 0; k < NDRUM; k++)
             ok += drums.v[k].active && drums.v[k].note == LANE_NOTE[12];
-        check(NDRUM == 12u && ok == 1u, "MULDJORD: 12 voices: the crash still rings after eleven more hits");
+        check(NDRUM == 16u && ok == 1u, "MULDJORD: 16 voices: the crash still rings after fifteen more hits");
         quiet();
         {   /* the voices a hit takes (drums.c drum_voice, 2026-10-22): at most DRUM_SAME of one note, its oldest cut;
              * with none free, the quietest (velocity by the part of the sample left), not the oldest */

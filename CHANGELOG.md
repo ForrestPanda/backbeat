@@ -8,6 +8,9 @@ ABOUT; the editor shows it next to the connect button.
 
 ### Firmware
 
+- **Sixteen drum voices** (twelve before): cymbal and tom tails ring on under busy fills instead of being cut for the
+  next hit. Measured on the unit: the busiest song's worst audio block went from 40 % to 46 % of the time available.
+  (Added to the 0.9.1 package on the evening of 2026-10-30; a 0.9.1 installed earlier that day has twelve.)
 - **A new package identity, FM-1_988.** 0.9's FM-1_985 was Loom FM-1's first, so the firmware hubs showed a
   BackBeat unit as Loom. The installer moves a unit from 985 to 988 as from any other firmware.
 - **D#5 ends the song**: the outro once, then the stop (the pedal's CC 22). The black keys are now fills, the

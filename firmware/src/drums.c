@@ -5,7 +5,8 @@
  * voices of its own. One-shots: note-offs are ignored; a closed or
  * pedal hi-hat chokes the open one. LEVEL / REV / DLY: SETUP > DRUMS (G_DRLVL, G_DRREV, G_DRDLY);
  * PAN and MUTE: the drum track's P_PAN / P_MUTE. Rendered from the audio ISR. */
-#define NDRUM 12                /* (6 until the layered kit: its cymbals and toms ring under the next hits) */
+#define NDRUM 16                /* (6 until the layered kit, 12 until 2026-10-30: its cymbals and toms ring under the next hits;
+                                 * 16 since the busiest song read 40 % on LOAD with 12) */
 #include "drum_synth.c"       /* synthesised kits (DS_KITS) */
 /* P_E0 was unused on the drum track: it holds the kit. 0: MULDJORD, the built-in layered kit (samples.c set REAL,
  * tools/gen_realkit.py: up to 4 velocity layers a lane, round-robin takes), the power-on kit and the songs' default

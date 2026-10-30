@@ -6,7 +6,7 @@ image for `tools/fm1_render.py --usrkit` (hear it first) or straight into the FM
 
 ## The chosen kit: Muldjord (2026-10-11)
 
-After renders of Another Brick in the Wall with five kits, the user chose the **Muldjord Kit**: it is in
+After renders of one of the user's songs with five kits, the user chose the **Muldjord Kit**: it is in
 `web/kit/` (ten lanes, the three hi-hats from Black Pearl and the ride from Red Zeppelin at the user's wish, CLAP and COWBELL from the
 CC0 studio kit), preloaded on the editor's
 Drum kit page and played by its Songs tab. Recipe and licence below, under the three more realistic kits.

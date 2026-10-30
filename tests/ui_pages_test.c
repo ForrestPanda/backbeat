@@ -1038,7 +1038,7 @@ int main(int argc, char **argv)
             check(!strcmp(mi_value(mi_find(MI_LOAD), &c), "25%") && c == C_HI &&
                   !strcmp(mi_value(mi_find(MI_WORST), &c), "50%") && c == C_HI &&
                   !strcmp(mi_value(mi_find(MI_LATE), &c), "3") && c == C_AMB &&
-                  !strcmp(mi_value(mi_find(MI_VOICES), &c), "12 OF 12, 37 FULL") && c == C_AMB,
+                  !strcmp(mi_value(mi_find(MI_VOICES), &c), "16 OF 16, 37 FULL") && c == C_AMB,
                   "menu LOAD: 25%, worst 50%, 3 late, 12 of 12 voices with 37 hits that found none free");
             audio_max_us = 5400; meter.t = 0;
             check(!strcmp(mi_value(mi_find(MI_WORST), &c), "93%") && c == C_AMB, "menu LOAD: a worst block of 80 % or more in amber");
@@ -1047,7 +1047,7 @@ int main(int argc, char **argv)
             tap(B_OCTUP);
             check(ui.menu == 1 && !strcmp(mi_value(mi_find(MI_WORST), &c), "0%") &&
                   !strcmp(mi_value(mi_find(MI_LATE), &c), "NONE") && c == C_DIM &&
-                  !strcmp(mi_value(mi_find(MI_VOICES), &c), "0 OF 12") && c == C_HI && felucca_dbg.late == 3u,
+                  !strcmp(mi_value(mi_find(MI_VOICES), &c), "0 OF 16") && c == C_HI && felucca_dbg.late == 3u,
                   "menu LOAD: OCT+ resets the worst, the late (from now) and the voices");
             song.cpu_q8 = 0; felucca_dbg.late = 0; meter.late0 = 0;
         }
