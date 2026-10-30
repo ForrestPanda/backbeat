@@ -111,7 +111,7 @@
   <p id="status"></p>
   <pre id="log"></pre>
   <a class="ed" href="../editor/" data-t="editor"></a>
-  <p class="small"><a href="../editor/backbeat-editor.html" download="backbeat-editor-0.9.1.html" data-t="edOffline"></a></p>
+  <p class="small"><a href="../editor/backbeat-editor.html" download="backbeat-editor-0.9.2.html" data-t="edOffline"></a></p>
   <p class="small"><a href="../changelog/" data-t="changelog"></a> &middot; <a href="../cheatsheet/" data-t="cheat"></a></p>
   <p><button id="app" class="ed" hidden data-t="appInstall"></button></p>
   <hr>
@@ -566,7 +566,7 @@ const sayK = (k, arg = "") => { lastKey = k; lastArg = arg; $("status").textCont
 const say = (txt) => { lastKey = null; $("status").textContent = txt; };
 const log = (t) => { $("log").textContent += t + "\n"; };
 let image = null;
-const meta = {"version": "0.9.1", "product": "FM-1_988", "pkg": "../../firmware/backbeat-0.9.1.fwsc", "sha256": "f8322f89406b5f95ad647e3b6a1a4494ec671ce12afd90d452e0674e745775ca"};
+const meta = {"version": "0.9.2", "product": "FM-1_988", "pkg": "../../firmware/backbeat-0.9.2.fwsc", "sha256": "b0f63968929d6543858f5621801a3f098693ad73795db51e6587d1d619ef49a3"};
 
 let writing = false, stock = null;
 const lockAll = (on) => {

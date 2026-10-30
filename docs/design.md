@@ -498,6 +498,11 @@ next bar). No named sections, one song, no fill tied to a section change.
    `webapp/cheatsheet/` (the hub's "cheat" link in fmhub.json). What
    changed since 0.9 is in `CHANGELOG.md` at the root (the firmware and the website apart), rendered by
    `web/make_site.py` as the site's `webapp/changelog/` and linked from the installer and the editor.
+   **0.9.2 (2026-10-30)**: version `BACKBEAT 0.9.2`, the package `backbeat-0.9.2.fwsc`, identity `FM-1_988` still:
+   the two kinds of fill (the fill bar whole from the next bar line), the bar-line race (`bar_in_doubt`), and the
+   editor's marks-or-fill-bar rule, the selected bars on the section's grid and the label row (all below and in the
+   changelog). The release build no longer appends ` BETA` to the version (the 0.9.1 package says `BACKBEAT 0.9.1
+   BETA` on the device, the docs 0.9.1; `tools/build.py`).
 8. **More flash for the kit (proposed 2026-10-29, not started).** The user asked whether the samples could be
    compressed and loaded into RAM for better sound, since RAM is free and flash is not. Measured that day: the kit is
    IMA ADPCM, 4 bits a sample at 22 kHz (11 KB a second; 399 478 B, 36 s), played in place from the memory-mapped
@@ -751,7 +756,7 @@ then the pattern from its top or the section asked for); only the editor and the
   pattern's limit, 64 steps), only in a section that keeps to its pattern (`MATCH`) with a whole pattern before them;
   else one bar as before. The user's files: a chorus, two solos and a song's
   last part got 2-bar fills.
-- **It ends on the section's last bar line** (asked the same day: "make the long fill end on the section's last bar
+- **It ends on the section's last bar line** (superseded 2026-10-30, the section "Two kinds of fill" below: a fill of its own plays whole from the next bar line) (asked the same day: "make the long fill end on the section's last bar
   line"; before, it ran its bars from the press, past the section's end). A fill bar of several bars asked for with
   more bars left than it has waits (`pedal_fill_wait` is now the bar lines to its start: 1 the last beat's next bar
   as before, more a long fill waiting; `fill_wait_from`), then plays whole; with fewer left, its last bars from now,
@@ -763,6 +768,59 @@ then the pattern from its top or the section asked for); only the editor and the
 Tests: test_web.mjs (the select, fbSet, a 2-bar withFill; the player: a 2-bar fill asked in a 2-bar section's last
 bar and first, a 3-bar one waiting a bar, a 2-bar one in a 4-bar section waiting two), song_test.c (the device, the
 same first three), gp2song_test.py. To verify on hardware.
+
+## Two kinds of fill: embedded, and extra bars (2026-10-30)
+
+Asked with a song whose solo is a 4-bar riff with a 2-bar fill bar: "I need to somehow play the fill on section 7 after
+the 3rd bar of the pattern, but I want to play the whole fill, not just the last bar". Under the 2026-10-20 rule (a fill
+of several bars ends on the section's last bar line) a press in bar 3's last beat or in bar 4 left one bar, so only the
+fill's second bar played. Two ways were weighed: (A) a fill bar of its own always plays whole, like a section, and a fill
+wanted on part of a bar is merged into the pattern as marks; (B) a flag per section, whole or replacing the pattern's
+last bars. The user chose A ("what do you think is more reasonable?", then "go with option A"), then named the two
+kinds and asked for them documented and kept apart in the editor: "'embedded' which work like typical arranger keyboard
+fills, and extra bars, played to completion when requested. Both follow the fill, fill-now logic, update the web UI to
+prevent the user from defining both simultaneously".
+
+- **Embedded** (a section without a fill bar; `docs/design.md` "Fills, mark by mark", 2026-10-11): the fill is in the
+  pattern's marks (only in a fill, not in a fill) and step conditions. CC 21 puts the section in fill mode from now to
+  its end, the marks heard where they sit, the pattern on with no restart; in the bar's last beat, or CC 21 value 1,
+  from the next bar. Unchanged.
+- **Extra bars** (a section with a fill bar of its own, `fillbar`, 1 to 4 bars): CC 21, any value, any place in the
+  bar, plays the fill bar whole from the next bar line, past the section's end when fewer bars are left, then the
+  pattern from its top or the section cued meanwhile (on the bar after the fill). Pressed again in its last beat,
+  another one follows. The screen says FILL NEXT BAR while it waits (FILL AT THE END is gone: nothing waits longer than
+  a bar line now). Firmware: `pedal.c pedal_fill_req` (a fill bar: `pedal_fill_wait = 1`), `seq.c fill_bars_from`
+  (a fill bar: `fb_bars`; `fill_span_from` and `fill_wait_from` removed), `ui_draw.c` and `ui_drummer.c` (the text);
+  the player: `PLAY.fillNext`, `PLAY.fillBars` (`fillSpan`, `fillWaitFrom` removed). What goes: the arranger habit of a
+  mid-bar press for the back half of a 1-bar fill bar; the fill bars of the user's songs are phrase-end fills from the
+  records, so the next-bar landing is the one wanted, and the merge gives the other.
+- **Never both.** The device plays the fill bar and never hears the marks, so the editor keeps them apart
+  (`SED.embedded`, `SED.marksClear`): adding a fill bar (`fbAdd`) folds every mark and step condition in (F hits
+  outside its bars go, they were never heard with a fill bar; N marks clear; the conditions clear), the status says the
+  counts (sedFbAddedMarks); with a fill bar the mark pens and the m key are off (sedMarkOff); the grid's top row no
+  longer edits the step conditions (F / N for a whole step: never used, the user, 2026-10-30, "we don't make use of
+  that flag anymore"), it labels the columns ENTRY, PATTERN, FILL, BREAK (`sec.fill` stays in the model and the file
+  for the device, folded or cleared as before);
+  a file that has both (older files, hand-written JSON) shows a warning (sedBothWarn) with **Drop the marks**
+  (sedFbDropMarks, the fill bar kept) beside **Merge into the pattern** (the marks kept). Tests: song_test (the
+  device, a 1-bar, a 2-bar and a 3-bar fill bar whole from the next bar line, past the end), test_web (the player the
+  same, the editor's exclusivity), pedal_test unchanged (its section has no fill bar). Docs: README (the CC table, the
+  keys, the section editor, the two kinds under "The pedal"), ampero-setup.md, the editor's help strings (en, ja),
+  CHANGELOG. To verify on hardware: the user's solo, a 2-bar fill from bar 4 over the section's end, then the riff.
+- **A second crash, on the device only** (the user, the same evening: "I hear a second crash when the fill only has it
+  on the first bar of the fill ... on the web ui it behaves as expected"). Not the count: a race in the audio block.
+  `live_block` (the bar line: the fill's start, its bar count, its end and the restart, a section landing) runs before
+  `seq_tick` in each block, both on the block's clock position, so a bar's first step nudged early (SLOOP's nudge, or
+  humanize: `hum_shift` is a hash of the absolute step, 3 or 6 ms either way, the same step every time) fires in the
+  block before the bar line, with the state of the bar before: the fill's second bar read the fill bar's step 0 again
+  (the crash); the fill's start the pattern's step; the bar after a fill, an entry or a section change the old
+  position's step, then the restart fired step 0 again, a double hit. The browser player sequences step by step with
+  the bar's bookkeeping first, so it never showed it. Fix: `seq.c bar_in_doubt` (the condition `seq_flam` already used
+  for the grace notes, with a fill playing and an entry or break added): a bar's first step nudged early into a bar
+  whose content the bar line decides waits for the bar line's block, after `live_block`, at most a few ms late once.
+  song_test: the fill's bar-first steps nudged an eighth early (`micro`), the first step of each fill bar fired after
+  the bar line set the fill and moved its count, the restart's step 0 once; the test fails at the fill's first step
+  with the hold disabled. Installed on the unit the same evening.
 
 ## The backup holds the songs; the editor's Projects tab gone (2026-10-21)
 

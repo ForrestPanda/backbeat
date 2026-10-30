@@ -33,7 +33,7 @@ presets, the sampled instruments, the punch FX, the SLICER, live recording, the 
 three of its four tracks) is gone, see [docs/drums-only.md](docs/drums-only.md). What is left of SLOOP is its
 drum track, sequencer and sections (SLOOP's own manual is upstream). What this fork adds is in
 [docs/design.md](docs/design.md); what changed in each version is in [CHANGELOG.md](CHANGELOG.md), also on the
-site. The firmware reports itself as BACKBEAT 0.9.1 (the editor's INFO keeps its
+site. The firmware reports itself as BACKBEAT 0.9.2 (the editor's INFO keeps its
 `FELUCCA ` prefix, and the USB port names and the backup format stay SLOOP's, so the tools keep working).
 
 ## Getting started
@@ -51,7 +51,7 @@ official firmware is the same installer with M-VAVE's FM-1 V15 file, or M-VAVE's
 **Install.** Open the installer at <https://forrestpanda.github.io/backbeat/> in Chrome or Edge, plug in the
 FM-1 and follow the page. The package is also on the
 [releases page](https://github.com/ForrestPanda/backbeat/releases) and in [docs/firmware/](docs/firmware/), for
-the command line (`python3 tools/fm1_install.py backbeat-0.9.1.fwsc`) or a local copy of the site
+the command line (`python3 tools/fm1_install.py backbeat-0.9.2.fwsc`) or a local copy of the site
 (`cd docs && python3 -m http.server 8000`, then `http://localhost:8000/webapp/installer/`). If BackBeat
 stops starting after an install, hold **OCT-** alone while switching on: the BACKBEAT USB RESCUE screen
 takes the package again.
@@ -87,7 +87,7 @@ Footswitches send MIDI on channel 16 (default) to the TRS jack or over USB:
 | --- | --- |
 | CC 20, value 0..15 | section 1..16 of the song (no song loaded: 0..3, SLOOP's A..D) when the section playing has played its pattern out (a 1-bar section: the next bar; a fill pending: the bar after it), no fill of its own; stopped: start with it. The section already playing: nothing. A section with an entry comes in through it (below) |
 | CC 27, value 0..15 | that section on the next bar, without waiting for the section's end, no fill of its own |
-| CC 21 | the fill. A section with a fill bar of its own, as an arranger's fill-in: the rest of this bar (pressed in its last beat: the whole next bar), then the pattern from its top. A fill of several bars (up to 4, the section editor's Fill select) ends on the section's last bar line: asked earlier, it waits (the screen says FILL AT THE END), then plays whole; asked with fewer bars left, its last bars from now. A section without one: fill mode to the section's end, its fill marks heard where they sit, the pattern on with no restart (nothing marked: nothing changes). Sent with a CC 20 / 22 / 24 / 25 / 27 (either order), the fill into that change, which lands on the bar after the fill. Value 1: the whole next bar from anywhere in this one, for a fill that leads off its bar |
+| CC 21 | the fill, of two kinds. A section with a fill of its own (extra bars, 1 to 4, the section editor's Fill select or the importer's): it plays whole, from the next bar line, past the section's end if fewer bars are left, then the pattern from its top (the screen says FILL NEXT BAR while it waits). A section without one, its fill embedded in the pattern as marks, as an arranger keyboard's: fill mode from now to the section's end, the marks heard where they sit, the pattern on with no restart (nothing marked: nothing changes); pressed in the bar's last beat, the whole next bar. Sent with a CC 20 / 22 / 24 / 25 / 27 (either order), the fill into that change, which lands on the bar after the fill. Value 1: the whole next bar from anywhere in this one, for a fill that leads off its bar |
 | CC 22, value 0..15 | ending: the section playing ends, that section once as the outro (its entry first, if it has one), stop on the bar (other values: the song's flagged outro, or the section ends, then stop; the outro playing already: it plays to its end, then stop) |
 | CC 28, value n | the break: section n through its break, when the section playing ends (as CC 20; with CC 21 on the switch: the fill, then the break); the section playing too. Value 127 (not a section): the section playing's, so one switch serves every song. No break written: its entry; neither: a bar of rest. Stopped: start with it |
 | CC 23 | stop now |
@@ -108,10 +108,12 @@ before its pattern as it comes in; after them the pattern starts from its top, a
 at their end (a song's 4 bars between two 3-bar phrases: the next section on the 5th bar, not the 4th). The entry
 plays when the section comes in from another section or from stopped; pressing the section already playing still does
 nothing, so a switch with a fill and its own section plays just the fill. The break plays on CC 28, at the end of
-the section playing (as CC 20). A fill pressed during one cuts it; CC 21 value 1 in its last bar (or a plain CC 21
-in its last beat) lets it play out and fills the bar after it. In the JSON
+the section playing (as CC 20). A fill pressed during one cuts it (an embedded fill at once, a fill of its own at the next bar line); CC 21 value 1 in
+its last bar (or a plain CC 21 in its last beat) lets it play out and fills the bar after it. In the JSON
 `"entry": {"bars": 4, "lanes": {...}}` and `"break": {"lanes": {}}` (a silent bar); in the editor, the section's
-Entry and Break selects and their blue columns, or **Entry / Break = selected bars** from a Guitar Pro file;
+Entry and Break selects and their blue columns, or **Entry / Break = selected bars** from a Guitar Pro file (the
+file's 16ths put on the section's grid, as Fill = selected bars: a hit between a coarser division's steps is
+dropped and listed, so set the division first);
 `fm1_render.py --play "VERSE:4, !VERSE:4"` plays a section through its break.
 
 **Songs.** A song is up to 16 named drum sections (intro, verse, chorus, bridge, solo, outro...) with its
@@ -165,7 +167,7 @@ localhost (Chrome on Linux keeps Web Bluetooth behind a flag; Firefox and Safari
 length (at most 64 steps, 4 bars at 1/16: a section is a groove that repeats, `docs/design.md` says why), the division (changing it keeps the hits in their place on the
 beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between, the fill bar, entry and break follow; a pattern that would pass 64 steps is refused), the time signature, the outro, split and merge, the hits on a grid with levels, ratchets, flams (a grace note
 before the hit) and fill marks, the fill
-conditions, the section's fill of its own (the Fill select, 1 to 4 bars, started as the pattern's last bars the way a fill plays them;
+conditions, the section's fill of its own (the Fill select, 1 to 4 extra bars, played whole from the next bar line; started as the pattern's last bars the way the marks played them, and the marks go: a section has embedded marks or a fill of its own, never both, and the editor keeps them apart, the mark pens off with a fill of its own, a file with both warned with a **Drop the marks** button;
 **Merge into the pattern** folds it back into those bars as fill marks and removes it: a hit in both plays always, one in the pattern only is marked
 not in a fill, one in the fill only is written in as only in a fill, so the fill then plays the marks to the section's end), columns copied and pasted, undo and redo (Ctrl+Z / Ctrl+Y), keys for the pen (n h s g x, r for the
 ratchet, l for the flam, m for the mark, [ ] between sections), a lane's sound on a click of its name, "Play this section" to
@@ -245,10 +247,15 @@ sounds at 44.1 kHz); `docs/kits.md` has the kits tried, the chosen one (the Muld
 Songs then use that kit by its index (`"kit": 41` in the JSON, the kit after the built-in and SYN kits).
 The songs live in the flash of the USR1 and USR2 sample slots (8 songs each, two safe copies of every song), which
 the drummer gives up: the kit pair USR3+4 stays yours. With no song loaded the
-pedal has no sections to play: the drum track's own pattern loops. **Fills** are marks on the hits of a section's
-pattern: a hit marked "only in a fill" plays only during a fill (CC 21, a black key or SEL on the LIVE screen),
-one marked "not in a fill" rests then, mark by mark in the editor's grid or lane by lane in the JSON (`"fills"`);
-SLOOP's own whole-step conditions still work on top. Built for the Hotone Ampero II Stage (each footswitch sends up to three CC / PC messages), but any
+pedal has no sections to play: the drum track's own pattern loops. **Fills** come in two kinds, one or the other per
+section. *Embedded*, as an arranger keyboard's: marks on the hits of the section's pattern, a hit marked "only in a
+fill" plays only during a fill (CC 21, a black key on the LIVE screen), one marked "not in a fill" rests then, from the
+press to the section's end, where the marks sit; mark by mark in the editor's grid or lane by lane in the JSON
+(`"fills"`); SLOOP's own whole-step conditions still work on top. *Extra bars*: the section's fill of its own, 1 to 4
+bars (`"fillbar"`, the editor's Fill select, or the file's deviating bars through the importer), played whole from the
+next bar line when asked, past the section's end if it must, then the pattern from its top: press in the bar before
+you want it, as you would cue a drummer. A fill that belongs at a place in the phrase, or on part of a bar, is an
+embedded one: **Merge into the pattern** turns a fill of its own into marks. Built for the Hotone Ampero II Stage (each footswitch sends up to three CC / PC messages), but any
 pedalboard with a MIDI out does. With the Ampero as the MIDI clock master (CLOCK OUT(TRS) on, the FM-1's SETUP > PEDAL >
 MIDI CLOCK IN on TRS) the drums play at the patch's tempo, and the Ampero's **looper stays in time with the drums**
 (`docs/ampero-setup.md`).
@@ -315,7 +322,7 @@ and what comes in two lines, the word then the section in large letters (NEXT / 
 nothing is coming, the beat lights in its place. The white keys still change section; the layout is kept in the
 settings. HOME again: the tiles. The white keys 1..16 change section when the one
 playing ends, with OCT+ held on the next bar (the state line says KEY: ON THE NEXT BAR), with no fill of their own; the first black key (F#3) asks for a fill (as CC 21:
-the rest of the bar with a fill bar of its own, else to the section's end; with OCT+ held the whole next bar), the second (G#3) the fill on the whole next bar,
+a fill of its own whole from the next bar line; embedded marks from now to the section's end, with OCT+ held from the next bar), the second (G#3) the fill from the next bar (the same as F#3 with a fill of its own),
 the fourth (C#4) the break (as CC 28: the section playing comes in again through its break when it ends); D#5 the **ending** (as CC 22 value 127: the song's outro once, its entry first, then the stop; with no outro the section playing ends, then the stop); the last (F#5) the
 **tap tempo** (as CC 26, song loaded or not), its light flashing the tempo (with PLAY while playing; stopped, at the
 tempo, so a tap or a MIDI clock shows at once); the other black keys as the first. So a plain change is one press, and a fill into the change is a black key then a white one,

@@ -6,7 +6,7 @@
 #ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
 #define UI_SMALL
 #endif
-#define FELUCCA_VERSION "BACKBEAT 0.9.1"  /* the drummer firmware for the FM-1 (a fork of SLOOP, based on Felucca) */
+#define FELUCCA_VERSION "BACKBEAT 0.9.2"  /* the drummer firmware for the FM-1 (a fork of SLOOP, based on Felucca) */
 #endif
 static void panel_setup(void);
 static uint8_t sync_reload;                  /* a kit / project loaded: editor RELOAD push */

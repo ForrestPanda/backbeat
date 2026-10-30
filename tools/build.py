@@ -309,7 +309,8 @@ def main():
         m = re.fullmatch(r"(\d)\.(\d)(\.\d)?(-[A-Za-z0-9]+)?", a.release)
         if not m:
             raise SystemExit(f"--release {a.release}: use X.Y, X.Y.Z or X.Y-suffix, one digit each")
-        VERSION = "BACKBEAT " + (a.release.upper() if "BETA" in a.release.upper() else a.release.upper() + " BETA")
+        VERSION = "BACKBEAT " + a.release.upper()   # (until 0.9.2 a " BETA" was appended, SLOOP's habit: the 0.9.1
+                                                    # package says BACKBEAT 0.9.1 BETA where the docs say 0.9.1)
         name = f"felucca-{a.release}.fwsc"
     fm1pkg_make.SDK = a.sdk
     for rel, sha in SDK_SHA256.items():          # fail early without the SDK

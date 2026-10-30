@@ -398,40 +398,72 @@ int main(int argc, char **argv)
         cc(16, 20, 0); advance(CTL * 3u);                                  /* the VERSE from stopped */
         assert(song.playing && live_sec == 0);
         advance(bar / 2u);
-        cc(16, 21, 127); advance(CTL * 2u);                                /* CC 21 in bar 0, beat 3: the fill to its end */
-        assert(pedal_fill && fill_now && pedal_fill_bars == 1u);
-        while (TDRUM->seq_idx != 8u)                                       /* the bar's third beat: the fill bar's step 8, the tom */
+        cc(16, 21, 127); advance(CTL * 2u);                                /* CC 21 in bar 0, beat 3: not this bar: the fill bar
+                                                                            * whole on the next (2026-10-30; from the press to the
+                                                                            * bar line, cut from the front, before) */
+        assert(!pedal_fill && pedal_fill_wait == 1u && !fill_now);
+        while (TDRUM->seq_idx != 24u)                                      /* bar 1's third beat: the fill bar's step 8, the tom */
             advance(CTL);
-        assert(fill_now && drum_src(TDRUM, 8, (8) % trk_len(TDRUM), &fb) == &fb_dstep[8] && fb && !TDRUM->seq_skip);
-        while (TDRUM->seq_idx != 15u)
+        assert(pedal_fill && fill_now && pedal_fill_bars == 1u && !pedal_fill_wait && live_bar == 1 &&
+               drum_src(TDRUM, 24, (24) % trk_len(TDRUM), &fb) == &fb_dstep[8] && fb && !TDRUM->seq_skip);
+        while (TDRUM->seq_idx != 31u)
             advance(CTL);
-        assert(fill_now && drum_src(TDRUM, 15, (15) % trk_len(TDRUM), &fb) == &fb_dstep[15] && fb);   /* ..its last step: the crash */
+        assert(fill_now && drum_src(TDRUM, 31, (31) % trk_len(TDRUM), &fb) == &fb_dstep[15] && fb);   /* ..its last step: the crash */
         while (TDRUM->seq_idx != 2u)                                       /* over at the bar line: the pattern from its top */
             advance(CTL);
         assert(!pedal_fill && !fill_now && live_bar == 0 && drum_src(TDRUM, 2, (2) % trk_len(TDRUM), &fb) == &TDRUM->dstep[2] && !fb);
-        {   /* a fill bar of two bars (32 steps) in this 2-bar section, ending on its last bar line (2026-10-20; before, it
-             * ran two bars from the press, past the end): asked in bar 1, its last bar from now (cut from the front);
-             * asked in bar 0, both; then the pattern from its top */
+        {   /* a fill bar of two bars (32 steps) in this 2-bar section: whole, from the next bar line, past the section's
+             * end when it must (2026-10-30; from 2026-10-20 it ended on the section's last bar line: asked in bar 1, its
+             * last bar from now, cut from the front, which is what the user lost: "I want to play the whole fill, not
+             * just the last bar"): asked in bar 1, the next cycle's two bars are the fill; asked in bar 0, bar 1 and the
+             * next cycle's first; then the pattern from its top */
             fb_len = 32; fb_bar = 16; fb_bars = 2;                         /* (as sng_apply would set them) */
+            TDRUM->micro[0] = -8; TDRUM->micro[16] = -8;                   /* the bars' first steps nudged early (an eighth of a
+                                                                            * step, as humanize can): a bar's first step whose
+                                                                            * content the bar line decides waits for its block
+                                                                            * (seq.c bar_in_doubt; 2026-10-30, the second crash) */
             while (TDRUM->seq_idx != 20u)
                 advance(CTL);
             cc(16, 21, 127); advance(CTL * 2u);
-            assert(pedal_fill && pedal_fill_bars == 1u && !pedal_fill_wait && drum_src(TDRUM, 20, (20) % trk_len(TDRUM), &fb) == &fb_dstep[20] && fb);
-            while (TDRUM->seq_idx != 2u)
+            assert(!pedal_fill && pedal_fill_wait == 1u && drum_src(TDRUM, 20, (20) % trk_len(TDRUM), &fb) == &TDRUM->dstep[20] && !fb);
+            while (TDRUM->seq_idx != 0u)                                   /* the next cycle: the fill's first bar, its first
+                                                                            * step fired after the bar line set the fill */
                 advance(CTL);
-            assert(!pedal_fill && live_bar == 0 && drum_src(TDRUM, 2, (2) % trk_len(TDRUM), &fb) == &TDRUM->dstep[2] && !fb);
+            assert(pedal_fill && pedal_fill_bars == 2u && !pedal_fill_wait && live_bar == 2 && drum_src(TDRUM, TDRUM->seq_abs, 0, &fb) == &fb_dstep[0] && fb);
             while (TDRUM->seq_idx != 4u)
                 advance(CTL);
-            cc(16, 21, 127); advance(CTL * 2u);
-            assert(pedal_fill && pedal_fill_bars == 2u && drum_src(TDRUM, 4, (4) % trk_len(TDRUM), &fb) == &fb_dstep[4] && fb);
+            assert(pedal_fill && pedal_fill_bars == 2u && !pedal_fill_wait && live_bar == 2 && drum_src(TDRUM, 4, (4) % trk_len(TDRUM), &fb) == &fb_dstep[4] && fb);
+            while (TDRUM->seq_idx != 16u)                                  /* its second: the first step fired after the count moved */
+                advance(CTL);
+            assert(pedal_fill && pedal_fill_bars == 1u && live_bar == 3 && drum_src(TDRUM, TDRUM->seq_abs, 16, &fb) == &fb_dstep[16] && fb);
             while (TDRUM->seq_idx != 18u)
                 advance(CTL);
-            assert(pedal_fill && pedal_fill_bars == 1u && drum_src(TDRUM, 18, (18) % trk_len(TDRUM), &fb) == &fb_dstep[18] && fb);
+            assert(pedal_fill && pedal_fill_bars == 1u && live_bar == 3 && drum_src(TDRUM, 18, (18) % trk_len(TDRUM), &fb) == &fb_dstep[18] && fb);
+            while (TDRUM->seq_idx != 0u)                                   /* over: the pattern from its top, step 0 once (the
+                                                                            * early one held for the restart) */
+                advance(CTL);
+            assert(!pedal_fill && live_bar == 0 && TDRUM->seq_abs == 0u && drum_src(TDRUM, 0, 0, &fb) == &TDRUM->dstep[0] && !fb);
             while (TDRUM->seq_idx != 2u)
                 advance(CTL);
             assert(!pedal_fill && live_bar == 0 && drum_src(TDRUM, 2, (2) % trk_len(TDRUM), &fb) == &TDRUM->dstep[2] && !fb);
-            /* three bars (48 steps), longer than the pattern: the first section end it reaches whole, bar 4, so
-             * asked in bar 0 it waits a bar, then plays whole over the cycle going round (no restart mid-fill) */
+            TDRUM->micro[0] = 0; TDRUM->micro[16] = 0;
+            while (TDRUM->seq_idx != 4u)
+                advance(CTL);
+            cc(16, 21, 127); advance(CTL * 2u);                            /* asked in bar 0: bar 1 and the next cycle's first */
+            assert(!pedal_fill && pedal_fill_wait == 1u);
+            while (TDRUM->seq_idx != 18u)
+                advance(CTL);
+            assert(pedal_fill && pedal_fill_bars == 2u && live_bar == 1 && drum_src(TDRUM, 18, (18) % trk_len(TDRUM), &fb) == &fb_dstep[2] && fb);
+            while (TDRUM->seq_idx != 2u)                                   /* past the section's end, no restart mid-fill */
+                advance(CTL);
+            assert(pedal_fill && pedal_fill_bars == 1u && live_bar == 2 && drum_src(TDRUM, 2, (2) % trk_len(TDRUM), &fb) == &fb_dstep[18] && fb);
+            while (TDRUM->seq_idx != 18u)                                  /* over at the fill's end: the pattern from its top, bar 1 by now */
+                advance(CTL);
+            assert(!pedal_fill && live_bar == 1 && drum_src(TDRUM, 18, (18) % trk_len(TDRUM), &fb) == &TDRUM->dstep[18] && !fb);
+            while (TDRUM->seq_idx != 2u)
+                advance(CTL);
+            /* three bars (48 steps), longer than the pattern: from the next bar line, whole, over the cycle going round
+             * (no restart mid-fill); asked in bar 0: bar 1, then the next cycle */
             fb_len = 48; fb_bars = 3;
             while (TDRUM->seq_idx != 4u)
                 advance(CTL);
@@ -442,10 +474,11 @@ int main(int argc, char **argv)
             assert(pedal_fill && pedal_fill_bars == 3u && !pedal_fill_wait && drum_src(TDRUM, 18, (18) % trk_len(TDRUM), &fb) == &fb_dstep[2] && fb);
             while (TDRUM->seq_idx != 2u)
                 advance(CTL);
-            assert(pedal_fill && pedal_fill_bars == 2u && live_bar == 2 && drum_src(TDRUM, 2, (2) % trk_len(TDRUM), &fb) == &fb_dstep[18] && fb);
+            assert(pedal_fill && pedal_fill_bars == 2u && live_bar == 4 && drum_src(TDRUM, 2, (2) % trk_len(TDRUM), &fb) == &fb_dstep[18] && fb);   /* (live_bar:
+                                                                            * asked in the cycle after the last restart's, bar 2) */
             while (TDRUM->seq_idx != 18u)
                 advance(CTL);
-            assert(pedal_fill && pedal_fill_bars == 1u && drum_src(TDRUM, 18, (18) % trk_len(TDRUM), &fb) == &fb_dstep[34] && fb);
+            assert(pedal_fill && pedal_fill_bars == 1u && live_bar == 5 && drum_src(TDRUM, 18, (18) % trk_len(TDRUM), &fb) == &fb_dstep[34] && fb);
             while (TDRUM->seq_idx != 2u)
                 advance(CTL);
             assert(!pedal_fill && live_bar == 0 && drum_src(TDRUM, 2, (2) % trk_len(TDRUM), &fb) == &TDRUM->dstep[2] && !fb);

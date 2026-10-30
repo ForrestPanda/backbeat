@@ -697,6 +697,23 @@ function editorSed() {
   ok(!wf.sec.fill && !wf.sec.fills && wf.sec.fillbar.steps === 16 && wf.sec.fillbar.lanes.HITOM === "............x.x." && wf.sec.fillbar.lanes.LOWTOM === ".............x.x"
     && wf.sec.fillbar.lanes.KICK === "x...x...x...x..." && !("SNARE" in wf.sec.fillbar.lanes) && wf.sec.lanes.KICK === fb.lanes.KICK && wf.dropped.length === 0,
     "sed: a bar of the file as the section's fill bar of its own (as it is; the pattern untouched)");
+  {   /* the file's bars (1/16) onto the section's grid (2026-10-30: before, a fill, entry or break from the bars kept 16 steps
+         a bar on a 1/8 section, read as twice the bars by the device and the player): a 1/8 section's fill bar has 8 steps
+         a bar, the hits on the odd 16ths dropped and listed; the break the same; Pattern = selected bars re-grids a kept
+         fill bar to the new 1/16 */
+    const f8 = S.setDiv(fb, "1/8"), w8 = S.withFill(f8, fill);
+    ok(f8.div === "1/8" && f8.steps === 16 && w8.sec.fillbar.steps === 8 && w8.sec.fillbar.lanes.HITOM === "......xx" && w8.sec.fillbar.lanes.KICK === "x.x.x.x."
+      && !("LOWTOM" in w8.sec.fillbar.lanes) && w8.dropped.join() === "LOWTOM 14,LOWTOM 16" && S.fbBars(w8.sec) === 1,
+      "sed: a bar of the file as a 1/8 section's fill bar: 8 steps, the toms on the odd 16ths dropped and listed, one bar");
+    const b8 = S.withBlock(f8, "break", [fill, fill]);
+    ok(S.ebSteps(b8.sec, "break") === 16 && b8.sec.break.lanes.HITOM === "......xx......xx" && b8.dropped.length === 4 && S.ebBars(b8.sec, "break") === 2,
+      "sed: two bars of the file as a 1/8 section's break: 16 steps, two bars");
+    const back16 = S.withPattern(w8.sec, bars);
+    ok(back16.div === "1/16" && back16.steps === 32 && back16.fillbar.steps === 16 && back16.fillbar.lanes.KICK === "x...x...x...x..." && back16.fillbar.lanes.HITOM === "............x.x.",
+      "sed: Pattern = selected bars (1/16) re-grids the kept 1/8 fill bar to 16 steps, its hits in place");
+    ok(/function sedUseBlock\(r\)/.test(html) && /sayK\("sedDivDropped"/.test(html) && /sedUseBlock\(SED\.withFill\(sec/.test(html) && /sedUseBlock\(SED\.withBlock\(sec, key/.test(html),
+      "sed: the page says the dropped hits for Fill, Entry and Break = selected bars");
+  }
   {   /* the undo history: a state marked after each change (a redraw is not a change), undo and redo, redo dropped by a new change, a cap */
     const h = S.hist();
     const a = { name: "H", bpm: 120, sections: [S.blank("A")] };
@@ -794,8 +811,8 @@ function editorFillBar() {
                        ratchets: { HITOM: "..............................2." }, fills: { HITOM: "............................F.F.", HAT: "............................N.N.", KICK: "N..............................." } });
     const a = D.fbAdd(m);
     ok(a.fillbar.steps === 16 && a.fillbar.lanes.HITOM === "............x.x." && a.fillbar.ratchets.HITOM === "..............2." && a.fillbar.lanes.HAT === "x.x.x.x.x.x....." && a.fillbar.lanes.KICK === "x.......x......."
-      && !("HITOM" in a.lanes) && a.lanes.HAT === m.lanes.HAT && !a.fills.HAT && !a.fills.HITOM && a.fills.KICK === "N" + ".".repeat(31) && D.fbSteps(m) === 16,
-      "sed: a fill bar added from the pattern's last bar as a fill played it (F in, N out), the pattern's last bar as it plays (F out), those marks gone");
+      && !("HITOM" in a.lanes) && a.lanes.HAT === m.lanes.HAT && !a.fills && D.fbSteps(m) === 16,
+      "sed: a fill bar added from the pattern's last bar as a fill played it (F in, N out), the pattern's last bar as it plays (F out), every mark gone (the N before its bars too, 2026-10-30)");
     ok(D.fbAdd(m, true).fillbar.steps === 16 && Object.keys(D.fbAdd(m, true).fillbar.lanes).length === 0 && !("fillbar" in D.fbRemove(a)) && D.fbRemove(a).lanes.HAT === m.lanes.HAT,
       "sed: an empty fill bar; removed (the pattern stays as it is)");
     const e = D.fbSetHit(a, "CRASH", 15, "X"), e2 = D.fbSetHit(e, "HITOM", 12, "x", 3);
@@ -821,13 +838,13 @@ function editorFillBar() {
            last bars, a hit in both always, in the pattern only N, in the fill bar only written in as F; the fill bar
            gone. fbMerge(fbAdd(m)) gives m back; e2's edits (the crash, the tom's ratchet) land as F hits */
       const canon = (o) => JSON.stringify(o, (k, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort()) : v));
-      const back = D.fbMerge(a), r = D.fbMerge(e2);
-      ok(canon(back.sec) === canon(m) && !back.differ.length && !back.dropped.length && back.n.F === 2 && back.n.N === 2 && back.n.A === 8,
-        "sed: the fill bar merged into the pattern as marks gives the marked pattern it was added from (2 F, 2 N, 8 in both)");
+      const back = D.fbMerge(a), r = D.fbMerge(e2), m0 = D.norm({ ...m, fills: { HITOM: m.fills.HITOM, HAT: m.fills.HAT } });   /* (m less the N before the fill's bars, which the add dropped) */
+      ok(canon(back.sec) === canon(m0) && !back.differ.length && !back.dropped.length && back.n.F === 2 && back.n.N === 2 && back.n.A === 8,
+        "sed: the fill bar merged into the pattern as marks gives the marked pattern it was added from (2 F, 2 N, 8 in both; the N before its bars gone with the add)");
       ok(!("fillbar" in r.sec) && r.sec.lanes.HITOM === ".".repeat(28) + "x.x." && r.sec.ratchets.HITOM === ".".repeat(28) + "3.2." && r.sec.fills.HITOM === ".".repeat(28) + "F.F."
         && r.sec.lanes.CRASH === ".".repeat(31) + "X" && r.sec.fills.CRASH === ".".repeat(31) + "F" && r.sec.fills.HAT === ".".repeat(28) + "N.N." && r.sec.lanes.HAT === m.lanes.HAT
-        && r.sec.fills.KICK === "N" + ".".repeat(31) && r.sec.lanes.KICK === m.lanes.KICK && r.n.F === 3 && r.n.N === 2 && r.n.A === 8 && D.fbMerge(m).sec === m,
-        "sed: ..the fill bar's own hits written in as F with their ratchets, the pattern's hits it leaves out N, the ones in both unmarked, the marks before its bars kept; nothing to merge without one");
+        && !r.sec.fills.KICK && r.sec.lanes.KICK === m.lanes.KICK && r.n.F === 3 && r.n.N === 2 && r.n.A === 8 && D.fbMerge(m).sec === m,
+        "sed: ..the fill bar's own hits written in as F with their ratchets, the pattern's hits it leaves out N, the ones in both unmarked; nothing to merge without one");
       const q = D.norm({ name: "Q", steps: 16, div: "1/16", lanes: { SNARE: "....x.......x...", KICK: "x..............." }, fills: { SNARE: "............F..." }, flams: { KICK: "f..............." },
                          fillbar: { steps: 16, lanes: { SNARE: "....X...........", KICK: "x..............." } } });
       const rq = D.fbMerge(q);
@@ -840,8 +857,27 @@ function editorFillBar() {
       ok(/<button id="sed-fbmerge" data-t="sedFbMerge" hidden>/.test(html) && /SED\.fbMerge\(sec\)/.test(html) && /\$\("sed-fbmerge"\)\.hidden = !sec\.fillbar/.test(html)
         && /sedFbMerge: "Merge into the pattern"/.test(html) && /sedFbMerged: "/.test(html) && /sayK\("sedFbMerged"/.test(html),
         "sed: the page has the Merge button beside the Fill select, shown with a fill bar, calling fbMerge and saying the counts");
+      {   /* a fill embedded in the pattern (marks, step conditions) or a fill bar of its own, never both (2026-10-30): adding a
+             fill bar folds every mark in (F hits outside its bars go, N marks clear, the conditions too); marksClear drops them
+             keeping the fill bar; the page: the mark pens off with a fill bar, the condition row too, a file with both warned
+             and its marks droppable */
+        const both = { ...m, fill: "F" + ".".repeat(31), lanes: { ...m.lanes, SNARE: "x" + ".".repeat(31) } };   /* step 0 only in a fill (a condition) */
+        const emb = D.embedded(both), add = D.fbAdd(both);
+        ok(emb.F === 2 && emb.N === 3 && emb.cF === 1 && emb.cN === 0 && emb.n === 6 && D.embedded(m).n === 5 && D.embedded(add).n === 0,
+          "sed: embedded() counts the marks (F, N) and the step conditions; none after a fill bar is added");
+        ok(!("fill" in add) || !/[FN]/.test(add.fill), "sed: ..the step conditions cleared by the add");
+        ok(!("SNARE" in add.lanes) && add.lanes.HAT === "." + m.lanes.HAT.slice(1) && D.marksClear(both).dropped === 4 && D.marksClear(both).cleared === 4
+          && D.embedded(D.marksClear(both).sec).n === 0 && D.marksClear(both).sec.lanes.KICK === both.lanes.KICK && D.marksClear(both).sec.lanes.HAT === "." + m.lanes.HAT.slice(1)
+          && !("HITOM" in D.marksClear(both).sec.lanes),
+          "sed: the step-0 condition (only in a fill, outside the fill's bars) takes the snare and the unmarked hat there out of the pattern, the N-marked kick stays; marksClear drops the F hits (4) and clears the N marks and the condition (4)");
+        ok(/<button id="sed-fbmarks" data-t="sedFbDropMarks" hidden>/.test(html) && /<span class="warn-t" id="sed-bothwarn" hidden>/.test(html)
+          && /const both = !!sec\.fillbar && SED\.embedded\(sec\)\.n > 0;/.test(html) && /b\.disabled = !!sec\.fillbar && b\.dataset\.mark !== "";/.test(html)
+          && !/sedSet\(SED\.setCond/.test(html) && /label\(sec\.steps, sep, "patl", "PATTERN"\);/.test(html) && /case "m": if \(sedSec\(\) && sedSec\(\)\.fillbar\) \{ sayK\("sedMarkOff"\)/.test(html)
+          && /sayK\("sedFbAddedMarks"/.test(html) && /sayK\("sedFbMarksDropped"/.test(html) && /SED\.marksClear\(sec\)/.test(html),
+          "sed: the page keeps them apart: the mark pens off with a fill bar (the m key too), the warning and the Drop the marks button with both, the counts said; the label row says PATTERN, no step condition cells (2026-10-30)");
+      }
     }
-    ok(/<select id="sed-fillbar">/.test(html) && /sedFill: "Fill"/.test(html) && /SED\.fbSet\(sec, \+\$\("sed-fillbar"\)\.value\)/.test(html) && /cls: "fb", what: "fill"/.test(html) && /cls = `c \$\{b\.cls\}`/.test(html) && /\.sedgrid \.sep\.fb::before/.test(html) && /SED\.fbSetHit\(sec, l, i, h, r, f\)/.test(html),
+    ok(/<select id="sed-fillbar">/.test(html) && /sedFill: "Fill"/.test(html) && /SED\.fbSet\(sec, bars\)/.test(html) && /cls: "fb", what: "fill"/.test(html) && /cls = `c \$\{b\.cls\}`/.test(html) && /\.sedgrid \.sep\.fb::before/.test(html) && /SED\.fbSetHit\(sec, l, i, h, r, f\)/.test(html),
       "sed: the page has the fill's bars select, its columns after the gap, its cells on the pen");
   }
   /* the player: a fill plays the fill bar instead of the bar it is in, from the press, its step i at the bar's own
@@ -865,15 +901,18 @@ function editorFillBar() {
     ok(Math.abs(P.flamAt(10, 0.125, 0) - 9.975) < 1e-9 && Math.abs(P.flamAt(10, 0.04, 0) - 9.99) < 1e-9 && P.flamAt(10, 0.125, 9.99) === 9.99, "play: the grace 25 ms before, a quarter of a short step, never in the past");
     ok(/if \(h\.flam\) playHit\(\{ lane: h\.lane, level: 1, rat: 1 \}, PLAY\.flamAt\(at, SPLAY\.stepSecs, ctx\.currentTime\)\)/.test(html), "play: the page plays the grace as a ghost of the same drum");
   }
-  P.fillNext(st);                                           /* bar 0, step 8: the fill from here to the bar's end */
-  for (let i = 8; i < 48; i++) ev.push(P.tick(st));
-  ok(!ev[7].fill && !ev[7].fb && ev[8].fill && ev[8].fb && ev[8].hits.map((x) => x.lane).sort().join() === `0,${tom}`
-    && ev[14].fb && ev[14].hits.find((x) => x.lane === tom).rat === 2 && !ev[14].hits.some((x) => x.lane === hat)
-    && ev[15].fb && ev[15].hits.map((x) => x.lane).join() === String(crash) && ev[15].hits[0].level === 3,
-    "fill bar: from step 8 the fill bar's own steps 8..15 (the kick and the tom, the tom's ratchet on 14, the hard crash on 15, no hat)");
-  ok(!ev[16].fill && !ev[16].fb && ev[16].step === 0 && ev[16].bar === 0 && ev[16].hits.length === 2 && ev[30].hits.map((x) => x.lane).join() === String(hat)
-    && ev[46].hits.map((x) => x.lane).join() === String(hat),
-    "fill bar: over at the bar line: the pattern from its top (its hat back on step 14, and on step 30, marked N, outside a fill)");
+  P.fillNext(st);                                           /* bar 0, step 8: a fill bar of its own, extra bars, plays whole from the
+                                                               next bar line (2026-10-30; before, from here to the bar's end, cut
+                                                               from the front) */
+  ok(!st.fill && st.fillWait === 1, "fill bar: asked mid-bar: not this bar (a fill of its own plays whole, from the next bar line)");
+  for (let i = 8; i < 64; i++) ev.push(P.tick(st));
+  ok(!ev[8].fill && !ev[8].fb && !ev[15].fill && ev[14].hits.some((x) => x.lane === hat) && ev[16].fill && ev[16].fb && ev[16].step === 16 && ev[16].hits.map((x) => x.lane).join() === "0"
+    && ev[24].fb && ev[24].hits.some((x) => x.lane === tom) && ev[30].fb && ev[30].hits.find((x) => x.lane === tom).rat === 2 && !ev[30].hits.some((x) => x.lane === hat)
+    && ev[31].fb && ev[31].hits.map((x) => x.lane).join() === String(crash) && ev[31].hits[0].level === 3,
+    "fill bar: the rest of this bar the pattern (its hat on 14), the next bar the fill bar whole (the kick on its 0, the tom on 8, its ratchet on 14, the hard crash on 15, no hat)");
+  ok(!ev[32].fill && !ev[32].fb && ev[32].step === 0 && ev[32].bar === 0 && ev[32].hits.length === 2 && ev[46].hits.map((x) => x.lane).join() === String(hat)
+    && ev[62].hits.map((x) => x.lane).join() === String(hat),
+    "fill bar: over at its bar line: the pattern from its top (its hat back on step 14, and on step 30, marked N, outside a fill)");
   for (let i = 0; i < 12; i++) P.tick(st);                  /* the next cycle's first bar, its last beat */
   P.fillNext(st);
   ok(!st.fill && st.fillWait, "fill bar: asked in the bar's last beat: not this bar");
@@ -884,44 +923,45 @@ function editorFillBar() {
   const p2 = P.create(spec); P.request(p2, 1); P.tick(p2); P.fillNext(p2);
   const e3 = []; for (let i = 0; i < 20; i++) e3.push(P.tick(p2));
   ok(e3.every((x) => !x.fb) && e3[0].fill && e3[14].fill && !e3[15].fill && e3[15].step === 0 && e3[15].hits.length === 1,
-    "fill bar: a section without one fills as before (the rest of the bar, its hits as marked: none here), then from its top");
-  {   /* a fill bar longer than a bar (32 steps: two): the fill lasts two bars and the phrase ends with it, cut from the
-         front (fbBar / fbBars as seq.c fb_bar / fb_bars); the cycle goes round meanwhile (no restart mid-fill) */
+    "fill bar: a section without one, its fill embedded as marks, fills as before (the rest of the bar, its hits as marked: none here), then from its top");
+  {   /* a fill bar longer than a bar (32 steps: two): the fill lasts two bars, whole, from the next bar line, past the
+         section's end when fewer bars are left (2026-10-30; from 2026-10-20 it ended on the section's last bar line, waiting
+         or cut from the front, which lost a two-bar fill asked in the last bar); the cycle goes round meanwhile (no restart
+         mid-fill), the pattern from its top after it (fbBar / fbBars as seq.c fb_bar / fb_bars) */
     const two = { ...sec, fillbar: { steps: 32, lanes: { KICK: "x...............x...............", CRASH: "...............................X" } } };
     ok(P.fbSteps(two) === 32 && P.fbBar(two) === 16 && P.fbBars(two) === 2 && P.fbBar(sec) === 16 && P.fbBars(sec) === 1 && P.fbBars(spec.sections[1]) === 1
       && P.fbBar({ ...sec, fillbar: { steps: 8, lanes: {} } }) === 8, "fill bar: its steps a bar (a bar of the meter when whole and it fits, else all of it) and its bars");
-    /* (2026-10-20: a fill of several bars ends on the section's last bar line; this one's 2 bars) asked in its last bar:
-       the phrase's last bar from now; asked in its first: both, from now; a 3-bar one in it: the first section end it
-       reaches whole (bar 4), so it waits a bar; a 2-bar one in a 4-bar section: it waits for its last 2 bars */
     const q = P.create({ ...spec, sections: [two] });
-    P.request(q, 0); for (let i = 0; i < 20; i++) P.tick(q);          /* bar 1, step 4 */
+    P.request(q, 0); for (let i = 0; i < 20; i++) P.tick(q);          /* bar 1, step 4: the section's last bar */
     P.fillNext(q);
-    ok(q.fill && q.fillBars === 1 && !q.fillWait, "fill bar (two bars): asked in the section's last bar: its last bar, from now");
-    const e = []; for (let i = 20; i < 36; i++) e.push(P.tick(q));
-    ok(e[0].fb && e[0].step === 20 && e[0].hits.length === 0 && e[11].fb && e[11].hits.some((x) => x.lane === crash) && !e[12].fill && e[12].step === 0 && e[12].bar === 0 && e[12].hits.length === 2,
-      "fill bar (two bars): ..the phrase's second half to the section's end, its last step the crash; then the pattern from its top");
+    ok(!q.fill && q.fillWait === 1, "fill bar (two bars): asked in the section's last bar: not this bar");
+    const e = []; for (let i = 20; i < 68; i++) e.push(P.tick(q));
+    ok(!e[11].fill && e[12].fill && e[12].fb && e[12].step === 0 && e[12].hits.map((x) => x.lane).join() === "0" && e[28].fb && e[28].hits.map((x) => x.lane).join() === "0"
+      && e[43].fb && e[43].hits.some((x) => x.lane === crash) && !e[44].fill && e[44].step === 0 && e[44].bar === 0 && e[44].hits.length === 2,
+      "fill bar (two bars): ..the next cycle's two bars are the fill, whole, past the section's end (its kick on 0 and 16, the crash last); then the pattern from its top");
     const q2 = P.create({ ...spec, sections: [two] });
     P.request(q2, 0); for (let i = 0; i < 4; i++) P.tick(q2);         /* bar 0, step 4 */
     P.fillNext(q2);
-    const e2 = []; for (let i = 4; i < 36; i++) e2.push(P.tick(q2));
-    ok(e2[0].fb && e2[12].fb && e2[12].step === 16 && e2[12].hits.map((x) => x.lane).join() === "0" && e2[27].hits.some((x) => x.lane === crash) && !e2[28].fill && e2[28].step === 0,
-      "fill bar (two bars): asked in the section's first bar: both bars from now (its step 16 kick in bar 1), ending on the section's end");
+    const e2 = []; for (let i = 4; i < 56; i++) e2.push(P.tick(q2));
+    ok(!e2[11].fill && e2[12].fb && e2[12].step === 16 && e2[12].hits.map((x) => x.lane).join() === "0" && e2[28].fb && e2[28].step === 0 && e2[28].hits.map((x) => x.lane).join() === "0"
+      && e2[43].hits.some((x) => x.lane === crash) && !e2[44].fill && e2[44].step === 0 && e2[44].bar === 0,
+      "fill bar (two bars): asked in the section's first bar: bar 1 and the next cycle's first, whole; then the pattern from its top");
     const three = { ...sec, fillbar: { steps: 48, lanes: { KICK: "x" + ".".repeat(47), CRASH: ".".repeat(47) + "X" } } };
     const q3 = P.create({ ...spec, sections: [three] });
     P.request(q3, 0); for (let i = 0; i < 4; i++) P.tick(q3);
     P.fillNext(q3);
-    ok(!q3.fill && q3.fillWait === 1 && P.fillSpan(three, 0) === 4 && P.fillWaitFrom(three, 0) === 1, "fill bar (three bars, a 2-bar pattern): it waits a bar");
+    ok(!q3.fill && q3.fillWait === 1 && !("fillSpan" in P) && !("fillWaitFrom" in P), "fill bar (three bars, a 2-bar pattern): from the next bar line, whole (no waiting for the section's end, no cut)");
     const e3 = []; for (let i = 4; i < 68; i++) e3.push(P.tick(q3));
-    ok(!e3[11].fill && e3[12].fb && e3[12].hits.map((x) => x.lane).join() === "0" && q3.bar >= 0 && e3[59].hits.some((x) => x.lane === crash) && !e3[60].fill && e3[60].step === 0,
-      "fill bar (three bars): ..then plays whole, from bar 1 to the end of the cycle's second round (bar 4)");
+    ok(!e3[11].fill && e3[12].fb && e3[12].hits.map((x) => x.lane).join() === "0" && e3[59].hits.some((x) => x.lane === crash) && !e3[60].fill && e3[60].step === 0,
+      "fill bar (three bars): ..then plays whole, from bar 1 over the cycle going round; then the pattern from its top");
     const four = { name: "FOUR", steps: 64, div: "1/16", lanes: { HAT: "x...".repeat(16) }, fillbar: { steps: 32, lanes: { KICK: "x" + ".".repeat(31) } } };
     const q4 = P.create({ ...spec, sections: [four] });
     P.request(q4, 0); for (let i = 0; i < 4; i++) P.tick(q4);
     P.fillNext(q4);
     const w = q4.fillWait, e4 = []; for (let i = 4; i < 68; i++) e4.push(P.tick(q4));
-    ok(w === 2 && e4[0].wait === 2 && !e4[27].fill && e4[28].fill && e4[28].bar === 2 && e4[28].hits.some((x) => x.lane === 0) && e4[59].fill && !e4[60].fill && e4[60].step === 0,
-      "fill bar (two bars, a 4-bar section): asked in bar 0 it waits two bar lines, then plays bars 2 and 3; then the pattern");
- 
+    ok(w === 1 && e4[0].wait === 1 && !e4[11].fill && e4[12].fill && e4[12].bar === 1 && e4[12].hits.some((x) => x.lane === 0) && e4[43].fill && !e4[44].fill && e4[44].step === 0 && e4[44].bar === 0,
+      "fill bar (two bars, a 4-bar section): asked in bar 0 it plays bars 1 and 2, whole; then the pattern from its top (the phrase cut short, as the player asked)");
+    ok(/say = "FILL NEXT BAR"; cls \+= " fill";/.test(html) && !/FILL AT THE END/.test(html), "play: the page says FILL NEXT BAR while one waits (never at the end any more)");
   }
 }
 
@@ -1039,7 +1079,7 @@ function editorEntryBreak() {
   ok(parts[0].entry.bars === 4 && parts[0].break.bars === 1 && !parts[1].entry && !parts[1].break && back2.entry.bars === 4 && back2.break.lanes.KICK === lane(16, [12], "X")
     && !D.merge(parts[1], parts[0]).entry, "sed: through split with the first part, through merge the first's");
   const fileBars = [{ steps: 16, lanes: { RIDE: lane(16, [8]) } }, { steps: 16, lanes: {} }, { steps: 16, lanes: { KICK: lane(16, [6, 8, 12]), LOWTOM: lane(16, [6, 8]) } }];
-  const w = D.withBlock(g, "break", fileBars);
+  const w = D.withBlock(g, "break", fileBars).sec;
   ok(w.break.bars === 3 && w.break.lanes.RIDE === lane(48, [8]) && w.break.lanes.LOWTOM === lane(48, [38, 40]) && w.entry.bars === 4,
     "sed: the file's bars as the break (Shine On's 205-207: the ride, a silent bar, the pickup)");
   ok(eq([...S.pack({ ...spec, sections: [w] })], [...S.pack({ ...spec, sections: [D.norm(S.unpack(S.pack({ ...spec, sections: [w] })).sections[0])] })]),
@@ -1063,7 +1103,7 @@ function editorEntryBreak() {
     ok(/colPick\(b\.key, i, e\)/.test(html) && /SED\.pasteCols\(sec, Math\.min\(SONGED\.colA, SONGED\.colB\), SONGED\.clip, SONGED\.colKey\)/.test(html),
       "sed: a block's step numbers select steps there, the paste goes where they are");
   }
-  ok(/id="sed-entry"/.test(html) && /id="sed-break"/.test(html) && /id="sed-useentry"/.test(html) && /SED\.withBlock\(sec, key, SONGED\.bars\.slice/.test(html)
+  ok(/id="sed-entry"/.test(html) && /id="sed-break"/.test(html) && /id="sed-useentry"/.test(html) && /sedUseBlock\(SED\.withBlock\(sec, key, SONGED\.bars\.slice/.test(html)
     && /\.sedgrid \.sep\.eb::before/.test(html) && /sedEbHelp: "Entry and break/.test(html) && /sedEbHelp: "エントリーとブレイク/.test(html),
     "sed: the page has the entry and break selects, their columns after a blue gap, the file's bars as them");
 }

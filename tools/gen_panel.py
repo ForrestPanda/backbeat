@@ -135,7 +135,7 @@ def main():
     # the body
     svg.append(f'<rect x="20" y="14" width="{W - 40}" height="{panel_h - 28}" rx="26" fill="{BODY}" stroke="{LINE}" stroke-width="2"/>')
     text(40, 42, "M-VAVE FM-1", 12, SILK, "start", 600)
-    text(W - 40, 42, "BackBeat 0.9.1: the controls on LIVE, the stage screen", 12, DIM, "end", 400)
+    text(W - 40, 42, "BackBeat 0.9.2: the controls on LIVE, the stage screen", 12, DIM, "end", 400)
     # the screen (240 x 240 at 2x), a LIVE sketch in it
     sx, sy = 370, 42
     svg.append(f'<rect x="{sx - 10}" y="{sy - 10}" width="500" height="500" rx="10" fill="{TRAY}"/>')

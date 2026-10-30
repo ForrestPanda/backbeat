@@ -460,7 +460,7 @@ UI_SMALL static void ui_draw(void)
         case PU_NEXT:   ui_say("NEXT: ", nm); break;
         case PU_SONG:   ui_say("SONG: ", nm); break;
         case PU_ENDING: ui_say("ENDING", nm[0] ? ": " : ""); if (nm[0]) str_cpy(ui.msg + str_len(ui.msg), nm, sizeof ui.msg - str_len(ui.msg)); break;
-        case PU_FILL:   ui_message(pedal_fill_wait > 1u ? "FILL AT THE END" : pedal_fill_wait ? "FILL NEXT BAR" : "FILL"); break;
+        case PU_FILL:   ui_message(pedal_fill_wait ? "FILL NEXT BAR" : "FILL"); break;
         case PU_NOSONG: ui_say(nm[0] ? "NO SONG " : "NO SONG", nm); break;   /* (PC 127: no song, no sections) */
         case PU_STOP:   ui_message("STOP"); break;
         case PU_COUNT:  ui_say("COUNT-IN: ", nm); break;

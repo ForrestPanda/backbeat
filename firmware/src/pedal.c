@@ -103,22 +103,21 @@ static void pedal_name(uint32_t s, char *out)    /* the section's name for the s
     sng_name(s, out);
 }
 
-/* CC 21: the fill. A section with a fill bar of its own, as the arrangers (Yamaha, Korg, Roland, Ketron, the
- * BeatBuddy) do it (2026-10-15, after a day of fills aligned to the pattern's end): from now to the end of this bar,
- * the pattern again from its top on the next bar (live_block), or the section asked for meanwhile, which waits for
- * the fill's end instead of the pattern's. A fill bar longer than a bar (fb_bars) ends on the section's last bar line
- * (2026-10-20; fill_wait_from): asked for earlier, it waits, then plays whole; later, its last bars from now. A section
- * without one (its fill in its marks and conditions, or none at all; 2026-10-17): fill mode from now to the
- * section's end (fill_bars_from), the marks heard where they sit, the pattern on from its top with no restart, the
- * section asked for at that end. Asked for in the bar's last beat (as Yamaha's last beat; the BeatBuddy's last half
- * beat): the whole next bar is the fill (no fill bar, in the section's last bar: the whole next cycle). A fill
- * playing asked for again: nothing new (it ends at its bar line), except in the last beat of its last bar: then the
- * next bar is a fill too, straight on (asked 2026-10-16: a two-bar fill from two presses).
+/* CC 21: the fill. A section with a fill bar of its own: the fill bar whole, from the next bar line, the pattern again
+ * from its top after it (live_block), or the section asked for meanwhile, which waits for the fill's end instead of
+ * the pattern's. Past the section's end when fewer bars are left than it has (2026-10-30, option A of two the user
+ * weighed: a fill bar is a block placed by ear, like a section; a fill that belongs at a place in the phrase, or on
+ * part of a bar, is merged into the pattern as marks. From 2026-10-15 it was an arranger's fill-in from the press to
+ * the bar line, cut from the front, and from 2026-10-20 a fill of several bars ended on the section's last bar line,
+ * waiting or cut, which lost a two-bar fill asked in the last bar). A section without one (its fill in its marks and
+ * conditions, or none at all; 2026-10-17): fill mode from now to the section's end (fill_bars_from), the marks heard
+ * where they sit, the pattern on from its top with no restart, the section asked for at that end; asked for in the
+ * bar's last beat (as Yamaha's last beat; the BeatBuddy's last half beat): the whole next bar (in the section's last
+ * bar: the whole next cycle). A fill playing asked for again: nothing new (it ends at its bar line), except in the
+ * last beat of its last bar: then another one follows, straight on (asked 2026-10-16: a two-bar fill from two presses).
  * next (CC 21 value 1; LIVE's black keys and SEL with OCT+ held; asked 2026-10-16 for a fill bar whose hits lead off
- * the bar, which the cut from the front never plays): the whole next bar from anywhere in this one, as the last beat's
- * press; playing a fill in its last bar, the next bar a fill too, straight on. The user has an Ampero patch a song, so
- * the switch says which; a rule that defers to the next bar by itself when the fill from here would sound like the
- * groove was considered and parked (design.md). */
+ * the bar): as asked in the last beat, from anywhere in this one; with a fill bar of its own the same as a plain
+ * press since 2026-10-30. The user has an Ampero patch a song, so the switch says which. */
 static void pedal_fill_req(uint32_t next)
 {
     uint32_t b16 = meter_b16(clk_meter), beat = 16u / meter_den(clk_meter), at = clk_16th() % b16;
@@ -127,10 +126,9 @@ static void pedal_fill_req(uint32_t next)
     if (next)
         at = b16 - 1u;                            /* as asked in the bar's last beat */
     if (!pedal_fill && !pedal_fill_wait) {
-        uint32_t late = at + beat >= b16, wait = late + fill_wait_from(live_bar + late);
-        if (wait) {                               /* the bar's last beat: the next bar, whole; a fill of several bars:
-                                                   * its start, to end on the section's end */
-            pedal_fill_wait = (uint8_t)wait;
+        if (fb_bars || at + beat >= b16) {        /* a fill bar of its own: whole, from the next bar line; none, in the
+                                                   * bar's last beat: the next bar, whole */
+            pedal_fill_wait = 1;
         } else {
             eb_cut();                             /* (an entry or break playing: the fill cuts it) */
             pedal_fill = 1;

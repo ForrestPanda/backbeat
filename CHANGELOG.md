@@ -4,6 +4,31 @@ What changed in each version of BackBeat, the firmware and the website (the edit
 <https://forrestpanda.github.io/backbeat/>). The version is on the device's boot screen and in SETUP > SYSTEM >
 ABOUT; the editor shows it next to the connect button.
 
+## 0.9.2 (2026-10-30)
+
+### Firmware
+
+- **Two kinds of fill.** A section's fill of its own (extra bars, 1 to 4) now plays whole, from the next bar line, past
+  the section's end if fewer bars are left, then the pattern from its top: press in the bar before you want it. A fill
+  embedded in the pattern as marks works as before, from the press to the section's end, like an arranger keyboard's.
+  Until now a fill of several bars ended on the section's last bar line, so a 2-bar fill asked in the last bar played
+  its second bar only. FILL AT THE END is gone from the screen.
+- **No stray hit at a bar line.** A bar's first step that humanize or a nudge had pulled a few milliseconds early
+  could play the bar before's content: a fill's second bar started with the fill's first step again (a second crash),
+  the bar after a fill or a section change doubled a hit. Such a step now waits for the bar line.
+
+### Website
+
+- **The player follows**: a fill of its own whole from the next bar line.
+- **Marks or a fill of its own, never both.** Adding a fill to a section folds its fill marks and conditions in; with a
+  fill the mark pens are off; a song file that has both is flagged, with Drop the marks beside Merge into the pattern.
+- **Fill, Entry and Break = selected bars follow the section's division.** The bars of a Guitar Pro file are 16ths;
+  on a 1/8 or 1/4 section they kept 16 steps a bar, so the device and the player read them as twice or four times the
+  bars. They are now put on the section's grid; hits that fall between its steps are dropped and listed (set a finer
+  division first to keep them). Pattern = selected bars re-grids a kept fill, entry or break to the new 1/16 as well.
+- **The grid's top row labels the columns** (ENTRY, PATTERN, FILL, BREAK). Its cells over the pattern used to set a
+  step's fill condition (F / N for every hit of the step); a mark belongs on the hit, with the mark pen.
+
 ## 0.9.1 (2026-10-30)
 
 ### Firmware
