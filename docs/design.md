@@ -1413,7 +1413,7 @@ Taken:
   steps of 4 LSB times the MASTER, signal-correlated distortion that stays as loud while a hit fades, on the jack and
   USB; dsp.c `MULQ12R` keeps the low bits (~6 ops), used by the master and DUST's drive (fx.c). The drums' own LEVEL
   is a Q15 multiply without a pre-shift and was never affected. Golden renders updated (every render moves by an LSB
-  here and there).
+  here and there). Heard on the unit the same day (the user: "tails sound better").
 - **A user kit zone's root clamped** (drums.c, SLOOP after 2.8.3): a typed root of 300 shifted the pitch by 2^20.
 - **The installer finds the update loader by its handshake** (web/fm1ota.js, SLOOP 2.8): Windows often names the
   re-enumerated loader generically ("USB MIDI Device"), so the name filter missed it and the install stalled at "the
@@ -1442,7 +1442,24 @@ Taken:
   photo), and **the two stacks are painted at boot** (`stack_paint`, 24 KB main and 8 KB supervisor, hal
   `fm1_sp / fm1_ssp / fm1_usp`): the console's `status` says `stack_main_free`, `stack_sup_free` and `stack_sp`, the
   bytes above each guard band never reached since boot and which region the main loop runs on. What they say decides
-  whether `_guard0` may move up and the pool grow (milestone 8's RAM).
+  whether `_guard0` may move up and the pool grow (milestone 8's RAM). **Read on the unit 2026-10-30** (the console
+  over USB SERIAL, 84 s after boot, idle): `stack_main_free 23160` of the main stack's 24320 B, `stack_sup_free 7216`
+  of the supervisor's 7936 B, `stack_sp 0x1C79EB8` (the main loop on the main stack, 328 B below its top): about
+  1.2 KB and 0.7 KB used, the paint's 512 B margin included. Read again at 237 s, after a song with fills, section
+  changes and every screen (LIVE, SONGS, SECTIONS, EDIT, SETUP; 12 voices at the peak, five blocks with none free,
+  the worst block 2333 us): **the same numbers**, nothing went deeper than the paint's starting line. So playing and
+  the screens take under 1.2 KB of the main stack and under 0.7 KB of the supervisor's, and 20 KB of the main
+  stack's 24 KB look free for the pool (milestone 8). Read a third time at 953 s, after a setlist uploaded from the
+  editor (the flash written), a backup made, a backup restored, the device's setlist copied into the editor, while
+  a song played (`cpu_pct 15`): `stack_main_free 22664`, 496 B deeper than a song, **1656 B of the main stack
+  used** at the deepest, the supervisor's unchanged at 7216 free; one late audio block over the 16 minutes, most
+  likely a flash erase while the song played (a setlist is written as the editor sends it; the settings alone
+  wait for a quiet moment): to confirm with a `status` read before and after an upload while playing; the main
+  loop on core 1 (milestone 8's list) is the way to make it never. So 20 KB stay free with the song, the screens, the editor's transfers and the flash writes
+  all walked. The update cannot be read this way: its staging (ota.c, the loader written to 0xE0000) runs on this
+  stack with the same SysEx receive and flash erase and program as an upload, then resets into the loader, a
+  program with a stack of its own, and the paint is gone with the reset. The console's own frames are in every
+  reading.
 - **Compiled for size off the audio path** (core.h `UI_SMALL`, clang's minsize attribute, SLOOP 2.7's way): the
   pages, menus, panel, songs' packing, projects, updater, console, 289 functions in 21 files (not seq.c, fx.c,
   drums.c, gfx.c, lcd.c, usb.c, midi_uart.c, samples.c, voice.c). 5344 B back, nothing taken out; each file guards
