@@ -48,8 +48,8 @@ firmware starts again, untouched.
 Use the web installer (Chrome or Edge), or from the command line:
 
 ```
-python3 tools/fm1_install.py --info                       # what runs now: FM-1_015 is stock V15, FM-1_985 BackBeat
-python3 tools/fm1_install.py backbeat-0.9.fwsc            # about two minutes
+python3 tools/fm1_install.py --info                       # what runs now: FM-1_015 is stock V15, FM-1_988 BackBeat
+python3 tools/fm1_install.py backbeat-0.9.1.fwsc          # about two minutes
 ```
 
 Close every other program that uses MIDI first, and keep the cable in. The install runs in two
@@ -122,7 +122,7 @@ not been needed with BackBeat: the rescue screen comes first.
 | On USB | What runs |
 | --- | --- |
 | MIDI device "FM-1", identity `FM-1_015` | stock V15 |
-| MIDI device "Felucca MIDI 1" and an audio device "Felucca", identity `FM-1_985` | BackBeat (SLOOP's USB names, kept on purpose; the first 0.9 package answered SLOOP's `FM-1_900`) |
+| MIDI device "Felucca MIDI 1" and an audio device "Felucca", identity `FM-1_988` | BackBeat 0.9.1 and later (SLOOP's USB names, kept on purpose; 0.9 answered `FM-1_985`, which Loom FM-1 had first, and the first 0.9 package SLOOP's `FM-1_900`) |
 | MIDI device, identity `FM-1_000` | BackBeat's rescue screen |
 | MIDI device, identity `ota-FM-1_...` | the update loader, waiting: run the installer again |
 | a USB disk 4c4a:8057 "WL82 UBOOT1.00" (`/dev/sgN` on Linux) | the ROM's download mode |

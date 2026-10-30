@@ -47,7 +47,7 @@ SDK_SHA256 = {
     "cfg/eq_cfg_hw.bin": "41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85ed80ea7d",
 }
 
-PRODUCT = "FM-1_985"                # package identity, BackBeat's own (SLOOP's FM-1_900; free in the hub's catalogue 2026-10-24)
+PRODUCT = "FM-1_988"                # package identity, BackBeat's own (SLOOP's FM-1_900; FM-1_985 for 0.9, Loom FM-1's since 2026-10-18: 988 free in thefirmwarehub.com, fm1-site and mooring 2026-10-30)
 VERSION = None                      # FELUCCA_VERSION for release builds (default: firmware/src/ui.c)
 
 
@@ -306,9 +306,9 @@ def main():
     a = ap.parse_args()
     name = "felucca.fwsc"
     if a.release:
-        m = re.fullmatch(r"(\d)\.(\d)(-[A-Za-z0-9]+)?", a.release)
+        m = re.fullmatch(r"(\d)\.(\d)(\.\d)?(-[A-Za-z0-9]+)?", a.release)
         if not m:
-            raise SystemExit(f"--release {a.release}: use X.Y or X.Y-suffix, one digit each")
+            raise SystemExit(f"--release {a.release}: use X.Y, X.Y.Z or X.Y-suffix, one digit each")
         VERSION = "BACKBEAT " + (a.release.upper() if "BETA" in a.release.upper() else a.release.upper() + " BETA")
         name = f"felucca-{a.release}.fwsc"
     fm1pkg_make.SDK = a.sdk

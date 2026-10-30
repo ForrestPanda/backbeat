@@ -1,0 +1,7 @@
+{
+  "what": "A drummer for guitarists: your songs as sections (intro, verse, chorus, bridge, solo, outro) switched live from a pedalboard over the TRS MIDI jack, with fills where you ask for them. Drums only, a fork of SLOOP. 16 songs of up to 16 sections, 16 factory grooves, a sampled kit with four velocity layers; a web editor with a setlist, a section editor, a player and Guitar Pro import.",
+  "kinds": ["drums"],
+  "editor": "https://forrestpanda.github.io/backbeat/webapp/editor/",
+  "install": "https://forrestpanda.github.io/backbeat/webapp/installer/",
+  "cheat": "https://forrestpanda.github.io/backbeat/webapp/cheatsheet/"
+}

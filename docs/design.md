@@ -344,7 +344,8 @@ next bar). No named sections, one song, no fill tied to a section change.
      ENV / LFO step without a fill. (2026-10-19, asked: "make the first black key do a fill now, the second a
      fill-next-bar, and the fourth a break": F#3 the fill as before, G#3 CC 21 value 1 without the hold, C#4 the
      break, CC 28 value 127: the section playing through its break when it ends; A#3 and the rest as F#3.
-     `key_black` in ui_drummer.c. Test: ui_pages_test.) The pedal followed the same day: no section change brings a fill (see the
+     `key_black` in ui_drummer.c. Test: ui_pages_test. 2026-10-30, asked: D#5 the ending, CC 22 value 127, the
+     song's outro once then the stop, or the section's end then the stop; the cheat sheet and README say so.) The pedal followed the same day: no section change brings a fill (see the
      command map); the web editor's player (`PLAY`) mirrors it. Found while doing it: the wait for the section's
      end (`pedal_at_end`) itself made the last bar a fill, so LIVE's first fill-free keys still filled into a
      section longer than a bar; `live_block` no longer does.
@@ -484,6 +485,20 @@ next bar). No named sections, one song, no fill tied to a section change.
    still "Felucca MIDI 1". **Left and back the same day**: V15 (M-VAVE's `FM-1.fwsc`) installed from 985, `FM-1_015`;
    then the site's `backbeat-0.9.fwsc` (the 985 package) from V15, `FM-1_985` again, both written to 100 %. To verify
    on hardware: an install unplugged while writing and resumed (the hub's last check).
+   **0.9.1 (2026-10-30)**: version `BACKBEAT 0.9.1`, the package `backbeat-0.9.1.fwsc`, **identity `FM-1_988`**: the
+   user found the unit listed as Loom on thefirmwarehub.com; Loom FM-1 (Co-oscillator) has shipped `FM-1_985` since
+   2026-10-18, six days before BackBeat took it, and fm1-site lists a second firmware on it. 988 is in none of the
+   three catalogues (thefirmwarehub.com/catalog.json's `ident` patterns, cicloid/awesome-fm-1's mooring and
+   ocean/fm1-site's bootloader check, read 2026-10-30; the other free 9NN were 922, 923, 929, 962, 963, 965, 967,
+   968, 984) and no hub pattern but the catch-all matches it. `fmhub.json` at the root is what the hub reads from a
+   listed repository (the text, the kinds, the editor and installer links); the listing itself is the hub's. The
+   panel diagram (the user, 2026-10-30: "an FM1 diagram with the function of the keys/buttons"): `tools/gen_panel.py`
+   draws the FM-1 after the emulator's geometry with every control's LIVE role on it and the other screens' roles in
+   four columns, `assets/panel/backbeat-panel.svg` (and .png), in the README before the button table, in the editor as
+   its Cheat sheet tab (under Device; the one-file editor carries the SVG as a data URI) and on the site as
+   `webapp/cheatsheet/` (the hub's "cheat" link in fmhub.json). What
+   changed since 0.9 is in `CHANGELOG.md` at the root (the firmware and the website apart), rendered by
+   `web/make_site.py` as the site's `webapp/changelog/` and linked from the installer and the editor.
 8. **More flash for the kit (proposed 2026-10-29, not started).** The user asked whether the samples could be
    compressed and loaded into RAM for better sound, since RAM is free and flash is not. Measured that day: the kit is
    IMA ADPCM, 4 bits a sample at 22 kHz (11 KB a second; 399 478 B, 36 s), played in place from the memory-mapped

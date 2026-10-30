@@ -32,7 +32,8 @@ A fork of [SLOOP](https://github.com/isod89/sloop-fm1) 2.6 (GPL-3.0, itself from
 presets, the sampled instruments, the punch FX, the SLICER, live recording, the arpeggiator, scales and chords,
 three of its four tracks) is gone, see [docs/drums-only.md](docs/drums-only.md). What is left of SLOOP is its
 drum track, sequencer and sections (SLOOP's own manual is upstream). What this fork adds is in
-[docs/design.md](docs/design.md). The firmware reports itself as BACKBEAT 0.9 (the editor's INFO keeps its
+[docs/design.md](docs/design.md); what changed in each version is in [CHANGELOG.md](CHANGELOG.md), also on the
+site. The firmware reports itself as BACKBEAT 0.9.1 (the editor's INFO keeps its
 `FELUCCA ` prefix, and the USB port names and the backup format stay SLOOP's, so the tools keep working).
 
 ## Getting started
@@ -50,7 +51,7 @@ official firmware is the same installer with M-VAVE's FM-1 V15 file, or M-VAVE's
 **Install.** Open the installer at <https://forrestpanda.github.io/backbeat/> in Chrome or Edge, plug in the
 FM-1 and follow the page. The package is also on the
 [releases page](https://github.com/ForrestPanda/backbeat/releases) and in [docs/firmware/](docs/firmware/), for
-the command line (`python3 tools/fm1_install.py backbeat-0.9.fwsc`) or a local copy of the site
+the command line (`python3 tools/fm1_install.py backbeat-0.9.1.fwsc`) or a local copy of the site
 (`cd docs && python3 -m http.server 8000`, then `http://localhost:8000/webapp/installer/`). If BackBeat
 stops starting after an install, hold **OCT-** alone while switching on: the BACKBEAT USB RESCUE screen
 takes the package again.
@@ -91,7 +92,7 @@ Footswitches send MIDI on channel 16 (default) to the TRS jack or over USB:
 | CC 28, value n | the break: section n through its break, when the section playing ends (as CC 20; with CC 21 on the switch: the fill, then the break); the section playing too. Value 127 (not a section): the section playing's, so one switch serves every song. No break written: its entry; neither: a bar of rest. Stopped: start with it |
 | CC 23 | stop now |
 | CC 24 / CC 25 | next / previous section (empty ones skipped, wrapping), as CC 20; stopped: the first / the last |
-| CC 26 | tap tempo (on the device: the last black key, F#5, on LIVE) |
+| CC 26 | tap tempo (on the device: the last black key, F#5, on LIVE; the ending is D#5 there) |
 | PC 0..15 | load your song in slot 1..16: stopped, its tempo and kit now and its first section cued; playing, with the next section |
 | PC 16..31 | load factory groove 1..16 (the same way) |
 | PC 32..127 | no song: the drum track's own pattern loops, with no sections to cue |
@@ -285,6 +286,10 @@ shares the cable).
 Five screens, a button each. Every one of them was checked on the fm1-emu emulator and in the host tests; LIVE
 has been played from the pedal on an FM-1 (2026-10-19); SECTIONS is in the host tests only so far.
 
+<p align="center"><img src="assets/panel/backbeat-panel.svg" alt="The FM-1 panel with what every knob, button and key does in BackBeat: on LIVE, the knobs are tempo, kit, drum level and swing, ALGORITHM the previous or next song, SEL opens SONGS, ENV and LFO the previous and next section, EDIT the SECTIONS screen, GLO SETUP, HOME LIVE, SEQ the grid, the white keys the sections, the black keys fills, the break and the tap tempo; under it, the same controls on SONGS, SECTIONS and EDIT" width="900"></p>
+
+The panel in one picture (`tools/gen_panel.py`; also the web editor's Cheat sheet tab and a page of the site), then the buttons in detail:
+
 | Button | Tapped | Held |
 | --- | --- | --- |
 | HOME | **LIVE**, the screen it starts on; on LIVE: its other layout, the bar big (kept across power-offs) | |
@@ -311,7 +316,7 @@ nothing is coming, the beat lights in its place. The white keys still change sec
 settings. HOME again: the tiles. The white keys 1..16 change section when the one
 playing ends, with OCT+ held on the next bar (the state line says KEY: ON THE NEXT BAR), with no fill of their own; the first black key (F#3) asks for a fill (as CC 21:
 the rest of the bar with a fill bar of its own, else to the section's end; with OCT+ held the whole next bar), the second (G#3) the fill on the whole next bar,
-the fourth (C#4) the break (as CC 28: the section playing comes in again through its break when it ends); the last (F#5) the
+the fourth (C#4) the break (as CC 28: the section playing comes in again through its break when it ends); D#5 the **ending** (as CC 22 value 127: the song's outro once, its entry first, then the stop; with no outro the section playing ends, then the stop); the last (F#5) the
 **tap tempo** (as CC 26, song loaded or not), its light flashing the tempo (with PLAY while playing; stopped, at the
 tempo, so a tap or a MIDI clock shows at once); the other black keys as the first. So a plain change is one press, and a fill into the change is a black key then a white one,
 as the pedal's CC 21 sent with its CC 20. ENV and LFO are the previous and next section
@@ -423,6 +428,7 @@ firmware ([BUILDING.md](BUILDING.md)): at your own risk.
 | `web/kit/` | the kit the editor serves (the Muldjord Kit with two velocity layers), the files `tools/mkkit.py` makes the device image from |
 | `tools/gen_realkit.py`, `tools/realkit.json`, `assets/realkit/` | the built-in layered kit MULDJORD: the recipe, rendered once from the source kits into WAVs (layers, takes, levels, fitted to 290 KB); `tools/gen_samples.py` builds them in as set REAL, the editor's player plays them (`web/realkit/`) |
 | `tools/fm1_render.py`, `tests/song_render.c` | a song played by the pedal, rendered to a WAV on the host |
+| `tools/gen_panel.py`, `assets/panel/` | the panel diagram above (SVG and PNG): every control's role on LIVE on the drawing, the other screens' in four columns under it; edit its tables and run it again |
 | `tools/gen_screens.py`, `assets/screens/` | the screen pictures in this README, from the host tests' renders of every screen (`build/host/*.ppm`) |
 | `tools/gp2song.py`, `tests/gp2song_test.py`, `tests/midi2song_test.py` | the drum track of a Guitar Pro file or a MIDI file into a song (markers, patterns, fills, levels, ratchets, flams); the MIDI reader is its own, the tests write their files |
 | `tools/mkkit.py` | a sampled kit from a folder of WAVs or an SFZ kit onto USR3+4: lanes by name, two velocity layers, trim, cut, level; an image for the renderer, or the upload |

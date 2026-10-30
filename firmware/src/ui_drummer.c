@@ -26,7 +26,8 @@
  *                     the next bar); with OCT+ held, the whole next bar (CC 21 value 1: the same hold as the white
  *                     keys' "next bar"). G#3, the second: the whole next bar always (CC 21 value 1). C#4, the
  *                     fourth: the break (CC 28 value 127: the section playing comes in again through its break
- *                     when it ends; stopped, the one cued starts through it). F#5, the last: the tap tempo (as CC 26;
+ *                     when it ends; stopped, the one cued starts through it). D#5, the tenth: the ending (CC 22 value
+ *                     127: the song's outro once, then the stop; 2026-10-30, asked). F#5, the last: the tap tempo (as CC 26;
  *                     its light flashes the tempo; 2026-10-22, asked), a song loaded or not. The other black keys as the first
  *   ENV LFO           previous, next (as CC 25, 24, without their fill); SEL: SONGS (ui_input.c; it was a fill, CC 21,
  *                     until 2026-10-30: the black keys fill)
@@ -123,6 +124,9 @@ static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.
         pedal_cc(PEDAL_CC_FILL, 1u);
     else if (b == 3)                                /* the fourth (C#4): the break (CC 28, the section playing's) */
         pedal_cc(PEDAL_CC_BREAK, 127u);
+    else if (b == 9)                                /* the tenth (D#5): the ending (CC 22 value 127: the song's outro once,
+                                                     * else the section playing to its end, then the stop; 2026-10-30) */
+        pedal_cc(PEDAL_CC_ENDING, 127u);
     else
         pedal_cc(PEDAL_CC_FILL, nextbar ? 1u : 0u); /* the first (F#3) and the others: a fill to the bar's end (CC 21);
                                                      * OCT+ held: the whole next bar (value 1) */

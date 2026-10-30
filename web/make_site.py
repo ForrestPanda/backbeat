@@ -7,6 +7,8 @@
   firmware/felucca-VER.fwsc   the package
   webapp/installer/index.html index_pkg.html with fm1pkg.js, fm1ota.js and the metadata inlined
   webapp/editor/index.html    editor.html (+ fukiai.ttf, FUKIAI-LICENSE.txt)
+  webapp/changelog/index.html CHANGELOG.md rendered (the installer and the editor link it)
+  webapp/cheatsheet/index.html the panel diagram (assets/panel/backbeat-panel.svg) as a page
   webapp/editor/backbeat-editor.html  the editor in one file, for offline use (SLOOP 2.6): its icon font inlined,
                               its links to the installer and the font licence online; opened from the disk in
                               Chrome / Edge (file:// is a secure context: Web MIDI asks for permission)
@@ -70,6 +72,9 @@ def offline_editor(html):
     font = base64.b64encode((HERE / "fukiai.ttf").read_bytes()).decode()
     for a, b in (('url("fukiai.ttf")', 'url(data:font/ttf;base64,' + font + ')'),
                  ('href="../installer/"', 'href="' + ONLINE + 'webapp/installer/" target="_blank" rel="noopener"'),
+                 ('href="../changelog/"', 'href="' + ONLINE + 'webapp/changelog/" target="_blank" rel="noopener"'),
+                 ('src="panel/backbeat-panel.svg"', 'src="data:image/svg+xml;base64,' + base64.b64encode(
+                     (HERE.parent / "assets" / "panel" / "backbeat-panel.svg").read_bytes()).decode() + '"'),   # (the Cheat sheet tab)
                  ('href="FUKIAI-LICENSE.txt"', 'href="' + ONLINE + 'webapp/editor/FUKIAI-LICENSE.txt" target="_blank" rel="noopener"')):
         if html.count(a) != 1:
             raise SystemExit(f"editor.html must contain {a} once; update make_site.py")
@@ -89,6 +94,71 @@ def offline_editor(html):
 ICONS = ("icon-192.png", "icon-512.png", "icon-maskable-512.png")
 
 
+CHANGELOG_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BackBeat: what's new</title><meta name="color-scheme" content="dark light">
+<style>
+  :root { --bg: #000; --fg: #f2f2f2; --dim: #8a8a92; --tile: #16161a; --line: #2a2a30; --orange: #ff621a; }
+  @media (prefers-color-scheme: light) { :root { --bg: #f4f4f2; --fg: #111; --dim: #666; --tile: #e6e6e2; --line: #d0d0cc; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 "Helvetica Neue", -apple-system, BlinkMacSystemFont, Arial, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 13px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin: 0 0 8px; }
+  h2 { font-size: 22px; font-weight: 600; margin: 32px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 13px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--orange); margin: 20px 0 6px; }
+  p, ul { margin: 0 0 14px; } ul { padding-left: 20px; } li { margin: 0 0 6px; }
+  code { font-size: 13px; background: var(--tile); padding: 1px 4px; } a { color: inherit; }
+  .small { color: var(--dim); font-size: 12.5px; }
+</style></head><body><main>
+<p class="small"><a href="../installer/">BackBeat installer</a> &middot; <a href="../editor/">editor</a> &middot; <a href="../cheatsheet/">the panel</a></p>
+<!--BODY-->
+</main></body></html>
+"""
+
+CHEAT_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BackBeat: the panel</title><meta name="color-scheme" content="dark">
+<style>
+  body { margin: 0; background: #121316; color: #f2f2f2; font: 15px/1.6 "Helvetica Neue", -apple-system, BlinkMacSystemFont, Arial, sans-serif; }
+  main { max-width: 1280px; margin: 0 auto; padding: 16px; }
+  img { display: block; width: 100%; height: auto; }
+  .small { color: #9a9ca4; font-size: 12.5px; margin: 0 0 12px; } a { color: inherit; }
+</style></head><body><main>
+<p class="small"><a href="../installer/">BackBeat installer</a> &middot; <a href="../editor/">editor</a> &middot; <a href="../changelog/">what's new</a>
+&middot; The FM-1 panel in BackBeat: every control's role on LIVE, the stage screen, on the drawing; the other screens under it. <a href="backbeat-panel.svg">The picture alone</a>.</p>
+<img src="backbeat-panel.svg" alt="The FM-1 panel with what every knob, button and key does in BackBeat">
+</main></body></html>
+"""
+
+
+def md_html(md):
+    """CHANGELOG.md as HTML: headings, bullets (continued on indented lines), paragraphs, **bold**, `code`, links"""
+    def inline(t):
+        t = t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
+        t = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t)
+        t = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', t)
+        return re.sub(r"&lt;(https?://[^&]+)&gt;", r'<a href="\1">\1</a>', t)
+    out, para, items = [], [], []
+    def flush():
+        if para:
+            out.append("<p>" + inline(" ".join(para)) + "</p>"); para.clear()
+        if items:
+            out.append("<ul>" + "".join("<li>" + inline(i) + "</li>" for i in items) + "</ul>"); items.clear()
+    for line in md.splitlines():
+        if not line.strip():
+            flush(); continue
+        m = re.match(r"(#{1,3}) (.*)", line)
+        if m:
+            flush(); out.append(f"<h{len(m[1])}>{inline(m[2])}</h{len(m[1])}>"); continue
+        if line.startswith("- "):
+            if para: flush()
+            items.append(line[2:]); continue
+        if items and line.startswith("  "):
+            items[-1] += " " + line.strip(); continue
+        if items: flush()
+        para.append(line.strip())
+    flush()
+    return "\n".join(out)
+
+
 def app_files(out, version, fw_name):
     """webapp/: the manifest, the icons and sw.js with the list of what it keeps (relative to webapp/) and a
     stamp of their contents, so any change makes a new sw.js and the browser takes the new site"""
@@ -105,6 +175,9 @@ def app_files(out, version, fw_name):
     }
     (app / "backbeat.webmanifest").write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
     keep = {"installer/": app / "installer" / "index.html", "editor/": app / "editor" / "index.html",
+            "changelog/": app / "changelog" / "index.html",
+            "cheatsheet/": app / "cheatsheet" / "index.html", "cheatsheet/backbeat-panel.svg": app / "cheatsheet" / "backbeat-panel.svg",
+            "editor/panel/backbeat-panel.svg": app / "editor" / "panel" / "backbeat-panel.svg",
             "../firmware/" + fw_name: out / "firmware" / fw_name, "backbeat.webmanifest": app / "backbeat.webmanifest"}
     for f in ("fukiai.ttf", "FUKIAI-LICENSE.txt"):
         if (app / "editor" / f).exists():
@@ -164,9 +237,16 @@ def main(pkg, version, out):
     html = html.replace("/*LIB*/", lib).replace("/*META*/", meta)
     logo = HERE.parent / "assets" / "logo" / "backbeat-logo.svg"  # the BackBeat logo (tools/gen_logo.py), inline
     html = html.replace("<!--LOGO-->", logo.read_text(encoding="utf-8") if logo.exists() else "<b>BackBeat</b>")
-    inst, ed, fw = out / "webapp" / "installer", out / "webapp" / "editor", out / "firmware"
-    for d in (inst, ed, fw):
+    inst, ed, fw, cl, cs = (out / "webapp" / "installer", out / "webapp" / "editor", out / "firmware", out / "webapp" / "changelog",
+                            out / "webapp" / "cheatsheet")
+    for d in (inst, ed, fw, cl, cs):
         d.mkdir(parents=True, exist_ok=True)
+    (cs / "index.html").write_text(CHEAT_PAGE, encoding="utf-8")                                  # (the panel diagram,
+    shutil.copy(HERE.parent / "assets" / "panel" / "backbeat-panel.svg", cs / "backbeat-panel.svg")   # tools/gen_panel.py)
+    (ed / "panel").mkdir(exist_ok=True)                                                                 # (the editor's Cheat
+    shutil.copy(HERE.parent / "assets" / "panel" / "backbeat-panel.svg", ed / "panel" / "backbeat-panel.svg")   # sheet tab)
+    (cl / "index.html").write_text(CHANGELOG_PAGE.replace("<!--BODY-->", md_html((HERE.parent / "CHANGELOG.md").read_text(encoding="utf-8"))),
+                                   encoding="utf-8")                   # (the changelog, the repository's CHANGELOG.md)
     guide = HERE.parent / "output/pdf/Studio-0.3-guide-rapide-FR.pdf"
     guide_link = ""
     if guide.exists() and "--studio-guide" in sys.argv:   # LIVE: that guide describes the removed RYTHME tab

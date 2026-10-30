@@ -514,6 +514,7 @@
       <button role="tab" data-tab="samples" data-t="samples" data-ic="symbol_waves"></button>
       <div class="navh" data-t="navDevice"></div>
       <button role="tab" data-tab="settings" data-t="tabSettings" data-ic="symbol_cog"></button>
+      <button role="tab" data-tab="cheat" data-t="tabCheat" data-ic="symbol_keyboard"></button>
       <div class="navh" data-t="navFuture"></div>   <!-- SLOOP's pages BackBeat does not support yet (the drummer plays songs) -->
       <button role="tab" data-tab="sequencer" data-t="tabSeq" data-ic="symbol_grid"></button>
     </nav>
@@ -523,9 +524,9 @@
       <span id="live"></span>
       <span id="mock" hidden data-t="mock"></span>
       <button id="connect" class="pri" data-t="connect" data-ic="port_usb_c"></button>
-      <div class="links"><a class="dim" href="../installer/" data-t="installer"></a><button class="lang" id="lang"></button></div>
+      <div class="links"><a class="dim" href="../installer/" data-t="installer"></a><a class="dim" href="../changelog/" data-t="changelog"></a><button class="lang" id="lang"></button></div>
       <button id="install" class="pri" data-t="install" hidden></button>
-      <!--DL--><a class="dim" id="offline" href="backbeat-editor.html" download="backbeat-editor-0.9.html" data-t="offline"></a><!--/DL-->
+      <!--DL--><a class="dim" id="offline" href="backbeat-editor.html" download="backbeat-editor-0.9.1.html" data-t="offline"></a><!--/DL-->
     </div>
   </aside>
 
@@ -750,6 +751,14 @@
       </div>
     </section>
 
+    <section class="panel" id="p-cheat" data-tab="cheat" hidden>   <!-- the panel diagram (tools/gen_panel.py: assets/panel, web/panel a link to it,
+                                                                        the site's editor/panel; no FM-1 needed) -->
+      <div class="card">
+        <h2><span data-t="tabCheat" data-ic="symbol_keyboard"></span><span class="sub" data-t="cheatSub"></span></h2>
+        <p class="dim" data-t="cheatHelp"></p>
+        <img id="cheat-img" src="panel/backbeat-panel.svg" alt="The FM-1 panel with what every knob, button and key does in BackBeat" style="width: 100%; max-width: 880px; height: auto; display: block; margin: 0 auto;">
+      </div>
+    </section>
     <section class="panel" id="p-sequencer" data-tab="sequencer" data-dev hidden>
       <div class="groups" id="seqgroups"></div>
       <div class="card" id="steps">
@@ -1626,7 +1635,7 @@ function makeMockDevice(opt = {}) {
           ENGINES.forEach(s); b(4); b(proto);
           break;
         }
-        s("FELUCCA BACKBEAT 0.9 (MOCK)"); b(0); b(P_COUNT); b(G_COUNT); b(NSTEP); b(P_E0); b(1); b(PROTO);
+        s("FELUCCA BACKBEAT 0.9.1 (MOCK)"); b(0); b(P_COUNT); b(G_COUNT); b(NSTEP); b(P_E0); b(1); b(PROTO);
         break;
       case CMD.GET: case CMD.SET: {
         if (a.length < 2) return null;
@@ -3328,7 +3337,7 @@ const GLYPH = {
   symbol_folder: 0xEAB8, symbol_folder_open: 0xEAB9, port_disk: 0xEAB3, symbol_trash: 0xEAC1,
   control_arrow_loop: 0xEAD6, note_eight: 0xEAEF, symbol_waves: 0xEAE6,
   ui_knob: 0xEA70, symbol_effector: 0xEAB7, symbol_echo: 0xEAB5, symbol_spring: 0xEAD1,
-  symbol_grid: 0xEABA, symbol_cog: 0xEA46, symbol_drum: 0xEA66,
+  symbol_grid: 0xEABA, symbol_cog: 0xEA46, symbol_drum: 0xEA66, symbol_keyboard: 0xEABC,
   function_filter_lpf_peak: 0xEAA0, ui_slider_vertical: 0xEA73,
   waveform_sine: 0xEA85,                           /* (the probe that tells the face has loaded) */
 };
@@ -3376,6 +3385,8 @@ const TEXT = {
     delete: "削除",
     reloaded: "本体で読み込みがあったので読み直しました",
     installer: "BackBeat インストーラー",
+    changelog: "更新履歴",
+    tabCheat: "早見表", cheatSub: "FM-1 のパネル", cheatHelp: "各ノブ・ボタン・鍵盤の働き。上はステージ画面 LIVE での役割、下は SONGS、SECTIONS、EDIT での役割と長押し。",
     offline: "エディタをダウンロード（パソコンでオフライン用：Chrome / Edge で開く）",
     install: "アプリとしてインストール（オフラインで使える・Android も）",
     tabSeq: "シーケンサー", tabSettings: "設定",
@@ -3515,6 +3526,8 @@ const TEXT = {
     delete: "Delete",
     reloaded: "The FM-1 loaded something: read again",
     installer: "BackBeat installer",
+    changelog: "What's new",
+    tabCheat: "Cheat sheet", cheatSub: "the FM-1 panel", cheatHelp: "What every knob, button and key does: on the drawing its role on LIVE, the stage screen; under it the same controls on SONGS, SECTIONS and EDIT, and the holds.",
     offline: "Download the editor (offline on a computer: open it in Chrome or Edge)",
     install: "Install the app (works offline, Android too)",
     tabSeq: "Sequencer", tabSettings: "Settings",
@@ -3677,7 +3690,7 @@ $("sidetog").addEventListener("click", () => {
 /* one panel at a time; the last one is remembered (localStorage) and in the URL hash (#setlist ...). A tab of
    SLOOP's editor remembered from before (sound, tracks, library, and the Jam, gone 2026-10-27) opens the first one, the
    setlist; the sequencer last, under "future" (not supported yet, 2026-10-21) */
-const TABS = ["setlist", "songs", "kits", "drumsynth", "samples", "settings", "sequencer"];   /* (the backup in Settings, 2026-10-21) */
+const TABS = ["setlist", "songs", "kits", "drumsynth", "samples", "settings", "cheat", "sequencer"];   /* (the backup in Settings, 2026-10-21) */
 const TAB_KEY = "felucca-editor-tab";
 let tab = (() => {
   const h = location.hash.slice(1);

@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define FELUCCA_ID "ota-FM-1_985"
+#define FELUCCA_ID "ota-FM-1_988"
 #define FELUCCA_OTA_DRYRUN 0
 
 static uint8_t nor[0x100000], *logical;

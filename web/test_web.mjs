@@ -1798,8 +1798,9 @@ function editorTabs() {
   const tabs = [...html.matchAll(/<button role="tab" data-tab="(\w+)"/g)].map((x) => x[1]);
   const panels = [...html.matchAll(/<section class="panel" id="p-(\w+)" data-tab="(\w+)"/g)].map((x) => [x[1], x[2]]);
   const TABS = JSON.parse((/const TABS = (\[[^\]]*\]);/.exec(html) || [])[1] || "[]");
-  ok(tabs.length === 7 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b)
-    && js([...TABS].sort()) === js(["drumsynth", "kits", "samples", "sequencer", "setlist", "settings", "songs"])
+  ok(tabs.length === 8 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b)
+    && js([...TABS].sort()) === js(["cheat", "drumsynth", "kits", "samples", "sequencer", "setlist", "settings", "songs"])
+    && /<section class="panel" id="p-cheat" data-tab="cheat" hidden>/.test(html) && /id="cheat-img" src="panel\/backbeat-panel\.svg"/.test(html)
     && /id="p-settings"[\s\S]*id="bkgroup"[\s\S]*id="p-sequencer"/.test(html) && !/id="p-song"|id="slots"|data-tab="song"/.test(html),
     `editor: ${tabs.length} tabs, one panel each (${tabs.join(" ")})`);
   /* drums only: SLOOP's Sound, Tracks and Library tabs, the synth step grid, piano roll, MIDI files, CHOP and FM6 are gone; a tab
@@ -1959,7 +1960,7 @@ const UPGRADE = [0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7];
 
 /* an FM-1 on WebMIDI: identity, then "device asks, host answers" reads of the image */
 class FakeFM1 {
-  constructor(image, { unplugAfter = Infinity, finalIdentity = "FM-1_985", name = "FM-1", identity = "FM-1_015", loaderName = "Felucca Update" } = {}) {
+  constructor(image, { unplugAfter = Infinity, finalIdentity = "FM-1_988", name = "FM-1", identity = "FM-1_015", loaderName = "Felucca Update" } = {}) {
     this.image = image; this.unplugAfter = unplugAfter; this.served = 0; this.bad = 0;
     this.finalIdentity = finalIdentity; this.loaderName = loaderName;   /* (loaderName: what the OS calls the loader; Windows: a generic name) */
     this.access = { inputs: new Map(), outputs: new Map() };
@@ -1997,7 +1998,7 @@ class FakeFM1 {
       this.waiting = null;
       this.served++;
       if (this.served >= this.unplugAfter) { this.input.state = this.output.state = "disconnected"; return; }
-      if (addr === 0xE0000000) setTimeout(() => this.boot("ota-FM-1_985", this.loaderName), 300);
+      if (addr === 0xE0000000) setTimeout(() => this.boot("ota-FM-1_988", this.loaderName), 300);
       else if (addr === 0xF0000000) setTimeout(() => this.boot(this.finalIdentity, "Felucca"), 300);
       else this.next();
     }
@@ -2019,37 +2020,37 @@ async function updater() {
   const image = Uint8Array.from({ length: 0x2000 }, (_, i) => (i * 7) & 0xFF);
   const dev = new FakeFM1(image);
   const steps = [];
-  const got = await new Updater(dev.access).install(image, "FM-1_985", (k) => steps.push(k));
-  ok(got === "FM-1_985" && dev.bad === 0 && steps.includes("write") && steps.at(-1) === "done",
+  const got = await new Updater(dev.access).install(image, "FM-1_988", (k) => steps.push(k));
+  ok(got === "FM-1_988" && dev.bad === 0 && steps.includes("write") && steps.at(-1) === "done",
     `fm1ota.js: install: running firmware -> loader -> Felucca (${dev.served} reads)`);
 
   const rescue = new FakeFM1(image);
   rescue.boot("FM-1_000", "Felucca");
-  const recovered = await new Updater(rescue.access).install(image, "FM-1_985");
-  ok(recovered === "FM-1_985" && rescue.bad === 0, "fm1ota.js: recovery mode -> loader -> normal firmware");
+  const recovered = await new Updater(rescue.access).install(image, "FM-1_988");
+  ok(recovered === "FM-1_988" && rescue.bad === 0, "fm1ota.js: recovery mode -> loader -> normal firmware");
   const failedBoot = new FakeFM1(image, { finalIdentity: "FM-1_000" });
   const rescueSteps = [];
-  const bootError = await new Updater(failedBoot.access).install(image, "FM-1_985", (k) => rescueSteps.push(k)).then(() => null, (e) => e);
+  const bootError = await new Updater(failedBoot.access).install(image, "FM-1_988", (k) => rescueSteps.push(k)).then(() => null, (e) => e);
   ok(bootError?.code === "mismatch" && !rescueSteps.includes("done"), "fm1ota.js: boot into recovery is not reported as successful installation");
 
   const dev2 = new FakeFM1(image, { unplugAfter: 3 });
-  dev2.boot("ota-FM-1_985", "Felucca Update");
+  dev2.boot("ota-FM-1_988", "Felucca Update");
   const t0 = Date.now();
   const done = await new Updater(dev2.access).resume(image);
   ok(done === false && Date.now() - t0 < 6000, "fm1ota.js: unplugged during the write -> stops at once");
 
   const dev3 = new FakeFM1(image, { unplugAfter: 2 });
-  const e = await new Updater(dev3.access).install(image, "FM-1_985").then(() => null, (x) => x);
+  const e = await new Updater(dev3.access).install(image, "FM-1_988").then(() => null, (x) => x);
   ok(e && e.code === "lost", "fm1ota.js: unplugged in step 1 -> error code 'lost'");
-  const e2 = await new Updater({ inputs: new Map(), outputs: new Map() }).install(image, "FM-1_985").then(() => null, (x) => x);
+  const e2 = await new Updater({ inputs: new Map(), outputs: new Map() }).install(image, "FM-1_988").then(() => null, (x) => x);
   ok(e2 && e2.code === "notfound", "fm1ota.js: no device -> error code 'notfound'");
   {   /* an FM-1 running CLIPPER (USB name "Clipper", SLOOP's sister firmware) installs SLOOP like any FM-1 */
     const cl = new FakeFM1(image, { name: "Clipper", identity: "FM-1_901" });
-    const g = await new Updater(cl.access).install(image, "FM-1_985");
-    ok(g === "FM-1_985" && cl.bad === 0, "fm1ota.js: an FM-1 under CLIPPER (port 'Clipper') -> found and installed");
+    const g = await new Updater(cl.access).install(image, "FM-1_988");
+    ok(g === "FM-1_988" && cl.bad === 0, "fm1ota.js: an FM-1 under CLIPPER (port 'Clipper') -> found and installed");
     /* other gear is never probed, and "not found" names the MIDI ports there are */
     const other = new FakeFM1(image, { name: "Arturia KeyStep Pro" });
-    const e6 = await new Updater(other.access).install(image, "FM-1_985").then(() => null, (x) => x);
+    const e6 = await new Updater(other.access).install(image, "FM-1_988").then(() => null, (x) => x);
     ok(e6 && e6.code === "notfound" && other.served === 0 && /Arturia KeyStep Pro/.test(e6.detail),
        `fm1ota.js: a port of other gear is left alone; 'not found' lists it${e6 ? e6.detail : ""}`);
     ok(["FM-1", "Felucca", "Felucca Update", "Clipper", "SLOOP", "MIDIIN2 (Clipper)", "USB-MIDI"].every((n) => FM1_PORT.test(n)) &&
@@ -2058,9 +2059,9 @@ async function updater() {
     {   /* (SLOOP 2.8, 2026-10-30) Windows names the re-enumerated update loader generically ("USB MIDI Device"): hunted
            deep, it is found by its handshake; the running firmware is still looked for by name only */
       const gen = new FakeFM1(image, { loaderName: "USB MIDI Device" });
-      const g2 = await new Updater(gen.access).install(image, "FM-1_985");
-      ok(g2 === "FM-1_985" && gen.bad === 0, "fm1ota.js: the loader under a generic Windows name is found by its handshake");
-      const gen2 = new FakeFM1(image, { name: "USB MIDI Device", identity: "ota-FM-1_985" });
+      const g2 = await new Updater(gen.access).install(image, "FM-1_988");
+      ok(g2 === "FM-1_988" && gen.bad === 0, "fm1ota.js: the loader under a generic Windows name is found by its handshake");
+      const gen2 = new FakeFM1(image, { name: "USB MIDI Device", identity: "ota-FM-1_988" });
       const r2 = await new Updater(gen2.access).resume(image);
       ok(r2 === true && gen2.bad === 0, "fm1ota.js: ..and resumed after a replug");
       const up = new Updater(new FakeFM1(image, { name: "Some Synth" }).access);
@@ -2076,7 +2077,7 @@ async function updater() {
   const st = [];
   const r4 = await new Updater(back.access).resume(image, (k) => st.push(k), { product: "FM-1_015" });
   ok(r4 === true && back.bad === 0 && st.at(-1) === "done", "fm1ota.js: return to official: its own loader resumed, V15 checked when back");
-  const wrong = new FakeFM1(image, { finalIdentity: "FM-1_985" });
+  const wrong = new FakeFM1(image, { finalIdentity: "FM-1_988" });
   wrong.boot("ota-FM-1_015", "FM-1 Update");
   const e5 = await new Updater(wrong.access).resume(image, null, { product: "FM-1_015" }).then(() => null, (x) => x);
   ok(e5 && e5.code === "mismatch", "fm1ota.js: return to official: another firmware coming back is not 'done'");

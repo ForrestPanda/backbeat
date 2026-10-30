@@ -31,6 +31,8 @@ check("offline: the icon font inlined", 'url("fukiai.ttf")' not in off and "font
 check("offline: no download link to itself", "<!--DL-->" not in off and 'id="offline"' not in off)
 check("offline: the installer and the font licence online",
       'href="../installer/"' not in off and make_site.ONLINE + "webapp/installer/" in off
+      and 'href="../changelog/"' not in off and make_site.ONLINE + "webapp/changelog/" in off
+      and 'src="panel/backbeat-panel.svg"' not in off and 'src="data:image/svg+xml;base64,' in off
       and 'href="FUKIAI-LICENSE.txt"' not in off)
 rel = [m for m in re.findall(r'(?:src|href)="([^"#]+)"', off) if not re.match(r"(https?:|data:|mailto:)", m)]
 check("offline: no other file next to it (no relative src / href)", not rel)
@@ -48,7 +50,7 @@ check("offline: no app, no service worker (a file has no site)",
 tmp = Path(tempfile.mkdtemp())
 try:
     pkg = bytearray(4096)
-    for i, ch in enumerate("FM-1_985"):
+    for i, ch in enumerate("FM-1_988"):
         pkg[i * make_site.BLK + make_site.KEEP] = (ord(ch) + i + 1) & 0xFF
     for i in range(8, make_site.BLOCKS):
         pkg[i * make_site.BLK + make_site.KEEP] = 0x7D

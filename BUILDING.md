@@ -50,7 +50,7 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`).
 
 `./build.sh --release 0.9-beta` makes a release build: the version string `0.9-BETA` (the package identity stays
-`FM-1_985`, BackBeat's own); the package is `build/felucca-0.9-beta.fwsc`.
+`FM-1_988`, BackBeat's own); the package is `build/felucca-0.9-beta.fwsc`.
 
 Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 
