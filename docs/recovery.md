@@ -76,6 +76,12 @@ If the cable came out, or the computer slept, during the install: switch the FM-
 identity starting with `ota-`, the update loader is waiting: run the installer again, it picks up
 where it stopped.
 
+If the FM-1 was switched **off** while the loader was writing (the moment the installer warns
+about), the screen can stay dark and nothing show up on USB at all, not even the loader. That
+happened once (2026-10-30, 0.9 to 0.9.1): the way back was the dongle below and the app area of the
+unit's own dump, then stock, then the install again, all in one sitting. Keep the cable in and the
+power on until the installer says done.
+
 ### BackBeat does not start, or crashes at start
 
 - After **two failed starts in a row**, BackBeat opens its **BACKBEAT USB RESCUE** screen by itself.
@@ -114,8 +120,11 @@ included; it is only for a dump of the same unit.
 A firmware that crashes before USB starts cannot be reached from the computer. The way in is a
 "key" dongle: a small microcontroller board on the cable's D+ and D- lines that sends the chip's
 download key while it powers up. [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter)
-does this on a Seeed XIAO RP2040, and also restores the firmware. Then restore as above. This has
-not been needed with BackBeat: the rescue screen comes first.
+does this on a Seeed XIAO RP2040, and also restores the firmware. Then restore as above. The
+rescue screen comes first and this is rarely needed; it was, once, after a power-off during an
+update (2026-10-30, the STM32F4-Discovery dongle and `fm1_flash.sh restore-app` of the bridge's
+tools, the record in the bridge's recovery.md). Check the dongle's board really holds the key
+program before the first round.
 
 ## Telling the states apart
 
