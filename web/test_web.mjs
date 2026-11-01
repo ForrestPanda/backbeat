@@ -127,8 +127,8 @@ async function editorMock() {
     ok(thrower.misses === 3 && thrower.silent(3000, Date.now() + 3001), "editor: a send that throws (the port gone) is a miss as well");
     ok(/else if \(dev\.link\.silent\(\)\) disconnect\("lostSilent"\);/.test(html)
       && /if \(\[dev\.input, dev\.output\]\.some\(\(p\) => p\.state === "disconnected"\)\) disconnect\("lost"\);/.test(html)
-      && /async function freshAccess\(\)/.test(html) && /async function reopen\(p\)/.test(html) && /await reopen\(pr\.input\);\s*await reopen\(pr\.output\);/.test(html)
-      && /if \(p\.connection === "open" && p\.close\) await p\.close\(\);/.test(html) && /if \(p\.state !== "disconnected" && p\.connection === "open" && p\.close\) p\.close\(\)\.catch/.test(html) && /await freshAccess\(\);\s*if \(!dev && wantConnected && !connecting && fm1Ports\(access\)\.length\) await connect\(true\);/.test(html)
+      && /async function freshAccess\(\)/.test(html) && /async function reopen\(p\)/.test(html) && /await within\(p\.open\(\), 1000\)/.test(html) && /await reopen\(pr\.input\);[^\n]*\n\s*await reopen\(pr\.output\);\s*pr\.input\.onmidimessage = /.test(html)
+      && /if \(p\.connection === "open" && p\.close\) await within\(p\.close\(\), 1000\);/.test(html) && /if \(p\.state !== "disconnected" && p\.connection === "open" && p\.close\) p\.close\(\)\.catch/.test(html) && /await freshAccess\(\);\s*if \(!dev && wantConnected && !connecting && fm1Ports\(access\)\.length\) await connect\(true\);/.test(html)
       && /if \(a && a !== access\) \{ access = a; access\.onstatechange = onState; \}/.test(html)
       && /setInterval\(reconnectTick, 1500\);/.test(html) && /onState\.tm = setTimeout\(\(\) => \{ if \(!dev && wantConnected\) connect\(true\); \}, 800\);/.test(html)
       && /if \(!quiet\) \{ \$\("connect"\)\.disabled = true; sayK\("connecting"\); \}/.test(html) && /if \(!quiet\) sayK\("nodevice"\)/.test(html) && /if \(quiet\) sayK\("back"\);/.test(html)

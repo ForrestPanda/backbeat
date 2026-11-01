@@ -380,7 +380,18 @@ next bar). No named sections, one song, no fill tied to a section change.
      adds a plugged-back one under a new random id; and midir makes the OS connection on a port's first open only
      (`open_port`: a connection when open_count is 0), so a port kept open across the device's absence holds a dead
      connection. Hence `reopen`: every retry closes an open port and opens it again (both ports; the output's send
-     opens it), and `disconnect` closes the ports it leaves, so the next open makes a new connection. Test: test_web (the link's misses and silence, the page's
+     opens it), and `disconnect` closes the ports it leaves, so the next open makes a new connection. Measured on
+     the unit in a headless Firefox 156 (selenium, a profile with the MIDI permission granted, the cable pulled
+     and plugged back; 2026-11-01), two more things were needed: (1) each port opened exactly once: setting
+     `onmidimessage` on a port not yet open is an open of its own, and the editor set the handler and then called
+     open(), so Firefox counted two opens, one close left the dead connection, and no replug came back, not even
+     after a reload (the count lives in the browser's MIDI service, not the page); now the input is opened first
+     and the handler set after. (2) The open of a port whose device is away (unplugged but still listed) never
+     settles, and that port object stays stuck for good (its later open and close hang too): `connect` hung on the
+     first retry's open and no other retry ran. `reopen` gives each open and close a second (`within`), the
+     request then fails and the next retry's `freshAccess` hands out new port objects, which open and answer as
+     soon as the device is back. Verified: the loss seen 40 s after the pull (silence; Firefox reports nothing),
+     "The FM-1 is back" 5 s after the replug, in Firefox. Test: test_web (the link's misses and silence, the page's
      wiring, both languages). The pedal followed the same day: no section change brings a fill (see the
      command map); the web editor's player (`PLAY`) mirrors it. Found while doing it: the wait for the section's
      end (`pedal_at_end`) itself made the last bar a fill, so LIVE's first fill-free keys still filled into a

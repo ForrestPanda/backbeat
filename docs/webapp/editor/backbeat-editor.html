@@ -3909,9 +3909,9 @@ async function connect(quiet = false) {
         onPush: (f) => onPush(f),
         onGap: () => { rewatch = true; },
       });
-      pr.input.onmidimessage = (e) => l.receive(e.data);
-      await reopen(pr.input);
+      await reopen(pr.input);                        /* (opened before the handler is set: see reopen) */
       await reopen(pr.output);
+      pr.input.onmidimessage = (e) => l.receive(e.data);
       try {
         await l.request(req.info(), { timeout: 500, retries: 3, quiet: true });   /* (the first frame can be lost) */
         link = l, input = pr.input, output = pr.output;
@@ -3943,15 +3943,23 @@ async function connect(quiet = false) {
     renderLive();
   }
 }
-/* a port closed if it is open, then opened. Firefox (midir) makes the OS connection on a port's first open only, so a
-   port kept open while its device went away and came back holds a dead connection until it is closed and opened
-   again; the output too (its send opens it). Chrome: cheap. Nothing on a port whose device is gone (state
-   disconnected: not in the list any more) */
+/* a port closed if it is open, then opened. Firefox (midir) makes the OS connection on a port's first open only and
+   drops it when as many closes have come as opens, so a port kept open while its device went away and came back
+   holds a dead connection until it is closed and opened again; the output too (its send opens it). Each port is
+   opened exactly once: the input's handler is set after this open (setting onmidimessage on a port not yet open
+   is an open of its own, and Firefox counted two, so the close in disconnect left the dead connection and no
+   replug ever came back, not even after a reload: the count lives in the browser's MIDI service, not the page).
+   Chrome: cheap. Nothing on a port whose device is gone (state disconnected: not in the list any more).
+   Each step within a second: in Firefox the open of a port whose device is away (unplugged but still listed) never
+   settles, and that port object stays stuck for good (its later open and close hang too); given up, the next retry
+   asks for the ports again (freshAccess) and the new objects open and answer as soon as the device is back
+   (measured on the unit, 2026-11-01). Without the limit connect() hung on the first retry and no other ran */
 async function reopen(p) {
   if (!p || p.state === "disconnected") return;
-  try { if (p.connection === "open" && p.close) await p.close(); } catch (e) { /* (then the open below) */ }
-  try { if (p.open) await p.open(); } catch (e) { /* (a dead port: the request times out, the next retry) */ }
+  try { if (p.connection === "open" && p.close) await within(p.close(), 1000); } catch (e) { /* (then the open below) */ }
+  try { if (p.open) await within(p.open(), 1000); } catch (e) { /* (a dead port: the request times out, the next retry) */ }
 }
+const within = (pr, ms) => Promise.race([pr, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout " + ms + " ms")), ms))]);
 /* Connect; Disconnect while connected; Stop waiting while the device is away and waited for */
 function renderConnectBtn() { setLabel($("connect"), t(dev ? "disconnect" : wantConnected ? "stopWaiting" : "connect")); }
 

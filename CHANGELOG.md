@@ -23,7 +23,8 @@ ABOUT; the editor shows it next to the connect button.
   LED blinks, and it tries again every 1.5 s, quietly, until the device answers, then reads it again. No page
   reload. Stop waiting on the button ends the retries; Connect with no device plugged in waits for one the same way.
   In Firefox too, whose Web MIDI does not report a device unplugged or plugged back: the editor asks for the port
-  list again on every retry.
+  list again on every retry, opens each port once, and gives up on a port that hangs (a replugged device never
+  came back in Firefox before, not even after a reload).
 
 ## 0.9.2 (2026-10-30)
 
