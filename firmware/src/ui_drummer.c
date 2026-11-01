@@ -24,10 +24,11 @@
  *   black keys        (since 2026-10-19, asked: "the first black key a fill now, the second a fill next bar, the
  *                     fourth a break") F#3, the first: the fill (CC 21: the rest of this bar; from its last beat,
  *                     the next bar); with OCT+ held, the whole next bar (CC 21 value 1: the same hold as the white
- *                     keys' "next bar"). G#3, the second: the whole next bar always (CC 21 value 1). C#4, the
- *                     fourth: the break (CC 28 value 127: the section playing comes in again through its break
- *                     when it ends; stopped, the one cued starts through it). D#5, the tenth: the ending (CC 22 value
- *                     127: the song's outro once, then the stop; 2026-10-30, asked). F#5, the last: the tap tempo (as CC 26;
+ *                     keys' "next bar"). G#3, the second: the whole next bar always (CC 21 value 1). C#4 and D#4,
+ *                     the pair: the break (CC 28 value 127: the section playing comes in again through its break
+ *                     when it ends; stopped, the one cued starts through it). C#5 and D#5, the pair: the ending
+ *                     (CC 22 value 127: the song's outro once, then the stop; 2026-10-30, asked; both keys of each
+ *                     pair since 2026-11-01, asked). F#5, the last: the tap tempo (as CC 26;
  *                     its light flashes the tempo; 2026-10-22, asked), a song loaded or not. F#4, G#4, A#4, the
  *                     trio of the second octave: ON THE NEXT BAR, what OCT+ is, no fill (2026-11-01, asked: "make the
  *                     three middle black keys ... behave as a on next bar, the same as octave+", "I meant the second
@@ -35,7 +36,7 @@
  *                     OCT+ held); tapped with a change cued for the section's end, that change moves to the next bar;
  *                     tapped with nothing cued, the next white key changes on the next bar (key_nextbar, the state
  *                     line says KEY: ON THE NEXT BAR; a second tap, a white key or the stop clears it). The other
- *                     black keys (A#3, D#4, C#5) as the first
+ *                     black key, A#3, as the first
  *   ENV LFO           previous, next (as CC 25, 24, without their fill); SEL: SONGS (ui_input.c; it was a fill, CC 21,
  *                     until 2026-10-30: the black keys fill)
  *   PLAY              stopped: the section cued (the count-in first); playing: stop
@@ -143,14 +144,15 @@ static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.
         } else {
             key_nextbar = (uint8_t)!key_nextbar;
         }
-    } else if (b == 3)                                /* the fourth (C#4): the break (CC 28, the section playing's) */
+    } else if (b == 3 || b == 4)                      /* the first pair (C#4, D#4): the break (CC 28, the section playing's) */
         pedal_cc(PEDAL_CC_BREAK, 127u);
-    else if (b == 9)                                /* the tenth (D#5): the ending (CC 22 value 127: the song's outro once,
-                                                     * else the section playing to its end, then the stop; 2026-10-30) */
+    else if (b == 8 || b == 9)                      /* the second pair (C#5, D#5): the ending (CC 22 value 127: the song's
+                                                     * outro once, else the section playing to its end, then the stop;
+                                                     * 2026-10-30; the pair 2026-11-01) */
         pedal_cc(PEDAL_CC_ENDING, 127u);
     else
-        pedal_cc(PEDAL_CC_FILL, nextbar ? 1u : 0u); /* the first (F#3) and the others (A#3, D#4, C#5): a fill to the bar's
-                                                     * end (CC 21); OCT+ held: the whole next bar (value 1) */
+        pedal_cc(PEDAL_CC_FILL, nextbar ? 1u : 0u); /* the first (F#3) and A#3: a fill to the bar's end (CC 21); OCT+
+                                                     * held: the whole next bar (value 1) */
     fm1_irq_on();
 }
 

@@ -599,16 +599,16 @@ int main(int argc, char **argv)
             static const uint8_t BLACK[11] = {1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25};
             uint32_t b, all = 1, now = 1;
             for (b = 0; b < 9u; b++) {
-                if (b == 1u || b == 3u || (b >= 5u && b <= 7u))   /* (G#3 the next bar's fill, C#4 the break, the trio; D#5
-                                                                 * the ending since 2026-10-30; the last, F#5: the tap
-                                                                 * tempo since 2026-10-22, below) */
+                if (b != 0u && b != 2u)                  /* (G#3 the next bar's fill, C#4 and D#4 the break, the trio; C#5 and
+                                                         * D#5 the ending since 2026-10-30, the pairs 2026-11-01; the last,
+                                                         * F#5: the tap tempo since 2026-10-22, below) */
                     continue;
                 pedal_fill = 0; pedal_fill_wait = 0;
                 key(BLACK[b]); frames(2);
                 all &= (pedal_fill || pedal_fill_wait) && song.playing;
                 now &= pedal_fill && !pedal_fill_wait;  /* (the stub's section has no fill bar: the fill now, not the wait) */
             }
-            check(all && now, "LIVE: the first black key (F#3) and the others (A#3, D#4, C#5): the fill now (CC 21), playing on");
+            check(all && now, "LIVE: the first black key (F#3) and A#3: the fill now (CC 21), playing on");
             pedal_fill = 0; pedal_fill_wait = 0;
             key(BLACK[1]); frames(2);
             check(!pedal_fill && pedal_fill_wait && song.playing, "LIVE: the second black key (G#3): the fill on the next bar (CC 21 value 1), no hold");
@@ -637,17 +637,22 @@ int main(int argc, char **argv)
             check(live_req >= 0 && !pedal_at_end && !key_nextbar && !pedal_fill && !pedal_fill_wait,
                   "LIVE: G#4 held + a white key: the change on the next bar (as OCT+ held)");
             live_req = -1; pedal_at_end = 0;
-            pedal_fill = 0; pedal_fill_wait = 0; live_req = -1; live_req_brk = 0;
-            key(BLACK[3]); frames(2);
-            check(live_req == live_sec && live_req_brk && !pedal_fill && !pedal_fill_wait && song.playing,
-                  "LIVE: the fourth black key (C#4): the break (CC 28): the section playing again through its break, no fill");
+            for (b = 3; b < 5u; b++) {                  /* the pair C#4, D#4 (D#4 since 2026-11-01): the break */
+                pedal_fill = 0; pedal_fill_wait = 0; live_req = -1; live_req_brk = 0;
+                key(BLACK[b]); frames(2);
+                all &= live_req == live_sec && live_req_brk && !pedal_fill && !pedal_fill_wait && song.playing;
+            }
+            check(all, "LIVE: C#4 and D#4: the break (CC 28): the section playing again through its break, no fill");
             live_req = -1; live_req_brk = 0;
-            pedal_fill = 0; pedal_fill_wait = 0; pedal_at_end = 0; sng_ui_next[0] = 0;
-            key(BLACK[9]); frames(2);                       /* D#5 (2026-10-30): the ending, CC 22 value 127 (the stub's song has
-                                                             * no outro: the section playing to its end, then the stop) */
-            check(pedal_at_end && !strcmp(sng_ui_next, "STOP") && !pedal_fill && !pedal_fill_wait && song.playing,
-                  "LIVE: the tenth black key (D#5): the ending (CC 22): the section ends, then the stop, no fill");
-            pedal_at_end = 0; sng_ui_next[0] = 0; live_req = -1;
+            for (b = 8; b < 10u; b++) {                 /* the pair C#5, D#5 (D#5 2026-10-30, C#5 2026-11-01): the ending, CC 22
+                                                         * value 127 (the stub's song has no outro: the section playing to its
+                                                         * end, then the stop) */
+                pedal_fill = 0; pedal_fill_wait = 0; pedal_at_end = 0; sng_ui_next[0] = 0;
+                key(BLACK[b]); frames(2);
+                all &= pedal_at_end && !strcmp(sng_ui_next, "STOP") && !pedal_fill && !pedal_fill_wait && song.playing;
+                pedal_at_end = 0; sng_ui_next[0] = 0; live_req = -1;
+            }
+            check(all, "LIVE: C#5 and D#5: the ending (CC 22): the section ends, then the stop, no fill");
             pedal_fill = 0; pedal_fill_wait = 0;
             press(B_OCTUP); key(BLACK[0]); release(B_OCTUP); frames(2);
             check(!pedal_fill && pedal_fill_wait && song.playing, "LIVE: OCT+ held + the first black key: the fill on the next bar (CC 21 value 1)");

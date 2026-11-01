@@ -14,6 +14,7 @@ ABOUT; the editor shows it next to the connect button.
   the next bar; tapped alone, the next white key's change does (KEY: ON THE NEXT BAR on the state line; a second tap
   takes it back); tapped while a change waits for the section's end, that change moves to the next bar. The first
   octave's black keys are as before: F#3 the fill, G#3 the fill on the next bar, C#4 the break.
+- **The pairs**: C#4 and D#4 are both the break, C#5 and D#5 both the ending. The fill now is F#3 and A#3.
 
 ## 0.9.2 (2026-10-30)
 

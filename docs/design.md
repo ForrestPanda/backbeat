@@ -355,8 +355,10 @@ next bar). No named sections, one song, no fill tied to a section change.
      on the grid the keys are steps); tapped with a change cued for the section's end (`pedal_at_end`), the change
      goes on the next bar instead (`pedal_at_end = 0`, live_block lands it at the bar line); tapped with nothing
      cued, `key_nextbar` arms the next white key (the state line says KEY: ON THE NEXT BAR, a second tap, the white
-     key or the stop clears it). A fill into a change on the next bar is F#3 then F#4 + a white key. Test:
-     ui_pages_test.) The pedal followed the same day: no section change brings a fill (see the
+     key or the stop clears it). A fill into a change on the next bar is F#3 then F#4 + a white key. Then "make
+     break work on both keys of the pair C#4 and D#4, and C#5 and D#5 both the ending": the pairs, so the foot or
+     the hand need not tell the two apart (`b == 3 || b == 4`, `b == 8 || b == 9`); the fill now is F#3 and A#3.
+     Test: ui_pages_test.) The pedal followed the same day: no section change brings a fill (see the
      command map); the web editor's player (`PLAY`) mirrors it. Found while doing it: the wait for the section's
      end (`pedal_at_end`) itself made the last bar a fill, so LIVE's first fill-free keys still filled into a
      section longer than a bar; `live_block` no longer does.

@@ -38,7 +38,8 @@ ROLES = {
     "OCT- 2": ("at power-on: rescue", DIM), "OCT+ 2": ("on SONGS: load", ORANGE),
 }
 WHITE_ROLE = ("sections 1 .. 16", GREEN)                      # white key n: section n, when the one playing ends
-BLACK = {1: ("FILL", ORANGE), 3: ("FILL next bar", ORANGE), 8: ("BREAK", RED), 22: ("ENDING", RED), 25: ("TAP tempo", GREEN)}   # key id - 14
+BLACK = {1: ("FILL", ORANGE), 3: ("FILL next bar", ORANGE), 8: ("BREAK", RED), 10: ("BREAK", RED), 13: ("NEXT bar", YELLOW), 15: ("NEXT bar", YELLOW),
+         17: ("NEXT bar", YELLOW), 20: ("ENDING", RED), 22: ("ENDING", RED), 25: ("TAP tempo", GREEN)}   # key id - 14
 BLACK_OTHER = ("FILL", ORANGE)
 
 # the columns under the panel: (title, colour, rows); a row: (control, what)
@@ -47,8 +48,8 @@ COLUMNS = [
         ("white key n", "section n, when the one playing ends; with OCT+ held, on the next bar"),
         ("F#3", "fill to the end of the bar (CC 21); with OCT+ held, the whole next bar"),
         ("G#3", "fill on the whole next bar"),
-        ("C#4", "break: the section comes back in through its break"),
-        ("D#5", "the ending: the song's outro once, then the stop (no outro: the section ends, then the stop)"),
+        ("C#4 D#4", "break: the section comes back in through its break"),
+        ("C#5 D#5", "the ending: the song's outro once, then the stop (no outro: the section ends, then the stop)"),
         ("F#5", "tap tempo (its light flashes the beat)"),
         ("F#4 G#4 A#4", "on the next bar, as OCT+: held with a white key, or tapped before it (or after: the change cued moves)"),
         ("other black keys", "a fill, as F#3"),
@@ -212,7 +213,7 @@ def main():
             text(cx, 604, lines[0], 11, role[1], "middle", 700)
             text(cx, 620, " ".join(lines[1:]), 9.5, role[1], "middle", 600)
     text(x0, 806, "white keys: " + WHITE_ROLE[0] + ", when the one playing ends (OCT+ held: on the next bar)", 12, WHITE_ROLE[1], "start", 600)
-    text(x0 + 16 * (kw + gap) - gap, 806, "black keys: fills, the break, the ending, the tap tempo", 12, ORANGE, "end", 600)
+    text(x0 + 16 * (kw + gap) - gap, 806, "black keys: fills, the break, on the next bar, the ending, the tap tempo", 12, ORANGE, "end", 600)
     # the columns
     cw = (W - 40) / len(COLUMNS)
     for c, (title, colour, rws) in enumerate(COLUMNS):

@@ -92,7 +92,7 @@ Footswitches send MIDI on channel 16 (default) to the TRS jack or over USB:
 | CC 28, value n | the break: section n through its break, when the section playing ends (as CC 20; with CC 21 on the switch: the fill, then the break); the section playing too. Value 127 (not a section): the section playing's, so one switch serves every song. No break written: its entry; neither: a bar of rest. Stopped: start with it |
 | CC 23 | stop now |
 | CC 24 / CC 25 | next / previous section (empty ones skipped, wrapping), as CC 20; stopped: the first / the last |
-| CC 26 | tap tempo (on the device: the last black key, F#5, on LIVE; the ending is D#5 there) |
+| CC 26 | tap tempo (on the device: the last black key, F#5, on LIVE; the ending is C#5 or D#5 there) |
 | PC 0..15 | load your song in slot 1..16: stopped, its tempo and kit now and its first section cued; playing, with the next section |
 | PC 16..31 | load factory groove 1..16 (the same way) |
 | PC 32..127 | no song: the drum track's own pattern loops, with no sections to cue |
@@ -323,7 +323,7 @@ nothing is coming, the beat lights in its place. The white keys still change sec
 settings. HOME again: the tiles. The white keys 1..16 change section when the one
 playing ends, with OCT+ held on the next bar (the state line says KEY: ON THE NEXT BAR), with no fill of their own; the first black key (F#3) asks for a fill (as CC 21:
 a fill of its own whole from the next bar line; embedded marks from now to the section's end, with OCT+ held from the next bar), the second (G#3) the fill from the next bar (the same as F#3 with a fill of its own),
-the fourth (C#4) the break (as CC 28: the section playing comes in again through its break when it ends); D#5 the **ending** (as CC 22 value 127: the song's outro once, its entry first, then the stop; with no outro the section playing ends, then the stop); the last (F#5) the
+the pair C#4 and D#4 the break (as CC 28: the section playing comes in again through its break when it ends); the pair C#5 and D#5 the **ending** (as CC 22 value 127: the song's outro once, its entry first, then the stop; with no outro the section playing ends, then the stop); the last (F#5) the
 **tap tempo** (as CC 26, song loaded or not), its light flashing the tempo (with PLAY while playing; stopped, at the
 tempo, so a tap or a MIDI clock shows at once); the second octave's trio (F#4, G#4, A#4) is **on the next bar** like OCT+,
 no fill: held while a white key is pressed, the change comes on the next bar; tapped alone, the next white key's change
