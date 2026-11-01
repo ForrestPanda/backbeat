@@ -123,8 +123,8 @@ static volatile uint8_t kb_grid;
 #define LKQ 16u
 #define KB_OCTUP 32u                                   /* a KB_GRID key's entry: OCT+ was held (k uses bits 0..4) */
 #define KB_OCTDN 64u                                   /* ..OCT- was held (the grid page: a ghost hit; OCT+ a hard one) */
-#define KB_NEXTBAR ((1u << 1) | (1u << 3) | (1u << 5))   /* the song screen's F#3, G#3, A#3: held, a white key changes on
-                                                        * the next bar, as with OCT+ (2026-11-01; ui_drummer.c) */
+#define KB_NEXTBAR ((1u << 13) | (1u << 15) | (1u << 17))   /* the song screen's F#4, G#4, A#4: held, a white key changes
+                                                        * on the next bar, as with OCT+ (2026-11-01; ui_drummer.c) */
 static volatile uint16_t lk_q[LKQ];
 static volatile uint32_t lk_w, lk_r;
 static void lk_push(uint32_t layer, uint32_t k, uint32_t down)
@@ -702,7 +702,7 @@ static void key_down(uint32_t k)
                            | ((fm1_in.buttons & dyn_bit[0]) ? KB_OCTDN : 0u), 1);
                                                       /* (OCT+ held as the key went down: the song screen's "on the next
                                                        * bar", the grid's hard hit; OCT-: the grid's ghost; on the song
-                                                       * screen F#3, G#3 or A#3 held is the same "next bar") */
+                                                       * screen F#4, G#4 or A#4 held is the same "next bar") */
         return;
     }
     lvl = key_lvl();                                  /* the key's lane, at the level OCT- / OCT+ give */

@@ -591,21 +591,28 @@ int main(int argc, char **argv)
         check(live_req < 0 && !pedal_fill && !pedal_fill_wait, "LIVE: the section playing's key again: nothing (no fill)");
         sng_ui_next[0] = 0;
         ui.force = 1; frame(); ppm("live-fill");
-        {   /* the black keys (2026-10-19): the first three ON THE NEXT BAR, as OCT+ (2026-11-01, asked: "the three middle
-             * black keys F#3, G#3, A#3 behave as a on next bar, the same as octave+"; the fill now and the fill on the
-             * next bar until then), the fourth the break (CC 28), the others (D#4 to C#5) the fill now (CC 21: this bar,
-             * or the next one from its last beat); then a white key: the fill into the change, on the bar after it */
+        {   /* the black keys (2026-10-19): the first the fill (CC 21: this bar, or the next one from its last beat), the
+             * second the whole next bar (value 1), the fourth the break (CC 28), the second octave's trio (F#4, G#4, A#4)
+             * ON THE NEXT BAR as OCT+ (2026-11-01, asked: "the three middle black keys ... behave as a on next bar, the
+             * same as octave+", "I meant the second one"), the others as the first; then a white key: the fill into the
+             * change, on the bar after it */
             static const uint8_t BLACK[11] = {1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25};
             uint32_t b, all = 1, now = 1;
-            for (b = 4; b < 9u; b++) {                  /* (C#4 the break; D#5 the ending since 2026-10-30; the last, F#5: the
-                                                         * tap tempo since 2026-10-22, below) */
+            for (b = 0; b < 9u; b++) {
+                if (b == 1u || b == 3u || (b >= 5u && b <= 7u))   /* (G#3 the next bar's fill, C#4 the break, the trio; D#5
+                                                                 * the ending since 2026-10-30; the last, F#5: the tap
+                                                                 * tempo since 2026-10-22, below) */
+                    continue;
                 pedal_fill = 0; pedal_fill_wait = 0;
                 key(BLACK[b]); frames(2);
                 all &= (pedal_fill || pedal_fill_wait) && song.playing;
                 now &= pedal_fill && !pedal_fill_wait;  /* (the stub's section has no fill bar: the fill now, not the wait) */
             }
-            check(all && now, "LIVE: the black keys D#4 to C#5: the fill now (CC 21), playing on");
-            for (b = 0; b < 3u; b++) {                  /* each of the three, tapped alone: no fill, the next white key armed */
+            check(all && now, "LIVE: the first black key (F#3) and the others (A#3, D#4, C#5): the fill now (CC 21), playing on");
+            pedal_fill = 0; pedal_fill_wait = 0;
+            key(BLACK[1]); frames(2);
+            check(!pedal_fill && pedal_fill_wait && song.playing, "LIVE: the second black key (G#3): the fill on the next bar (CC 21 value 1), no hold");
+            for (b = 5; b < 8u; b++) {                  /* each of the trio, tapped alone: no fill, the next white key armed */
                 pedal_fill = 0; pedal_fill_wait = 0; live_req = -1; pedal_at_end = 0; key_nextbar = 0;
                 key(BLACK[b]); frames(2);
                 all &= !pedal_fill && !pedal_fill_wait && key_nextbar && live_req < 0 && song.playing;
@@ -613,22 +620,22 @@ int main(int argc, char **argv)
                 all &= live_req >= 0 && !pedal_at_end && !key_nextbar && !pedal_fill && !pedal_fill_wait;
                 live_req = -1;
             }
-            check(all, "LIVE: F#3, G#3, A#3 tapped: no fill, the next white key's change on the next bar (2026-11-01)");
-            ui.force = 1; key(BLACK[0]); frames(2); ppm("live-key-nextbar");   /* "KEY: ON THE NEXT BAR" */
-            check(key_nextbar && !pedal_fill && !pedal_fill_wait, "LIVE: F#3 tapped: armed (the state line says KEY: ON THE NEXT BAR)");
-            key(BLACK[0]); frames(2);
-            check(!key_nextbar, "LIVE: F#3 tapped again: taken back");
+            check(all, "LIVE: F#4, G#4, A#4 tapped: no fill, the next white key's change on the next bar (2026-11-01)");
+            ui.force = 1; key(BLACK[5]); frames(2); ppm("live-key-nextbar");   /* "KEY: ON THE NEXT BAR" */
+            check(key_nextbar && !pedal_fill && !pedal_fill_wait, "LIVE: F#4 tapped: armed (the state line says KEY: ON THE NEXT BAR)");
+            key(BLACK[5]); frames(2);
+            check(!key_nextbar, "LIVE: F#4 tapped again: taken back");
             key(key_of_white(live_sec == 2 ? 0 : 2)); frames(2);
             check(live_req >= 0 && pedal_at_end, "LIVE: then a white key: the change for the section's end, as ever");
-            key(BLACK[2]); frames(2);
+            key(BLACK[7]); frames(2);
             check(live_req >= 0 && !pedal_at_end && !key_nextbar && !pedal_fill && !pedal_fill_wait,
-                  "LIVE: a change cued for the end, A#3 tapped: that change on the next bar instead");
+                  "LIVE: a change cued for the end, A#4 tapped: that change on the next bar instead");
             live_req = -1; pedal_at_end = 0;
-            fm1_in.notes |= 1u << BLACK[1]; frame();    /* G#3 held, a white key: on the next bar, as with OCT+ */
+            fm1_in.notes |= 1u << BLACK[6]; frame();    /* G#4 held, a white key: on the next bar, as with OCT+ */
             key(key_of_white(live_sec == 2 ? 0 : 2)); frames(2);
-            fm1_in.notes &= ~(1u << BLACK[1]); frame();
+            fm1_in.notes &= ~(1u << BLACK[6]); frame();
             check(live_req >= 0 && !pedal_at_end && !key_nextbar && !pedal_fill && !pedal_fill_wait,
-                  "LIVE: G#3 held + a white key: the change on the next bar (as OCT+ held)");
+                  "LIVE: G#4 held + a white key: the change on the next bar (as OCT+ held)");
             live_req = -1; pedal_at_end = 0;
             pedal_fill = 0; pedal_fill_wait = 0; live_req = -1; live_req_brk = 0;
             key(BLACK[3]); frames(2);
@@ -642,8 +649,8 @@ int main(int argc, char **argv)
                   "LIVE: the tenth black key (D#5): the ending (CC 22): the section ends, then the stop, no fill");
             pedal_at_end = 0; sng_ui_next[0] = 0; live_req = -1;
             pedal_fill = 0; pedal_fill_wait = 0;
-            press(B_OCTUP); key(BLACK[4]); release(B_OCTUP); frames(2);
-            check(!pedal_fill && pedal_fill_wait && song.playing, "LIVE: OCT+ held + the fifth black key (D#4): the fill on the next bar (CC 21 value 1)");
+            press(B_OCTUP); key(BLACK[0]); release(B_OCTUP); frames(2);
+            check(!pedal_fill && pedal_fill_wait && song.playing, "LIVE: OCT+ held + the first black key: the fill on the next bar (CC 21 value 1)");
             key(key_of_white(2)); frames(2);                /* (that fill pending) */
             check(live_req == 2 && !pedal_at_end && (pedal_fill || pedal_fill_wait), "LIVE: a black key, then white key 3: the fill, CHORUS on the bar after it");
             ui.force = 1; frame(); ppm("live-fill-next");     /* "FILL > CHORUS" */

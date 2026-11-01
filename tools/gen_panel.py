@@ -45,11 +45,13 @@ BLACK_OTHER = ("FILL", ORANGE)
 COLUMNS = [
     ("LIVE", GREEN, [
         ("white key n", "section n, when the one playing ends; with OCT+ held, on the next bar"),
-        ("F#3 G#3 A#3", "on the next bar, as OCT+: held with a white key, or tapped before it (or after: the change cued moves)"),
+        ("F#3", "fill to the end of the bar (CC 21); with OCT+ held, the whole next bar"),
+        ("G#3", "fill on the whole next bar"),
         ("C#4", "break: the section comes back in through its break"),
         ("D#5", "the ending: the song's outro once, then the stop (no outro: the section ends, then the stop)"),
         ("F#5", "tap tempo (its light flashes the beat)"),
-        ("other black keys", "fill to the end of the bar (CC 21); with OCT+ held, the whole next bar"),
+        ("F#4 G#4 A#4", "on the next bar, as OCT+: held with a white key, or tapped before it (or after: the change cued moves)"),
+        ("other black keys", "a fill, as F#3"),
         ("ENV / LFO", "the previous / next section, no fill"),
         ("PLAY", "start the section cued, after the count-in; playing: stop"),
         ("HOME", "the other layout: the bar of the section big"),

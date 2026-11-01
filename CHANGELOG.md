@@ -10,10 +10,10 @@ ABOUT; the editor shows it next to the connect button.
 
 - **KNOB 2 scrolls the songs on LIVE**, as ALGORITHM does: the previous or next song of the page chosen on SONGS,
   USER or FACTORY, empty slots skipped. The kit is on PRESETS (KNOB 2 was the kit).
-- **F#3, G#3 and A#3 are "on the next bar"**, what OCT+ is, with no fill: held with a white key, the change comes on
+- **F#4, G#4 and A#4 are "on the next bar"**, what OCT+ is, with no fill: held with a white key, the change comes on
   the next bar; tapped alone, the next white key's change does (KEY: ON THE NEXT BAR on the state line; a second tap
-  takes it back); tapped while a change waits for the section's end, that change moves to the next bar. The fill now
-  (CC 21) is on the black keys from D#4 to C#5, with OCT+ held the fill on the next bar there.
+  takes it back); tapped while a change waits for the section's end, that change moves to the next bar. The first
+  octave's black keys are as before: F#3 the fill, G#3 the fill on the next bar, C#4 the break.
 
 ## 0.9.2 (2026-10-30)
 
