@@ -1073,7 +1073,8 @@ class Link {
     const now = Date.now();
     if (this.lastSent && now - this.lastSent > 2500) this.onGap(now - this.lastSent);
     this.lastSent = now;
-    try { this.sendRaw(frame(c.cmd, c.args)); } catch (e) { this.finish(null, e); return; }
+    try { this.sendRaw(frame(c.cmd, c.args)); }
+    catch (e) { this.misses++; this.finish(null, e); return; }   /* (a port gone: Chrome's send throws; a miss as well) */
     c.timer = setTimeout(() => {
       if (this.cur !== c) return;
       if (c.retries-- > 0) { this.fire(); return; }
@@ -3970,8 +3971,10 @@ function onState(e) {
    here the way an unplugged one is by onState, and waited for the same way */
 function reconnectTick() {
   if (connecting) return;
-  if (dev) {
-    if (dev.link.silent()) disconnect("lostSilent");
+  if (dev) {                                        /* (the ports' own state too: a statechange event may not come, or
+                                                     * may have come while a connect was running) */
+    if ([dev.input, dev.output].some((p) => p.state === "disconnected")) disconnect("lost");
+    else if (dev.link.silent()) disconnect("lostSilent");
     return;
   }
   if (!wantConnected || !access) return;

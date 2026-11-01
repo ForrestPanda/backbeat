@@ -122,7 +122,11 @@ async function editorMock() {
     const live = new E.Link((d) => setTimeout(() => live.receive(E.frame(C.PING, [])), 1), { timeout: 30 });
     for (let i = 0; i < 3; i++) await live.request(E.req.ping(), { retries: 0 });
     ok(live.misses === 0 && live.lastRecv > 0 && !live.silent(0, Date.now() + 10), "editor: a reply resets the misses and stamps lastRecv");
-    ok(/if \(dev\.link\.silent\(\)\) disconnect\("lostSilent"\);/.test(html) && /if \(fm1Ports\(access\)\.length\) connect\(true\);/.test(html)
+    const thrower = new E.Link(() => { throw new Error("The port is disconnected"); }, { timeout: 30 });
+    for (let i = 0; i < 3; i++) await thrower.request(E.req.ping(), { retries: 0 }).catch(() => {});
+    ok(thrower.misses === 3 && thrower.silent(3000, Date.now() + 3001), "editor: a send that throws (the port gone) is a miss as well");
+    ok(/else if \(dev\.link\.silent\(\)\) disconnect\("lostSilent"\);/.test(html) && /if \(fm1Ports\(access\)\.length\) connect\(true\);/.test(html)
+      && /if \(\[dev\.input, dev\.output\]\.some\(\(p\) => p\.state === "disconnected"\)\) disconnect\("lost"\);/.test(html)
       && /setInterval\(reconnectTick, 1500\);/.test(html) && /onState\.tm = setTimeout\(\(\) => \{ if \(!dev && wantConnected\) connect\(true\); \}, 800\);/.test(html)
       && /if \(!quiet\) \{ \$\("connect"\)\.disabled = true; sayK\("connecting"\); \}/.test(html) && /if \(!quiet\) sayK\("nodevice"\)/.test(html) && /if \(quiet\) sayK\("back"\);/.test(html)
       && /t\(dev \? "disconnect" : wantConnected \? "stopWaiting" : "connect"\)/.test(html) && /\.led\.wait \{[^}]*animation: ledwait/.test(html)
