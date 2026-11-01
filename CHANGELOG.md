@@ -4,6 +4,15 @@ What changed in each version of BackBeat, the firmware and the website (the edit
 <https://forrestpanda.github.io/backbeat/>). The version is on the device's boot screen and in SETUP > SYSTEM >
 ABOUT; the editor shows it next to the connect button.
 
+## Unreleased
+
+### Firmware
+
+- **KNOB 2 scrolls the songs on LIVE**, as ALGORITHM does: the previous or next song of the page chosen on SONGS,
+  USER or FACTORY, empty slots skipped. The kit is on PRESETS (KNOB 2 was the kit).
+- **F#3, G#3 and A#3 are the fill on the next bar** (CC 21 value 1), as G#3 was and as OCT+ held with any black key.
+  The fill now (a plain CC 21) is on the black keys from D#4 to C#5, with OCT+ held the next bar there too.
+
 ## 0.9.2 (2026-10-30)
 
 ### Firmware

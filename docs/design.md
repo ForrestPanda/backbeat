@@ -332,8 +332,10 @@ next bar). No named sections, one song, no fill tied to a section change.
      pedal channel and a MIDI dot (`pedal_seen_ms`, set in `pedal_msg`). SEL / ENV / LFO are FILL / PREV / NEXT
      (CC 21 / 25 / 24; since 2026-10-30 SEL opens SONGS instead, from every screen but SECTIONS, and turns its page
      there, the user: "sel should actually open the page instead of save"; SAVE's tap does nothing now, its hold
-     saves; the black keys fill); KNOB 1..4 tempo, kit, drums level, swing; ALGORITHM (2026-10-30, the user:
-     "algorithm should scroll through the songs/grooves depending on which is selected") the songs of the page shown
+     saves; the black keys fill); KNOB 1, 3, 4 tempo, drums level, swing, PRESETS the kit (KNOB 2 was the kit until
+     2026-11-01); KNOB 2 and ALGORITHM (2026-10-30, the user: "algorithm should scroll through the songs/grooves
+     depending on which is selected"; 2026-11-01: "make knob 2 scroll through the songs (similar to algorithm) when
+     on the home menu", the knob under the hand on stage) the songs of the page shown
      in turn, each loaded as the pedal's PC would (`drummer_load`; empty slots skipped, the ends stop, a load still
      pending counted from). ISR-written strings and the clock are read
      with the IRQ off.
@@ -345,7 +347,11 @@ next bar). No named sections, one song, no fill tied to a section change.
      fill-next-bar, and the fourth a break": F#3 the fill as before, G#3 CC 21 value 1 without the hold, C#4 the
      break, CC 28 value 127: the section playing through its break when it ends; A#3 and the rest as F#3.
      `key_black` in ui_drummer.c. Test: ui_pages_test. 2026-10-30, asked: D#5 the ending, CC 22 value 127, the
-     song's outro once then the stop, or the section's end then the stop; the cheat sheet and README say so.) The pedal followed the same day: no section change brings a fill (see the
+     song's outro once then the stop, or the section's end then the stop; the cheat sheet and README say so.
+     2026-11-01, asked, "make the three middle black keys F#3, G#3, A#3 behave as a fill on next bar, the same as
+     octave+": the first three black keys CC 21 value 1 (`b <= 2`), the fill now on D#4 to C#5 only, OCT+ held
+     still the next bar there; the user plays fills of their own, whole from the next bar line either way, and a
+     fill now reached by mistake under the hand on stage was the risk.) The pedal followed the same day: no section change brings a fill (see the
      command map); the web editor's player (`PLAY`) mirrors it. Found while doing it: the wait for the section's
      end (`pedal_at_end`) itself made the last bar a fill, so LIVE's first fill-free keys still filled into a
      section longer than a bar; `live_block` no longer does.

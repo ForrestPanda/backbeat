@@ -22,18 +22,22 @@
  * its own (as the pedal's CC 20 / 27): a fill is asked for by itself, so one press changes, two fill into it:
  *   white keys 1..16  the song's sections, when the one playing ends; with OCT+ held, on the next bar
  *   black keys        (since 2026-10-19, asked: "the first black key a fill now, the second a fill next bar, the
- *                     fourth a break") F#3, the first: the fill (CC 21: the rest of this bar; from its last beat,
- *                     the next bar); with OCT+ held, the whole next bar (CC 21 value 1: the same hold as the white
- *                     keys' "next bar"). G#3, the second: the whole next bar always (CC 21 value 1). C#4, the
+ *                     fourth a break") F#3, G#3, A#3, the three in the middle of the first octave: the whole next
+ *                     bar (CC 21 value 1: the same hold as the white keys' "next bar"; 2026-11-01, asked: "make the
+ *                     three middle black keys F#3, G#3, A#3 behave as a fill on next bar, the same as octave+";
+ *                     F#3 and A#3 were the fill now, below, until then). C#4, the
  *                     fourth: the break (CC 28 value 127: the section playing comes in again through its break
  *                     when it ends; stopped, the one cued starts through it). D#5, the tenth: the ending (CC 22 value
  *                     127: the song's outro once, then the stop; 2026-10-30, asked). F#5, the last: the tap tempo (as CC 26;
- *                     its light flashes the tempo; 2026-10-22, asked), a song loaded or not. The other black keys as the first
+ *                     its light flashes the tempo; 2026-10-22, asked), a song loaded or not. The other black keys (D#4
+ *                     to C#5): the fill now (CC 21: the rest of this bar; from its last beat, the next bar); with OCT+
+ *                     held, the whole next bar
  *   ENV LFO           previous, next (as CC 25, 24, without their fill); SEL: SONGS (ui_input.c; it was a fill, CC 21,
  *                     until 2026-10-30: the black keys fill)
  *   PLAY              stopped: the section cued (the count-in first); playing: stop
- *   KNOB 1..4         tempo, kit, drums level, swing (SELECT: tempo; PRESETS: kit); ALGORITHM: the songs of the
- *                     page shown (USER or FACTORY) in turn, each loaded, empty slots skipped (2026-10-30)
+ *   KNOB 1..4         tempo, songs, drums level, swing (SELECT: tempo; PRESETS: the kit); KNOB 2 and ALGORITHM: the
+ *                     songs of the page shown (USER or FACTORY) in turn, each loaded, empty slots skipped
+ *                     (2026-10-30; KNOB 2 since 2026-11-01, asked: it was the kit, which stays on PRESETS)
  *   HOME              on LIVE: the other layout (2026-10-29, asked: "a large number regarding the current beat of the
  *                     total beats in the measure", and only the section playing, not all of them; then "switch the
  *                     beat counter with the bar in section counter as that's what's most useful for me for
@@ -120,7 +124,8 @@ static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.
                                                      * OCT+ held: on the next bar */
         if (w < (int32_t)SNG_SECTIONS)
             pedal_section((uint32_t)w, nextbar ? PS_BAR : PS_END);
-    } else if (b == 1)                              /* the second black key (G#3): the whole next bar (CC 21 value 1) */
+    } else if (b <= 2)                              /* the first three black keys (F#3, G#3, A#3): the whole next bar (CC 21
+                                                     * value 1; G#3 since 2026-10-19, the three since 2026-11-01) */
         pedal_cc(PEDAL_CC_FILL, 1u);
     else if (b == 3)                                /* the fourth (C#4): the break (CC 28, the section playing's) */
         pedal_cc(PEDAL_CC_BREAK, 127u);
@@ -128,8 +133,8 @@ static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.
                                                      * else the section playing to its end, then the stop; 2026-10-30) */
         pedal_cc(PEDAL_CC_ENDING, 127u);
     else
-        pedal_cc(PEDAL_CC_FILL, nextbar ? 1u : 0u); /* the first (F#3) and the others: a fill to the bar's end (CC 21);
-                                                     * OCT+ held: the whole next bar (value 1) */
+        pedal_cc(PEDAL_CC_FILL, nextbar ? 1u : 0u); /* the others (D#4 to C#5): a fill to the bar's end (CC 21); OCT+ held:
+                                                     * the whole next bar (value 1) */
     fm1_irq_on();
 }
 
@@ -331,8 +336,7 @@ UI_SMALL static void drummer_input(uint32_t pressed, uint32_t home)
         song.g[G_BPM] = (int16_t)clamp(song.g[G_BPM] + accel(EN_K1, s, 200), GP[G_BPM].min, GP[G_BPM].max);
         ui.bpm_t = 40;
     }
-    s = panel_enc(EN_K2) + panel_enc(EN_PRESET);    /* KNOB 2 (and PRESETS): the kit */
-    if (s) {
+    if ((s = panel_enc(EN_PRESET)) != 0) {          /* PRESETS: the kit (KNOB 2 too until 2026-11-01) */
         TDRUM->p[P_E0] = drum_kit_step(TDRUM->p[P_E0], s);
         ui_say("KIT ", DRUM_KIT_NAMES[drum_kit()]);
     }
@@ -344,9 +348,13 @@ UI_SMALL static void drummer_input(uint32_t pressed, uint32_t home)
         song.g[G_SWING] = (int16_t)clamp(song.g[G_SWING] + accel(EN_K4, s, 100), GP[G_SWING].min, GP[G_SWING].max);
         live_say("SWING ", song.g[G_SWING]);
     }
-    if ((s = panel_enc(EN_ALGO)) != 0) {            /* ALGORITHM: the page's songs in turn, each loaded (2026-10-30, the
-                                                     * user: "algorithm should scroll through the songs/grooves depending
-                                                     * on which is selected"); empty slots skipped, the ends stop */
+    s = panel_enc(EN_K2) + panel_enc(EN_ALGO);      /* KNOB 2 and ALGORITHM: the page's songs in turn, each loaded
+                                                     * (2026-10-30, the user: "algorithm should scroll through the
+                                                     * songs/grooves depending on which is selected"; 2026-11-01: "make
+                                                     * knob 2 scroll through the songs (similar to algorithm) when on the
+                                                     * home menu"); empty slots skipped, the ends stop; a detent a song,
+                                                     * however fast (no accel) */
+    if (s) {
         uint32_t page = lib_page(), base = page * SNG_SLOTS;
         int32_t cur = sng_req ? (int32_t)sng_req - 1 : sng_cur;   /* (a load still pending: from it) */
         int32_t d = s > 0 ? 1 : -1, n = s > 0 ? s : -s, from, row;

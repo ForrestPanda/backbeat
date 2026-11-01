@@ -29,7 +29,7 @@ FONT = "'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif"
 ROLES = {
     "MASTER": ("volume", YELLOW), "SELECT": ("tempo", YELLOW),
     "PRESETS": ("kit", YELLOW), "ALGORITHM": ("song: previous / next", YELLOW),
-    "KNOB 1": ("tempo", YELLOW), "KNOB 2": ("kit", YELLOW), "KNOB 3": ("drum level", YELLOW), "KNOB 4": ("swing", YELLOW),
+    "KNOB 1": ("tempo", YELLOW), "KNOB 2": ("song: previous / next", YELLOW), "KNOB 3": ("drum level", YELLOW), "KNOB 4": ("swing", YELLOW),
     "FX": ("effects", BLUE), "SEL": ("SONGS", BLUE), "ENV": ("PREV section", GREEN), "LFO": ("NEXT section", GREEN),
     "EDIT": ("SECTIONS", BLUE), "GLO": ("SETUP", BLUE),
     "HOME": ("LIVE, its layout", BLUE), "SAVE": ("hold: save", ORANGE), "ARP": ("hold: roll", DIM),
@@ -45,17 +45,16 @@ BLACK_OTHER = ("FILL", ORANGE)
 COLUMNS = [
     ("LIVE", GREEN, [
         ("white key n", "section n, when the one playing ends; with OCT+ held, on the next bar"),
-        ("F#3", "fill to the end of the bar (CC 21); with OCT+ held, the whole next bar"),
-        ("G#3", "fill on the whole next bar"),
+        ("F#3 G#3 A#3", "fill on the whole next bar (CC 21 value 1)"),
         ("C#4", "break: the section comes back in through its break"),
         ("D#5", "the ending: the song's outro once, then the stop (no outro: the section ends, then the stop)"),
         ("F#5", "tap tempo (its light flashes the beat)"),
-        ("other black keys", "a fill, as F#3"),
+        ("other black keys", "fill to the end of the bar (CC 21); with OCT+ held, the whole next bar"),
         ("ENV / LFO", "the previous / next section, no fill"),
         ("PLAY", "start the section cued, after the count-in; playing: stop"),
         ("HOME", "the other layout: the bar of the section big"),
-        ("KNOB 1..4", "tempo, kit, drum level, swing (SELECT: tempo; PRESETS: kit)"),
-        ("ALGORITHM", "the previous / next song of the page chosen on SONGS"),
+        ("KNOB 1 / 3 / 4", "tempo, drum level, swing (SELECT: tempo; PRESETS: the kit)"),
+        ("KNOB 2, ALGORITHM", "the previous / next song of the page chosen on SONGS"),
     ]),
     ("SONGS  (SEL)", BLUE, [
         ("SEL", "the other page: USER (your 16 slots) / FACTORY (the 16 grooves)"),

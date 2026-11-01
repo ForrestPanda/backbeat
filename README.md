@@ -293,7 +293,7 @@ shares the cable).
 Five screens, a button each. Every one of them was checked on the fm1-emu emulator and in the host tests; LIVE
 has been played from the pedal on an FM-1 (2026-10-19); SECTIONS is in the host tests only so far.
 
-<p align="center"><img src="assets/panel/backbeat-panel.svg" alt="The FM-1 panel with what every knob, button and key does in BackBeat: on LIVE, the knobs are tempo, kit, drum level and swing, ALGORITHM the previous or next song, SEL opens SONGS, ENV and LFO the previous and next section, EDIT the SECTIONS screen, GLO SETUP, HOME LIVE, SEQ the grid, the white keys the sections, the black keys fills, the break and the tap tempo; under it, the same controls on SONGS, SECTIONS and EDIT" width="900"></p>
+<p align="center"><img src="assets/panel/backbeat-panel.svg" alt="The FM-1 panel with what every knob, button and key does in BackBeat: on LIVE, the knobs are tempo, the previous or next song, drum level and swing, ALGORITHM the previous or next song too, PRESETS the kit, SEL opens SONGS, ENV and LFO the previous and next section, EDIT the SECTIONS screen, GLO SETUP, HOME LIVE, SEQ the grid, the white keys the sections, the black keys fills (the first three on the next bar), the break, the ending and the tap tempo; under it, the same controls on SONGS, SECTIONS and EDIT" width="900"></p>
 
 The panel in one picture (`tools/gen_panel.py`; also the web editor's Cheat sheet tab and a page of the site), then the buttons in detail:
 
@@ -321,15 +321,16 @@ the small font's size (the count-in's count, amber; dim when stopped) beside "BE
 and what comes in two lines, the word then the section in large letters (NEXT / CHORUS, FILL > / CHORUS); while
 nothing is coming, the beat lights in its place. The white keys still change section; the layout is kept in the
 settings. HOME again: the tiles. The white keys 1..16 change section when the one
-playing ends, with OCT+ held on the next bar (the state line says KEY: ON THE NEXT BAR), with no fill of their own; the first black key (F#3) asks for a fill (as CC 21:
-a fill of its own whole from the next bar line; embedded marks from now to the section's end, with OCT+ held from the next bar), the second (G#3) the fill from the next bar (the same as F#3 with a fill of its own),
+playing ends, with OCT+ held on the next bar (the state line says KEY: ON THE NEXT BAR), with no fill of their own; the first three black keys (F#3, G#3, A#3) ask for the fill on the next bar (as CC 21 value 1:
+a fill of its own whole from the next bar line, embedded marks from the next bar to the section's end),
 the fourth (C#4) the break (as CC 28: the section playing comes in again through its break when it ends); D#5 the **ending** (as CC 22 value 127: the song's outro once, its entry first, then the stop; with no outro the section playing ends, then the stop); the last (F#5) the
 **tap tempo** (as CC 26, song loaded or not), its light flashing the tempo (with PLAY while playing; stopped, at the
-tempo, so a tap or a MIDI clock shows at once); the other black keys as the first. So a plain change is one press, and a fill into the change is a black key then a white one,
+tempo, so a tap or a MIDI clock shows at once); the other black keys (D#4 to C#5) the fill now (as a plain CC 21: embedded
+marks from now, a fill of its own still from the next bar line; with OCT+ held, the next bar). So a plain change is one press, and a fill into the change is a black key then a white one,
 as the pedal's CC 21 sent with its CC 20. ENV and LFO are the previous and next section
 (without a fill). KNOB 1 (and SELECT) the tempo (turned fast it sweeps wider, a detent at a time when turned slowly;
-so every knob with a wide range), KNOB 2 (and PRESETS) the kit, KNOB 3 the drums' level, KNOB 4 the
-swing. ALGORITHM scrolls through the songs of the page shown on SONGS, USER or FACTORY, loading each one as it
+so every knob with a wide range), PRESETS the kit, KNOB 3 the drums' level, KNOB 4 the
+swing. KNOB 2 and ALGORITHM scroll through the songs of the page shown on SONGS, USER or FACTORY, loading each one as it
 goes (empty slots skipped, the ends stop; with a song of the other page loaded it starts from that page's edge). With no song loaded it says PICK A SONG and shows the 16 songs of the SONGS page shown (USER or FACTORY;
 ENV / LFO switch, SEL opens SONGS), and the white keys 1..16 load them.
 

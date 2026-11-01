@@ -591,23 +591,26 @@ int main(int argc, char **argv)
         check(live_req < 0 && !pedal_fill && !pedal_fill_wait, "LIVE: the section playing's key again: nothing (no fill)");
         sng_ui_next[0] = 0;
         ui.force = 1; frame(); ppm("live-fill");
-        {   /* the black keys (2026-10-19): the first the fill (CC 21: this bar, or the next one from its last beat), the
-             * second the whole next bar (value 1), the fourth the break (CC 28), the others as the first; then a white
-             * key: the fill into the change, on the bar after it */
+        {   /* the black keys (2026-10-19): the first three the whole next bar (value 1; F#3 and A#3 the fill now until
+             * 2026-11-01, asked: "the three middle black keys F#3, G#3, A#3 ... a fill on next bar, the same as octave+"),
+             * the fourth the break (CC 28), the others (D#4 to C#5) the fill now (CC 21: this bar, or the next one from its
+             * last beat); then a white key: the fill into the change, on the bar after it */
             static const uint8_t BLACK[11] = {1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25};
-            uint32_t b, all = 1;
-            for (b = 0; b < 11u; b++) {
-                if (b == 1u || b == 3u || b == 9u || b == 10u)   /* (D#5 the ending since 2026-10-30; the last, F#5: the
-                                                                 * tap tempo since 2026-10-22, below) */
-                    continue;
+            uint32_t b, all = 1, now = 1;
+            for (b = 4; b < 9u; b++) {                  /* (C#4 the break; D#5 the ending since 2026-10-30; the last, F#5: the
+                                                         * tap tempo since 2026-10-22, below) */
                 pedal_fill = 0; pedal_fill_wait = 0;
                 key(BLACK[b]); frames(2);
                 all &= (pedal_fill || pedal_fill_wait) && song.playing;
+                now &= pedal_fill && !pedal_fill_wait;  /* (the stub's section has no fill bar: the fill now, not the wait) */
             }
-            check(all, "LIVE: the first black key and the others: the fill (CC 21), playing on");
-            pedal_fill = 0; pedal_fill_wait = 0;
-            key(BLACK[1]); frames(2);
-            check(!pedal_fill && pedal_fill_wait && song.playing, "LIVE: the second black key (G#3): the fill on the next bar (CC 21 value 1), no hold");
+            check(all && now, "LIVE: the black keys D#4 to C#5: the fill now (CC 21), playing on");
+            for (b = 0; b < 3u; b++) {
+                pedal_fill = 0; pedal_fill_wait = 0;
+                key(BLACK[b]); frames(2);
+                all &= !pedal_fill && pedal_fill_wait && song.playing;
+            }
+            check(all, "LIVE: the first three black keys (F#3, G#3, A#3): the fill on the next bar (CC 21 value 1), no hold (2026-11-01)");
             pedal_fill = 0; pedal_fill_wait = 0; live_req = -1; live_req_brk = 0;
             key(BLACK[3]); frames(2);
             check(live_req == live_sec && live_req_brk && !pedal_fill && !pedal_fill_wait && song.playing,
@@ -620,8 +623,8 @@ int main(int argc, char **argv)
                   "LIVE: the tenth black key (D#5): the ending (CC 22): the section ends, then the stop, no fill");
             pedal_at_end = 0; sng_ui_next[0] = 0; live_req = -1;
             pedal_fill = 0; pedal_fill_wait = 0;
-            press(B_OCTUP); key(BLACK[0]); release(B_OCTUP); frames(2);
-            check(!pedal_fill && pedal_fill_wait && song.playing, "LIVE: OCT+ held + the first black key: the fill on the next bar (CC 21 value 1)");
+            press(B_OCTUP); key(BLACK[4]); release(B_OCTUP); frames(2);
+            check(!pedal_fill && pedal_fill_wait && song.playing, "LIVE: OCT+ held + the fifth black key (D#4): the fill on the next bar (CC 21 value 1)");
             key(key_of_white(2)); frames(2);                /* (that fill pending) */
             check(live_req == 2 && !pedal_at_end && (pedal_fill || pedal_fill_wait), "LIVE: a black key, then white key 3: the fill, CHORUS on the bar after it");
             ui.force = 1; frame(); ppm("live-fill-next");     /* "FILL > CHORUS" */
@@ -682,6 +685,12 @@ int main(int argc, char **argv)
             encs[panel.enc[EN_ALGO]] = 1; frame(); check(sng_req == 17u, "LIVE, no song, FACTORY: ALGORITHM up: groove 1 (PC 16)");
             sng_req = 0; sng_cur = (int8_t)SNG_FAC0;
             encs[panel.enc[EN_ALGO]] = 1; frame(); check(sng_req == 18u, "LIVE, groove 1: ALGORITHM up: groove 2");
+            sng_req = 0; sng_cur = -1; sng_page = 0;   /* KNOB 2 the same (2026-11-01, asked) */
+            encs[panel.enc[EN_K2]] = 1; frame(); check(sng_req == 1u, "LIVE, no song, USER: KNOB 2 up: song 1 loaded");
+            sng_req = 0; sng_cur = 2;
+            encs[panel.enc[EN_K2]] = -1; frame(); check(sng_req == 1u, "LIVE, song 3: KNOB 2 down: song 1 (slot 2 empty, skipped)");
+            sng_req = 0; sng_cur = 2;
+            encs[panel.enc[EN_K2]] = 3; frame(); check(sng_req == 13u, "LIVE, song 3: KNOB 2 three detents up at once: song 13, then the end");
             sng_req = 0; sng_cur = 2; sng_page = 1;
             encs[panel.enc[EN_ALGO]] = 1; frame(); check(sng_req == 17u, "LIVE, song 3 loaded but FACTORY shown: ALGORITHM up: groove 1");
             sng_cur = c0; sng_page = p0; sng_req = r0; frame();
@@ -690,7 +699,9 @@ int main(int argc, char **argv)
             int16_t bpm = song.g[G_BPM], kit = TDRUM->p[P_E0], lv = song.g[G_DRLVL], sw = song.g[G_SWING];
             frames(16);
             encs[panel.enc[EN_K1]] = 2; frame(); check(song.g[G_BPM] == bpm + 2, "LIVE: KNOB 1: the tempo");
-            encs[panel.enc[EN_K2]] = 1; frame(); check(TDRUM->p[P_E0] != kit && !strncmp(ui.msg, "KIT ", 4), "LIVE: KNOB 2: the kit (said)");   /* (up: the power-on kit, MULDJORD, is the first since 2026-10-15) */
+            encs[panel.enc[EN_PRESET]] = 1; frame(); check(TDRUM->p[P_E0] != kit && !strncmp(ui.msg, "KIT ", 4), "LIVE: PRESETS: the kit (said)");   /* (up: the power-on kit, MULDJORD, is the first since 2026-10-15) */
+            kit = TDRUM->p[P_E0];
+            encs[panel.enc[EN_K2]] = 1; frame(); check(TDRUM->p[P_E0] == kit, "LIVE: KNOB 2: not the kit (the songs, below; 2026-11-01)");
             encs[panel.enc[EN_K3]] = -3; frame(); check(song.g[G_DRLVL] == lv - 3, "LIVE: KNOB 3: the drums' level");
             encs[panel.enc[EN_K4]] = 4; frame(); check(song.g[G_SWING] == sw + 4, "LIVE: KNOB 4: the swing");
             ui.force = 1; frame(); ppm("live-knob");
