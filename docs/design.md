@@ -348,10 +348,14 @@ next bar). No named sections, one song, no fill tied to a section change.
      break, CC 28 value 127: the section playing through its break when it ends; A#3 and the rest as F#3.
      `key_black` in ui_drummer.c. Test: ui_pages_test. 2026-10-30, asked: D#5 the ending, CC 22 value 127, the
      song's outro once then the stop, or the section's end then the stop; the cheat sheet and README say so.
-     2026-11-01, asked, "make the three middle black keys F#3, G#3, A#3 behave as a fill on next bar, the same as
-     octave+": the first three black keys CC 21 value 1 (`b <= 2`), the fill now on D#4 to C#5 only, OCT+ held
-     still the next bar there; the user plays fills of their own, whole from the next bar line either way, and a
-     fill now reached by mistake under the hand on stage was the risk.) The pedal followed the same day: no section change brings a fill (see the
+     2026-11-01, asked, "make the three middle black keys F#3, G#3, A#3 behave as a on next bar, the same as
+     octave+", and when they were made the fill on the next bar, "it's issuing a fill instead": the three are
+     OCT+'s "on the next bar", no fill at all. Held, a white key's event carries KB_OCTUP (seq.c `KB_NEXTBAR`, the
+     song screen only: on the grid the keys are steps); tapped with a change cued for the section's end
+     (`pedal_at_end`), the change goes on the next bar instead (`pedal_at_end = 0`, live_block lands it at the bar
+     line); tapped with nothing cued, `key_nextbar` arms the next white key (the state line says KEY: ON THE NEXT
+     BAR, a second tap, the white key or the stop clears it). The fill now stays on D#4 to C#5 (OCT+ held: the
+     next bar); a fill into a change on the next bar is D#4 then F#3 + a white key. Test: ui_pages_test.) The pedal followed the same day: no section change brings a fill (see the
      command map); the web editor's player (`PLAY`) mirrors it. Found while doing it: the wait for the section's
      end (`pedal_at_end`) itself made the last bar a fill, so LIVE's first fill-free keys still filled into a
      section longer than a bar; `live_block` no longer does.

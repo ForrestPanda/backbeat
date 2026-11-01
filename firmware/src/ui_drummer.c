@@ -22,10 +22,14 @@
  * its own (as the pedal's CC 20 / 27): a fill is asked for by itself, so one press changes, two fill into it:
  *   white keys 1..16  the song's sections, when the one playing ends; with OCT+ held, on the next bar
  *   black keys        (since 2026-10-19, asked: "the first black key a fill now, the second a fill next bar, the
- *                     fourth a break") F#3, G#3, A#3, the three in the middle of the first octave: the whole next
- *                     bar (CC 21 value 1: the same hold as the white keys' "next bar"; 2026-11-01, asked: "make the
- *                     three middle black keys F#3, G#3, A#3 behave as a fill on next bar, the same as octave+";
- *                     F#3 and A#3 were the fill now, below, until then). C#4, the
+ *                     fourth a break") F#3, G#3, A#3, the three in the middle of the first octave: ON THE NEXT BAR,
+ *                     what OCT+ is, no fill (2026-11-01, asked: "make the three middle black keys F#3, G#3, A#3
+ *                     behave as a on next bar, the same as octave+", then "it's issuing a fill instead"; F#3 and
+ *                     A#3 were the fill now, G#3 the fill on the next bar, until then): held, a white key changes on
+ *                     the next bar (seq.c KB_NEXTBAR, as OCT+ held); tapped with a change cued for the section's
+ *                     end, that change moves to the next bar; tapped with nothing cued, the next white key changes
+ *                     on the next bar (key_nextbar, the state line says KEY: ON THE NEXT BAR; a second tap, a white
+ *                     key or the stop clears it). C#4, the
  *                     fourth: the break (CC 28 value 127: the section playing comes in again through its break
  *                     when it ends; stopped, the one cued starts through it). D#5, the tenth: the ending (CC 22 value
  *                     127: the song's outro once, then the stop; 2026-10-30, asked). F#5, the last: the tap tempo (as CC 26;
@@ -73,6 +77,8 @@ static uint32_t str_hash(uint32_t h, const char *s);
 static void sections_pick(uint32_t k);               /* SECTIONS (below): the section picked */
 static int drummer_on(void) { return on_song_page(); }
 static int drummer_keys_on(void) { return drummer_on() && !ui.menu; }
+static uint8_t key_nextbar;                         /* F#3, G#3 or A#3 tapped: the next white key changes on the next bar */
+#define keys_nextbar_held() ((fm1_in.notes & KB_NEXTBAR) != 0u)
 UI_SMALL static void drummer_open(uint32_t view)             /* (ui.c go_home, studio_open: the page is the SONG page) */
 {
     sng_view = (uint8_t)view;
@@ -121,13 +127,21 @@ static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.
     }
     fm1_irq_off();                                  /* (pedal.c runs in the audio ISR) */
     if (w >= 0) {                                   /* a section, no fill of its own: when the one playing ends;
-                                                     * OCT+ held: on the next bar */
+                                                     * OCT+ (or F#3, G#3, A#3) held, or one of them tapped before: on
+                                                     * the next bar */
         if (w < (int32_t)SNG_SECTIONS)
-            pedal_section((uint32_t)w, nextbar ? PS_BAR : PS_END);
-    } else if (b <= 2)                              /* the first three black keys (F#3, G#3, A#3): the whole next bar (CC 21
-                                                     * value 1; G#3 since 2026-10-19, the three since 2026-11-01) */
-        pedal_cc(PEDAL_CC_FILL, 1u);
-    else if (b == 3)                                /* the fourth (C#4): the break (CC 28, the section playing's) */
+            pedal_section((uint32_t)w, nextbar || key_nextbar ? PS_BAR : PS_END);
+        key_nextbar = 0;
+    } else if (b <= 2) {                            /* F#3, G#3, A#3 (2026-11-01): the change cued for the section's end
+                                                     * goes on the next bar instead; nothing cued: the next white key's
+                                                     * change will (a second tap takes it back) */
+        if (live_req >= 0 && pedal_at_end) {
+            pedal_at_end = 0;
+            key_nextbar = 0;
+        } else {
+            key_nextbar = (uint8_t)!key_nextbar;
+        }
+    } else if (b == 3)                                /* the fourth (C#4): the break (CC 28, the section playing's) */
         pedal_cc(PEDAL_CC_BREAK, 127u);
     else if (b == 9)                                /* the tenth (D#5): the ending (CC 22 value 127: the song's outro once,
                                                      * else the section playing to its end, then the stop; 2026-10-30) */
@@ -255,6 +269,8 @@ UI_SMALL static void drummer_input(uint32_t pressed, uint32_t home)
 {
     int32_t s;
     uint32_t id;
+    if (!song.playing)
+        key_nextbar = 0;                            /* (stopped, a white key starts its section at once) */
     if (home == 1u) {                               /* BT_TAP: LIVE (from SONGS and SECTIONS); on LIVE, the other layout */
         if (sng_view == DV_LIVE) {
             live_view ^= 1u;
@@ -530,7 +546,9 @@ UI_SMALL static void live_state(uint32_t playing, const char *next, uint32_t big
     char b[24];
     uint16_t c = C_AMB;
     uint32_t fill = fill_now || pedal_fill, hold = pedal_fill_wait, end = pedal_end_req || pedal_end_bars, np = 0;
-    uint32_t oct = (fm1_in.buttons & dyn_bit[1]) != 0u;   /* OCT+ held: a white key now changes on the next bar */
+    uint32_t oct = (fm1_in.buttons & dyn_bit[1]) != 0u || keys_nextbar_held() || key_nextbar;   /* OCT+ (or F#3, G#3,
+                                                   * A#3) held, or one of them tapped: a white key now changes on the
+                                                   * next bar */
     uint32_t sig = studio_hash(playing + fill * 3u + hold * 7u + end * 11u + fill_arm * 13u + oct * 17u + pedal_fill_wait * 19u +
                                live_req_brk * 23u + midi_thru * 29u + big * (43u + beat * 131u + beats * 1009u), next);
     if (!ui.force && sig == cache)
