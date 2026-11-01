@@ -109,6 +109,27 @@ async function editorMock() {
   const dead = new E.Link(() => {}, { timeout: 30 });
   const err = await dead.request(E.req.info(), { retries: 1 }).then(() => null, (e) => e.message);
   ok(/^timeout/.test(err || ""), "editor: no reply -> timeout after the retries");
+  {   /* a device that stops answering (2026-11-01): three misses in a row and nothing received for 3 s make the link
+         silent; a frame of its own, a reply or a push, ends that; the page then lets the device go and waits for it,
+         connecting again by itself (reconnectTick, connect(true): no "Connecting", no "not found" meanwhile), the
+         button Stop waiting, the LED blinking, both languages */
+    const now = Date.now();
+    ok(dead.misses === 1 && !dead.silent(3000, now), "editor: one request timed out: one miss, not silent yet");
+    await dead.request(E.req.ping(), { retries: 0 }).catch(() => {});
+    await dead.request(E.req.ping(), { retries: 0 }).catch(() => {});
+    ok(dead.misses === 3 && dead.silent(3000, now + 3001) && !dead.silent(3000, dead.lastRecv + 2999), "editor: three misses in a row: silent once 3 s passed since the last frame received");
+    dead.receive(E.frame(C.PING, []).slice());
+    const live = new E.Link((d) => setTimeout(() => live.receive(E.frame(C.PING, [])), 1), { timeout: 30 });
+    for (let i = 0; i < 3; i++) await live.request(E.req.ping(), { retries: 0 });
+    ok(live.misses === 0 && live.lastRecv > 0 && !live.silent(0, Date.now() + 10), "editor: a reply resets the misses and stamps lastRecv");
+    ok(/if \(dev\.link\.silent\(\)\) disconnect\("lostSilent"\);/.test(html) && /if \(fm1Ports\(access\)\.length\) connect\(true\);/.test(html)
+      && /setInterval\(reconnectTick, 1500\);/.test(html) && /onState\.tm = setTimeout\(\(\) => \{ if \(!dev && wantConnected\) connect\(true\); \}, 800\);/.test(html)
+      && /if \(!quiet\) \{ \$\("connect"\)\.disabled = true; sayK\("connecting"\); \}/.test(html) && /if \(!quiet\) sayK\("nodevice"\)/.test(html) && /if \(quiet\) sayK\("back"\);/.test(html)
+      && /t\(dev \? "disconnect" : wantConnected \? "stopWaiting" : "connect"\)/.test(html) && /\.led\.wait \{[^}]*animation: ledwait/.test(html)
+      && /lostSilent: "The FM-1 stopped answering/.test(html) && /lostSilent: "FM-1 が応答しなくなりました/.test(html) && /stopWaiting: "Stop waiting"/.test(html) && /stopWaiting: "待機をやめる"/.test(html)
+      && /waiting: "Waiting for the FM-1/.test(html) && /back: "The FM-1 is back"/.test(html),
+      "editor: the page waits for a device gone silent or unplugged and connects again by itself; Stop waiting; both languages");
+  }
   done();
   /* a SLOOP (protocol 10 and before): INFO says so, nothing else answers; the page stops there and says why */
   const o = attachMock({ proto: 10 });

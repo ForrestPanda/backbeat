@@ -16,6 +16,13 @@ ABOUT; the editor shows it next to the connect button.
   octave's black keys are as before: F#3 the fill, G#3 the fill on the next bar, C#4 the break.
 - **The pairs**: C#4 and D#4 are both the break, C#5 and D#5 both the ending. The fill now is F#3 and A#3.
 
+### Website
+
+- **The editor waits for the FM-1 and connects again by itself.** Unplugged, switched off, restarting after an
+  install, or gone silent (three requests unanswered and nothing heard for 3 s): the editor lets it go, says so, the
+  LED blinks, and it tries again every 1.5 s, quietly, until the device answers, then reads it again. No page
+  reload. Stop waiting on the button ends the retries; Connect with no device plugged in waits for one the same way.
+
 ## 0.9.2 (2026-10-30)
 
 ### Firmware

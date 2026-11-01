@@ -358,7 +358,19 @@ next bar). No named sections, one song, no fill tied to a section change.
      key or the stop clears it). A fill into a change on the next bar is F#3 then F#4 + a white key. Then "make
      break work on both keys of the pair C#4 and D#4, and C#5 and D#5 both the ending": the pairs, so the foot or
      the hand need not tell the two apart (`b == 3 || b == 4`, `b == 8 || b == 9`); the fill now is F#3 and A#3.
-     Test: ui_pages_test.) The pedal followed the same day: no section change brings a fill (see the
+     Test: ui_pages_test.)
+   - **The editor and a device that goes away** (2026-11-01, the user: "improve usb handling on the web ui, detect
+     disconnected, allow to reconnect without reloading"): before, only Web MIDI's statechange was watched (an
+     unplug said "lost", a port coming back reconnected once, 800 ms later), and a device that stayed enumerated but
+     stopped answering (a restart into the loader, a crash, a USB stack asleep) showed timeouts for ever with the
+     button on Disconnect. Now `Link` counts the misses in a row and stamps the last frame received (`silent()`:
+     three misses and 3 s without a frame; a flash write that holds a reply is one miss at most, those requests
+     have their own long timeouts), `reconnectTick` every 1.5 s lets a silent device go (lostSilent) and, while
+     `wantConnected` and no device, tries `connect(true)` quietly whenever an FM-1 port is listed (no "Connecting",
+     "not found" or "no reply" on the way, "back" when it answers, the device read again as at the first connect);
+     the onState path stays for the quick case. The button reads Stop waiting while the device is waited for, the
+     LED blinks amber, the live line says what is waited for. Test: test_web (the link's misses and silence, the
+     page's wiring, both languages). The pedal followed the same day: no section change brings a fill (see the
      command map); the web editor's player (`PLAY`) mirrors it. Found while doing it: the wait for the section's
      end (`pedal_at_end`) itself made the last bar a fill, so LIVE's first fill-free keys still filled into a
      section longer than a bar; `live_block` no longer does.

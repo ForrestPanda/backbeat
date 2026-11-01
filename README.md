@@ -61,7 +61,9 @@ the pedal's PC 16..31). PLAY starts, SEL fills, ENV / LFO go to the previous / n
 
 **Your songs.** Open the editor (<https://forrestpanda.github.io/backbeat/webapp/editor/>, or `webapp/editor/` on a local copy): its Song editor tab
 imports a Guitar Pro or MIDI file, finds the sections, lets you fix them on a grid and play them; Send puts the
-song in one of the FM-1's 16 slots.
+song in one of the FM-1's 16 slots. Connect once: an FM-1 unplugged, switched off, restarting after an install or
+gone silent is waited for (the LED blinks, the button reads Stop waiting) and read again when it answers, with no page
+reload.
 
 **Your pedal.** Set it to send on channel 16. The five messages that cover a gig:
 

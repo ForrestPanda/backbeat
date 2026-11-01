@@ -107,6 +107,8 @@
   .led { width: 10px; height: 10px; background: var(--s3); flex: none; }
   .led.on { background: var(--t2); box-shadow: 0 0 8px var(--t2); }
   .led.busy { background: var(--t3); }
+  .led.wait { background: var(--t3); animation: ledwait 1.2s ease-in-out infinite; }   /* the device away: waited for */
+  @keyframes ledwait { 50% { opacity: 0.25; } }
   #version { color: var(--fg2); overflow-wrap: anywhere; }
   #live, #mock { color: var(--dim); }
   #connect { width: 100%; }
@@ -1029,6 +1031,8 @@ class Link {
     this.cur = null;
     this.closed = false;
     this.lastSent = 0;                              /* Date.now() of the last frame sent (WATCH keep-alive) */
+    this.lastRecv = 0;                              /* Date.now() of the last frame of ours received (a reply or a push) */
+    this.misses = 0;                                /* requests timed out in a row, after their retries (silent) */
     this.timeout = opts.timeout || 300;
     this.onUnknown = opts.onUnknown || (() => {});
     this.onTimeout = opts.onTimeout || (() => {});
@@ -1037,6 +1041,11 @@ class Link {
   }
   get idle() { return !this.cur && !this.q.length; }
   hasQueued(key) { return this.q.some((r) => r.key === key); }
+  /* the device has stopped answering (2026-11-01: the editor then waits for it and connects again by itself): three
+     requests timed out in a row, retries included, and nothing of its own has come for ms (a flash write holds a
+     reply up to a few seconds; the requests that wait that long have their own timeouts, so a slow answer is one
+     miss at most) */
+  silent(ms = 3000, now = Date.now()) { return this.misses >= 3 && now - this.lastRecv > ms; }
   /* r = [cmd, args]; opt: {timeout, retries, key (coalesce queued requests: the latest args win), front,
      quiet (a timeout is expected: no onTimeout)} */
   request(r, opt = {}) {
@@ -1068,6 +1077,7 @@ class Link {
     c.timer = setTimeout(() => {
       if (this.cur !== c) return;
       if (c.retries-- > 0) { this.fire(); return; }
+      this.misses++;
       if (!c.quiet) this.onTimeout(c.cmd);
       this.finish(null, new Error("timeout (cmd " + c.cmd + ")"));
     }, c.timeout);
@@ -1084,6 +1094,8 @@ class Link {
   receive(data) {
     const f = unframe(data);
     if (!f) return;                                  /* not ours (notes, clock, other SysEx) */
+    this.lastRecv = Date.now();
+    this.misses = 0;
     if (PUSH.has(f.cmd)) { this.onPush(f); return; }
     const c = this.cur;
     if (!c || f.cmd !== c.cmd || !replyMatches(c.cmd, c.args, f.a)) { this.onUnknown(f); return; }
@@ -3398,7 +3410,7 @@ function setLabel(e, txt) { e.replaceChildren(...(e.dataset.ic ? [icon(e.dataset
 
 const TEXT = {
   ja: {
-    other: "English", connect: "接続", disconnect: "切断", mock: "モック（実機なし）",
+    other: "English", connect: "接続", disconnect: "切断", stopWaiting: "待機をやめる", mock: "モック（実機なし）",
     empty: "空",
     steps: "ステップ", reload: "再読み込み", clearSeq: "シーケンスを消去",
     time: "タイム",
@@ -3409,7 +3421,8 @@ const TEXT = {
     connecting: "接続中", reading: "読み込み中 ", steploading: "ステップを読み込み中 ",
     fwRefused: "このエディターは BackBeat ファームウェア（エディタープロトコル 11）用です。この FM-1 は別のファームウェアです（SLOOP のエディターをお使いください）: ", protoN: "プロトコル",
     protocolL: "プロトコル",
-    ready: "接続しました", disconnected: "切断されました", lost: "FM-1 が外されました",
+    ready: "接続しました", disconnected: "切断されました", lost: "FM-1 が外されました：戻るのを待っています",
+    lostSilent: "FM-1 が応答しなくなりました：戻るのを待っています", waiting: "FM-1 を待っています（USB でつなぐか、電源を入れてください）", back: "FM-1 が戻りました",
     noreply: "応答がありません", error: "エラー: ",
     applying: "書き込み中 ",
     confirmClear: "シーケンスを全部消しますか？",
@@ -3539,7 +3552,7 @@ const TEXT = {
     pedalClockHelp: "ペダルボードのクロックのテンポと START / STOP に従います（Ampero: CLOCK OUT (TRS) をオン）。すぐに設定されます", pedalNow: "今: ", pedalOff: "オフ", pedalAny: "すべて", pedalCount: "カウントイン", pedalBar: "1 小節", pedalBars: "2 小節",
   },
   en: {
-    other: "日本語", connect: "Connect", disconnect: "Disconnect", mock: "Mock device (no hardware)",
+    other: "日本語", connect: "Connect", disconnect: "Disconnect", stopWaiting: "Stop waiting", mock: "Mock device (no hardware)",
     empty: "empty",
     steps: "Steps", reload: "Reload", clearSeq: "Clear sequence",
     time: "Time",
@@ -3550,7 +3563,8 @@ const TEXT = {
     connecting: "Connecting", reading: "Reading ", steploading: "Reading steps ",
     fwRefused: "This editor is for the BackBeat firmware (editor protocol 11); this FM-1 runs another one (use SLOOP's editor for it): ", protoN: "protocol",
     protocolL: "Protocol",
-    ready: "Connected", disconnected: "Disconnected", lost: "The FM-1 was unplugged",
+    ready: "Connected", disconnected: "Disconnected", lost: "The FM-1 was unplugged: waiting for it to come back",
+    lostSilent: "The FM-1 stopped answering: waiting for it to come back", waiting: "Waiting for the FM-1 (plug it in, or switch it on)", back: "The FM-1 is back",
     noreply: "No reply from the device", error: "Error: ",
     applying: "Writing ",
     confirmClear: "Clear the whole sequence?",
@@ -3702,7 +3716,7 @@ function applyLang() {
   document.querySelectorAll("[data-t]").forEach((e) => setLabel(e, t(e.dataset.t)));
   $("lang").textContent = t("other");
   renderSide();
-  setLabel($("connect"), t(dev ? "disconnect" : "connect"));
+  renderConnectBtn();
   if (lastKey) $("status").textContent = t(lastKey) + lastArg;
   renderLive();
   renderPanels();
@@ -3858,12 +3872,16 @@ function fm1Ports(access) {
   }
   return pairs.sort((a, b) => rank(a.input.name || "") - rank(b.input.name || ""));
 }
-async function connect() {
+let connecting = false;   /* a connect() running (the retry loop and the port events wait for it) */
+/* quiet: a retry on its own (reconnectTick, onState): no "Connecting", no "not found", no "no reply" while the device
+   is still away; "back" instead of "Connected" when it answers */
+async function connect(quiet = false) {
   wantConnected = true;
+  if (connecting) return;
   const missing = MOCK ? null : midiMissing();
   if (missing) { sayK(missing.key, missing.arg); return; }
-  $("connect").disabled = true;
-  sayK("connecting");
+  connecting = true;
+  if (!quiet) { $("connect").disabled = true; sayK("connecting"); }
   try {
     if (!access) {
       if (MOCK) { mock = makeMockDevice({ proto: QS.get("proto") ? +QS.get("proto") : undefined }); access = mock.access; }
@@ -3874,7 +3892,7 @@ async function connect() {
       access.onstatechange = onState;
     }
     const pairs = fm1Ports(access);
-    if (!pairs.length) { sayK("nodevice"); return; }
+    if (!pairs.length) { if (!quiet) sayK("nodevice"); return; }
     let link = null, input = null, output = null;
     for (const pr of pairs) {                        /* the first pair that answers (a generic name may be other gear) */
       const l = new Link((d) => pr.output.send(d), {
@@ -3895,12 +3913,13 @@ async function connect() {
         pr.input.onmidimessage = null;
       }
     }
-    if (!link) { sayK("noreply"); return; }
+    if (!link) { if (!quiet) sayK("noreply"); return; }
     dev = { link, input, output, info: null, pdesc: [], gdesc: [], kitNames: null, dump: null, dsteps: [], watch: false };
     sets.clear();                                    /* (another FM-1, maybe) */
-    setLabel($("connect"), t("disconnect"));
+    renderConnectBtn();
     renderLive();
     await load(dev);
+    if (quiet) sayK("back");
   } catch (e) {
     console.error(e);
     if (dev) {                                       /* not unplugged meanwhile (that says "lost") */
@@ -3910,9 +3929,14 @@ async function connect() {
       else sayK(timeout ? "noreply" : "error", timeout ? "" : e.message);
     }
   } finally {
+    connecting = false;
     $("connect").disabled = false;
+    renderConnectBtn();
+    renderLive();
   }
 }
+/* Connect; Disconnect while connected; Stop waiting while the device is away and waited for */
+function renderConnectBtn() { setLabel($("connect"), t(dev ? "disconnect" : wantConnected ? "stopWaiting" : "connect")); }
 
 function disconnect(reasonKey = "disconnected") {
   if (dev) {
@@ -3926,7 +3950,7 @@ function disconnect(reasonKey = "disconnected") {
   renderSysinfo();
   renderLive();
   $("version").textContent = "";
-  setLabel($("connect"), t("connect"));
+  renderConnectBtn();
   sayK(reasonKey);
 }
 
@@ -3934,12 +3958,26 @@ function onState(e) {
   const p = e.port;
   if (!p || !FM1_PORT.test(p.name || "")) return;
   if (dev && p.state === "disconnected" && (p.id === dev.input.id || p.id === dev.output.id)) {
-    disconnect("lost");
+    disconnect("lost");                             /* (wantConnected stays: reconnectTick waits for it) */
   } else if (!dev && wantConnected && p.state === "connected" && p.type === "output") {
-    clearTimeout(onState.tm);                       /* the device came back: reconnect */
-    onState.tm = setTimeout(() => { if (!dev && wantConnected) connect(); }, 800);
+    clearTimeout(onState.tm);                       /* the device came back: reconnect (a new port id on Linux) */
+    onState.tm = setTimeout(() => { if (!dev && wantConnected) connect(true); }, 800);
   }
 }
+/* the device away (unplugged, switched off, restarting after an install, or silent: Link.silent): the editor keeps
+   wanting it and tries again every 1.5 s, quietly, until it answers; Disconnect pressed stops that (2026-11-01, the
+   user: "detect disconnected, allow to reconnect without reloading"). While connected, a silent device is let go
+   here the way an unplugged one is by onState, and waited for the same way */
+function reconnectTick() {
+  if (connecting) return;
+  if (dev) {
+    if (dev.link.silent()) disconnect("lostSilent");
+    return;
+  }
+  if (!wantConnected || !access) return;
+  if (fm1Ports(access).length) connect(true);
+}
+setInterval(reconnectTick, 1500);
 
 const rq = (r, opt) => dev.link.request(r, opt);
 async function getDesc(scope, id) { return parse[CMD.DESC](await rq(req.desc(scope, id))); }
@@ -6637,8 +6675,8 @@ async function op(fn) {
   try { await fn(); } catch (err) { report(err); } finally { busy--; }
 }
 function renderLive() {
-  $("live").textContent = !dev || !dev.dump ? "" : t(dev.watch ? "live" : "polling");
-  $("led").className = "led" + (dev && dev.dump ? " on" : dev ? " busy" : "");
+  $("live").textContent = dev ? (dev.dump ? t(dev.watch ? "live" : "polling") : "") : wantConnected && !connecting ? t("waiting") : "";
+  $("led").className = "led" + (dev && dev.dump ? " on" : dev || connecting ? " busy" : wantConnected ? " wait" : "");
 }
 
 /* keep-alive: PING when nothing else went out for ~1 s; after a longer gap (hidden tab, a long flash
@@ -6757,7 +6795,14 @@ $("bk-file").addEventListener("change", async () => {
 });
 
 $("connect").addEventListener("click", () => {
-  if (dev) { wantConnected = false; disconnect(); } else connect();
+  if (dev) { wantConnected = false; disconnect(); }
+  else if (wantConnected) {                        /* Stop waiting: the retries end, until Connect again */
+    wantConnected = false;
+    clearTimeout(onState.tm);
+    renderConnectBtn();
+    renderLive();
+    sayK("disconnected");
+  } else connect();
 });
 applyLang();
 showTab(tab);
