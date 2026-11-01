@@ -374,7 +374,13 @@ next bar). No named sections, one song, no fill tied to a section change.
      hot-plug, so an unplugged device stays listed as connected with a dead port (its silence is what is detected,
      a send there throws or drops), and the one plugged back is not in the list until requestMIDIAccess is called
      again: every retry asks again (`freshAccess`, no prompt once allowed, Chrome returns its live list) and takes
-     the new list; Chrome's statechange path stays. Test: test_web (the link's misses and silence, the page's
+     the new list; Chrome's statechange path stays. Read in mozilla-central (dom/midi, 2026-11-01): the port list is
+     enumerated at the first access and refreshed only when another MIDIAccess is created (`MIDIAccessManager::
+     AddObserver` -> SendRefresh), never on a timer or an OS event; a refresh marks a missing port Disconnected and
+     adds a plugged-back one under a new random id; and midir makes the OS connection on a port's first open only
+     (`open_port`: a connection when open_count is 0), so a port kept open across the device's absence holds a dead
+     connection. Hence `reopen`: every retry closes an open port and opens it again (both ports; the output's send
+     opens it), and `disconnect` closes the ports it leaves, so the next open makes a new connection. Test: test_web (the link's misses and silence, the page's
      wiring, both languages). The pedal followed the same day: no section change brings a fill (see the
      command map); the web editor's player (`PLAY`) mirrors it. Found while doing it: the wait for the section's
      end (`pedal_at_end`) itself made the last bar a fill, so LIVE's first fill-free keys still filled into a
