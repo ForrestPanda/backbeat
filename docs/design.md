@@ -369,8 +369,13 @@ next bar). No named sections, one song, no fill tied to a section change.
      `wantConnected` and no device, tries `connect(true)` quietly whenever an FM-1 port is listed (no "Connecting",
      "not found" or "no reply" on the way, "back" when it answers, the device read again as at the first connect);
      the onState path stays for the quick case. The button reads Stop waiting while the device is waited for, the
-     LED blinks amber, the live line says what is waited for. Test: test_web (the link's misses and silence, the
-     page's wiring, both languages). The pedal followed the same day: no section change brings a fill (see the
+     LED blinks amber, the live line says what is waited for. Firefox (the user's browser; "in chrome it works
+     correctly, however I'm using firefox"): its Web MIDI hands out a snapshot of the ports and reports no
+     hot-plug, so an unplugged device stays listed as connected with a dead port (its silence is what is detected,
+     a send there throws or drops), and the one plugged back is not in the list until requestMIDIAccess is called
+     again: every retry asks again (`freshAccess`, no prompt once allowed, Chrome returns its live list) and takes
+     the new list; Chrome's statechange path stays. Test: test_web (the link's misses and silence, the page's
+     wiring, both languages). The pedal followed the same day: no section change brings a fill (see the
      command map); the web editor's player (`PLAY`) mirrors it. Found while doing it: the wait for the section's
      end (`pedal_at_end`) itself made the last bar a fill, so LIVE's first fill-free keys still filled into a
      section longer than a bar; `live_block` no longer does.

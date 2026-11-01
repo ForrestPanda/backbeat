@@ -3969,8 +3969,8 @@ function onState(e) {
    wanting it and tries again every 1.5 s, quietly, until it answers; Disconnect pressed stops that (2026-11-01, the
    user: "detect disconnected, allow to reconnect without reloading"). While connected, a silent device is let go
    here the way an unplugged one is by onState, and waited for the same way */
-function reconnectTick() {
-  if (connecting) return;
+async function reconnectTick() {
+  if (connecting || reconnectTick.run) return;
   if (dev) {                                        /* (the ports' own state too: a statechange event may not come, or
                                                      * may have come while a connect was running) */
     if ([dev.input, dev.output].some((p) => p.state === "disconnected")) disconnect("lost");
@@ -3978,7 +3978,22 @@ function reconnectTick() {
     return;
   }
   if (!wantConnected || !access) return;
-  if (fm1Ports(access).length) connect(true);
+  reconnectTick.run = true;
+  try {
+    await freshAccess();
+    if (!dev && wantConnected && !connecting && fm1Ports(access).length) await connect(true);
+  } finally { reconnectTick.run = false; }
+}
+/* the port list asked for again (no prompt once allowed). Chrome keeps one live list and tells of changes
+   (statechange); Firefox hands out a snapshot and tells of none (2026-11-01, the user: "in chrome it works correctly,
+   however I'm using firefox"): a device unplugged stays listed as connected, its port dead, and the one plugged back
+   is not in the list until requestMIDIAccess is called again. So every retry asks again and takes the new list */
+async function freshAccess() {
+  if (MOCK || !navigator.requestMIDIAccess) return;
+  try {
+    const a = await navigator.requestMIDIAccess({ sysex: true });
+    if (a && a !== access) { access = a; access.onstatechange = onState; }
+  } catch (e) { /* refused now: the list we have */ }
 }
 setInterval(reconnectTick, 1500);
 

@@ -22,6 +22,8 @@ ABOUT; the editor shows it next to the connect button.
   install, or gone silent (three requests unanswered and nothing heard for 3 s): the editor lets it go, says so, the
   LED blinks, and it tries again every 1.5 s, quietly, until the device answers, then reads it again. No page
   reload. Stop waiting on the button ends the retries; Connect with no device plugged in waits for one the same way.
+  In Firefox too, whose Web MIDI does not report a device unplugged or plugged back: the editor asks for the port
+  list again on every retry.
 
 ## 0.9.2 (2026-10-30)
 
