@@ -4,7 +4,7 @@ What changed in each version of BackBeat, the firmware and the website (the edit
 <https://forrestpanda.github.io/backbeat/>). The version is on the device's boot screen and in SETUP > SYSTEM >
 ABOUT; the editor shows it next to the connect button.
 
-## Unreleased
+## 0.9.3 (2026-11-01)
 
 ### Firmware
 

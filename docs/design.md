@@ -549,7 +549,11 @@ next bar). No named sections, one song, no fill tied to a section change.
    the two kinds of fill (the fill bar whole from the next bar line), the bar-line race (`bar_in_doubt`), and the
    editor's marks-or-fill-bar rule, the selected bars on the section's grid and the label row (all below and in the
    changelog). The release build no longer appends ` BETA` to the version (the 0.9.1 package says `BACKBEAT 0.9.1
-   BETA` on the device, the docs 0.9.1; `tools/build.py`).
+   BETA` on the device, the docs 0.9.1; `tools/build.py`). **0.9.3 (2026-11-01)**: version `BACKBEAT 0.9.3`, the
+   package `backbeat-0.9.3.fwsc`, identity `FM-1_988` still: KNOB 2 scrolls the songs on LIVE, F#4, G#4, A#4 "on
+   the next bar", the pairs (C#4 and D#4 the break, C#5 and D#5 the ending), and the editor's reconnect (a device
+   gone away waited for and connected again by itself, in Firefox too; the keys and the reconnect are in 7 and the
+   note on the editor above). The panel drawing says 0.9.3.
 8. **More flash for the kit (proposed 2026-10-29, not started).** The user asked whether the samples could be
    compressed and loaded into RAM for better sound, since RAM is free and flash is not. Measured that day: the kit is
    IMA ADPCM, 4 bits a sample at 22 kHz (11 KB a second; 399 478 B, 36 s), played in place from the memory-mapped
