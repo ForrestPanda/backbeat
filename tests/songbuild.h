@@ -69,6 +69,22 @@ static uint32_t song_blk(uint8_t *b, uint32_t pos, uint32_t end, uint32_t f, uin
     w16(b + pos + 16, q - pos);
     return q;
 }
+/* a note (2026-11-02): the section's at pos (its flag, the bytes last, its size), or the song's (pos 0: the
+ * header's flag) at end; the new end */
+static uint32_t song_note(uint8_t *b, uint32_t pos, uint32_t end, const char *text)
+{
+    uint32_t n = (uint32_t)strlen(text), q = end;
+    if (pos)
+        b[pos + 14] |= (uint8_t)SNG_F_NOTE;
+    else
+        b[23] |= (uint8_t)SNG_H_NOTE;
+    b[q++] = (uint8_t)n;
+    memcpy(b + q, text, n);
+    q += n;
+    if (pos)
+        w16(b + pos + 16, q - pos);
+    return q;
+}
 static uint32_t song_fb(uint8_t *b, uint32_t pos, uint32_t end, uint32_t fl, const char *const lane[DRUM_LANES])
 {
     return song_blk(b, pos, end, SNG_F_FILLBAR, fl, lane);

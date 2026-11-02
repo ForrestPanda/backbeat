@@ -43,6 +43,10 @@
  *   KNOB 1..4         tempo, songs, drums level, swing (SELECT: tempo; PRESETS: the kit); KNOB 2 and ALGORITHM: the
  *                     songs of the page shown (USER or FACTORY) in turn, each loaded, empty slots skipped
  *                     (2026-10-30; KNOB 2 since 2026-11-01, asked: it was the kit, which stays on PRESETS)
+ *   OCT-              on LIVE: NOTES (2026-11-02, asked: "oct- on the home page would be nice"): the section's note
+ *                     and the song's, as the editor's Song tab wrote them (sng.c sng_note), wrapped; KNOB 1 scrolls;
+ *                     OCT- again or HOME: LIVE. LIVE's state line shows the section's first line (the song's when it
+ *                     has none) while nothing else is announced
  *   HOME              on LIVE: the other layout (2026-10-29, asked: "a large number regarding the current beat of the
  *                     total beats in the measure", and only the section playing, not all of them; then "switch the
  *                     beat counter with the bar in section counter as that's what's most useful for me for
@@ -56,6 +60,7 @@
 #define UI_SMALL
 #endif
 static uint8_t sng_view = DV_LIVE;                  /* DV_* (ui.c) */
+static uint8_t note_scroll;                         /* NOTES: the first line shown */
 static uint8_t sng_pick;                            /* SONGS: the row of the page (0..15) */
 static int8_t sng_page = -1;                        /* 0 USER, 1 FACTORY; -1 not chosen yet: lib_page */
 UI_SMALL static uint32_t lib_page(void)                      /* the page shown: the one chosen, or FACTORY while USER is empty */
@@ -297,6 +302,10 @@ UI_SMALL static void drummer_input(uint32_t pressed, uint32_t home)
             else
                 pedal_cc(PEDAL_CC_SECTION, live_sec >= 0 ? (uint32_t)live_sec : 0u);
             fm1_irq_on();
+        } else if (b == B_OCTDN && (sng_view == DV_LIVE || sng_view == DV_NOTE)) {   /* NOTES, and back (2026-11-02) */
+            sng_view = (uint8_t)(sng_view == DV_NOTE ? DV_LIVE : DV_NOTE);
+            note_scroll = 0;
+            ui.force = 1;
         } else if (sng_view == DV_SEC) {            /* SECTIONS: copy, move, the outro (REC held: holds_input) */
             if (b == B_SCL)
                 sections_edit(SE_DUP);
@@ -351,6 +360,10 @@ UI_SMALL static void drummer_input(uint32_t pressed, uint32_t home)
         panel_enc(EN_ALGO); panel_enc(EN_PRESET);
         return;
     }
+    if (sng_view == DV_NOTE && (s = panel_enc(EN_K1)) != 0) {   /* NOTES: KNOB 1 scrolls the lines (SELECT: the tempo) */
+        note_scroll = (uint8_t)clamp((int32_t)note_scroll + s, 0, 63);
+        ui.force = 1;
+    }
     s = panel_enc(EN_K1) + panel_enc(EN_SELECT);    /* LIVE: KNOB 1 (and SELECT) the tempo */
     if (s) {
         song.g[G_BPM] = (int16_t)clamp(song.g[G_BPM] + accel(EN_K1, s, 200), GP[G_BPM].min, GP[G_BPM].max);
@@ -396,11 +409,12 @@ UI_SMALL static void drummer_input(uint32_t pressed, uint32_t home)
 }
 
 /* ------------------------------------------------------------------ draw --- */
-UI_SMALL static void cut_name(char *d, const char *s, const felucca_font_t *f, int32_t w)   /* s cut to w pixels */
+UI_SMALL static void cut_text(char *d, const char *s, const felucca_font_t *f, int32_t w, uint32_t max)   /* s cut to w
+                                                     * pixels and max characters, its first line (d: max + 1 bytes) */
 {
     uint32_t n = 0;
     d[0] = 0;
-    while (s[n] && n < 12u) {
+    while (s[n] && s[n] != '\n' && n < max) {
         d[n] = s[n];
         d[n + 1] = 0;
         if (text_w(f, d) > w) {
@@ -409,6 +423,10 @@ UI_SMALL static void cut_name(char *d, const char *s, const felucca_font_t *f, i
         }
         n++;
     }
+}
+UI_SMALL static void cut_name(char *d, const char *s, const felucca_font_t *f, int32_t w)   /* s cut to w pixels */
+{
+    cut_text(d, s, f, w, 12u);
 }
 UI_SMALL static void meter_str(char *b, uint32_t m)          /* "7/8" */
 {
@@ -547,7 +565,7 @@ UI_SMALL static void live_main(uint32_t playing, const char *sec, uint32_t bar, 
 UI_SMALL static void live_state(uint32_t playing, const char *next, uint32_t big, uint32_t beat, uint32_t beats)
 {
     static uint32_t cache;
-    char b[24];
+    char b[40], note[40];
     uint16_t c = C_AMB;
     uint32_t fill = fill_now || pedal_fill, hold = pedal_fill_wait, end = pedal_end_req || pedal_end_bars, np = 0;
     uint32_t oct = (fm1_in.buttons & dyn_bit[1]) != 0u || keys_nextbar_held() || key_nextbar;   /* OCT+ (or F#4, G#4,
@@ -555,6 +573,11 @@ UI_SMALL static void live_state(uint32_t playing, const char *next, uint32_t big
                                                    * next bar */
     uint32_t sig = studio_hash(playing + fill * 3u + hold * 7u + end * 11u + fill_arm * 13u + oct * 17u + pedal_fill_wait * 19u +
                                live_req_brk * 23u + midi_thru * 29u + big * (43u + beat * 131u + beats * 1009u), next);
+    sng_note(live_sec, b, sizeof b);                /* the section's note, else the song's (2026-11-02): its first line */
+    if (!b[0])
+        sng_note(-1, b, sizeof b);
+    cut_text(note, b, &FONT_S, 232, sizeof note - 1u);
+    sig = studio_hash(sig, note);
     if (!ui.force && sig == cache)
         return;
     cache = sig;
@@ -589,6 +612,9 @@ UI_SMALL static void live_state(uint32_t playing, const char *next, uint32_t big
         c = TE_DRUM;
     } else if (midi_thru == THRU_ONLY) {          /* SETUP > MIDI 2 > TRS TO USB: the pedal reaches only the USB */
         str_cpy(b, "BRIDGE: PEDAL TO USB", sizeof b);
+    } else if (note[0]) {                         /* nothing announced: the note's first line, dim (OCT-: the whole) */
+        str_cpy(b, note, sizeof b);
+        c = TE_G3;
     }
     if (!big) {
         cv_begin(240, 20, C_BLACK);
@@ -928,6 +954,108 @@ UI_SMALL static void sections_draw(void)
     te_dials(184, LAB, val, ratio, 5u, &dials);
 }
 
+/* s wrapped into lines of w pixels of the small font (at a space when one fits, else cut; a newline ends a line),
+ * the lines from skip on drawn at x, y, 16 px apart, max of them; the lines s takes in all */
+UI_SMALL static uint32_t text_wrap(const char *s, int32_t x, int32_t y, int32_t w, uint32_t skip, uint32_t max, uint16_t c)
+{
+    char line[48];
+    uint32_t n = 0, drawn = 0;
+    while (*s) {
+        uint32_t k = 0, brk = 0;
+        while (s[k] && s[k] != '\n' && k < sizeof line - 1u) {
+            line[k] = s[k];
+            line[k + 1u] = 0;
+            if (text_w(&FONT_S, line) > w) {
+                line[k] = 0;
+                break;
+            }
+            if (s[k] == ' ')
+                brk = k;
+            k++;
+        }
+        if (s[k] && s[k] != '\n' && brk) {        /* over the width: back to the last space */
+            k = brk;
+            line[k] = 0;
+        }
+        if (!k && *s != '\n') {                   /* (a character wider than the line: shown anyway) */
+            line[0] = *s;
+            line[1] = 0;
+            k = 1;
+        }
+        if (n >= skip && drawn < max) {
+            cv_text(x, y + (int32_t)drawn * 16, &FONT_S, line, c);
+            drawn++;
+        }
+        n++;
+        s += k;
+        while (*s == ' ')
+            s++;
+        if (*s == '\n')
+            s++;
+    }
+    return n;
+}
+/* NOTES (OCT- on LIVE, 2026-11-02): the section's note under its name, then the song's under the song's name, wrapped;
+ * KNOB 1 scrolls (12 lines fit); none: how to write one. Drawn in two strips (the canvas is 240 x 124 at most) */
+UI_SMALL static void notes_draw(void)
+{
+    static uint32_t cache;
+    static char txt[2][256];
+    char nm[13], b[40];
+    uint32_t sig, k, lines = 0, strip, have;
+    int32_t sec = live_sec;
+    nm[0] = 0;
+    if (sng_cur >= 0 && sec >= 0)
+        sng_name((uint32_t)sec, nm);
+    sng_note(sec, txt[0], sizeof txt[0]);
+    sng_note(-1, txt[1], sizeof txt[1]);
+    have = (txt[0][0] != 0) | (txt[1][0] != 0) << 1;
+    sig = studio_hash((uint32_t)(sng_cur + 1) * 7u + (uint32_t)(sec + 1) * 13u + note_scroll * 131u + have * 1009u, nm);
+    sig = studio_hash(studio_hash(sig, txt[0]), txt[1]);
+    sig = studio_hash(sig, sng_ui_song);
+    if (!ui.force && sig == cache) {
+        live_foot();
+        return;
+    }
+    cache = sig;
+    cv_begin(240, 24, C_BLACK);
+    cv_text(4, 4, &FONT_S, "NOTES", C_WHITE);
+    cut_name(b, sng_ui_song[0] ? sng_ui_song : "no song", &FONT_S, 120);
+    cv_text(4 + text_w(&FONT_S, "NOTES") + 10, 4, &FONT_S, b, TE_G3);
+    cv_text(236 - text_w(&FONT_S, "oct-: live"), 4, &FONT_S, "oct-: live", TE_G3);
+    cv_rect(0, 23, 240, 1, TE_G1);
+    cv_blit(0, 0);
+    for (strip = 0; strip < 2u; strip++) {         /* 6 lines of 16 px each, lines note_scroll + 6 x strip on */
+        uint32_t at = 0, skip = note_scroll + 6u * strip;
+        cv_begin(240, 96, C_BLACK);
+        if (!have) {
+            if (!strip) {
+                cv_text(4, 4, &FONT_S, "NO NOTES", TE_G3);
+                cv_text(4, 24, &FONT_S, "the editor's Song tab writes", TE_G4);
+                cv_text(4, 40, &FONT_S, "them: a section's, the song's", TE_G4);
+            }
+        } else {
+            for (k = 0; k < 2u; k++) {             /* the section's note under its name, then the song's */
+                const char *title = k ? (sng_ui_song[0] ? sng_ui_song : "SONG") : (nm[0] ? nm : "SECTION");
+                uint32_t n;
+                if (!txt[k][0])
+                    continue;
+                if (at >= skip && at < skip + 6u)
+                    cv_text(4, 4 + (int32_t)(at - skip) * 16, &FONT_S, title, k ? C_AMB : C_WHITE);
+                at++;
+                n = text_wrap(txt[k], 4, 4 + (int32_t)(at > skip ? at - skip : 0u) * 16, 232,
+                              skip > at ? skip - at : 0u, at < skip + 6u ? skip + 6u - at : 0u, TE_G4);
+                at += n;
+                if (k == 0 && txt[1][0])
+                    at++;                           /* a blank line between the two */
+            }
+        }
+        cv_blit(0, 24 + (int32_t)strip * 96);
+        lines = at;
+    }
+    (void)lines;
+    live_foot();
+}
 UI_SMALL static void drummer_draw(void)
 {
     sng_lib_refresh();                              /* (only after a load or a write: sng.c) */
@@ -935,6 +1063,8 @@ UI_SMALL static void drummer_draw(void)
         lib_draw();
     else if (sng_view == DV_SEC)
         sections_draw();
+    else if (sng_view == DV_NOTE)
+        notes_draw();
     else
         live_draw();
 }

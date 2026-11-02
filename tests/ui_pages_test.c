@@ -74,6 +74,8 @@ static void sng_name(uint32_t k, char *out)
                                       "LAST CHORUS", "OUTRO"};
     str_cpy(out, k < t_nsec ? N[k] : "", 13);
 }
+static const char *t_note = "", *t_snote = "";    /* the notes (2026-11-02): section 1's, the song's */
+static void sng_note(int32_t k, char *d, uint32_t n) { str_cpy(d, sng_cur < 0 ? "" : k < 0 ? t_snote : k == 1 ? t_note : "", n); }
 static uint32_t sng_ready(void) { return sng_cur >= 0 ? (1u << t_nsec) - 1u : 0u; }
 static uint32_t sng_bars(uint32_t k) { return k == 1u ? 2u : 1u; }
 static uint32_t sng_meter(uint32_t k) { return k == 1u ? 7u | 1u << 5 : 0u; }
@@ -561,6 +563,27 @@ int main(int argc, char **argv)
         key(key_of_white(9)); frames(2);
         check(live_req == 2 && pedal_at_end, "LIVE: white key 10, a song of 3 sections: nothing (CHORUS still cued)");
         live_req = -1; pedal_at_end = 0;
+        {   /* the notes (2026-11-02): the section's first line on the state line, OCT- the NOTES screen, scrolled by
+             * KNOB 1, OCT- or HOME back */
+            uint32_t v0 = live_view;
+            char nx[13];
+            str_cpy(nx, sng_ui_next, sizeof nx); sng_ui_next[0] = 0;   /* (nothing announced: the note shows) */
+            t_note = "3rd time: bridge a bar early, then the chorus twice\nwatch the singer for the stop";
+            t_snote = "Ampero: bank 2, scene A";
+            live_view = 0; live_sec = 1; sng_apply(1); ui.force = 1; frame(); ppm("live-note");
+            tap(B_OCTDN); frames(2);
+            check(sng_view == DV_NOTE && drummer_on(), "LIVE: OCT-: the NOTES screen");
+            ui.force = 1; frame(); ppm("live-notes");
+            encs[panel.enc[EN_K1]] = 2; frames(2);
+            check(note_scroll == 2u && sng_view == DV_NOTE, "NOTES: KNOB 1 scrolls");
+            live_sec = 0; sng_apply(0); ui.force = 1; frame();   /* (another section: its own, none: the song's shows) */
+            tap(B_OCTDN); frames(2);
+            check(sng_view == DV_LIVE && note_scroll == 0u, "NOTES: OCT- again: LIVE");
+            live_sec = 1; sng_apply(1); live_view = 1; ui.force = 1; frame(); ppm("live-big-note");
+            tap(B_OCTDN); frames(2); tap(B_HOME); frames(2);
+            check(sng_view == DV_LIVE && live_view == 1u, "NOTES: HOME: LIVE, its layout kept");
+            t_note = t_snote = ""; live_view = (uint8_t)v0; str_cpy(sng_ui_next, nx, sizeof sng_ui_next); ui.force = 1; frame();
+        }
         press(B_OCTUP); frames(2);
         ui.force = 1; frame(); ppm("live-nextbar");          /* "KEY: ON THE NEXT BAR" while OCT+ is held */
         key(key_of_white(0)); frames(2);
@@ -933,6 +956,23 @@ int main(int argc, char **argv)
         usb_full = 0;
         encs[panel.enc[EN_K1 + mi_row(ui.menu_sel)]] = 1; frame();
         check(usb_full == 1u && (lights_word() >> 11 & 1u) == 1u, "menu USB AUDIO: its knob (KNOB 2) -> FULL, saved with the settings");
+        {   /* KIT PAN (2026-11-02): OFF, DRUMMER, AUDIENCE in the settings word (bits 17..18, plus one); a word from
+             * before it: DRUMMER */
+            uint32_t w;
+            drum_kpan = KP_AUDIENCE; w = lights_word(); drum_kpan = KP_OFF; lights_from_word(w);
+            check((w >> 17 & 3u) == 3u && drum_kpan == KP_AUDIENCE, "KIT PAN: AUDIENCE kept in the settings word (bits 17-18), read back");
+            drum_kpan = KP_OFF; w = lights_word(); lights_from_word(w);
+            check((w >> 17 & 3u) == 1u && drum_kpan == KP_OFF, "KIT PAN: OFF kept (not the default's zero)");
+            lights_from_word(w & ~(3u << 17));
+            check(drum_kpan == KP_DRUMMER, "KIT PAN: a settings word from 0.9.3 (no bits): DRUMMER");
+            ui.menu = 1; ui.menu_sel = (uint8_t)mi_find(MI_KPAN); ui.force = 1; frame();
+            check(!strcmp(mi_value(ui.menu_sel, &(uint16_t){0}), "DRUMMER"), "menu DRUMS > KIT PAN reads DRUMMER");
+            tap(B_OCTUP); frame();
+            check(drum_kpan == KP_AUDIENCE && !strcmp(mi_value(ui.menu_sel, &(uint16_t){0}), "AUDIENCE"), "KIT PAN: OCT+ goes round to AUDIENCE");
+            tap(B_OCTUP); frame();
+            check(drum_kpan == KP_OFF, "KIT PAN: OCT+ again: OFF");
+            drum_kpan = KP_DRUMMER; ui.menu_sel = (uint8_t)mi_find(MI_USB); ui.force = 1; frame();   /* (back on USB AUDIO) */
+        }
         tap(B_OCTUP);
         check(usb_full == 0u && ui.menu == 1, "menu USB AUDIO: OCT+ toggles back to MASTER");
         ui.menu_sel = (uint8_t)mi_find(MI_SERIAL); ui.force = 1; frame();

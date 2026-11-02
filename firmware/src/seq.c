@@ -876,7 +876,8 @@ static uint32_t sng_bars(uint32_t k);              /* the bars section k takes *
 static uint32_t sng_meter(uint32_t k);             /* section k's meter (clk_meter's form) */
 static uint32_t sng_outro(void);                   /* the section flagged as the outro, 0xFF = none */
 static int sng_pending(void);                      /* a song loaded while playing waits for its first section */
-static void sng_name(uint32_t k, char *out);       /* section k's name (12 + 1 chars) */
+static void sng_name(uint32_t k, char *out);
+static void sng_note(int32_t k, char *d, uint32_t n);   /* (2026-11-02: the notes, sng.c) */       /* section k's name (12 + 1 chars) */
 /* the songs in flash as the SONGS screen lists them (ui_drummer.c): read again by sng_lib_refresh (sng.c, the
  * UI's loop) only when sng_lib_dirty is set (boot, a load, a write): a slot's read goes through its whole copy for
  * the CRC */

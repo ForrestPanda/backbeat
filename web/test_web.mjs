@@ -262,6 +262,21 @@ async function editorSongs() {
   ok(JSON.stringify(E.SNG.pack(back)) === JSON.stringify(js) && back.sections[0].lanes.KICK === spec.sections[0].lanes.KICK && back.sections[1].ratchets.SNARE === spec.sections[1].ratchets.SNARE
     && back.sections[1].fill === spec.sections[1].fill && back.sections[1].flams.SNARE === spec.sections[1].flams.SNARE && !("flams" in back.sections[0]),
     "songs: unpack -> pack gives the same bytes (lanes, ratchets, flams, fill conditions)");
+  {   /* the notes (2026-11-02): the song's and a section's, packed as the tool packs them (the parity above), read back;
+       * a length byte that does not meet the section's size, or runs past the song, refused; over 255 refused; a
+       * section's note goes with it through the section editor's normalisation */
+    const nh = h.sections.find((s) => s.note), nk = h.sections.indexOf(nh);
+    ok(nh && nk === 1 && (js[23] & 2) && back.notes === spec.notes && back.sections[1].notes === "3rd time: bridge a bar early" && back.sections[4].notes === spec.sections[4].notes
+      && !("notes" in back.sections[0]) && h.noteOff != null && h.bytes === js.length, "songs: notes: the header's and the sections' flags, read back as written");
+    const bad1 = Uint8Array.from(js); bad1[nh.noteOff]--;
+    const bad2 = Uint8Array.from(js); bad2[h.noteOff] = 200;
+    const long = (() => { try { E.SNG.pack({ ...spec, notes: "x".repeat(256) }); return false; } catch (e) { return /notes: 256/.test(e.message); } })();
+    ok(!E.SNG.check(bad1) && !E.SNG.check(bad2) && long && E.SNG.noteBytes("  a line  \r\n\n", "t").length === 8 && E.SNG.noteBytes("\n \n", "t").length === 0
+      && E.SNG.noteBytes("é→", "t").join() === "233,63", "songs: notes: a wrong length is refused, over 255 refused, trailing blanks dropped, Latin-1 with ? for the rest");
+    const nn = E.SED.norm({ ...spec.sections[1], notes: " keep me " });
+    ok(nn.notes === " keep me " && !("notes" in E.SED.norm({ ...spec.sections[1], notes: "  " })) && E.SED.norm(spec.sections[0]).notes == null,
+      "songs: the section editor keeps a section's notes (blank: none)");
+  }
   {   /* a flam (2026-10-17): the hit byte's bit 6, the JSON's "flams" ('.' or 'f', only where the lane hits); the fill
        * bar's too; bit 7 still refused by the check */
     const f = E.SNG.pack({ name: "F", bpm: 120, sections: [{ name: "A", steps: 4, lanes: { SNARE: "x.x.", KICK: "x..." }, flams: { SNARE: "f...", KICK: "...f" },

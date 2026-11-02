@@ -592,6 +592,27 @@ next bar). No named sections, one song, no fill tied to a section change.
    (`build/host/compare.html`); the pans liked, the kick expected in the middle (it is: the hats on the same beats lean
    left), so SETUP > DRUMS > KIT PAN: OFF, DRUMMER (the default), AUDIENCE (the mirror); drums.c `drum_kpan`, kept in the
    settings word (panel.c, bits 17..18 as the value plus one: a word from 0.9.3 reads DRUMMER). Image 564108 B.
+10. **Notes on a song and its sections (2026-11-02, done).** Asked: "a way to add text to the song section, or maybe
+   to the song as a whole so that I can register notes about how to play the song. things like on 3rd time bridge
+   happens a bar earlier", to remember how the song is organised on the Ampero 2 Stage; asked whether the device had
+   room (it has: a song's 4 KB sector holds 3800 B and the example songs pack to 540..850 B; the code 17 KB; no RAM,
+   the text read in place from flash as the names are), then "let's add the help text to the device as well then I
+   think oct- on the home page would be nice". JSON `"notes"` on the song and on a section: free text, Latin-1, up to
+   255 bytes each (`fm1_song.py note_bytes`, the editor's `SNG.noteBytes`, byte for byte the same: newlines kept,
+   trailing blanks dropped). Packed (sng.c): a section's note is its last block (flag bit 4, `SNG_F_NOTE`: a length
+   byte, the text), so the device's own copy, move and delete of sections carry it and the pack-back keeps it (on a
+   new grid too); the song's note follows the last section (the header's flag bit 1, `SNG_H_NOTE`), where the image
+   edits' memmoves carry it as well. `sng_check` 7 (a section's note not meeting its size) and 8 (the song's past
+   the end); a firmware before this refuses a song with notes (check 6: bytes left over), and this one reads older
+   songs as before. On the device: LIVE's state line shows the section's first line, dim, while nothing else is
+   announced (the song's when the section has none; `live_state`, `sng_note`, `cut_text`); OCT- on LIVE opens NOTES
+   (`DV_NOTE`, `notes_draw`: the section's note under its name, the song's under the song's, word-wrapped in the
+   small font, 12 lines, KNOB 1 scrolls, drawn in two strips as the canvas is 240 x 124 at most), OCT- again or HOME
+   back. The editor's Song tab: a Song notes field and a Section notes field (kept through the section editor's
+   normalisation and the undo history, read back from the device). Tests: song_test (lengths and flags refused, read,
+   kept through the pack-back on a new grid, through DUP, RIGHT and DEL), ui_pages_test (the state line, NOTES open,
+   scrolled, closed; renders `live-note`, `live-notes`, `live-big-note`), test_web (parity with `fm1_song.py` on
+   `tests/example-song.json`, which carries notes now; the refusals; the editor keeps them). Cheat sheet and README.
 
 The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log
@@ -629,6 +650,7 @@ the only big lever is `SMP_DATA`, and the acoustic kit is in it.
 | With entries and breaks (CC 28, 2026-10-18; the flams and the fills to the section's end before it) | 550984 B: **30580 B left**; static RAM 61312 B |
 | The ride 2.0 s (399478 B of ADPCM), the voice pick (at most four of a note, the quietest given way) and SETUP > LOAD, 2026-10-22 | 566616 B: **14948 B left**; static RAM 61344 B |
 | SLOOP 2.7 to 2.8.4 looked through (2026-10-30, below): the mix rounded, the rescue key, the clock's mean tempo, the knobs' acceleration, MIDI CLOCK OUT, the crash screen's stack and the stacks painted; then the non-audio functions compiled for size (`UI_SMALL`, clang minsize, SLOOP 2.7's) | 568460 B with the changes, **563116 B** with UI_SMALL: **18448 B left**; static RAM 61568 B |
+| 0.9.3, then the kit's sound without more samples (2026-11-01, `docs/kits.md`): the stand-in layers, the pitch jitter, a pan per lane (the pre-emphasis and the encoder change no byte count) | 563320 B, 563912 B, 564108 B (KIT PAN), then 565620 B (the notes, 2026-11-02): **15944 B left**; static RAM 63184 B (the NOTES screen's text, 512 B) |
 | Data region (0x93000..0xE0000): projects, the user sample slots of 80 KB (USR1 and USR2 now hold the songs: USR3 and USR4 are the user's; free: 0xC4000..0xC7FFF, the old user preset banks 0xDC000..0xDFFFF, the FM6 bank 0xE5000..0xE6FFF, 0xFB000) | about 308 KB |
 | Songs 1..8 (0xA0000..0xAFFFF, A/B) and the pedal settings (0xB0000 / 0xB1000); songs 9..16 (0xB4000..0xC3FFF, A/B, since 2026-10-14) | 72 KB of USR1's 80 KB, 64 KB of USR2's; the kit pair USR3+4 stays the user's |
 | ADPCM sample audio | about 11 KB per second (mono 22 kHz, 4 bit) |

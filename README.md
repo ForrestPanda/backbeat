@@ -130,7 +130,7 @@ short bar (4 steps of 1/16 is `"time": "1/4"`); `fm1_song.py` and the editor's s
 is not whole bars and offer the signature that fits. Write one as JSON (`tests/example-song.json` is the model; `song_examples/` has three demo songs, docs/demos.md) and send it over USB:
 
 ```
-python3 tools/fm1_song.py tests/example-song.json            # check it
+python3 tools/fm1_song.py tests/example-song.json            # check it (and print its notes)
 python3 tools/fm1_song.py tests/example-song.json --put 0    # into song slot 0 (the FM-1 stopped)
 python3 tools/fm1_song.py --pedal-channel 16            # the pedal's MIDI channel, kept through power-off
 python3 tools/fm1_song.py --count-in 1                  # one bar of clicks before a start from stopped (0, 1, 2)
@@ -302,6 +302,7 @@ The panel in one picture (`tools/gen_panel.py`; also the web editor's Cheat shee
 | Button | Tapped | Held |
 | --- | --- | --- |
 | HOME | **LIVE**, the screen it starts on; on LIVE: its other layout, the bar big (kept across power-offs) | |
+| OCT- | on LIVE: **NOTES**, the section's note and the song's as the editor's Song tab wrote them (KNOB 1 scrolls); again or HOME: LIVE. LIVE's state line shows the section's first line while nothing else is announced | |
 | SEL | **SONGS**, your songs and the grooves (on SONGS: the other page, USER / FACTORY; on SECTIONS: the section copied after itself) | |
 | SAVE | nothing | on LIVE, SECTIONS or EDIT: the section into its song, with the song's tempo, kit, swing, drum level and reverb as the knobs left them |
 | EDIT | **SECTIONS**, the song's shape (from SECTIONS: the grid); on SONGS: that row's song and its SECTIONS, or on an empty slot a new song | SLOOP's erase / mute / undo layer |

@@ -6,7 +6,7 @@
 #ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
 #define UI_SMALL
 #endif
-#define FELUCCA_VERSION "BACKBEAT 0.9.2"  /* the drummer firmware for the FM-1 (a fork of SLOOP, based on Felucca) */
+#define FELUCCA_VERSION "BACKBEAT 0.9.3"  /* the drummer firmware for the FM-1 (a fork of SLOOP, based on Felucca) */
 #endif
 static void panel_setup(void);
 static uint8_t sync_reload;                  /* a kit / project loaded: editor RELOAD push */
@@ -232,8 +232,9 @@ UI_SMALL static int page_walk(int32_t s)
 }
 
 #if FELUCCA_DRUMMER
-enum { DV_LIVE, DV_LIB, DV_SEC };                /* the SONG page's screens: LIVE, SONGS, SECTIONS (ui_drummer.c;
-                                                  * SLOOP's chain page, JAM's, gone 2026-10-27; SECTIONS 2026-10-29) */
+enum { DV_LIVE, DV_LIB, DV_SEC, DV_NOTE };       /* the SONG page's screens: LIVE, SONGS, SECTIONS, NOTES (ui_drummer.c;
+                                                  * SLOOP's chain page, JAM's, gone 2026-10-27; SECTIONS 2026-10-29;
+                                                  * NOTES, OCT- on LIVE, 2026-11-02) */
 static void drummer_open(uint32_t view);
 static int on_song_page(void) { return !ui.home && cur_page()->scope == SC_SONG; }   /* (LIVE or SONGS) */
 #endif

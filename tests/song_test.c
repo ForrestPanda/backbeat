@@ -144,6 +144,18 @@ int main(int argc, char **argv)
         p7 = song_blk(blob[7], s7, p7, SNG_F_ENTRY, 64, ent);
         blob_n[7] = song_sec(blob[7], p7, "PLAIN", 16, 2, 0, "x.x.x.x.x.x.x.x.", 0, 0, 0);
     }
+    {   /* slot 11: notes (2026-11-02): VERSE with a note of two lines and no other tail, CHORUS with a break and a
+         * note, OUT with none; the song's own note after the sections */
+        const char *brk[DRUM_LANES] = {0, 0, 0, 0, "x..............."};
+        uint32_t p = song_hdr(blob[11], "NOTED", 120, 0, 3), s;
+        s = p; p = song_sec(blob[11], p, "VERSE", 16, 2, 0, "x...x...x...x...", "....x.......x...", 0, 0);
+        p = song_note(blob[11], s, p, "3rd time: bridge a bar early\nwatch the singer");
+        s = p; p = song_sec(blob[11], p, "CHORUS", 16, 2, 0, "x...x...x...x...", "....X.......X...", "x.x.x.x.x.x.x.x.", 0);
+        p = song_blk(blob[11], s, p, SNG_F_BREAK, 16, brk);
+        p = song_note(blob[11], s, p, "crash on 1");
+        p = song_sec(blob[11], p, "OUT", 16, 2, SNG_F_OUTRO, "x...............", 0, 0, 0);
+        blob_n[11] = song_note(blob[11], 0, p, "Ampero: bank 2, scene A");
+    }
     pos = song_hdr(blob[1], "SLOW", 100, 2, 1);
     pos = song_sec(blob[1], pos, "ONLY", 16, 2, 0, "x.x.x.x.x.x.x.x.", 0, 0, 0);
     blob_n[1] = pos;
@@ -790,6 +802,62 @@ int main(int argc, char **argv)
         assert(n && !sng_check(out, n, &tmp) && tmp.nsec == sng.nsec);
     }
     printf("song: a section packed again from the drum track (EDIT, SAVE held): same bytes, an edit kept, no room refused PASS\n");
+
+    /* ---- notes (2026-11-02): checked, read, carried through the pack-back (the division changed too), the image edits */
+    {
+        static uint8_t out[SNG_MAX], img[SNG_MAX];
+        char nb[256];
+        sng_t tmp;
+        uint32_t n, m, at, p1;
+        assert(sng_check(blob[11], blob_n[11], &tmp) == 0 && tmp.nsec == 3u && (blob[11][23] & SNG_H_NOTE) &&
+               (blob[11][SNG_HDR + 14] & SNG_F_NOTE));
+        memcpy(img, blob[11], blob_n[11]);
+        p1 = tmp.off[1] + sng_u16(img + tmp.off[1] + 16) - 1u - 10u;   /* CHORUS's length byte ("crash on 1": 10) */
+        assert(img[p1] == 10u);
+        img[p1] = 9;  assert(sng_check(img, blob_n[11], &tmp) == 7);      /* the note shorter than the section says */
+        img[p1] = 11; assert(sng_check(img, blob_n[11], &tmp) == 7);      /* longer */
+        img[p1] = 10; img[tmp.off[0] + 14] &= (uint8_t)~SNG_F_NOTE;
+        assert(sng_check(img, blob_n[11], &tmp) == 6);                    /* no flag: bytes left over */
+        memcpy(img, blob[11], blob_n[11]);
+        img[blob_n[11] - 24u] = 30; assert(sng_check(img, blob_n[11], &tmp) == 8);   /* the song's note past the end */
+        img[23] &= (uint8_t)~SNG_H_NOTE; img[blob_n[11] - 24u] = 23;
+        assert(sng_check(img, blob_n[11], &tmp) == 0);                    /* (no flag: the bytes after the sections are
+                                                                           * not looked at, as before 2026-11-02) */
+        pc(16, 11); advance(CTL); sng_poll();
+        assert(sng_cur == 11);
+        sng_note(0, nb, sizeof nb); assert(!strcmp(nb, "3rd time: bridge a bar early\nwatch the singer"));
+        sng_note(1, nb, sizeof nb); assert(!strcmp(nb, "crash on 1"));
+        sng_note(2, nb, sizeof nb); assert(!nb[0]);
+        sng_note(-1, nb, sizeof nb); assert(!strcmp(nb, "Ampero: bank 2, scene A"));
+        sng_note(0, nb, 9); assert(!strcmp(nb, "3rd time"));              /* cut to the room */
+        sng_note(7, nb, sizeof nb); assert(!nb[0]);
+        fm1_irq_off(); sng_apply(0); live_sec = 0; fm1_irq_on();           /* VERSE on a finer grid: its note stays */
+        assert(pattern_rediv(TDRUM, 3) && TDRUM->p[P_SLEN] == 32);
+        n = sng_pack_section(0, out, sizeof out);
+        assert(n && !sng_check(out, n, &tmp) && (out[tmp.off[0] + 14] & SNG_F_NOTE) && (out[23] & SNG_H_NOTE));
+        memcpy(blob[11], out, n); blob_n[11] = n;
+        pc(16, 11); advance(CTL); sng_poll();
+        sng_note(0, nb, sizeof nb); assert(!strcmp(nb, "3rd time: bridge a bar early\nwatch the singer"));
+        sng_note(1, nb, sizeof nb); assert(!strcmp(nb, "crash on 1"));
+        sng_note(-1, nb, sizeof nb); assert(!strcmp(nb, "Ampero: bank 2, scene A"));
+        assert(TDRUM->p[P_SDIV] == 3);
+        memcpy(img, blob[11], blob_n[11]);                                /* the image edits: the notes follow */
+        m = sng_image_edit(img, blob_n[11], sizeof img, SE_DUP, 1, &at);
+        assert(m && at == 2u && !sng_check(img, m, &tmp) && tmp.nsec == 4u);
+        assert(!sng_image_edit(img, m, sizeof img, SE_LEFT, 0, &at));     /* (refused: the first) */
+        m = sng_image_edit(img, m, sizeof img, SE_RIGHT, 0, &at);         /* VERSE after the first CHORUS */
+        assert(m && at == 1u && !sng_check(img, m, &tmp));
+        m = sng_image_edit(img, m, sizeof img, SE_DEL, 0, &at);           /* that CHORUS out */
+        assert(m && !sng_check(img, m, &tmp) && tmp.nsec == 3u);
+        memcpy(blob[11], img, m); blob_n[11] = m;
+        pc(16, 11); advance(CTL); sng_poll();
+        sng_note(0, nb, sizeof nb); assert(!strcmp(nb, "3rd time: bridge a bar early\nwatch the singer"));
+        sng_note(1, nb, sizeof nb); assert(!strcmp(nb, "crash on 1"));   /* the copy's note */
+        sng_note(2, nb, sizeof nb); assert(!nb[0]);
+        sng_note(-1, nb, sizeof nb); assert(!strcmp(nb, "Ampero: bank 2, scene A"));
+        TDRUM->p[P_SDIV] = 2;
+    }
+    printf("song: notes (2026-11-02): checked (lengths, flags), read, kept through the pack-back on a new grid and the image edits PASS\n");
 
     /* ---- the division changed on the device (2026-10-29, seq.c pattern_rediv): the hits keep their place on the beat,
      * the section's fill bar in RAM follows, and the save packs its fill bar and entry on the new grid (sng_pack_rediv) */

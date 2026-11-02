@@ -27,6 +27,11 @@
  *                 (1..64, whole bars of the section's meter) then the steps, played once before the section's
  *                 pattern as it comes in (the entry: from another section or from stopped; the break: the pedal's
  *                 CC 28), the pattern from its top after them (seq.c eb_dstep / sng_eb)
+ *   note          (flags bit 4, since 2026-11-02) last in the section: a byte, its length 1..255, then the text (Latin-1,
+ *                 newlines allowed): how to play it, written in the editor; LIVE's state line shows its first line while
+ *                 nothing else is announced, OCT- on LIVE the whole (ui_drummer.c notes_draw). The song's own note, the
+ *                 same form, after the last section when the header's flags have bit 1 (SNG_H_NOTE). A firmware before
+ *                 these refuses a song that has them (check 6).
  * A section's meter is the bar the pedal counts while it plays (seq.c clk_meter): where a request lands, the fill
  * bar, the ending, the click and the count-in. (The first form, "SNG1", 10 or 14 bytes a step, never reached a
  * device: not read.)
@@ -46,7 +51,9 @@
 #define SNG_F_ENTRY 4u                           /* ..an entry (after the fill bar) */
 #define SNG_F_BREAK 8u                           /* ..a break (after the entry) */
 #define SNG_F_TAIL (SNG_F_FILLBAR | SNG_F_ENTRY | SNG_F_BREAK)   /* the blocks after the pattern, in this order */
+#define SNG_F_NOTE 16u                           /* ..a note (last; 2026-11-02): its length, then the text */
 #define SNG_H_SWING8 1u                          /* the header's flags: the swing moves the 8ths, not the section's steps */
+#define SNG_H_NOTE 2u                            /* ..a note of the song's after the last section (2026-11-02) */
 
 typedef struct {
     const uint8_t *xip;                          /* the packed song: flash (XIP), or a RAM blob on the host */
@@ -116,10 +123,17 @@ UI_SMALL static int sng_check(const uint8_t *b, uint32_t n, sng_t *out)
                 if (!q)
                     return 7;
             }
+        if (b[pos + 14] & SNG_F_NOTE) {              /* its note: the last bytes, as long as its length byte says */
+            if (q >= end || !b[q] || q + 1u + b[q] != end)
+                return 7;
+            q = end;
+        }
         if (q != end)
             return 6;
         pos = end;
     }
+    if ((b[23] & SNG_H_NOTE) && (pos >= n || !b[pos] || pos + 1u + b[pos] > n))   /* the song's note after the sections */
+        return 8;
     return 0;
 }
 
@@ -175,6 +189,44 @@ static uint32_t sng_bars(uint32_t k)             /* the bars its pattern takes, 
     b = 12u * meter_b16(s[15]);
     bars = (len * u + b - 1u) / b;
     return !bars ? 1u : bars > 64u ? 64u : bars;
+}
+/* section s's note (2026-11-02): the offset of its length byte, 0 none (the tail walked, checked at the load) */
+UI_SMALL static uint32_t sng_note_off(const uint8_t *s)
+{
+    uint32_t size = sng_u16(s + 16), q, i;
+    if (!(s[14] & SNG_F_NOTE))
+        return 0;
+    q = sng_walk(s, SNG_SEC_HDR + ((uint32_t)s[12] + 3u) / 4u, s[12], size);
+    for (i = SNG_F_FILLBAR; q && i <= SNG_F_BREAK; i <<= 1)
+        if (s[14] & i)
+            q = sng_walk(s, q + 1u, s[q], size);
+    return q;
+}
+/* the note of section k (k < 0: the song's) into d, n bytes with its end (cut when longer); empty: none. LIVE shows its
+ * first line, the NOTES screen the whole (ui_drummer.c) */
+UI_SMALL static void sng_note(int32_t k, char *d, uint32_t n)
+{
+    const uint8_t *p = 0;
+    uint32_t len, i;
+    d[0] = 0;
+    if (sng_cur < 0 || !sng.xip || !sng.nsec)
+        return;
+    if (k < 0) {
+        const uint8_t *s = sng_sec(sng.nsec - 1u);
+        if (sng.xip[23] & SNG_H_NOTE)
+            p = s + sng_u16(s + 16);
+    } else if ((uint32_t)k < sng.nsec) {
+        const uint8_t *s = sng_sec((uint32_t)k);
+        uint32_t q = sng_note_off(s);
+        if (q)
+            p = s + q;
+    }
+    if (!p)
+        return;
+    len = p[0];
+    for (i = 0; i < len && i + 1u < n; i++)
+        d[i] = (char)p[1u + i];
+    d[i] = 0;
 }
 UI_SMALL static void sng_name(uint32_t k, char *out)      /* (the names are ASCII, 0-padded in the packed form) */
 {
@@ -428,8 +480,8 @@ UI_SMALL static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t roo
         n = sng_pack_track(out, n, room, s, s[14], s[15]);   /* its name, flags (the outro, the tail's) and meter */
         if (!n)
             return 0;
-        if (s[14] & SNG_F_TAIL) {                /* its fill bar of its own, entry and break, as they are (the device
-                                                  * edits the pattern), or on the new grid */
+        if (s[14] & (SNG_F_TAIL | SNG_F_NOTE)) { /* its fill bar of its own, entry and break, as they are (the device
+                                                  * edits the pattern), or on the new grid; its note as it is */
             uint32_t from = sng_walk(s, SNG_SEC_HDR + ((uint32_t)s[12] + 3u) / 4u, s[12], size);
             uint32_t odiv = s[13] % NDIV_STEP, ndiv = (uint32_t)t->p[P_SDIV] % NDIV_STEP;
             if (!from || from >= size)
@@ -451,10 +503,23 @@ UI_SMALL static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t roo
                     n += w;
                     from = sng_walk(s, from + 1u, s[from], size);   /* (checked at the load) */
                 }
+                if (s[14] & SNG_F_NOTE) {        /* the note after them, as it is (2026-11-02) */
+                    if (!from || n + size - from > room)
+                        return 0;
+                    memcpy(out + n, s + from, size - from);
+                    n += size - from;
+                }
             }
         }
         out[at + 16] = (uint8_t)(n - at);        /* its size, the tail counted */
         out[at + 17] = (uint8_t)((n - at) >> 8);
+    }
+    if (sng.xip[23] & SNG_H_NOTE) {              /* the song's note after the sections, as it is (2026-11-02) */
+        const uint8_t *s = sng_sec(sng.nsec - 1u), *q = s + sng_u16(s + 16);
+        if (n + 1u + q[0] > room)
+            return 0;
+        memcpy(out + n, q, 1u + q[0]);
+        n += 1u + q[0];
     }
     return n;
 }

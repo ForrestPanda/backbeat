@@ -1,5 +1,6 @@
 {
  "name": "EXAMPLE",
+ "notes": "Ampero: bank 2, scene A\nthe solo is twice round",
  "bpm": 112,
  "kit": 0,
  "swing": 0,
@@ -23,6 +24,7 @@
   },
   {
    "name": "VERSE",
+   "notes": "3rd time: bridge a bar early",
    "steps": 32,
    "div": "1/16",
    "lanes": {
@@ -97,6 +99,7 @@
   },
   {
    "name": "OUTRO",
+   "notes": "ritardando, crash on 1",
    "steps": 16,
    "div": "1/16",
    "outro": true,

@@ -36,6 +36,10 @@ bar's end, its step i at the bar's step i (an arranger's fill-in), then the patt
 and div; or "steps", whole bars, 1..64 in all; "lanes", "ratchets", "flams", as written, no marks; no lanes at all:
 silence), the pattern from its top after them (a change asked for meanwhile lands at their end): the entry when
 the section comes in from another one or from stopped, the break on the pedal's CC 28 (docs/design.md).
+"notes" (2026-11-02), on the song and on a section: free text, how to play it ("3rd time: bridge a bar early"); up to
+255 bytes each (Latin-1, the device's font; newlines kept, trailing blanks dropped). The device shows the section's
+first line on LIVE's state line while nothing else is announced (the song's when the section has none), and the whole
+on OCT- (NOTES); the editor's Song tab writes them. A firmware before 2026-11-02 refuses a song with notes.
 Lanes:
 KICK, KICK2, SNARE, CLAP, HAT, OPENHAT, PEDAL, RIM, SNARE2, LOWTOM, MIDTOM, HITOM, CRASH, RIDE, SHAKER, COWBELL
 (MIDTOM since 2026-10-14, where the conga was: "CONGA" still reads as it; spaces and case do not matter). div: 1/4 1/8 1/16 1/32 8T 16T 1/2 1BAR 2BAR. time: the section's meter,
@@ -194,6 +198,25 @@ def parse_hits(obj, steps, name):
     return hit
 
 
+def note_bytes(text, name):
+    """a "notes" string as the packed form carries it (the same in web/editor.html SNG.noteBytes): newlines kept, tabs
+    spaces, trailing blanks and empty edge lines dropped, Latin-1 with '?' for the rest, 1..255 bytes; b"" for none"""
+    if text is None:
+        return b""
+    s = str(text).replace("\r\n", "\n").replace("\r", "\n").replace("\t", " ")
+    s = "\n".join(line.rstrip() for line in s.split("\n")).strip("\n")
+    if not s:
+        return b""
+    b = s.encode("latin-1", "replace")
+    if len(b) > 255:
+        sys.exit(f"{name}: notes: {len(b)} bytes; at most 255")
+    if any(c < 32 and c != 10 for c in b):
+        sys.exit(f"{name}: notes: control characters")
+    if len(s.split("\n")[0]) > 36:
+        print(f"warning: {name}: notes: the device shows the first line cut to its width (about 36 characters)", file=sys.stderr)
+    return b
+
+
 def pack_steps(hit):
     """the steps of a hit table: 2 bytes of lanes, then a byte a hit"""
     body = bytearray()
@@ -274,6 +297,10 @@ def pack_section(sec, index):
             sys.exit(f"{name}: {key}: {n} steps is not whole bars of {bar}")
         body += bytes([n]) + pack_steps(parse_hits(eb, n, f"{name} {key}"))
         flags |= bit
+    note = note_bytes(sec.get("notes"), name)      # its note, last (2026-11-02)
+    if note:
+        body += bytes([len(note)]) + note
+        flags |= 16
     size = SEC_HDR + len(body)
     out = bytearray(name.encode("ascii", "replace").ljust(12, b"\0"))
     out += bytes([steps, DIVS.index(div), flags, meter]) + struct.pack("<H", size)
@@ -295,9 +322,13 @@ def pack(spec):
     if swing_grid not in SWING_GRIDS:                  # section's grid (SLOOP's), or "1/8", a shuffle: the 8ths, the 16ths inside
         sys.exit(f"swing_grid must be one of {' '.join(SWING_GRIDS)}")   # each sharing them (seq.c grid_den8, since 2026-10-19)
     name = str(spec.get("name", "SONG"))[:12].encode("ascii", "replace").ljust(12, b"\0")
+    note = note_bytes(spec.get("notes"), "song")      # the song's note, after the sections (2026-11-02)
     hdr = SNG_MAGIC + name + struct.pack("<HBBBBBB", bpm, kit, swing, int(spec.get("drum_level", 100)),
-                                          int(spec.get("drum_reverb", 20)), len(secs), SWING_GRIDS.index(swing_grid)) + bytes(8)
+                                          int(spec.get("drum_reverb", 20)), len(secs),
+                                          SWING_GRIDS.index(swing_grid) | (2 if note else 0)) + bytes(8)
     body = b"".join(pack_section(s, i) for i, s in enumerate(secs))
+    if note:
+        body += bytes([len(note)]) + note
     for w in bar_warnings(spec):                     # (a warning: the device plays it, but times it in whole bars)
         print(f"warning: {w}", file=sys.stderr)
     blob = hdr + body
@@ -337,6 +368,11 @@ def describe(blob):
                 q = walk(blob, q + 1, blob[q])
         print(f"  {k}: {sname:12s} {steps:2d} steps {DIVS[div]:5s} {meter_str(meter) or '4/4':5s} {hits:3d} hits {size:4d} bytes"
               f"{'  OUTRO' if flags & 1 else ''}{tail}")
+        if flags & 16:                               # its note (2026-11-02), last
+            print("     notes: " + blob[q + 1:q + 1 + blob[q]].decode("latin-1").replace("\n", " / "))
+    q = SNG_HDR + sum(s[6] for s in sections(blob))
+    if blob[23] & 2:
+        print("  notes: " + blob[q + 1:q + 1 + blob[q]].decode("latin-1").replace("\n", " / "))
 
 
 def walk(blob, q, n):
