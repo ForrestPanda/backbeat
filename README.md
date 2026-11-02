@@ -385,7 +385,8 @@ start, MIDI clock in: OFF, USB or TRS, the tempo and START / STOP from a clock m
 drums' channel, IN, other channels, OUT), MIDI 2 (MIDI LEARN, clear; TRS TO USB: what the TRS jack receives goes out
 over USB as well, the pedal and the clock for a tablet's editor to follow; off by default; BRIDGE ONLY: out over USB
 and nothing else, the FM-1 a TRS-to-USB MIDI interface that plays nothing, LIVE says BRIDGE: PEDAL TO USB), TEMPO (tempo, click,
-tune), FEEL (swing, humanize), DRUMS (level, reverb, delay, pan), MASTER, TEXTURE and TEXTURE 2, SCREEN (colour, zoom; SCREEN OFF: NEVER, 1, 5 or 15 minutes stopped and untouched, then
+tune), FEEL (swing, humanize), DRUMS (level, reverb, delay, pan; KIT PAN: each drum's own place in the stereo
+picture, OFF, DRUMMER (hats left, floor tom and ride right, kick and snare in the middle) or AUDIENCE, the mirror), MASTER, TEXTURE and TEXTURE 2, SCREEN (colour, zoom; SCREEN OFF: NEVER, 1, 5 or 15 minutes stopped and untouched, then
 the screen and its backlight go dark; a button, key, knob or the pedal wakes it, and the press that wakes it does
 nothing else), LIGHTS, AUDIO,
 LOAD (the audio's load and the drum voices), SYSTEM (calibration, ABOUT). The pedal settings are saved once the music stops.
@@ -438,7 +439,7 @@ firmware ([BUILDING.md](BUILDING.md)): at your own risk.
 | `grooves/`, `docs/grooves.md` | generic grooves, not songs (two sections, verse and chorus, 4-bar phrases, a fill at each phrase's end; each one's tempo, meter, verse, chorus and fill in `docs/grooves.md`): classic rock, blues, rock ballad, slow rock, punk, half-time shuffle, train beat, one drop, four on the floor, metal gallop, a 6/8 ballad, and some to spark ideas (7/8, a tom groove, linear funk, three over four, ride and kick only); the firmware's factory songs, slots 1..16 in `grooves/factory.txt`'s order |
 | `web/editor.html` | the web editor (SLOOP's, drums only, protocol v11) with a Song editor tab (no FM-1 needed but to send and set the pedal): the pedal channel, Guitar Pro and MIDI file import (Pyodide), the section editor, a player; a Setlist tab: the device's sixteen slots; `web/test_web.mjs` tests it against the simulated FM-1 |
 | `web/kit/` | the kit the editor serves (the Muldjord Kit with two velocity layers), the files `tools/mkkit.py` makes the device image from |
-| `tools/gen_realkit.py`, `tools/realkit.json`, `assets/realkit/` | the built-in layered kit MULDJORD: the recipe, rendered once from the source kits into WAVs (layers, takes, levels, fitted to 290 KB); `tools/gen_samples.py` builds them in as set REAL, the editor's player plays them (`web/realkit/`) |
+| `tools/gen_realkit.py`, `tools/realkit.json`, `assets/realkit/` | the built-in layered kit MULDJORD: the recipe, rendered once from the source kits into WAVs (layers, takes, levels, pans, pre-emphasis for the device's playback, fitted to 412 KB); `tools/gen_samples.py` builds them in as set REAL (a lookahead ADPCM encoder), the editor's player plays them (`web/realkit/`) |
 | `tools/fm1_render.py`, `tests/song_render.c` | a song played by the pedal, rendered to a WAV on the host |
 | `tools/gen_panel.py`, `assets/panel/` | the panel diagram above (SVG and PNG): every control's role on LIVE on the drawing, the other screens' in four columns under it; edit its tables and run it again |
 | `tools/gen_screens.py`, `assets/screens/` | the screen pictures in this README, from the host tests' renders of every screen (`build/host/*.ppm`) |

@@ -4,6 +4,24 @@ What changed in each version of BackBeat, the firmware and the website (the edit
 <https://forrestpanda.github.io/backbeat/>). The version is on the device's boot screen and in SETUP > SYSTEM >
 ABOUT; the editor shows it next to the connect button.
 
+## Unreleased
+
+### Firmware
+
+- **The kit sounds brighter and less like a machine, with no more flash for samples.** The samples are pre-emphasised
+  for the device's playback (its interpolation lost 3 dB at 8 kHz and 6 dB at 11 kHz on the kick, snare and toms, 3 dB
+  at 10 kHz on the hats and cymbals; half of that is given back, a full correction sounded hissy), encoded with a
+  lookahead (about 2 dB less hiss on the crash and ride tails), and the one-take sounds (the hats, the pedal, the toms,
+  the ride) no longer play the very same sample twice running: a neighbour velocity layer stands in, at the hit's
+  level. With HUMANIZE on, each hit is a few cents off (6 at LIGHT, 12 at MORE). Each drum has its place in the stereo
+  picture now, a drummer's view (hats left, floor tom and ride right, kick and snare in the middle), on top of the drum
+  track's PAN; the speaker sums it. **SETUP > DRUMS > KIT PAN** turns it OFF, to DRUMMER (the default) or to AUDIENCE,
+  the mirror; kept with the settings.
+
+### Website
+
+- **The editor's player follows**: the same stand-in layers, the same pans, the re-rendered kit.
+
 ## 0.9.3 (2026-11-01)
 
 ### Firmware

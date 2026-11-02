@@ -97,6 +97,8 @@ static uint32_t hum_run(uint32_t amt, hit_t *out)
                                                                             * is the same as another only from one seed
                                                                             * (the hats have one take; the crash two) */
     memset(rk_last, 0, sizeof rk_last);
+    memset(rk_last_l, 0, sizeof rk_last_l);                                 /* (the stand-in layers too, 2026-11-01) */
+    jit_seed = 1;
     for (i = 0; i < 16u; i++) {
         dstep_set(&TDRUM->dstep[i], 4u, LV_NORM, 0);                      /* HAT, every 16th */
         if (!(i & 1u))

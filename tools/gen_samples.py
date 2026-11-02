@@ -25,7 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sampleio as sio  # noqa: E402
-from sampleio import detect_hz, hz_to_midi, ima_encode, key_split, onset, peak, read_any_wav, resample  # noqa: E402
+from sampleio import detect_hz, hz_to_midi, ima_encode_beam, key_split, onset, peak, read_any_wav, resample  # noqa: E402
 
 SRC = Path(__file__).resolve().parents[1]
 GENDIR = SRC / "build" / "genwav"
@@ -221,8 +221,9 @@ class Builder:
         self.zones, self.sets, self.blob, self.kinds = [], [], bytearray(), {}
 
     def add(self, s, loop_start):
-        """ADPCM-encode s into the blob (each sample starts on an even offset) -> (offset, state at loop_start)"""
-        enc, st = ima_encode(s, loop_start)
+        """ADPCM-encode s into the blob (each sample starts on an even offset) -> (offset, state at loop_start); with
+        lookahead (sampleio.ima_encode_beam, 2026-11-01: a couple of dB less noise on the cymbal tails, the same decoder)"""
+        enc, st = ima_encode_beam(s, loop_start)
         off = len(self.blob)
         self.blob += enc
         if len(self.blob) & 1:
@@ -279,7 +280,7 @@ class Builder:
                     off, st = self.add(smp, len(smp))
                     self.zones.append(dict(off=off, n=len(smp), ls=len(smp), le=len(smp), looped=False, sr=L["rate"],
                                            root16=L["note"] * 16, pred=st[0], idx=st[1], lo=L["note"], hi=L["note"]))
-            self.rk.append((L["lane"], L["note"], layers, L["vel"]))
+            self.rk.append((L["lane"], L["note"], layers, L["vel"], L.get("pan", 0)))
         self.sets.append(("REAL", z0, len(self.zones) - z0))
         self.kinds["REAL"] = "kit"
         self.real_name = kit["name"]
@@ -323,17 +324,19 @@ class Builder:
         # first) and takes, and the velocity each layer stands for; nl 0: no such lane (or no kit)
         lanes = ["KICK", "KICK2", "SNARE", "CLAP", "HAT", "OPENHAT", "PEDAL", "RIM", "SNARE2", "LOWTOM", "MIDTOM", "HITOM", "CRASH",
                  "RIDE", "SHAKER", "COWBELL"]
-        rk = {lane: (layers, vel) for lane, _, layers, vel in getattr(self, "rk", [])}
+        rk = {lane: (layers, vel, pan) for lane, _, layers, vel, pan in getattr(self, "rk", [])}
         real = next((i for i, (n, _, _) in enumerate(sets) if n == "REAL"), -1)
         L.append(f"#define SMP_REAL_SET {real}")
         L.append(f'#define SMP_REAL_NAME "{getattr(self, "real_name", "")}"')
-        L.append("static const struct { uint8_t nl, z[4], nt[4], vel[4]; } RK_LANE[16] = {")
+        # pan (2026-11-01): kit.json's percent as the track PAN's units (-64 left .. 63 right), for every sampled kit
+        L.append("static const struct { uint8_t nl, z[4], nt[4], vel[4]; int8_t pan; } RK_LANE[16] = {")
         for lane in lanes:
-            layers, vel = rk.get(lane, ([], []))
+            layers, vel, pan = rk.get(lane, ([], [], 0))
             z = [a for a, _ in layers] + [0] * (4 - len(layers))
             nt = [b for _, b in layers] + [0] * (4 - len(layers))
             v = list(vel) + [0] * (4 - len(vel))
-            L.append(f"    {{{len(layers)}, {{{', '.join(map(str, z))}}}, {{{', '.join(map(str, nt))}}}, {{{', '.join(map(str, v))}}}}},   /* {lane} */")
+            pan = max(-64, min(63, int(round(pan * 64 / 100))))
+            L.append(f"    {{{len(layers)}, {{{', '.join(map(str, z))}}}, {{{', '.join(map(str, nt))}}}, {{{', '.join(map(str, v))}}}, {pan}}},   /* {lane} */")
         L.append("};")
         names = ", ".join(f'"{n}"' for n, _, _ in sets or [("NONE", 0, 0)])
         L.append("#define SMP_SET_NAMES_INIT " + names)

@@ -579,6 +579,19 @@ next bar). No named sections, one song, no fill tied to a section change.
    song save next to it (the slots and the songs are different sectors), and the install order (the package first,
    the slot image after: the kit must not reference the slot before it is written, so `samples.c` falls back to the
    first part's zones when the FSMP magic is missing).
+9. **The kit's sound without a byte more of samples (2026-11-01, done; `docs/kits.md`, the 2026-11-01 note).** The
+   user asked to go over the resources and how the kit could sound better; of the options, the four free of flash:
+   pre-emphasis in the recipe against the device's interpolation roll-off (`preemph_db`), a beam-search ADPCM encoder
+   for the built-in set (+1.5 to 2 dB on the cymbal tails), stand-in layers for the one-take lanes (the hats' machine
+   gun), the pitch jitter with HUMANIZE, and a pan per lane (a drummer's view, every sampled kit). Not taken yet, from
+   the same review: a better interpolation filter in `drums_mix` (the images of the 2x lanes; 2 multiplies a voice
+   sample), bake-time EQ and compression per lane, a block codec with a per-block shift in place of IMA (quieter tails
+   at the same bytes), and item 8 above. Verify on hardware: by ear; the cap and the pans are recipe numbers.
+   2026-11-02, after the user listened: the 6 dB render "noisier" than 0.9.3 (not the ADPCM noise, which fell: the
+   cymbals' top against their body, the hiss and the images with it), the cap set to 3 dB from an A/B at 0, 3 and 6
+   (`build/host/compare.html`); the pans liked, the kick expected in the middle (it is: the hats on the same beats lean
+   left), so SETUP > DRUMS > KIT PAN: OFF, DRUMMER (the default), AUDIENCE (the mirror); drums.c `drum_kpan`, kept in the
+   settings word (panel.c, bits 17..18 as the value plus one: a word from 0.9.3 reads DRUMMER). Image 564108 B.
 
 The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log

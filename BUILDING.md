@@ -70,7 +70,10 @@ The firmware's only samples are the built-in kit MULDJORD: the WAVs in `assets/r
 `tools/gen_samples.py` encodes at build time (set REAL). `tools/gen_realkit.py` renders them once from
 `tools/realkit.json` and the source kits (several GB, in a `kits/` folder two levels above this repository; how to get
 them is in `docs/kits.md`, credits in `assets/realkit/ATTRIBUTION.txt`);
-the build never needs the source kits. `docs/kits.md` has the recipe and the flash budget.
+the build never needs the source kits. `docs/kits.md` has the recipe and the flash budget. Both scripts use numpy
+(`pip3 install numpy`): `gen_realkit.py` for the pre-emphasis, `gen_samples.py` for its lookahead ADPCM encoder (without
+numpy it falls back to the plain one: a noisier kit, and `tests/golden.txt` will not match). The sample step of a build
+takes about a minute when the kit changed, and is cached (`build/gen_samples.cache`).
 
 `assets/samples-cc0/KIT` (CC0 recordings from Versilian Studios' VCSL, `ATTRIBUTION.txt` there) is a source of
 MULDJORD's CLAP, COWBELL and SHAKER and an example kit for `tools/mkkit.py`; `tools/fetch_cc0.py` downloads it

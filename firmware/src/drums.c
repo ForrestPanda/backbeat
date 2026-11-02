@@ -289,6 +289,11 @@ static uint32_t rk_layer(uint32_t ln, uint32_t vel)
 }
 static uint8_t rk_last[16];
 static uint32_t rk_seed = 0x2545F491u;
+static uint32_t rk_rand(void)                       /* 0..255 (the LCG rk_take steps; deterministic: the golden renders) */
+{
+    rk_seed = rk_seed * 1664525u + 1013904223u;
+    return rk_seed >> 24;
+}
 static uint32_t rk_take(uint32_t ln, uint32_t nt)
 {
     uint32_t t;
@@ -299,6 +304,28 @@ static uint32_t rk_take(uint32_t ln, uint32_t nt)
     rk_last[ln & 15u] = (uint8_t)t;
     return t;
 }
+/* (2026-11-01) a lane with one take of the layer its hit picked (the hats, the pedal, the toms, the ride: their
+ * sources have one hit a layer) played the very same sample twice running: the machine gun on 8th and 16th hats. The
+ * layer the lane played last is not played again at once when a neighbour layer can stand in for it, scaled to the
+ * hit's velocity by the layers' own (drum_on: a harder layer turned down, a softer one up, to RK_VMAX): a round robin
+ * made of the velocity layers, their small differences of timbre standing for the takes'. The hit's own layer plays
+ * whenever the last hit was another, so a pattern goes own, stand-in, own, stand-in */
+#define RK_VMAX 255u                                /* a voice's velocity: 127 as written, more for a stand-in layer */
+static uint8_t rk_last_l[16];                       /* the layer + 1 (0: none yet) */
+static uint32_t rk_alt(uint32_t ln, uint32_t l)
+{
+    uint32_t nl = RK_LANE[ln & 15u].nl, c[2], n = 0;
+    ln &= 15u;
+    if (nl >= 2u && RK_LANE[ln].nt[l & 3u] <= 1u && rk_last_l[ln] == (uint8_t)(l + 1u)) {
+        if (l > 0u)
+            c[n++] = l - 1u;
+        if (l + 1u < nl)
+            c[n++] = l + 1u;
+        l = c[rk_rand() % n];
+    }
+    rk_last_l[ln] = (uint8_t)(l + 1u);
+    return l;
+}
 
 /* fm1-drummer: humanize (SETUP > FEEL > HUMANIZE; seq.c drum_step and micro_units): each step a little early or
  * late, each hit a little louder or softer, as a drummer plays. The level is the hit's own, set by the sequencer
@@ -307,10 +334,16 @@ static uint32_t rk_take(uint32_t ln, uint32_t nt)
 #define HUM_N 3u
 static uint8_t drum_hum = 1;                        /* 0 off, 1 light, 2 more (panel.c's lights word, bits 26..27) */
 static uint8_t drum_hum_g;                          /* the next hit's level, 128 = as written (0: none set) */
-static uint32_t hum_vel(uint32_t vel, uint32_t g)
+/* fm1-drummer (2026-11-02): the lanes' places in the stereo picture (RK_LANE pan, tools/realkit.json) as a setting,
+ * SETUP > DRUMS > KIT PAN: OFF (every drum where the track's PAN puts it, as until 0.9.3), DRUMMER (the recipe: hats
+ * left, floor tom and ride right), AUDIENCE (the mirror); panel.c's lights word, bits 17..18 */
+enum { KP_OFF, KP_DRUMMER, KP_AUDIENCE, KP_N };
+static uint8_t drum_kpan = KP_DRUMMER;
+static uint32_t jit_seed = 0x9E3779B9u;              /* the pitch jitter's (drum_on) */
+static uint32_t hum_vel(uint32_t vel, uint32_t g, uint32_t max)   /* max: 127, RK_VMAX for the layered kit */
 {
     vel = (vel * g + 64u) >> 7;
-    return vel < 1u ? 1u : vel > 127u ? 127u : vel;
+    return vel < 1u ? 1u : vel > max ? max : vel;
 }
 
 static void drum_on(uint32_t note, uint32_t vel)
@@ -333,18 +366,19 @@ static void drum_on(uint32_t note, uint32_t vel)
         if (!RK_LANE[ln].nl)
             return;
         note = LANE_NOTE[ln];
-        l = rk_layer(ln, vel);
+        l = rk_alt(ln, rk_layer(ln, vel));          /* (a stand-in layer when the hit's own just played) */
         zid = (int32_t)(SMP_SETS[SMP_REAL_SET].z0 + RK_LANE[ln].z[l] + rk_take(ln, RK_LANE[ln].nt[l]));
         vel = vel * 127u / RK_LANE[ln].vel[l];      /* (the layer is that loud already: its own velocity full,
-                                                     * a MIDI velocity between two layers a little under) */
-        if (vel > 127u)
-            vel = 127u;
+                                                     * a MIDI velocity between two layers a little under; a softer
+                                                     * stand-in scaled up, past 127: drums_mix clamps the gain) */
+        if (vel > RK_VMAX)
+            vel = RK_VMAX;
 #else
         return;
 #endif
     } else if (kit >= DRUM_SYN) {                   /* SYN1..SYN4: your synthesised kit */
         const dsu_kit_t *u = dsu_kit(kit - DRUM_SYN);
-        drum_synth_on(note, hum_vel(vel, hg), kit, u->s, u->crush);
+        drum_synth_on(note, hum_vel(vel, hg, 127u), kit, u->s, u->crush);
         return;
     }
     if (zid < 0 && kit >= DRUM_USR) {              /* a user kit: the lane's sound, as its note (the hat choke) */
@@ -364,7 +398,7 @@ static void drum_on(uint32_t note, uint32_t vel)
         if (zid < 0)
             return;                                 /* (an empty slot, or no sound on this lane) */
     } else if (zid < 0) {                           /* synthesised kit */
-        drum_synth_on(note, hum_vel(vel, hg), kit, DS_KITS[kit - DRUM_DS0].s, DS_KITS[kit - DRUM_DS0].crush);
+        drum_synth_on(note, hum_vel(vel, hg, 127u), kit, DS_KITS[kit - DRUM_DS0].s, DS_KITS[kit - DRUM_DS0].crush);
         return;
     }
     if (note == 42u || note == 44u)                 /* hi-hat choke */
@@ -375,7 +409,7 @@ static void drum_on(uint32_t note, uint32_t vel)
             }
     v = drum_voice(note);
     v->note = (uint8_t)note;
-    v->vel = (uint8_t)hum_vel(vel, hg);
+    v->vel = (uint8_t)hum_vel(vel, hg, kit == DRUM_REAL ? RK_VMAX : 127u);
     v->active = 1;
     v->s[7] = 0;
     v->age = ++drums.age;
@@ -384,9 +418,17 @@ static void drum_on(uint32_t note, uint32_t vel)
     v->s[0] = v->s[1] = v->s[2] = 0;
     {
         const smp_zone_t *z = drum_zone_of(v);
-        v->s[3] = sample_next(z, v, 0);
         /* clamped (SLOOP, after 2.8.3): a user kit zone's root is not checked (a typed root of 300 shifted by 2^20) */
-        v->s[5] = (int32_t)((pow2_q16(clamp((int32_t)note * 16 - z->root16, -1536, 2047)) >> 8) * (z->rate >> 8));
+        int32_t d16 = clamp((int32_t)note * 16 - z->root16, -1536, 2047);
+        v->s[3] = sample_next(z, v, 0);
+        if (kit == DRUM_REAL && drum_hum) {         /* (2026-11-01) a few cents either way, as no two hits of a drum ring
+                                                     * alike: within a 1/16 semitone (6 cents) at LIGHT, 2 at MORE. Its own
+                                                     * LCG: HUMANIZE moves no take or stand-in (rk_seed), as its level
+                                                     * does not (seq2_test: the same hits on the same samples) */
+            jit_seed = jit_seed * 1664525u + 1013904223u;
+            d16 += (int32_t)((jit_seed >> 24) % (2u * drum_hum + 1u)) - (int32_t)drum_hum;
+        }
+        v->s[5] = (int32_t)((pow2_q16(d16) >> 8) * (z->rate >> 8));
     }
     {
         uint32_t vi = (uint32_t)(v - drums.v);
@@ -449,11 +491,26 @@ static __attribute__((noinline)) void drums_mix(int32_t *ml, int32_t *mr, int32_
             continue;
         z = drum_zone_of(v);
         uint32_t frac = v->ph[1], stepq = (uint32_t)v->s[5];   /* Q16 source samples per output (drum_on) */
-        int32_t g;
+        int32_t g, vgl = gl, vgr = gr, lp;
         if (!v->active)
             continue;
+        lp = drum_kpan == KP_OFF ? 0 : RK_LANE[lane_of_note(v->note)].pan;   /* (2026-11-01) the lane's place in the
+                                                     * stereo picture (tools/realkit.json "pan", a drummer's view: hats
+                                                     * left, floor tom and ride right), on top of the track's PAN, for
+                                                     * every sampled kit; the speaker sums it; KIT PAN turns it off or
+                                                     * round (2026-11-02) */
+        if (drum_kpan == KP_AUDIENCE)
+            lp = -lp;
+        if (lp) {
+            lp = clamp(pan + lp, -64, 63);
+            vgl = 4096 - (lp > 0 ? lp * 64 : 0);
+            vgr = 4096 + (lp < 0 ? lp * 64 : 0);
+        }
         g = mulq15(lvl, v->vel * 258);
         g += g * 3 >> 2;                           /* x1.75 (+5 dB): as loud as the synthesised kits */
+        if (g > 65535)
+            g = 65535;                             /* (a stand-in layer scaled up, rk_alt: a full-scale sample times more
+                                                    * would not fit the mix's int32; such a layer's samples are quieter) */
         for (i = 0; i < n; i++) {
             int32_t s;
             frac += stepq;
@@ -486,8 +543,8 @@ static __attribute__((noinline)) void drums_mix(int32_t *ml, int32_t *mr, int32_
                 mono[i] += s;
                 continue;
             }
-            ml[i] += (s * gl) >> 12;
-            mr[i] += (s * gr) >> 12;
+            ml[i] += (s * vgl) >> 12;
+            mr[i] += (s * vgr) >> 12;
             if (send)
                 rev[i] += mulq15(s, send);
             if (dsend)

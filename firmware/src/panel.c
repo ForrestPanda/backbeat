@@ -104,6 +104,8 @@ UI_SMALL static uint32_t lights_word(void)
            (uint32_t)(usb_full != 0u) << 11 |
            (uint32_t)(lights_sync % 3u) << 12 | (uint32_t)(lights_mout != 0u) << 14 | (uint32_t)(lights_min == 1u) << 15 |
            (uint32_t)(usb_serial != 0u) << 16 |   /* (17..20: the visualiser's style, gone) */
+           (uint32_t)(drum_kpan < KP_N ? drum_kpan + 1u : 0u) << 17 |   /* KIT PAN (2026-11-02): 1 OFF, 2 DRUMMER, 3 AUDIENCE;
+                                                                      * 0, a word saved before it: DRUMMER (19..20 free) */
            (uint32_t)(lights_min >= 2u && lights_min <= 17u ? lights_min - 1u : 0u) << 21 |   /* 2.6: CH n (n 1..16; 0 none) */
            (uint32_t)(drum_hum < HUM_N ? drum_hum : 0u) << 26 |   /* fm1-drummer: HUMANIZE (a word saved before it: off) */
            (uint32_t)(midi_thru != 0u) << 28 |   /* TRS TO USB (2026-10-22; bits no older firmware wrote: off) */
@@ -124,6 +126,7 @@ UI_SMALL static void lights_from_word(uint32_t w)
         lights_min = (uint8_t)(((w >> 21) & 31u) + 1u);   /* 2.6: CH n (an older SLOOP reads NOTES) */
     usb_serial = (uint8_t)((w >> 16) & 1u);
     drum_hum = (uint8_t)(((w >> 26) & 3u) < HUM_N ? (w >> 26) & 3u : 0u);
+    drum_kpan = (uint8_t)(((w >> 17) & 3u) ? ((w >> 17) & 3u) - 1u : KP_DRUMMER);
     midi_thru = (uint8_t)((w >> 28) & 1u ? ((w >> 29) & 1u ? THRU_ONLY : THRU_ON) : 0u);
     scr_off = (uint8_t)(w >> 30);
 }

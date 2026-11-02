@@ -202,18 +202,31 @@ int main(void)
               RK_LANE[rd].nl == 2u && !strcmp(SMP_SET_NAMES[SMP_REAL_SET], "REAL"), "MULDJORD: the power-on kit; snare 4 layers, ride 2");
         host_tracks_init();
         TDRUM->p[P_E0] = (int16_t)DRUM_REAL;
-        for (k = 0, ok = 1; k < 4u; k++) {
-            uint32_t i, zid;
-            quiet();
-            drum_on(LANE_NOTE[sn], V[k]);
-            for (i = 0; i < NDRUM && !drums.v[i].active; i++)
-                ;
-            zid = (uint32_t)drums.v[i].s[4] - z0;
-            ok &= zid >= RK_LANE[sn].z[k] && zid < RK_LANE[sn].z[k] + RK_LANE[sn].nt[k] && drums.v[i].vel == 127u;
-            pk[k] = run_peak(20);
+        song.g[G_DRLVL] = 40;                           /* (under the master limiter: at 100 the hard and normal snares both
+                                                         * reach LIM_T and come out alike) */
+        for (k = 0, ok = 1; k < 4u; k++) {              /* every take of the layer (2026-11-01: the takes of a layer differ
+                                                         * widely in peak, the hard snare's 15000 to 32000: the loudest of
+                                                         * each layer is compared, not the take the round robin happens on) */
+            uint32_t i, zid, h, seen = 0, all = (1u << RK_LANE[sn].nt[k]) - 1u;
+            pk[k] = 0;
+            for (h = 0; h < 12u && seen != all; h++) {
+                int32_t p;
+                quiet();
+                drum_on(LANE_NOTE[sn], V[k]);
+                for (i = 0; i < NDRUM && !drums.v[i].active; i++)
+                    ;
+                zid = (uint32_t)drums.v[i].s[4] - z0;
+                ok &= zid >= RK_LANE[sn].z[k] && zid < RK_LANE[sn].z[k] + RK_LANE[sn].nt[k] && drums.v[i].vel == 127u;
+                seen |= 1u << (zid - RK_LANE[sn].z[k]);
+                p = run_peak(20);
+                if (p > pk[k])
+                    pk[k] = p;
+            }
+            ok &= seen == all;
         }
-        check(ok, "MULDJORD: velocities 127, 100, 72, 42 play the snare's layers 1..4, each at its own level");
-        check(pk[0] > pk[1] && pk[1] > pk[2] && pk[2] > pk[3] && pk[3] > 600, "MULDJORD: hard > normal > soft > ghost, the ghost heard");
+        check(ok, "MULDJORD: velocities 127, 100, 72, 42 play the snare's layers 1..4 (every take), each at its own level");
+        check(pk[0] > pk[1] && pk[1] > pk[2] && pk[2] > pk[3] && pk[3] > 600, "MULDJORD: hard > normal > soft > ghost (each layer's loudest take), the ghost heard");
+        song.g[G_DRLVL] = 100;
         quiet(); drum_on(LANE_NOTE[rd], 100); for (k = 0; k < NDRUM && !drums.v[k].active; k++) ;
         ok = (uint32_t)drums.v[k].s[4] - z0 == RK_LANE[rd].z[0] && drums.v[k].vel == 100u;
         quiet(); drum_on(LANE_NOTE[rd], 72); for (k = 0; k < NDRUM && !drums.v[k].active; k++) ;
@@ -231,6 +244,35 @@ int main(void)
             last = t;
         }
         check(ok && seen == (1u << RK_LANE[sn].nt[0]) - 1u, "MULDJORD: 60 snares: every take, never the same twice running");
+        {   /* the lanes' pans (2026-11-01; KIT PAN 2026-11-02): the hat left in the drummer's view, right for the
+             * audience, in the middle off; the kick in the middle whichever */
+            static int32_t o[CTL * 2];
+            int32_t pl[3], pr[3], kl, kr, rev = song.g[G_DRREV], dly = song.g[G_DRDLY];
+            uint32_t m, b, i, hum = drum_hum;
+            song.g[G_DRREV] = song.g[G_DRDLY] = 0; drum_hum = 0;   /* (the same hat each time: no stand-in, no jitter, no
+                                                                     * stereo tails) */
+            for (m = 0; m < 3u; m++) {
+                drum_kpan = (uint8_t)m;
+                rk_last_l[4] = 0;
+                quiet(); drum_on(LANE_NOTE[4], 100); pl[m] = pr[m] = 0;   /* (lane 4: the hat) */
+                for (b = 0; b < 8u; b++) {
+                    mix_block(o, CTL);
+                    for (i = 0; i < CTL; i++) { if (abs(o[2 * i]) > pl[m]) pl[m] = abs(o[2 * i]); if (abs(o[2 * i + 1]) > pr[m]) pr[m] = abs(o[2 * i + 1]); }
+                }
+            }
+            drum_kpan = KP_DRUMMER;
+            quiet(); drum_on(LANE_NOTE[0], 100); kl = kr = 0;
+            for (b = 0; b < 8u; b++) {
+                mix_block(o, CTL);
+                for (i = 0; i < CTL; i++) { if (abs(o[2 * i]) > kl) kl = abs(o[2 * i]); if (abs(o[2 * i + 1]) > kr) kr = abs(o[2 * i + 1]); }
+            }
+            check(RK_LANE[4].pan < 0 && RK_LANE[0].pan == 0 && pl[KP_OFF] == pr[KP_OFF] && pl[KP_DRUMMER] > pr[KP_DRUMMER] &&
+                  pl[KP_DRUMMER] == pr[KP_AUDIENCE] && pr[KP_DRUMMER] == pl[KP_AUDIENCE] && kl == kr,
+                  "MULDJORD: KIT PAN: the hat left (DRUMMER), right (AUDIENCE), middle (OFF); the kick in the middle");
+            if (!(pl[KP_OFF] == pr[KP_OFF] && pl[KP_DRUMMER] == pr[KP_AUDIENCE] && kl == kr))
+                printf("userkit:   hat L/R off %d/%d drummer %d/%d audience %d/%d, kick %d/%d\n", pl[0], pr[0], pl[1], pr[1], pl[2], pr[2], kl, kr);
+            song.g[G_DRREV] = (int16_t)rev; song.g[G_DRDLY] = (int16_t)dly; drum_hum = (uint8_t)hum;
+        }
         quiet();
         for (k = 0; k < NDRUM; k++)                /* sixteen voices: a crash rings under fifteen hits */
             drum_on(k ? LANE_NOTE[k % 2u ? 0u : 2u] : LANE_NOTE[12], 127);   /* (lane 12: the crash) */

@@ -16,7 +16,16 @@ so its hardest hit peaks at the lane's gain (dB under full scale). The kit is fi
 IMA ADPCM, 4 bits a sample): while it is over, the lane with the most bytes above its floor loses a tenth of
 its length. The WAVs are what the firmware's build encodes (tools/gen_samples.py: set REAL) and what the web
 editor's player plays, so the build never needs the source kits (some GB). Names: LANE-<layer><take>.wav, layer
-1 the hardest, take a, b, c."""
+1 the hardest, take a, b, c.
+
+Pre-emphasis (2026-11-01, "preemph_db"): the device plays a lane at 44.1 kHz by linear interpolation at a fixed
+ratio (drums.c drums_mix), which rolls the top off: a 22.05 kHz lane by cos^2(pi f / 44100), 3 dB at 8 kHz and 6 dB
+at 11 kHz (the even output samples are the source's, the odd ones the mean of two neighbours), a 32 kHz lane by
+about sinc^2(f / 32000), 3 dB at 10 kHz. Each hit is boosted by the inverse before it is levelled and encoded, up
+to the cap in dB (the top of the band would want more; it also raises ADPCM's step there), so what comes out of the
+device is flat again. Zero-phase, in the frequency domain (numpy). 0: off. The pan ("pan", percent, -100 left ..
+100 right, a drummer's view: hats left, floor tom and ride right) goes into kit.json for the device (RK_LANE) and
+the editor's player; the WAVs stay mono."""
 import argparse
 import json
 import math
@@ -128,6 +137,31 @@ def cut(x, sec, rate):
     return x
 
 
+def preemph(x, rate, cap_db):
+    """x boosted by the inverse of the device's interpolation roll-off at this rate (see the top), up to cap_db"""
+    import numpy as np
+    n = len(x)
+    if n < 8 or cap_db <= 0:
+        return x
+    f = np.fft.rfftfreq(n, 1.0 / rate)
+    if rate * 2 == 44100:
+        h = np.cos(math.pi * f / 44100) ** 2                 # exactly 2x: [1/2, 1, 1/2] on the zero-stuffed signal
+    else:
+        a = math.pi * f / rate
+        h = np.ones_like(f)
+        h[1:] = (np.sin(a[1:]) / a[1:]) ** 2                 # the mean response over the fractions: the triangle's
+    g = np.minimum(1.0 / np.maximum(h, 1e-6), 10 ** (cap_db / 20))
+    return list(np.fft.irfft(np.fft.rfft(np.asarray(x, dtype=float)) * g, n))
+
+
+def preemphasize(recipe, kit):
+    cap = recipe.get("preemph_db", 0)
+    if cap <= 0:
+        return
+    for lane, d in kit.items():
+        d["hits"] = [[preemph(x, d["rate"], cap) for x in t] for t in d["hits"]]
+
+
 def render(recipe, tmp):
     """{lane: {"rate", "hits": [[float samples] per take] per layer}}"""
     srcs = {k: src_path(v) for k, v in recipe["sources"].items()}
@@ -228,12 +262,13 @@ def main():
         for L in meta["lanes"]:
             b = sum(nbytes(n) for t in L["samples"] for n in t)
             total += b
-            print(f"  {L['lane']:<8} {L['layers']} x {max(L['takes'])}  {L['rate']:>5} Hz  {max(n for t in L['samples'] for n in t) / L['rate']:.2f} s  {b:>6} B")
-        print(f"{meta['name']}: {total} B of IMA ADPCM")
+            print(f"  {L['lane']:<8} {L['layers']} x {max(L['takes'])}  {L['rate']:>5} Hz  {max(n for t in L['samples'] for n in t) / L['rate']:.2f} s  {b:>6} B  pan {L.get('pan', 0):+d}")
+        print(f"{meta['name']}: {total} B of IMA ADPCM, pre-emphasis up to {meta.get('preemph_db', 0)} dB")
         return
     recipe = json.loads(Path(a.recipe).read_text())
     with tempfile.TemporaryDirectory() as tmp:
         kit = render(recipe, tmp)
+    preemphasize(recipe, kit)
     level(recipe, kit)
     sec = fit(recipe, kit)
     out.mkdir(parents=True, exist_ok=True)
@@ -255,9 +290,10 @@ def main():
                 samples[-1].append(len(x))
                 total += nbytes(len(x))
         lanes.append({"lane": lane, "note": LANE_NOTE[lane], "rate": d["rate"], "layers": len(files),
-                      "takes": [len(t) for t in files], "vel": NOMINAL[len(files)], "files": files, "samples": samples})
-        print(f"  {lane:<8} {len(files)} x {len(files[0])}  {d['rate']:>5} Hz  {sec[lane]:.2f} s")
-    meta = {"name": recipe["name"], "lanes": lanes, "bytes": total}
+                      "takes": [len(t) for t in files], "vel": NOMINAL[len(files)], "files": files, "samples": samples,
+                      "pan": int(recipe["lanes"][lane].get("pan", 0))})
+        print(f"  {lane:<8} {len(files)} x {len(files[0])}  {d['rate']:>5} Hz  {sec[lane]:.2f} s  pan {lanes[-1]['pan']:+d}")
+    meta = {"name": recipe["name"], "lanes": lanes, "bytes": total, "preemph_db": recipe.get("preemph_db", 0)}
     (out / "kit.json").write_text(json.dumps(meta, indent=1) + "\n")
     print(f"{recipe['name']}: {total} B of IMA ADPCM (budget {recipe['budget']}) in {out}")
 

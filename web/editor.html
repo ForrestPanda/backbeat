@@ -2626,6 +2626,13 @@ const PLAY = {
   ebOf(s, brk) {
     const eb = brk ? s.break || s.entry || { lanes: {} } : s.entry;
     if (!eb) return null;
+  rkAlt(R, l, r) {                                       /* drums.c rk_alt (2026-11-01): one take of this layer and the lane
+                                                            just played it: a neighbour layer stands in (scaled by playHit) */
+    const nl = R.vel.length, c = [];
+    if (nl >= 2 && R.takes[l].length <= 1 && R.lastL === l) { if (l > 0) c.push(l - 1); if (l + 1 < nl) c.push(l + 1); l = c[Math.floor(r * c.length)]; }
+    R.lastL = l;
+    return l;
+  },
     const bar = SNG.fillbarSteps(s) || s.steps, n = Math.min(SNG.NSTEP, eb.steps != null ? Math.round(+eb.steps) : Math.round(eb.bars == null ? 1 : +eb.bars) * bar);
     return { eb, n, bars: Math.ceil(n / bar) };
   },
@@ -5073,7 +5080,8 @@ async function playRealKit() {
   };
   await Promise.all(meta.lanes.map(async (L) => {
     const l = SNG.LANES.indexOf(L.lane);
-    if (l >= 0) layers[l] = { vel: L.vel, takes: await Promise.all(L.files.map((fs) => Promise.all(fs.map(buf)))), last: -1 };
+    if (l >= 0) layers[l] = { vel: L.vel, takes: await Promise.all(L.files.map((fs) => Promise.all(fs.map(buf)))), last: -1, lastL: -1,
+                              pan: (L.pan || 0) / 100 };                /* (the device's RK_LANE pan, a drummer's view) */
   }));
   if (SPLAY.src) return true;                                /* (the user's own pads or WAVs came first) */
   SPLAY.layers = layers;
@@ -5135,14 +5143,18 @@ function playHit(h, at) {
     const src = ctx.createBufferSource(), g = ctx.createGain(), t0 = at + k * (SPLAY.stepSecs / h.rat);
     let gain = PLAY.GAIN[h.level];
     if (R) {                                               /* the layered kit: the level's layer, a new take every hit */
-      const vel = PLAY.VEL[h.level], l = PLAY.rkLayer(R.vel, vel), tk = R.takes[l];
+      const vel = PLAY.VEL[h.level], l = PLAY.rkAlt(R, PLAY.rkLayer(R.vel, vel), Math.random()), tk = R.takes[l];
       R.last = PLAY.rkTake(R.last, tk.length, Math.random());
       b = tk[R.last % tk.length];
-      gain = Math.min(1, vel / R.vel[l] * hum);            /* (the layer is that loud already) */
+      gain = Math.min(2, vel / R.vel[l] * hum);            /* (the layer is that loud already; a softer stand-in up, as RK_VMAX) */
     } else gain *= hum;
     src.buffer = b;
     g.gain.value = gain * (k ? 0.8 : 1);
-    src.connect(g).connect(ctx.destination);
+    if (R && R.pan && ctx.createStereoPanner) {            /* the lane's pan, as the device's drums_mix */
+      const pn = ctx.createStereoPanner();
+      pn.pan.value = R.pan;
+      src.connect(g).connect(pn).connect(ctx.destination);
+    } else src.connect(g).connect(ctx.destination);
     src.start(t0);
     SPLAY.srcs = (SPLAY.srcs || []).filter((s) => s.t0 > ctx.currentTime);   /* the hits not sounding yet: a stop cancels them */
     SPLAY.srcs.push({ src, t0 });

@@ -68,6 +68,64 @@ floors (`"min"`) so a tighter fit would only trim the new material. Round-robin 
 the Muldjord kit's own hi-hat (Black Pearl's has one hit a layer, no round robins) and reverted: the user prefers
 Black Pearl's sound. 32 KB of the slot is left.
 
+**Flat on the way out, the layers as takes, a place for every drum (2026-11-01).** The user asked how the kit could
+sound better with the flash full ("let's go over the resources available and how we can improve the drum kit sound");
+of the options the four that cost no sample bytes were taken (the image +592 B, 17.6 KB left; the kit's 399 478 B as
+they were). The host renders changed (`tests/golden.txt`, `GOLDEN_UPDATE=1`); before and after of one song in
+`build/host/first-light-0.9.3.wav` and `first-light-new-kit.wav`. **Verify on hardware:** by ear on the unit, through
+the speaker and the TRS out; the pre-emphasis cap and the pans are recipe numbers, to taste.
+
+- *Pre-emphasis (`"preemph_db": 3`, `gen_realkit.py preemph`).* The device plays a lane at 44.1 kHz by linear
+  interpolation at a fixed ratio (drums.c `drums_mix`), which rolls the top off: a 22.05 kHz lane by cos^2(pi f / 44100),
+  3 dB at 8 kHz and 6 dB at 11 kHz (the even output samples are the source's, the odd ones the mean of two
+  neighbours); a 32 kHz lane by about sinc^2(f / 32000), 3 dB at 10 kHz. Each hit is now boosted by the inverse
+  before it is levelled and encoded, capped (the top of the band would want more, and the boost raises ADPCM's step
+  there). At a 6 dB cap what came out of the device was flat again: measured on the WAVs, the top band (0.7 to 1.0 of
+  Nyquist) against the lows up 3.7 dB on the kick, snare and toms, 5 dB on the hats and ride, the peaks unchanged. The
+  images of the interpolation (a 10 kHz tone of a 22 kHz lane leaves a 12 kHz image only 7 dB down) are not helped and
+  are boosted with the rest: a better interpolation filter in `drums_mix` is the next step on that side. Needs numpy.
+  **The cap is 3 dB (2026-11-02).** The user heard the 6 dB render as noisier than 0.9.3's. Measured, the ADPCM noise
+  after the device had not risen (hats 1.3 dB lower, ride 2.4 dB lower, with the lookahead encoder) and the floor
+  between hits was 1 to 2 dB lower; what rose was the hats' and cymbals' top against their body (the 5 dB above), the
+  recordings' own hiss and the 2x lanes' images with it. The old roll-off had been a gentle low pass over all of that.
+  Rendered at 0, 3 and 6 dB for an A/B (`build/host/compare.html`, four players on one playhead), the user: "maybe
+  3db felt better"; the whole mix's top (11 to 22 kHz) against its mids (2 to 8 kHz): 0.9.3 -8.9 dB, 0 dB -9.5, 3 dB
+  -8.2, 6 dB -7.3.
+- *The encoder (`sampleio.ima_encode_beam`, used by `gen_samples.py` for the built-in set).* A beam search over the
+  encoder's states, 16 kept, instead of the nibble nearest each sample: a nibble also sets the next step, so the
+  nearest is often not the cheapest run. Same decoder, same bytes. Measured: +1.5 to 2 dB SNR on the crash and ride
+  tails (where IMA's step lags the decay: the hiss), +0.7 dB on the kick; a beam of 64 adds a tenth of that. A modest
+  gain, taken because it is free on the device; the cymbals' SNR is about 19 dB all the same, 4-bit ADPCM's nature. The
+  user slots keep the greedy encoder (the web editor's must give the same bytes, `test_web`). The build's sample step
+  takes a minute now, cached (`build/gen_samples.cache`).
+- *Stand-in layers (drums.c `rk_alt`).* A lane with one take of the layer its hit picked (the hats, the pedal, the toms,
+  the ride) does not play the very same sample twice running: a neighbour layer stands in, scaled to the hit's velocity
+  by the layers' own (a harder layer down, a softer one up, the voice's velocity to `RK_VMAX` 255; `drums_mix` clamps
+  the gain at 2x, such layers' samples being quieter). The hit's own layer plays whenever the last hit was another, so
+  16th hats go own, stand-in, own, stand-in: a round robin made of the velocity layers, their differences of timbre
+  standing for the takes'. The editor's player does the same (`PLAY.rkAlt`).
+- *Pitch jitter (drums.c `drum_on`).* With HUMANIZE on, each hit of the layered kit is a little off: within 1/16 of a
+  semitone (6 cents) at LIGHT, 2 at MORE. Its own LCG (`jit_seed`): HUMANIZE moves no take or stand-in, as it moves no
+  layer (seq2_test: the same hits on the same samples, OFF against LIGHT).
+- *Pan (`"pan"` per lane in the recipe, percent, a drummer's view).* kit.json carries it, `gen_samples.py` puts it in
+  `RK_LANE` in the track PAN's units, and `drums_mix` pans each sampled voice by its lane on top of the track's PAN, for
+  every sampled kit (the lanes are the same instruments; the synthesised kits stay centred): hats, open hat and pedal
+  -30, hi tom -12, crash -25, cowbell -20; clap +15, mid tom +15, shaker +25, low tom and ride +35. SLOOP's pan law (one
+  side turned down) as the track's; the speaker sums it (a lane at 30 % is 1.5 dB down in the sum). The editor's player
+  pans the same way (a StereoPanner). The user kits' WAVs stay mono. **SETUP > DRUMS > KIT PAN (2026-11-02): OFF,
+  DRUMMER, AUDIENCE** (drums.c `drum_kpan`; the settings word's bits 17..18, a word from 0.9.3 reads DRUMMER). The user
+  liked the picture but expected the kick in the middle: it is (its pan 0; in the render the band under 150 Hz sits
+  within half a dB of the middle, the floor tom's fills pull it right a little); what leans left is the hats on the
+  same beats, and the one-side pan law turns one side down rather than moving the sound. The drummer's view (hats
+  left, ride right, toms high to low from left to right, kick and snare in the middle) is the common convention of
+  rock and pop mixes; some engineers mirror it to the audience's view, hence the setting. The editor's player keeps
+  the drummer's view.
+
+Seen on the way, not changed: the DRS snare's hard layer is levelled by its takes' mean peak and those peaks run
+15 000 to 32 000 (the takes differ in crack more than in body), so in RMS over the first 50 ms the hard and normal
+layers are equally loud (about 5 000 against 5 100); the layering is heard as timbre more than as level. The
+`userkit_test` compares each layer's loudest take now, under the limiter (at LVL 100 a hard snare reaches `LIM_T`).
+
 ## Red Zeppelin (AVL Drumkits), the first rock kit tried
 
 A Ludwig kit with Sabian, Zildjian and Paiste cymbals and a Porkpie snare, recorded by Glen MacArthur
