@@ -965,12 +965,22 @@ int main(int argc, char **argv)
             check((w >> 17 & 3u) == 1u && drum_kpan == KP_OFF, "KIT PAN: OFF kept (not the default's zero)");
             lights_from_word(w & ~(3u << 17));
             check(drum_kpan == KP_DRUMMER, "KIT PAN: a settings word from 0.9.3 (no bits): DRUMMER");
-            ui.menu = 1; ui.menu_sel = (uint8_t)mi_find(MI_KPAN); ui.force = 1; frame();
-            check(!strcmp(mi_value(ui.menu_sel, &(uint16_t){0}), "DRUMMER"), "menu DRUMS > KIT PAN reads DRUMMER");
+            ui.menu = 1; ui.menu_sel = (uint8_t)mi_find(MI_KPAN); ui.force = 1; frame(); ppm("menu-drums2");
+            check(mi_sec(ui.menu_sel) == MS_DRUMS2 && !strcmp(MS_NAME[MS_DRUMS2], "DRUMS 2") && mi_row(ui.menu_sel) == 0u &&
+                  !strcmp(mi_value(ui.menu_sel, &(uint16_t){0}), "DRUMMER"),
+                  "menu DRUMS 2 > KIT PAN (its own section, 2026-11-03: DRUMS had four rows, the screen holds four), row 1, reads DRUMMER");
             tap(B_OCTUP); frame();
             check(drum_kpan == KP_AUDIENCE && !strcmp(mi_value(ui.menu_sel, &(uint16_t){0}), "AUDIENCE"), "KIT PAN: OCT+ goes round to AUDIENCE");
             tap(B_OCTUP); frame();
             check(drum_kpan == KP_OFF, "KIT PAN: OCT+ again: OFF");
+            encs[panel.enc[EN_K1]] = 1; frame();
+            check(drum_kpan == KP_DRUMMER, "KIT PAN: KNOB 1 up: DRUMMER");
+            encs[panel.enc[EN_K1]] = 5; frame();
+            check(drum_kpan == KP_AUDIENCE, "KIT PAN: KNOB 1 stops at AUDIENCE");
+            for (w = 0; w < MS_COUNT; w++)
+                if (MS_FIRST[w + 1u] - MS_FIRST[w] > 4u)
+                    break;
+            check(w == MS_COUNT, "SETUP: no section has more than four rows (KNOB 1..4; the screen shows four)");
             drum_kpan = KP_DRUMMER; ui.menu_sel = (uint8_t)mi_find(MI_USB); ui.force = 1; frame();   /* (back on USB AUDIO) */
         }
         tap(B_OCTUP);

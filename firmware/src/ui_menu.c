@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* SETUP (fm1-drummer: GLO tapped; SLOOP's menu, its GLO pages and its GLO layer in one place), in sections of up to
- * four rows: PEDAL, MIDI, MIDI 2 (LEARN until 2026-10-22), TEMPO, DRUMS, MASTER, TEXTURE (two), SCREEN, LIGHTS, AUDIO, LOAD, SYSTEM. SELECT goes to
+ * four rows (the screen holds no more: a row is 48 px of the 219 under the head; a fifth is cut, seen on the unit
+ * 2026-11-03): PEDAL, MIDI, MIDI 2 (LEARN until 2026-10-22), TEMPO, FEEL, DRUMS, DRUMS 2 (KIT PAN), MASTER, TEXTURE
+ * (two), SCREEN, LIGHTS, AUDIO, LOAD, SYSTEM. SELECT goes to
  * the section before / after (stopping at the ends), KNOB 1..4 set its rows in order (the knob's colour marks its
  * row), PRESETS moves the cursor; OCT+ steps the cursor's setting round or opens it (CALIBRATION, PROJECTS, ABOUT),
  * OCT-, GLO or HOME close (from ABOUT: back to the section). A row is a setting of its own (MI_*), a global
@@ -25,7 +27,8 @@ static const mrow_t MROW[] = {
     {"TEMPO", RK_G, G_BPM}, {"CLICK", RK_G, G_CLOCK}, {"TUNE", RK_G, G_TUNE},
     {"SWING", RK_G, G_SWING}, {"HUMANIZE", RK_MI, MI_HUMAN},
     {"LEVEL", RK_G, G_DRLVL}, {"REVERB", RK_G, G_DRREV}, {"DELAY", RK_G, G_DRDLY}, {"PAN", RK_P, P_PAN},
-    {"KIT PAN", RK_MI, MI_KPAN},                 /* (2026-11-02: the lanes' own pans, drums.c drum_kpan) */
+    {"KIT PAN", RK_MI, MI_KPAN},                 /* DRUMS 2 (2026-11-02: the lanes' own pans, drums.c drum_kpan; its own
+                                                  * section: DRUMS has four rows and the screen four) */
     {"DUST", RK_G, G_DUST}, {"DUCK", RK_G, G_DUCK}, {"FILTER", RK_G, G_FILT}, {"ROLL RATE", RK_G, G_ROLL},
     {"SOURCE", RK_G, G_TXSRC}, {"LEVEL", RK_G, G_TXLVL}, {"TONE", RK_G, G_TXTONE}, {"MOVE", RK_G, G_TXMOVE},
     {"RATE", RK_G, G_TXRATE}, {"WHEN", RK_G, G_TXWHEN}, {"DUCK", RK_G, G_TXDUCK},
@@ -38,12 +41,12 @@ static const mrow_t MROW[] = {
                                                                               * 2026-10-27) */
 };
 #define MI_COUNT (sizeof MROW / sizeof MROW[0])
-enum { MS_PEDAL, MS_MIDI, MS_LEARN, MS_TEMPO, MS_FEEL, MS_DRUMS, MS_MASTER, MS_TEX, MS_TEX2, MS_SCREEN, MS_LIGHTS,
-       MS_AUDIO, MS_LOAD, MS_SYSTEM, MS_COUNT };
-static const char *const MS_NAME[MS_COUNT] = {"PEDAL", "MIDI", "MIDI 2", "TEMPO", "FEEL", "DRUMS", "MASTER", "TEXTURE",
-                                              "TEXTURE 2", "SCREEN", "LIGHTS", "AUDIO", "LOAD",
+enum { MS_PEDAL, MS_MIDI, MS_LEARN, MS_TEMPO, MS_FEEL, MS_DRUMS, MS_DRUMS2, MS_MASTER, MS_TEX, MS_TEX2, MS_SCREEN,
+       MS_LIGHTS, MS_AUDIO, MS_LOAD, MS_SYSTEM, MS_COUNT };
+static const char *const MS_NAME[MS_COUNT] = {"PEDAL", "MIDI", "MIDI 2", "TEMPO", "FEEL", "DRUMS", "DRUMS 2", "MASTER",
+                                              "TEXTURE", "TEXTURE 2", "SCREEN", "LIGHTS", "AUDIO", "LOAD",
                                               "SYSTEM"};
-static const uint8_t MS_FIRST[MS_COUNT + 1] = {0, 4, 8, 12, 15, 17, 22, 26, 30, 33, 36, 39, 42, 46,
+static const uint8_t MS_FIRST[MS_COUNT + 1] = {0, 4, 8, 12, 15, 17, 21, 22, 26, 30, 33, 36, 39, 42, 46,
                                                 MI_COUNT};   /* rows of
                                                                                                           * each */
 _Static_assert(MI_COUNT == 48, "MS_FIRST follows MROW");

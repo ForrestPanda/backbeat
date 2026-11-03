@@ -386,8 +386,9 @@ start, MIDI clock in: OFF, USB or TRS, the tempo and START / STOP from a clock m
 drums' channel, IN, other channels, OUT), MIDI 2 (MIDI LEARN, clear; TRS TO USB: what the TRS jack receives goes out
 over USB as well, the pedal and the clock for a tablet's editor to follow; off by default; BRIDGE ONLY: out over USB
 and nothing else, the FM-1 a TRS-to-USB MIDI interface that plays nothing, LIVE says BRIDGE: PEDAL TO USB), TEMPO (tempo, click,
-tune), FEEL (swing, humanize), DRUMS (level, reverb, delay, pan; KIT PAN: each drum's own place in the stereo
-picture, OFF, DRUMMER (hats left, floor tom and ride right, kick and snare in the middle) or AUDIENCE, the mirror), MASTER, TEXTURE and TEXTURE 2, SCREEN (colour, zoom; SCREEN OFF: NEVER, 1, 5 or 15 minutes stopped and untouched, then
+tune), FEEL (swing, humanize), DRUMS (level, reverb, delay, pan), DRUMS 2 (KIT PAN: each drum's own place in the
+stereo picture, OFF, DRUMMER (hats left, floor tom and ride right, kick and snare in the middle) or AUDIENCE, the
+mirror; KNOB 1 or OCT+), MASTER, TEXTURE and TEXTURE 2, SCREEN (colour, zoom; SCREEN OFF: NEVER, 1, 5 or 15 minutes stopped and untouched, then
 the screen and its backlight go dark; a button, key, knob or the pedal wakes it, and the press that wakes it does
 nothing else), LIGHTS, AUDIO,
 LOAD (the audio's load and the drum voices), SYSTEM (calibration, ABOUT). The pedal settings are saved once the music stops.

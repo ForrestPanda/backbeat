@@ -15,7 +15,7 @@ ABOUT; the editor shows it next to the connect button.
   the ride) no longer play the very same sample twice running: a neighbour velocity layer stands in, at the hit's
   level. With HUMANIZE on, each hit is a few cents off (6 at LIGHT, 12 at MORE). Each drum has its place in the stereo
   picture now, a drummer's view (hats left, floor tom and ride right, kick and snare in the middle), on top of the drum
-  track's PAN; the speaker sums it. **SETUP > DRUMS > KIT PAN** turns it OFF, to DRUMMER (the default) or to AUDIENCE,
+  track's PAN; the speaker sums it. **SETUP > DRUMS 2 > KIT PAN** turns it OFF, to DRUMMER (the default) or to AUDIENCE,
   the mirror; kept with the settings.
 - **Notes on a song and its sections.** Free text written in the editor's Song tab (`"notes"` in the song's JSON, on
   the song and on a section, up to 255 characters each) travels with the song onto the device. LIVE's state line

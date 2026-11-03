@@ -112,8 +112,8 @@ the speaker and the TRS out; the pre-emphasis cap and the pans are recipe number
   every sampled kit (the lanes are the same instruments; the synthesised kits stay centred): hats, open hat and pedal
   -30, hi tom -12, crash -25, cowbell -20; clap +15, mid tom +15, shaker +25, low tom and ride +35. SLOOP's pan law (one
   side turned down) as the track's; the speaker sums it (a lane at 30 % is 1.5 dB down in the sum). The editor's player
-  pans the same way (a StereoPanner). The user kits' WAVs stay mono. **SETUP > DRUMS > KIT PAN (2026-11-02): OFF,
-  DRUMMER, AUDIENCE** (drums.c `drum_kpan`; the settings word's bits 17..18, a word from 0.9.3 reads DRUMMER). The user
+  pans the same way (a StereoPanner). The user kits' WAVs stay mono. **SETUP > DRUMS 2 > KIT PAN (2026-11-02): OFF,
+  DRUMMER, AUDIENCE** (its own section since 2026-11-03: DRUMS has four rows and the screen shows four) (drums.c `drum_kpan`; the settings word's bits 17..18, a word from 0.9.3 reads DRUMMER). The user
   liked the picture but expected the kick in the middle: it is (its pan 0; in the render the band under 150 Hz sits
   within half a dB of the middle, the floor tom's fills pull it right a little); what leans left is the hats on the
   same beats, and the one-side pan law turns one side down rather than moving the sound. The drummer's view (hats

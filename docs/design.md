@@ -590,8 +590,11 @@ next bar). No named sections, one song, no fill tied to a section change.
    2026-11-02, after the user listened: the 6 dB render "noisier" than 0.9.3 (not the ADPCM noise, which fell: the
    cymbals' top against their body, the hiss and the images with it), the cap set to 3 dB from an A/B at 0, 3 and 6
    (`build/host/compare.html`); the pans liked, the kick expected in the middle (it is: the hats on the same beats lean
-   left), so SETUP > DRUMS > KIT PAN: OFF, DRUMMER (the default), AUDIENCE (the mirror); drums.c `drum_kpan`, kept in the
-   settings word (panel.c, bits 17..18 as the value plus one: a word from 0.9.3 reads DRUMMER). Image 564108 B.
+   left), so SETUP > DRUMS 2 > KIT PAN: OFF, DRUMMER (the default), AUDIENCE (the mirror); drums.c `drum_kpan`, kept in the
+   settings word (panel.c, bits 17..18 as the value plus one: a word from 0.9.3 reads DRUMMER). Image 564108 B. It was
+   DRUMS' fifth row at first: the user, 2026-11-03, "the device only displays four rows per menu" (a row is 48 px of
+   the 219 under the head: the fifth drew off the panel), so its own section, DRUMS 2, as MIDI 2 and TEXTURE 2; the
+   host test checks no section has more than four rows.
 10. **Notes on a song and its sections (2026-11-02, done).** Asked: "a way to add text to the song section, or maybe
    to the song as a whole so that I can register notes about how to play the song. things like on 3rd time bridge
    happens a bar earlier", to remember how the song is organised on the Ampero 2 Stage; asked whether the device had
@@ -650,7 +653,7 @@ the only big lever is `SMP_DATA`, and the acoustic kit is in it.
 | With entries and breaks (CC 28, 2026-10-18; the flams and the fills to the section's end before it) | 550984 B: **30580 B left**; static RAM 61312 B |
 | The ride 2.0 s (399478 B of ADPCM), the voice pick (at most four of a note, the quietest given way) and SETUP > LOAD, 2026-10-22 | 566616 B: **14948 B left**; static RAM 61344 B |
 | SLOOP 2.7 to 2.8.4 looked through (2026-10-30, below): the mix rounded, the rescue key, the clock's mean tempo, the knobs' acceleration, MIDI CLOCK OUT, the crash screen's stack and the stacks painted; then the non-audio functions compiled for size (`UI_SMALL`, clang minsize, SLOOP 2.7's) | 568460 B with the changes, **563116 B** with UI_SMALL: **18448 B left**; static RAM 61568 B |
-| 0.9.3, then the kit's sound without more samples (2026-11-01, `docs/kits.md`): the stand-in layers, the pitch jitter, a pan per lane (the pre-emphasis and the encoder change no byte count) | 563320 B, 563912 B, 564108 B (KIT PAN), then 565620 B (the notes, 2026-11-02): **15944 B left**; static RAM 63184 B (the NOTES screen's text, 512 B) |
+| 0.9.3, then the kit's sound without more samples (2026-11-01, `docs/kits.md`): the stand-in layers, the pitch jitter, a pan per lane (the pre-emphasis and the encoder change no byte count) | 563320 B, 563912 B, 564108 B (KIT PAN), then 565620 B (the notes, 2026-11-02), 565628 B (DRUMS 2, 2026-11-03): **15936 B left**; static RAM 63184 B (the NOTES screen's text, 512 B) |
 | Data region (0x93000..0xE0000): projects, the user sample slots of 80 KB (USR1 and USR2 now hold the songs: USR3 and USR4 are the user's; free: 0xC4000..0xC7FFF, the old user preset banks 0xDC000..0xDFFFF, the FM6 bank 0xE5000..0xE6FFF, 0xFB000) | about 308 KB |
 | Songs 1..8 (0xA0000..0xAFFFF, A/B) and the pedal settings (0xB0000 / 0xB1000); songs 9..16 (0xB4000..0xC3FFF, A/B, since 2026-10-14) | 72 KB of USR1's 80 KB, 64 KB of USR2's; the kit pair USR3+4 stays the user's |
 | ADPCM sample audio | about 11 KB per second (mono 22 kHz, 4 bit) |
