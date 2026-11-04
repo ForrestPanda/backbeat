@@ -519,8 +519,11 @@ int main(int argc, char **argv)
         ui.force = 1; frame(); ppm("live-nosong-factory");
         key(key_of_white(2)); check(sng_req == 19u, "LIVE, no song, FACTORY: white key 3 loads groove 3");
         sng_req = 0;
-        tap(B_ENV); frame();
-        check(lib_page() == 0u && sng_view == DV_LIVE && !sng_req, "LIVE, no song: ENV: the USER page (no section step)");
+        tap(B_LFO); frame();
+        check(lib_page() == 0u && sng_view == DV_LIVE && !sng_req, "LIVE, no song: LFO again: the USER page (the other one; no section step)");
+        tap(B_ENV); frame(); check(sng_view == DV_NOTE, "LIVE, no song: ENV: NOTES (none)");
+        ui.force = 1; frame(); ppm("live-nosong-notes");
+        tap(B_ENV); frame(); check(sng_view == DV_LIVE && lib_page() == 0u, "NOTES, no song: ENV: LIVE, the page kept");
         key(key_of_white(2)); check(sng_req == 3u, "LIVE, no song, USER: white key 3 loads song 3");
         sng_req = 0;
         sng_page = -1; t_user = 0; sng_lib_dirty = 1; frame();
@@ -571,16 +574,20 @@ int main(int argc, char **argv)
             t_note = "3rd time: bridge a bar early, then the chorus twice\nwatch the singer for the stop";
             t_snote = "Ampero: bank 2, scene A";
             live_view = 0; live_sec = 1; sng_apply(1); ui.force = 1; frame(); ppm("live-note");
-            tap(B_OCTDN); frames(2);
-            check(sng_view == DV_NOTE && drummer_on(), "LIVE: OCT-: the NOTES screen");
+            tap(B_ENV); frames(2);
+            check(sng_view == DV_NOTE && drummer_on(), "LIVE: ENV: the NOTES screen (OCT- until 2026-11-04)");
             ui.force = 1; frame(); ppm("live-notes");
             encs[panel.enc[EN_K1]] = 2; frames(2);
             check(note_scroll == 2u && sng_view == DV_NOTE, "NOTES: KNOB 1 scrolls");
             live_sec = 0; sng_apply(0); ui.force = 1; frame();   /* (another section: its own, none: the song's shows) */
-            tap(B_OCTDN); frames(2);
-            check(sng_view == DV_LIVE && note_scroll == 0u, "NOTES: OCT- again: LIVE");
+            live_req = -1; pedal_at_end = 0;
+            tap(B_OCTUP); frames(2);
+            check(sng_view == DV_NOTE && live_req == 1 && pedal_at_end, "NOTES: OCT+ tapped: the next section cued, the screen stays");
+            live_req = -1; pedal_at_end = 0;
+            tap(B_ENV); frames(2);
+            check(sng_view == DV_LIVE && note_scroll == 0u, "NOTES: ENV again: LIVE");
             live_sec = 1; sng_apply(1); live_view = 1; ui.force = 1; frame(); ppm("live-big-note");
-            tap(B_OCTDN); frames(2); tap(B_HOME); frames(2);
+            tap(B_ENV); frames(2); tap(B_HOME); frames(2);
             check(sng_view == DV_LIVE && live_view == 1u, "NOTES: HOME: LIVE, its layout kept");
             t_note = t_snote = ""; live_view = (uint8_t)v0; str_cpy(sng_ui_next, nx, sizeof sng_ui_next); ui.force = 1; frame();
         }
@@ -714,11 +721,18 @@ int main(int argc, char **argv)
             tap(B_HOME); frames(2);
             check(sng_view == DV_LIVE && song.playing, "HOME: LIVE, still playing");
             pedal_fill_wait = 0; pedal_fill = 0; live_req = -1; pedal_at_end = 0;
-            tap(B_LFO); frames(2);
-            check(live_req == (int8_t)(live_sec + 1) && !pedal_fill, "LIVE: LFO: the next section (as CC 24, no fill)");
+            tap(B_OCTUP); frames(2);
+            check(live_req == (int8_t)(live_sec + 1) && pedal_at_end && !pedal_fill, "LIVE: OCT+ tapped: the next section (as CC 24, no fill; LFO until 2026-11-04)");
             live_req = -1; pedal_at_end = 0;
-            tap(B_ENV); frames(2);
-            check(live_req == (int8_t)(live_sec - 1) && !pedal_fill, "LIVE: ENV: the previous section (as CC 25, no fill)");
+            tap(B_OCTDN); frames(2);
+            check(live_req == (int8_t)(live_sec - 1) && !pedal_fill, "LIVE: OCT- tapped: the previous section (as CC 25, no fill; ENV until 2026-11-04)");
+            live_req = -1; pedal_at_end = 0; pedal_fill = 0;
+            tap(B_LFO); frames(2);
+            check(live_req < 0 && sng_view == DV_LIVE, "LIVE: LFO: nothing now (\"lfo loses the next section\")");
+            press(B_OCTUP); frames(30); release(B_OCTUP); frames(2);
+            check(live_req < 0, "LIVE: OCT+ held half a second and let go: no section cued (not a tap)");
+            press(B_OCTUP); frames(2); key(key_of_white(0)); release(B_OCTUP); frames(2);
+            check(live_req == 0 && !pedal_at_end, "LIVE: OCT+ held + white key 1, let go: INTRO on the next bar, no NEXT on the release");
             live_req = -1; pedal_at_end = 0; pedal_fill = 0;
         }
         {   /* ALGORITHM: the page's songs in turn (2026-10-30); the stub's USER slots: 1 TIME, 3 BLACK, 13 THIRTEEN;
@@ -770,8 +784,8 @@ int main(int argc, char **argv)
             uint8_t r0 = sng_req;
             sng_req = 0;
             t_note = "3rd time: bridge a bar early"; t_snote = "Ampero: bank 2, scene A";
-            tap(B_OCTDN); frames(2);
-            check(sng_view == DV_NOTE && note_sec == -1, "LIVE: OCT-: NOTES, the section playing");
+            tap(B_ENV); frames(2);
+            check(sng_view == DV_NOTE && note_sec == -1, "LIVE: ENV: NOTES, the section playing");
             encs[panel.enc[EN_ALGO]] = 3; frames(2);
             check(note_scroll == 3u && sng_req == 0u && sng_cur == c0, "NOTES: ALGORITHM scrolls the lines as KNOB 1, no song loaded");
             encs[panel.enc[EN_K2]] = 1; frames(2);
@@ -791,10 +805,10 @@ int main(int argc, char **argv)
             check(note_sec == -1, "NOTES: the section read (3) gone, a song of 1 now: the one playing again");
             t_nsec = 3;
             encs[panel.enc[EN_K2]] = 1; frames(2);
-            tap(B_OCTDN); frames(2); tap(B_OCTDN); frames(2);
+            tap(B_ENV); frames(2); tap(B_ENV); frames(2);
             check(sng_view == DV_NOTE && note_sec == -1, "NOTES: closed and opened: the section playing again");
-            tap(B_OCTDN); frames(2);
-            check(sng_view == DV_LIVE, "NOTES: OCT-: LIVE");
+            tap(B_ENV); frames(2);
+            check(sng_view == DV_LIVE, "NOTES: ENV: LIVE");
             t_note = t_snote = ""; sng_req = r0; ui.force = 1; frame();
         }
         {   /* the count-in, the pedal's MIDI dot */

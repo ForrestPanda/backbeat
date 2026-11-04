@@ -57,7 +57,7 @@ stops starting after an install, hold **OCT-** alone while switching on: the BAC
 takes the package again.
 
 **Play something.** BackBeat starts on its LIVE screen with sixteen factory grooves on board (the SONGS screen,
-the pedal's PC 16..31). PLAY starts, SEL fills, ENV / LFO go to the previous / next section.
+the pedal's PC 16..31). PLAY starts, SEL opens SONGS, OCT- / OCT+ go to the previous / next section.
 
 **Your songs.** Open the editor (<https://forrestpanda.github.io/backbeat/webapp/editor/>, or `webapp/editor/` on a local copy): its Song editor tab
 imports a Guitar Pro or MIDI file, finds the sections, lets you fix them on a grid and play them; Send puts the
@@ -295,20 +295,21 @@ shares the cable).
 Five screens, a button each. Every one of them was checked on the fm1-emu emulator and in the host tests; LIVE
 has been played from the pedal on an FM-1 (2026-10-19); SECTIONS is in the host tests only so far.
 
-<p align="center"><img src="assets/panel/backbeat-panel.svg" alt="The FM-1 panel with what every knob, button and key does in BackBeat: on LIVE, the knobs are tempo, the previous or next song, drum level and swing, ALGORITHM the previous or next song too, PRESETS the kit, SEL opens SONGS, ENV and LFO the previous and next section, EDIT the SECTIONS screen, GLO SETUP, HOME LIVE, SEQ the grid, the white keys the sections, the black keys fills, on the next bar (F#4, G#4, A#4), the break, the ending and the tap tempo; under it, the same controls on SONGS, SECTIONS and EDIT" width="900"></p>
+<p align="center"><img src="assets/panel/backbeat-panel.svg" alt="The FM-1 panel with what every knob, button and key does in BackBeat: on LIVE, the knobs are tempo, the previous or next song, drum level and swing, ALGORITHM the previous or next song too, PRESETS the kit, SEL opens SONGS, OCT- and OCT+ the previous and next section, ENV NOTES, EDIT the SECTIONS screen, GLO SETUP, HOME LIVE, SEQ the grid, the white keys the sections, the black keys fills, on the next bar (F#4, G#4, A#4), the break, the ending and the tap tempo; under it, the same controls on SONGS, SECTIONS and EDIT" width="900"></p>
 
 The panel in one picture (`tools/gen_panel.py`; also the web editor's Cheat sheet tab and a page of the site), then the buttons in detail:
 
 | Button | Tapped | Held |
 | --- | --- | --- |
 | HOME | **LIVE**, the screen it starts on; on LIVE: its other layout, the bar big (kept across power-offs) | |
-| OCT- | on LIVE: **NOTES**, the section's note and the song's as the editor's Song tab wrote them (KNOB 1 or ALGORITHM scrolls; KNOB 2 or PRESETS turns to another section's, to read: what plays stays, and the screen opens on the section playing); again or HOME: LIVE. LIVE's state line shows the section's first line while nothing else is announced | |
+| OCT- / OCT+ | on LIVE (and NOTES): **PREV**, **NEXT** (the pedal's CC 25, 24, without a fill; a fill is a black key) | OCT+ with a white key: that section **on the next bar** |
+| ENV | on LIVE: **NOTES**, the section's note and the song's as the editor's Song tab wrote them (KNOB 1 or ALGORITHM scrolls; KNOB 2 or PRESETS turns to another section's, to read: what plays stays, and the screen opens on the section playing); again or HOME: LIVE. LIVE's state line shows the section's first line while nothing else is announced | |
 | SEL | **SONGS**, your songs and the grooves (on SONGS: the other page, USER / FACTORY; on SECTIONS: the section copied after itself) | |
 | SAVE | nothing | on LIVE, SECTIONS or EDIT: the section into its song, with the song's tempo, kit, swing, drum level and reverb as the knobs left them |
 | EDIT | **SECTIONS**, the song's shape (from SECTIONS: the grid); on SONGS: that row's song and its SECTIONS, or on an empty slot a new song | SLOOP's erase / mute / undo layer |
 | SEQ | **EDIT**, the drum grid of the section playing (again: GRID / KIT) | the step layer, as SLOOP; its DIV knob (and the PATTERN page's) keeps the hits in their place on the beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between, the length follows (nudges, locks, conditions, marks and the section's fill bar with it; EDIT + OCT- undoes it; over 64 steps it is refused and the screen says so) |
 | GLO | **SETUP** (again, HOME or OCT-: closed) | |
-| ENV / LFO | on LIVE: **PREV**, **NEXT** (the pedal's CC 25, 24, without a fill; a fill is a black key); on SONGS, or LIVE with no song: USER, FACTORY | |
+| LFO | on SONGS: FACTORY (ENV: USER); on LIVE with no song: the other page of its keys; with a song: nothing | |
 | PLAY | start the section cued (the count-in first), or stop | |
 | FX, ARP | FX: the filter, insert, delay and reverb pages | SLOOP's layers (throws, roll) |
 
@@ -332,12 +333,12 @@ tempo, so a tap or a MIDI clock shows at once); the second octave's trio (F#4, G
 no fill: held while a white key is pressed, the change comes on the next bar; tapped alone, the next white key's change
 does (the state line says KEY: ON THE NEXT BAR until then; a second tap takes it back); tapped while a change waits for
 the section's end, that change moves to the next bar; the other black keys as the first. So a plain change is one press, and a fill into the change is a black key then a white one,
-as the pedal's CC 21 sent with its CC 20. ENV and LFO are the previous and next section
-(without a fill). KNOB 1 (and SELECT) the tempo (turned fast it sweeps wider, a detent at a time when turned slowly;
+as the pedal's CC 21 sent with its CC 20. OCT- and OCT+ tapped are the previous and next section
+(without a fill; OCT+ held with a white key still puts that section on the next bar). ENV opens NOTES. KNOB 1 (and SELECT) the tempo (turned fast it sweeps wider, a detent at a time when turned slowly;
 so every knob with a wide range), PRESETS the kit, KNOB 3 the drums' level, KNOB 4 the
 swing. KNOB 2 and ALGORITHM scroll through the songs of the page shown on SONGS, USER or FACTORY, loading each one as it
 goes (empty slots skipped, the ends stop; with a song of the other page loaded it starts from that page's edge). With no song loaded it says PICK A SONG and shows the 16 songs of the SONGS page shown (USER or FACTORY;
-ENV / LFO switch, SEL opens SONGS), and the white keys 1..16 load them.
+LFO switches, SEL opens SONGS), and the white keys 1..16 load them.
 
 **SONGS.** SEL opens it (HOME: LIVE again). Two pages, as tabs in the header: **USER**, your 16 slots, and
 **FACTORY**, the 16 grooves (read-only). SEL again switches to the other (the header's "sel: page"; ENV goes to USER

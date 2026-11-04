@@ -37,20 +37,25 @@
  *                     tapped with nothing cued, the next white key changes on the next bar (key_nextbar, the state
  *                     line says KEY: ON THE NEXT BAR; a second tap, a white key or the stop clears it). The other
  *                     black key, A#3, as the first
- *   ENV LFO           previous, next (as CC 25, 24, without their fill); SEL: SONGS (ui_input.c; it was a fill, CC 21,
- *                     until 2026-10-30: the black keys fill)
+ *   OCT- OCT+         tapped: previous, next (as CC 25, 24, without their fill; 2026-11-04, asked: "make oct- / oct+ in
+ *                     live mode cue the previous and the next section", ENV / LFO were, since 2026-10-30): acted on
+ *                     the release, within 400 ms and no key meanwhile, so OCT+ held with a white key stays "on the
+ *                     next bar" (oct_t, oct_used). ENV: NOTES (below); LFO: nothing with a song (the user: "lfo loses
+ *                     the next section"), with none the other SONGS page. SEL: SONGS (ui_input.c; it was a fill,
+ *                     CC 21, until 2026-10-30: the black keys fill)
  *   PLAY              stopped: the section cued (the count-in first); playing: stop
  *   KNOB 1..4         tempo, songs, drums level, swing (SELECT: tempo; PRESETS: the kit); KNOB 2 and ALGORITHM: the
  *                     songs of the page shown (USER or FACTORY) in turn, each loaded, empty slots skipped
  *                     (2026-10-30; KNOB 2 since 2026-11-01, asked: it was the kit, which stays on PRESETS)
- *   OCT-              on LIVE: NOTES (2026-11-02, asked: "oct- on the home page would be nice"): the section's note
+ *   ENV               on LIVE: NOTES (2026-11-02, asked: "oct- on the home page would be nice", on OCT- until
+ *                     2026-11-04, when OCT- became PREV and the user chose ENV): the section's note
  *                     and the song's, as the editor's Song tab wrote them (sng.c sng_note), wrapped; KNOB 1 scrolls;
  *                     KNOB 2 and PRESETS turn the pages of the sections, to read (2026-11-04, asked: "make the knob2
  *                     and preset knob scroll through the song sections"; they were the songs and the kit there): the
  *                     screen opens on the section playing and follows it until a turn; what plays stays as it is;
  *                     ALGORITHM scrolls the lines as KNOB 1 (asked next: "make the algorithm scroll the page itself
  *                     like knob1 does"; it was the songs there too).
- *                     OCT- again or HOME: LIVE. LIVE's state line shows the section's first line (the song's when it
+ *                     ENV again or HOME: LIVE. LIVE's state line shows the section's first line (the song's when it
  *                     has none) while nothing else is announced
  *   HOME              on LIVE: the other layout (2026-10-29, asked: "a large number regarding the current beat of the
  *                     total beats in the measure", and only the section playing, not all of them; then "switch the
@@ -67,6 +72,8 @@
 static uint8_t sng_view = DV_LIVE;                  /* DV_* (ui.c) */
 static uint8_t note_scroll;                         /* NOTES: the first line shown */
 static int8_t note_sec = -1;                        /* NOTES: the section read, -1 the one playing (notes_draw) */
+static uint32_t oct_t[2];                           /* OCT- / OCT+ pressed on LIVE or NOTES: fm1_ms | 1 while held; 0 */
+static uint8_t oct_used;                            /* bit 0 / 1: a key came while OCT- / OCT+ was held (no tap then) */
 static uint8_t sng_pick;                            /* SONGS: the row of the page (0..15) */
 static int8_t sng_page = -1;                        /* 0 USER, 1 FACTORY; -1 not chosen yet: lib_page */
 UI_SMALL static uint32_t lib_page(void)                      /* the page shown: the one chosen, or FACTORY while USER is empty */
@@ -122,6 +129,7 @@ static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.
                                                      * OCT+ was held) */
 {
     int32_t w = key_white(k), b = key_black(k);
+    oct_used |= (uint8_t)(((fm1_in.buttons & dyn_bit[0]) != 0u) | ((fm1_in.buttons & dyn_bit[1]) != 0u) << 1);
     if (k == KEY_TAP) {                             /* the tap tempo (the pedal's CC 26), with a song or without */
         fm1_irq_off();
         pedal_tap();
@@ -286,6 +294,23 @@ UI_SMALL static void drummer_input(uint32_t pressed, uint32_t home)
     uint32_t id;
     if (!song.playing)
         key_nextbar = 0;                            /* (stopped, a white key starts its section at once) */
+    for (id = 0; id < 2u; id++) {                   /* OCT- / OCT+ tapped on LIVE or NOTES: the previous / next section
+                                                     * (2026-11-04), on the release within 400 ms with no key meanwhile:
+                                                     * OCT+ held with a key is "on the next bar" (drummer_key) */
+        uint32_t bit = 1u << panel.btn[id ? B_OCTUP : B_OCTDN], down = (fm1_in.buttons & bit) != 0u;
+        if (down && !oct_t[id] && (pressed & bit) && (sng_view == DV_LIVE || sng_view == DV_NOTE)) {
+            oct_t[id] = fm1_ms | 1u;
+            oct_used &= (uint8_t)~(1u << id);
+        } else if (!down && oct_t[id]) {
+            uint32_t tap = fm1_ms - (oct_t[id] & ~1u) < 400u && !((oct_used >> id) & 1u);
+            oct_t[id] = 0;
+            if (tap && sng_cur >= 0 && (sng_view == DV_LIVE || sng_view == DV_NOTE)) {
+                fm1_irq_off();
+                pedal_step(id ? 1 : -1, PS_END);
+                fm1_irq_on();
+            }
+        }
+    }
     if (home == 1u) {                               /* BT_TAP: LIVE (from SONGS and SECTIONS); on LIVE, the other layout */
         if (sng_view == DV_LIVE) {
             live_view ^= 1u;
@@ -308,7 +333,8 @@ UI_SMALL static void drummer_input(uint32_t pressed, uint32_t home)
             else
                 pedal_cc(PEDAL_CC_SECTION, live_sec >= 0 ? (uint32_t)live_sec : 0u);
             fm1_irq_on();
-        } else if (b == B_OCTDN && (sng_view == DV_LIVE || sng_view == DV_NOTE)) {   /* NOTES, and back (2026-11-02) */
+        } else if (b == B_ENV && (sng_view == DV_LIVE || sng_view == DV_NOTE)) {   /* NOTES, and back (2026-11-02; ENV
+                                                                                  * since 2026-11-04, OCT- before) */
             sng_view = (uint8_t)(sng_view == DV_NOTE ? DV_LIVE : DV_NOTE);
             note_scroll = 0;
             note_sec = -1;
@@ -320,18 +346,16 @@ UI_SMALL static void drummer_input(uint32_t pressed, uint32_t home)
                 sections_edit(b == B_LFO ? SE_RIGHT : SE_LEFT);
             else if (b == B_OCTUP)
                 sections_edit(SE_OUTRO);
-        } else if (sng_view == DV_LIB || (sng_cur < 0 && (b == B_ENV || b == B_LFO))) {
+        } else if (sng_view == DV_LIB) {
             if (b == B_REC || b == B_OCTUP)
                 lib_load(sng_pick);
             else if (b == B_SCL)                    /* the page: SEL the other one (2026-10-30) */
                 lib_turn(!lib_page());
-            else if (b == B_ENV || b == B_LFO)      /* ENV USER, LFO FACTORY outright (LIVE with no song: its keys' too) */
+            else if (b == B_ENV || b == B_LFO)      /* ENV USER, LFO FACTORY outright */
                 lib_turn(b == B_LFO);
-        } else if (b == B_ENV || b == B_LFO) {      /* PREV, NEXT (no fill of their own, as the white keys; SEL was
-                                                     * FILL until 2026-10-30, it opens SONGS now: ui_input.c) */
-            fm1_irq_off();
-            pedal_step(b == B_LFO ? 1 : -1, PS_END);
-            fm1_irq_on();
+        } else if (b == B_LFO && sng_cur < 0) {     /* LIVE with no song: LFO the other page of its keys (ENV was USER,
+                                                     * LFO FACTORY until 2026-11-04: ENV is NOTES now) */
+            lib_turn(!lib_page());
         }
     }
     if (sng_view == DV_LIB) {
@@ -1020,7 +1044,7 @@ UI_SMALL static void note_line(uint32_t at, uint32_t skip, const char *s, uint16
     if (at >= skip && at < skip + 6u)
         cv_text(4, 4 + (int32_t)(at - skip) * 16, &FONT_S, s, c);
 }
-/* NOTES (OCT- on LIVE, 2026-11-02): the section's note under its number and name ("no note" with none), then the
+/* NOTES (ENV on LIVE, 2026-11-02 on OCT-, ENV since 2026-11-04): the section's note under its number and name ("no note" with none), then the
  * song's under the song's name, wrapped; KNOB 1 or ALGORITHM scrolls (12 lines fit); KNOB 2 and PRESETS the section read
  * (note_sec; the one playing until a turn, and again after a load or on a section gone); none at all: how to write
  * one. Drawn in two strips (the canvas is 240 x 124 at most) */
@@ -1057,7 +1081,7 @@ UI_SMALL static void notes_draw(void)
     cv_text(4, 4, &FONT_S, "NOTES", C_WHITE);
     cut_name(b, sng_ui_song[0] ? sng_ui_song : "no song", &FONT_S, 120);
     cv_text(4 + text_w(&FONT_S, "NOTES") + 10, 4, &FONT_S, b, TE_G3);
-    cv_text(236 - text_w(&FONT_S, "oct-: live"), 4, &FONT_S, "oct-: live", TE_G3);
+    cv_text(236 - text_w(&FONT_S, "env: live"), 4, &FONT_S, "env: live", TE_G3);
     cv_rect(0, 23, 240, 1, TE_G1);
     cv_blit(0, 0);
     for (strip = 0; strip < 2u; strip++) {         /* 6 lines of 16 px each, lines note_scroll + 6 x strip on */

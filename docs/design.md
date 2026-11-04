@@ -616,7 +616,13 @@ next bar). No named sections, one song, no fill tied to a section change.
    playing (the screen opens on it and follows it; after a turn it stays until OCT- again, a load or the section
    gone), the title its number and name, "no note" under it when it has none, so the knob is seen to move; what
    plays is untouched (SECTIONS' KNOB 1 is the one that cues), the song and the kit too; ALGORITHM scrolls the
-   lines as KNOB 1 (asked next: "make the algorithm scroll the page itself like knob1 does"). The editor's Song tab: a Song notes field and a Section notes field (kept through the section editor's
+   lines as KNOB 1 (asked next: "make the algorithm scroll the page itself like knob1 does"). Then, the same day,
+   "make oct- / oct+ in live mode cue the previous and the next section": OCT- and OCT+ tapped are PREV and NEXT on
+   LIVE and on NOTES (`oct_t`, `oct_used`: the release within 400 ms with no key meanwhile, so OCT+ held with a white
+   key stays "on the next bar"), NOTES moved to ENV (the user, asked where: "env opens the notes, but lfo loses the
+   next section"), LFO nothing with a song and the keys' other page with none; SONGS and SECTIONS keep their ENV /
+   LFO / OCT+. ui_pages_test: the taps, a half-second hold let go (no cue), the hold with a key (next bar, no cue on
+   the release), LFO idle, ENV with no song (render `live-nosong-notes`). The editor's Song tab: a Song notes field and a Section notes field (kept through the section editor's
    normalisation and the undo history, read back from the device). Tests: song_test (lengths and flags refused, read,
    kept through the pack-back on a new grid, through DUP, RIGHT and DEL), ui_pages_test (the state line, NOTES open,
    scrolled, closed; renders `live-note`, `live-notes`, `live-big-note`), test_web (parity with `fm1_song.py` on
@@ -658,7 +664,7 @@ the only big lever is `SMP_DATA`, and the acoustic kit is in it.
 | With entries and breaks (CC 28, 2026-10-18; the flams and the fills to the section's end before it) | 550984 B: **30580 B left**; static RAM 61312 B |
 | The ride 2.0 s (399478 B of ADPCM), the voice pick (at most four of a note, the quietest given way) and SETUP > LOAD, 2026-10-22 | 566616 B: **14948 B left**; static RAM 61344 B |
 | SLOOP 2.7 to 2.8.4 looked through (2026-10-30, below): the mix rounded, the rescue key, the clock's mean tempo, the knobs' acceleration, MIDI CLOCK OUT, the crash screen's stack and the stacks painted; then the non-audio functions compiled for size (`UI_SMALL`, clang minsize, SLOOP 2.7's) | 568460 B with the changes, **563116 B** with UI_SMALL: **18448 B left**; static RAM 61568 B |
-| 0.9.3, then the kit's sound without more samples (2026-11-01, `docs/kits.md`): the stand-in layers, the pitch jitter, a pan per lane (the pre-emphasis and the encoder change no byte count) | 563320 B, 563912 B, 564108 B (KIT PAN), then 565620 B (the notes, 2026-11-02), 565628 B (DRUMS 2, 2026-11-03), 566004 B then 566020 B (NOTES' sections, 2026-11-04): **15544 B left**; static RAM 63184 B (the NOTES screen's text, 512 B) |
+| 0.9.3, then the kit's sound without more samples (2026-11-01, `docs/kits.md`): the stand-in layers, the pitch jitter, a pan per lane (the pre-emphasis and the encoder change no byte count) | 563320 B, 563912 B, 564108 B (KIT PAN), then 565620 B (the notes, 2026-11-02), 565628 B (DRUMS 2, 2026-11-03), 566004 B then 566020 B (NOTES' sections, 2026-11-04), 566404 B (OCT- / OCT+ PREV / NEXT, ENV NOTES, the same day): **15160 B left**; static RAM 63184 B (the NOTES screen's text, 512 B) |
 | Data region (0x93000..0xE0000): projects, the user sample slots of 80 KB (USR1 and USR2 now hold the songs: USR3 and USR4 are the user's; free: 0xC4000..0xC7FFF, the old user preset banks 0xDC000..0xDFFFF, the FM6 bank 0xE5000..0xE6FFF, 0xFB000) | about 308 KB |
 | Songs 1..8 (0xA0000..0xAFFFF, A/B) and the pedal settings (0xB0000 / 0xB1000); songs 9..16 (0xB4000..0xC3FFF, A/B, since 2026-10-14) | 72 KB of USR1's 80 KB, 64 KB of USR2's; the kit pair USR3+4 stays the user's |
 | ADPCM sample audio | about 11 KB per second (mono 22 kHz, 4 bit) |
