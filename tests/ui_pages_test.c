@@ -761,6 +761,42 @@ int main(int argc, char **argv)
             ui.force = 1; frame(); ppm("live-knob");
             song.g[G_BPM] = bpm; TDRUM->p[P_E0] = kit; song.g[G_DRLVL] = lv; song.g[G_SWING] = sw; ui.msg_t = 0;
         }
+        {   /* NOTES: KNOB 2 and PRESETS turn the sections to read (2026-11-04, asked: they were the songs and the kit
+             * there): no song loaded, the kit untouched, what plays untouched; the ends stop; a section with no note
+             * says so under its number and name; OCT- back and in again: the section playing */
+            int16_t kit = TDRUM->p[P_E0];
+            int32_t ls = live_sec, lr = live_req;
+            int8_t c0 = sng_cur;
+            uint8_t r0 = sng_req;
+            sng_req = 0;
+            t_note = "3rd time: bridge a bar early"; t_snote = "Ampero: bank 2, scene A";
+            tap(B_OCTDN); frames(2);
+            check(sng_view == DV_NOTE && note_sec == -1, "LIVE: OCT-: NOTES, the section playing");
+            encs[panel.enc[EN_ALGO]] = 3; frames(2);
+            check(note_scroll == 3u && sng_req == 0u && sng_cur == c0, "NOTES: ALGORITHM scrolls the lines as KNOB 1, no song loaded");
+            encs[panel.enc[EN_K2]] = 1; frames(2);
+            check(note_sec == 2 && note_scroll == 0u && sng_req == 0u && sng_cur == c0, "NOTES: KNOB 2: section 3 read, no song loaded");
+            check(live_sec == ls && live_req == lr && song.playing, "NOTES: KNOB 2: what plays untouched");
+            ui.force = 1; frame(); ppm("live-notes-sec");   /* section 3: "no note", the song's under it */
+            encs[panel.enc[EN_K2]] = 5; frames(2);
+            check(note_sec == 2, "NOTES: KNOB 2 at the last section: stays");
+            encs[panel.enc[EN_PRESET]] = -1; frames(2);
+            check(note_sec == 1 && TDRUM->p[P_E0] == kit, "NOTES: PRESETS back: section 2, the kit untouched");
+            encs[panel.enc[EN_PRESET]] = -1; frames(2); encs[panel.enc[EN_PRESET]] = -1; frames(2);
+            check(note_sec == 0, "NOTES: PRESETS at the first section: stays");
+            encs[panel.enc[EN_K2]] = 2; frames(2);
+            check(note_sec == 1, "NOTES: KNOB 2 two detents at once: one section (no accel)");
+            encs[panel.enc[EN_K2]] = 1; frames(2);
+            t_nsec = 1; ui.force = 1; frame();
+            check(note_sec == -1, "NOTES: the section read (3) gone, a song of 1 now: the one playing again");
+            t_nsec = 3;
+            encs[panel.enc[EN_K2]] = 1; frames(2);
+            tap(B_OCTDN); frames(2); tap(B_OCTDN); frames(2);
+            check(sng_view == DV_NOTE && note_sec == -1, "NOTES: closed and opened: the section playing again");
+            tap(B_OCTDN); frames(2);
+            check(sng_view == DV_LIVE, "NOTES: OCT-: LIVE");
+            t_note = t_snote = ""; sng_req = r0; ui.force = 1; frame();
+        }
         {   /* the count-in, the pedal's MIDI dot */
             tap(B_PLAY); frames(3);
             ci_on = 1; ci_pedal = 8; ci_beat = 2; ci_meter = 0; pedal_seen_ms = fm1_ms;

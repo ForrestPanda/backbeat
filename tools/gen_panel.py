@@ -56,7 +56,7 @@ COLUMNS = [
         ("ENV / LFO", "the previous / next section, no fill"),
         ("PLAY", "start the section cued, after the count-in; playing: stop"),
         ("HOME", "the other layout: the bar of the section big"),
-        ("OCT-", "NOTES: the section's note and the song's (the editor's Song tab writes them; KNOB 1 scrolls); again or HOME: LIVE"),
+        ("OCT-", "NOTES: the section's note and the song's (the editor's Song tab writes them; KNOB 1 or ALGORITHM scrolls, KNOB 2 or PRESETS another section's, to read); again or HOME: LIVE"),
         ("KNOB 1 / 3 / 4", "tempo, drum level, swing (SELECT: tempo; PRESETS: the kit)"),
         ("KNOB 2, ALGORITHM", "the previous / next song of the page chosen on SONGS"),
     ]),

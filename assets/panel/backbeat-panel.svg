@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1524" width="1280" height="1524" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1538" width="1280" height="1538" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif">
 <title>The FM-1 panel in BackBeat: what every knob, button and key does</title>
-<rect width="1280" height="1524" fill="#121316"/>
+<rect width="1280" height="1538" fill="#121316"/>
 <rect x="20" y="14" width="1240" height="792" rx="26" fill="#2a2c31" stroke="#3c3f46" stroke-width="2"/>
 <text x="40.0" y="42.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="12" font-weight="600" fill="#c9c6bd" text-anchor="start" opacity="1.0">M-VAVE FM-1</text>
 <text x="1240.0" y="42.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="12" font-weight="400" fill="#9a9ca4" text-anchor="end" opacity="1.0">BackBeat 0.9.3: the controls on LIVE, the stage screen</text>
@@ -245,14 +245,15 @@
 <text x="28.0" y="1304.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">the other layout: the bar of the section big</text>
 <text x="28.0" y="1322.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="700" fill="#f2f2f2" text-anchor="start" opacity="1.0">OCT-</text>
 <text x="28.0" y="1336.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">NOTES: the section's note and the song's (the</text>
-<text x="28.0" y="1350.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">editor's Song tab writes them; KNOB 1 scrolls);</text>
-<text x="28.0" y="1364.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">again or HOME: LIVE</text>
-<text x="28.0" y="1382.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="700" fill="#f2f2f2" text-anchor="start" opacity="1.0">KNOB 1 / 3 / 4</text>
-<text x="28.0" y="1396.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">tempo, drum level, swing (SELECT: tempo; PRESETS:</text>
-<text x="28.0" y="1410.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">the kit)</text>
-<text x="28.0" y="1428.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="700" fill="#f2f2f2" text-anchor="start" opacity="1.0">KNOB 2, ALGORITHM</text>
-<text x="28.0" y="1442.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">the previous / next song of the page chosen on</text>
-<text x="28.0" y="1456.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">SONGS</text>
+<text x="28.0" y="1350.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">editor's Song tab writes them; KNOB 1 or ALGORITHM</text>
+<text x="28.0" y="1364.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">scrolls, KNOB 2 or PRESETS another section's, to</text>
+<text x="28.0" y="1378.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">read); again or HOME: LIVE</text>
+<text x="28.0" y="1396.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="700" fill="#f2f2f2" text-anchor="start" opacity="1.0">KNOB 1 / 3 / 4</text>
+<text x="28.0" y="1410.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">tempo, drum level, swing (SELECT: tempo; PRESETS:</text>
+<text x="28.0" y="1424.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">the kit)</text>
+<text x="28.0" y="1442.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="700" fill="#f2f2f2" text-anchor="start" opacity="1.0">KNOB 2, ALGORITHM</text>
+<text x="28.0" y="1456.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">the previous / next song of the page chosen on</text>
+<text x="28.0" y="1470.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">SONGS</text>
 <text x="338.0" y="856.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="13" font-weight="700" fill="#4d93ff" text-anchor="start" opacity="1.0">SONGS  (SEL)</text>
 <line x1="338.0" y1="864" x2="624.0" y2="864" stroke="#4d93ff" stroke-width="1.5" opacity="0.6"/>
 <text x="338.0" y="886.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="700" fill="#f2f2f2" text-anchor="start" opacity="1.0">SEL</text>
@@ -310,5 +311,5 @@
 <text x="958.0" y="1170.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="700" fill="#f2f2f2" text-anchor="start" opacity="1.0">GLO</text>
 <text x="958.0" y="1184.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">SETUP: pedal channel, count-in, MIDI, screen,</text>
 <text x="958.0" y="1198.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="11.5" font-weight="400" fill="#9a9ca4" text-anchor="start" opacity="1.0">system</text>
-<text x="1260.0" y="1508.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="10.5" font-weight="400" fill="#9a9ca4" text-anchor="end" opacity="0.8">BackBeat, a fork of SLOOP (Felucca). tools/gen_panel.py</text>
+<text x="1260.0" y="1522.0" font-family="'Helvetica Neue', Helvetica, Arial, 'Liberation Sans', sans-serif" font-size="10.5" font-weight="400" fill="#9a9ca4" text-anchor="end" opacity="0.8">BackBeat, a fork of SLOOP (Felucca). tools/gen_panel.py</text>
 </svg>

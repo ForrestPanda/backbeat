@@ -20,8 +20,9 @@ ABOUT; the editor shows it next to the connect button.
 - **Notes on a song and its sections.** Free text written in the editor's Song tab (`"notes"` in the song's JSON, on
   the song and on a section, up to 255 characters each) travels with the song onto the device. LIVE's state line
   shows the section's first line while nothing else is announced; **OCT- on LIVE** opens NOTES, the section's note
-  and the song's in full (KNOB 1 scrolls), OCT- again or HOME back. A song with notes needs this firmware; 0.9.3
-  refuses it.
+  and the song's in full (KNOB 1 or ALGORITHM scrolls; KNOB 2 or PRESETS turns to another section's, under its number and
+  name, "no note" when it has none: to read ahead, what plays stays as it is, and the screen opens on the section
+  playing), OCT- again or HOME back. A song with notes needs this firmware; 0.9.3 refuses it.
 
 ### Website
 
