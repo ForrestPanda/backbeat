@@ -1278,6 +1278,11 @@ async function editorSet() {
     && /requestFullscreen\(\)\.catch/.test(html) && /e\.key === "Escape" && document\.body\.classList\.contains\("live"\)/.test(html)
     && /\.plive-tiles button \{[^}]*background: var\(--s3\)/.test(html),
     "set: live mode (the stage view, full screen, the screen kept awake, Esc leaves); the section tiles brighter");
+  ok(/\.plive-state\.note \{ color: var\(--dim\); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; \}/.test(html)
+    && /if \(!say && sp && shown >= 0 && sp\.sections\[shown\]\)/.test(html)
+    && /String\(sp\.sections\[shown\]\.notes \|\| ""\)\.trim\(\) \|\| String\(sp\.notes \|\| ""\)\.trim\(\)/.test(html)
+    && /say = n\.split\("\\n"\)\[0\]\.trim\(\); cls \+= " note";/.test(html),
+    "play: the section's note (else the song's), its first line, on the state line while nothing is announced, as the device (2026-11-04)");
 }
 
 async function editorRealKit() {

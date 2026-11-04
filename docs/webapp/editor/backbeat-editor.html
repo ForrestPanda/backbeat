@@ -224,6 +224,7 @@
   .plive-state { min-height: 1.2em; margin: 0 0 8px; color: var(--t3); }
   .plive-state.fill { color: var(--t4); }
   .plive-state.end { color: var(--red); }
+  .plive-state.note { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* the note's first line, as the device (2026-11-04) */
   /* the section tiles: lighter than the view, the name bright, the number amber (they were dim: hard to read across a
      room, with 9..16 sections most of all); the one playing orange, the one cued framed */
   .plive-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
@@ -5302,6 +5303,7 @@ function playLiveDraw() {
     for (let k = 1; k <= ticks; k++) prog.append(el("s", { style: `left: ${(100 * k) / nbars}%` }));
   }
   let say = "", cls = "plive-state";                        /* what comes, as the device says it */
+  const shown = playing >= 0 ? playing : !ev && st && sp ? (st.req >= 0 ? st.req : 0) : -1;   /* the section on screen (the device's live_sec) */
   if (ev && sp) {
     if (ev.end) { say = "ENDING"; cls += " end"; }
     else if (ev.req >= 0 && ev.sec >= 0 && (ev.wait || ev.fill)) { say = `FILL > ${sp.sections[ev.req].name}`; cls += " fill"; }   /* (a fill into the change) */
@@ -5309,6 +5311,11 @@ function playLiveDraw() {
     else if (ev.req >= 0 && ev.sec >= 0) say = `NEXT: ${sp.sections[ev.req].name}`;
     else if (ev.wait) { say = "FILL NEXT BAR"; cls += " fill"; }
     else if (ev.fill) { say = "FILL"; cls += " fill"; }
+  }
+  if (!say && sp && shown >= 0 && sp.sections[shown]) {   /* nothing announced: the section's note, its first line (the song's
+                                                        when it has none), dim, as the device's state line (2026-11-04, asked) */
+    const n = String(sp.sections[shown].notes || "").trim() || String(sp.notes || "").trim();
+    if (n) { say = n.split("\n")[0].trim(); cls += " note"; }
   }
   stEl.textContent = say;
   stEl.className = cls;

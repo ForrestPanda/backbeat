@@ -31,7 +31,9 @@ ABOUT; the editor shows it next to the connect button.
 ### Website
 
 - **The editor's player follows**: the same stand-in layers, the same pans, the re-rendered kit.
-- **Song notes and section notes** in the Song tab, sent with the song and read back from the device.
+- **Song notes and section notes** in the Song tab, sent with the song and read back from the device. The player's
+  LIVE view shows the section's first line (the song's when it has none) on its state line while nothing is
+  announced, as the device does.
 
 ## 0.9.3 (2026-11-01)
 

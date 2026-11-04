@@ -622,7 +622,10 @@ next bar). No named sections, one song, no fill tied to a section change.
    key stays "on the next bar"), NOTES moved to ENV (the user, asked where: "env opens the notes, but lfo loses the
    next section"), LFO nothing with a song and the keys' other page with none; SONGS and SECTIONS keep their ENV /
    LFO / OCT+. ui_pages_test: the taps, a half-second hold let go (no cue), the hold with a key (next bar, no cue on
-   the release), LFO idle, ENV with no song (render `live-nosong-notes`). The editor's Song tab: a Song notes field and a Section notes field (kept through the section editor's
+   the release), LFO idle, ENV with no song (render `live-nosong-notes`). The editor's player follows the device's
+   state line (2026-11-04, asked: "update the UI to show the section note in one line similar to the device"):
+   `playLiveDraw` puts the section's note's first line (the song's when it has none), dim and cut with an ellipsis,
+   where NEXT / FILL / ENDING go while nothing is announced; test_web checks it. The editor's Song tab: a Song notes field and a Section notes field (kept through the section editor's
    normalisation and the undo history, read back from the device). Tests: song_test (lengths and flags refused, read,
    kept through the pack-back on a new grid, through DUP, RIGHT and DEL), ui_pages_test (the state line, NOTES open,
    scrolled, closed; renders `live-note`, `live-notes`, `live-big-note`), test_web (parity with `fm1_song.py` on
