@@ -203,11 +203,14 @@ UI_SMALL static uint32_t sng_note_off(const uint8_t *s)
     return q;
 }
 /* the note of section k (k < 0: the song's) into d, n bytes with its end (cut when longer); empty: none. LIVE shows its
- * first line, the NOTES screen the whole (ui_drummer.c) */
+ * first line, the NOTES screen the whole (ui_drummer.c). "@2" in the text is section 2's name (2026-11-06, the user:
+ * "some sort of shorthand for the sections names"): "@" and a section's number, 1 to nsec, ended by a non-digit; the
+ * number is the pedal's and SECTIONS', and the text follows a rename; anything else ("@0", "@9" of five, "@" alone)
+ * as typed. The editor renumbers them when sections come or go (SED.renum), and its player shows them the same */
 UI_SMALL static void sng_note(int32_t k, char *d, uint32_t n)
 {
     const uint8_t *p = 0;
-    uint32_t len, i;
+    uint32_t len, i, o;
     d[0] = 0;
     if (sng_cur < 0 || !sng.xip || !sng.nsec)
         return;
@@ -224,9 +227,23 @@ UI_SMALL static void sng_note(int32_t k, char *d, uint32_t n)
     if (!p)
         return;
     len = p[0];
-    for (i = 0; i < len && i + 1u < n; i++)
-        d[i] = (char)p[1u + i];
-    d[i] = 0;
+    for (i = 1, o = 0; i <= len && o + 1u < n; ) {   /* (the text's bytes are p[1..len]) */
+        uint32_t j = i + 1u, v = 0;
+        if (p[i] == '@') {
+            while (j <= len && p[j] >= '0' && p[j] <= '9' && v < 100u)
+                v = v * 10u + (p[j++] - '0');
+            if (v >= 1u && v <= sng.nsec && (j > len || p[j] < '0' || p[j] > '9')) {
+                const uint8_t *s = sng_sec(v - 1u);
+                uint32_t m;
+                for (m = 0; m < SNG_NAME && s[m] && o + 1u < n; m++)
+                    d[o++] = (char)s[m];
+                i = j;
+                continue;
+            }
+        }
+        d[o++] = (char)p[i++];
+    }
+    d[o] = 0;
 }
 UI_SMALL static void sng_name(uint32_t k, char *out)      /* (the names are ASCII, 0-padded in the packed form) */
 {

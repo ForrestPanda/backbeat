@@ -149,7 +149,7 @@ int main(int argc, char **argv)
         const char *brk[DRUM_LANES] = {0, 0, 0, 0, "x..............."};
         uint32_t p = song_hdr(blob[11], "NOTED", 120, 0, 3), s;
         s = p; p = song_sec(blob[11], p, "VERSE", 16, 2, 0, "x...x...x...x...", "....x.......x...", 0, 0);
-        p = song_note(blob[11], s, p, "3rd time: bridge a bar early\nwatch the singer");
+        p = song_note(blob[11], s, p, "3rd time: @2 a bar early\n@9 @0 @ @12x @1@2 @3");   /* ("@n": the names, 2026-11-06) */
         s = p; p = song_sec(blob[11], p, "CHORUS", 16, 2, 0, "x...x...x...x...", "....X.......X...", "x.x.x.x.x.x.x.x.", 0);
         p = song_blk(blob[11], s, p, SNG_F_BREAK, 16, brk);
         p = song_note(blob[11], s, p, "crash on 1");
@@ -825,11 +825,14 @@ int main(int argc, char **argv)
                                                                            * not looked at, as before 2026-11-02) */
         pc(16, 11); advance(CTL); sng_poll();
         assert(sng_cur == 11);
-        sng_note(0, nb, sizeof nb); assert(!strcmp(nb, "3rd time: bridge a bar early\nwatch the singer"));
+        sng_note(0, nb, sizeof nb); assert(!strcmp(nb, "3rd time: CHORUS a bar early\n@9 @0 @ @12x VERSECHORUS OUT"));   /* "@n" a
+                                                                           * section's name; past the count, 0, alone, or
+                                                                           * followed by a digit: as typed */
         sng_note(1, nb, sizeof nb); assert(!strcmp(nb, "crash on 1"));
         sng_note(2, nb, sizeof nb); assert(!nb[0]);
         sng_note(-1, nb, sizeof nb); assert(!strcmp(nb, "Ampero: bank 2, scene A"));
         sng_note(0, nb, 9); assert(!strcmp(nb, "3rd time"));              /* cut to the room */
+        sng_note(0, nb, 14); assert(!strcmp(nb, "3rd time: CHO"));         /* (a name cut as well) */
         sng_note(7, nb, sizeof nb); assert(!nb[0]);
         fm1_irq_off(); sng_apply(0); live_sec = 0; fm1_irq_on();           /* VERSE on a finer grid: its note stays */
         assert(pattern_rediv(TDRUM, 3) && TDRUM->p[P_SLEN] == 32);
@@ -837,7 +840,7 @@ int main(int argc, char **argv)
         assert(n && !sng_check(out, n, &tmp) && (out[tmp.off[0] + 14] & SNG_F_NOTE) && (out[23] & SNG_H_NOTE));
         memcpy(blob[11], out, n); blob_n[11] = n;
         pc(16, 11); advance(CTL); sng_poll();
-        sng_note(0, nb, sizeof nb); assert(!strcmp(nb, "3rd time: bridge a bar early\nwatch the singer"));
+        sng_note(0, nb, sizeof nb); assert(!strcmp(nb, "3rd time: CHORUS a bar early\n@9 @0 @ @12x VERSECHORUS OUT"));
         sng_note(1, nb, sizeof nb); assert(!strcmp(nb, "crash on 1"));
         sng_note(-1, nb, sizeof nb); assert(!strcmp(nb, "Ampero: bank 2, scene A"));
         assert(TDRUM->p[P_SDIV] == 3);
@@ -851,7 +854,9 @@ int main(int argc, char **argv)
         assert(m && !sng_check(img, m, &tmp) && tmp.nsec == 3u);
         memcpy(blob[11], img, m); blob_n[11] = m;
         pc(16, 11); advance(CTL); sng_poll();
-        sng_note(0, nb, sizeof nb); assert(!strcmp(nb, "3rd time: bridge a bar early\nwatch the singer"));
+        sng_note(0, nb, sizeof nb); assert(!strcmp(nb, "3rd time: CHORUS 2 a bar early\n@9 @0 @ @12x VERSECHORUS 2 OUT"));   /* ("@2" is
+                                                                           * the copy now: the device's edits move the
+                                                                           * numbers, the text is as typed) */
         sng_note(1, nb, sizeof nb); assert(!strcmp(nb, "crash on 1"));   /* the copy's note */
         sng_note(2, nb, sizeof nb); assert(!nb[0]);
         sng_note(-1, nb, sizeof nb); assert(!strcmp(nb, "Ampero: bank 2, scene A"));

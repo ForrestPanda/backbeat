@@ -39,7 +39,9 @@ the section comes in from another one or from stopped, the break on the pedal's 
 "notes" (2026-11-02), on the song and on a section: free text, how to play it ("3rd time: bridge a bar early"); up to
 255 bytes each (Latin-1, the device's font; newlines kept, trailing blanks dropped). The device shows the section's
 first line on LIVE's state line while nothing else is announced (the song's when the section has none), and the whole
-on OCT- (NOTES); the editor's Song tab writes them. A firmware before 2026-11-02 refuses a song with notes.
+on ENV (NOTES); the editor's Song tab writes them. "@2" in the text is section 2's name when shown (the pedal's
+number; past the count, 0 or alone: as typed), kept as "@2" in the file. A firmware before 2026-11-02 refuses a
+song with notes.
 Lanes:
 KICK, KICK2, SNARE, CLAP, HAT, OPENHAT, PEDAL, RIM, SNARE2, LOWTOM, MIDTOM, HITOM, CRASH, RIDE, SHAKER, COWBELL
 (MIDTOM since 2026-10-14, where the conga was: "CONGA" still reads as it; spaces and case do not matter). div: 1/4 1/8 1/16 1/32 8T 16T 1/2 1BAR 2BAR. time: the section's meter,

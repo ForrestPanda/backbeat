@@ -303,7 +303,7 @@ The panel in one picture (`tools/gen_panel.py`; also the web editor's Cheat shee
 | --- | --- | --- |
 | HOME | **LIVE**, the screen it starts on; on LIVE: its other layout, the bar big (kept across power-offs) | |
 | OCT- / OCT+ | on LIVE (and NOTES): **PREV**, **NEXT** (the pedal's CC 25, 24, without a fill; a fill is a black key) | OCT+ with a white key: that section **on the next bar** |
-| ENV | on LIVE: **NOTES**, the section's note and the song's as the editor's Song tab wrote them (KNOB 1 or ALGORITHM scrolls; KNOB 2 or PRESETS turns to another section's, to read: what plays stays, and the screen opens on the section playing); again or HOME: LIVE. LIVE's state line shows the section's first line while nothing else is announced | |
+| ENV | on LIVE: **NOTES**, the section's note and the song's as the editor's Song tab wrote them (KNOB 1 or ALGORITHM scrolls; KNOB 2 or PRESETS turns to another section's, to read: what plays stays, and the screen opens on the section playing); again or HOME: LIVE. LIVE's state line shows the section's first line while nothing else is announced. In a note, `@2` is section 2's name: written short, shown as the name | |
 | SEL | **SONGS**, your songs and the grooves (on SONGS: the other page, USER / FACTORY; on SECTIONS: the section copied after itself) | |
 | SAVE | nothing | on LIVE, SECTIONS or EDIT: the section into its song, with the song's tempo, kit, swing, drum level and reverb as the knobs left them |
 | EDIT | **SECTIONS**, the song's shape (from SECTIONS: the grid); on SONGS: that row's song and its SECTIONS, or on an empty slot a new song | SLOOP's erase / mute / undo layer |

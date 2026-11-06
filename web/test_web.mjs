@@ -276,6 +276,29 @@ async function editorSongs() {
     const nn = E.SED.norm({ ...spec.sections[1], notes: " keep me " });
     ok(nn.notes === " keep me " && !("notes" in E.SED.norm({ ...spec.sections[1], notes: "  " })) && E.SED.norm(spec.sections[0]).notes == null,
       "songs: the section editor keeps a section's notes (blank: none)");
+    {   /* "@n" (2026-11-06): section n's name when shown (SNG.noteShow, as sng.c sng_note), the number rewritten when the
+         * sections change (SED.renum): one in, after the first; the second out, its name in its place; the second
+         * split in two; the second and third merged */
+      const sn = ["INTRO", "VERSE", "CHORUS"].map((name) => ({ name }));
+      const sp = { notes: "go @2 then @3; @9 @0 @ @12x @1@2", sections: [{ ...sn[0], notes: "@3 twice" }, sn[1], sn[2]] };
+      const after = (count, f) => { const c = { ...sp, sections: sp.sections.map((x) => ({ ...x })) }; E.SED.renum(c, count, f); return c.notes + " | " + c.sections[0].notes; };
+      ok(E.SNG.noteShow(sp.notes, sp.sections) === "go VERSE then CHORUS; @9 @0 @ @12x INTROVERSE" && E.SNG.noteShow("", sp.sections) === ""
+        && after(3, (n) => n > 1 ? n + 1 : n) === "go @3 then @4; @9 @0 @ @12x @1@3 | @4 twice"
+        && after(3, (n) => n === 2 ? "VERSE" : n > 2 ? n - 1 : n) === "go VERSE then @2; @9 @0 @ @12x @1VERSE | @2 twice"
+        && after(3, (n) => n > 2 ? n + 1 : n) === "go @2 then @4; @9 @0 @ @12x @1@2 | @4 twice"
+        && after(3, (n) => n === 3 ? 2 : n > 3 ? n - 1 : n) === "go @2 then @2; @9 @0 @ @12x @1@2 | @2 twice",
+        "songs: notes: @n is section n's name when shown, past the count or malformed as typed; renumbered when sections come or go");
+      ok((html.match(/SED\.renum\(SONGED\.spec, a\.length/g) || []).length === 5
+        && /sed-del[^\n]*const name = a\[k\]\.name; a\.splice\(k, 1\); SED\.renum\(SONGED\.spec, a\.length \+ 1, \(n\) => n === k \+ 1 \? name : n > k \+ 1 \? n - 1 : n\)/.test(html)
+        && /sed-merge[^\n]*a\.splice\(k, 2, m\); SED\.renum\(SONGED\.spec, a\.length \+ 1, \(n\) => n === k \+ 2 \? k \+ 1 : n > k \+ 2 \? n - 1 : n\)/.test(html)
+        && /sed-(dup|new|split)[^\n]*SED\.renum\(SONGED\.spec, a\.length - 1, \(n\) => n > k \+ 1 \? n \+ 1 : n\)/.test(html),
+        "songs: notes: Duplicate, New section, Delete, Split and Merge renumber the notes' @n");
+      ok(/<div class="sednote-prev dim" id="sed-notes-prev" hidden><\/div>/.test(html) && /<div class="sednote-prev dim" id="sed-secnotes-prev" hidden><\/div>/.test(html)
+        && /function sedNotePrev\(\)/.test(html) && /show = !!sp && \/@\/\.test\(str\)/.test(html) && /str\.split\(\/\(@\\d\+\)\/\)/.test(html)
+        && /el\("b", \{ title: x \}, sp\.sections\[n - 1\]\.name\) : el\("s", \{ title: t\("sedNotesNoSec"\) \}, x\)/.test(html)
+        && (html.match(/sedNotePrev\(\)/g) || []).length === 4 && /\.sednote-prev b \{ color: var\(--t3\)/.test(html) && /\.sednote-prev s \{ color: var\(--red\)/.test(html),
+        "songs: notes: a preview under each field while the note has an @ (the names in colour, @n as the tooltip; one naming no section struck), refreshed on input and on a render (2026-11-06)");
+    }
   }
   {   /* a flam (2026-10-17): the hit byte's bit 6, the JSON's "flams" ('.' or 'f', only where the lane hits); the fill
        * bar's too; bit 7 still refused by the check */
@@ -1281,8 +1304,8 @@ async function editorSet() {
   ok(/\.plive-state\.note \{ color: var\(--dim\); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; \}/.test(html)
     && /if \(!say && sp && shown >= 0 && sp\.sections\[shown\]\)/.test(html)
     && /String\(sp\.sections\[shown\]\.notes \|\| ""\)\.trim\(\) \|\| String\(sp\.notes \|\| ""\)\.trim\(\)/.test(html)
-    && /say = n\.split\("\\n"\)\[0\]\.trim\(\); cls \+= " note";/.test(html),
-    "play: the section's note (else the song's), its first line, on the state line while nothing is announced, as the device (2026-11-04)");
+    && /say = SNG\.noteShow\(n\.split\("\\n"\)\[0\], sp\.sections\)\.trim\(\); cls \+= " note";/.test(html),
+    "play: the section's note (else the song's), its first line, on the state line while nothing is announced, as the device (2026-11-04; @n the name, 2026-11-06)");
 }
 
 async function editorRealKit() {

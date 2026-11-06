@@ -630,6 +630,25 @@ next bar). No named sections, one song, no fill tied to a section change.
    kept through the pack-back on a new grid, through DUP, RIGHT and DEL), ui_pages_test (the state line, NOTES open,
    scrolled, closed; renders `live-note`, `live-notes`, `live-big-note`), test_web (parity with `fm1_song.py` on
    `tests/example-song.json`, which carries notes now; the refusals; the editor keeps them). Cheat sheet and README.
+   **"@n" in a note is section n's name (2026-11-06**, the user: "would it make sense in the notes to use some sort of
+   shorthand for the sections names like "@1" "@2"? displayed text would print the section names"; answered yes, by
+   number as the pedal and SECTIONS name them, expanded when shown so the text follows a rename, and the editor must
+   renumber them when its section list changes, else a cue points at the wrong section; "yes, let's try it that
+   way"). `sng_note` replaces "@" and a number from 1 to the count, ended by a non-digit, with that section's name as
+   it copies the text out (so LIVE's line and NOTES show the name; anything else, "@0", "@9" of five, "@" alone, as
+   typed); the packed note keeps the "@n". The editor: `SNG.noteShow` the same rule for the player's state line,
+   `SED.renum` rewrites the song's and the sections' notes on Duplicate, New section, Split (the ones after move up),
+   Merge (the second's number becomes the first's) and Delete (the gone section's reference becomes its name, as text).
+   Known limit: the device's own SECTIONS edits (DUP, LEFT / RIGHT, DEL) move the numbers and leave the text as
+   typed, as the notebook they are (song_test shows "@2" naming the copy after them). Tests: song_test (the
+   expansion and its edge cases, through the pack-back and the image edits, a name cut to the room), test_web
+   (noteShow, renum's four shapes, the five handlers call it, the player uses noteShow). The Song tab's help says it.
+   Then "add a preview button or window so that I can validate quickly the numbers are correct": `sedNotePrev`, a
+   line under each notes field while the note has an "@", the note as the device shows it, each name in colour with
+   its "@n" as the tooltip, an "@n" naming no section struck in red; refreshed on input and on a render (so a
+   Duplicate or Delete shows the renumbering at once). The user's own songs' notes were rewritten with "@n" the same
+   day (their folder, outside this repo; a name standing for several sections, or a repeated name, resolved in the
+   song's order).
 
 The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log
@@ -667,7 +686,7 @@ the only big lever is `SMP_DATA`, and the acoustic kit is in it.
 | With entries and breaks (CC 28, 2026-10-18; the flams and the fills to the section's end before it) | 550984 B: **30580 B left**; static RAM 61312 B |
 | The ride 2.0 s (399478 B of ADPCM), the voice pick (at most four of a note, the quietest given way) and SETUP > LOAD, 2026-10-22 | 566616 B: **14948 B left**; static RAM 61344 B |
 | SLOOP 2.7 to 2.8.4 looked through (2026-10-30, below): the mix rounded, the rescue key, the clock's mean tempo, the knobs' acceleration, MIDI CLOCK OUT, the crash screen's stack and the stacks painted; then the non-audio functions compiled for size (`UI_SMALL`, clang minsize, SLOOP 2.7's) | 568460 B with the changes, **563116 B** with UI_SMALL: **18448 B left**; static RAM 61568 B |
-| 0.9.3, then the kit's sound without more samples (2026-11-01, `docs/kits.md`): the stand-in layers, the pitch jitter, a pan per lane (the pre-emphasis and the encoder change no byte count) | 563320 B, 563912 B, 564108 B (KIT PAN), then 565620 B (the notes, 2026-11-02), 565628 B (DRUMS 2, 2026-11-03), 566004 B then 566020 B (NOTES' sections, 2026-11-04), 566404 B (OCT- / OCT+ PREV / NEXT, ENV NOTES, the same day): **15160 B left**; static RAM 63184 B (the NOTES screen's text, 512 B) |
+| 0.9.3, then the kit's sound without more samples (2026-11-01, `docs/kits.md`): the stand-in layers, the pitch jitter, a pan per lane (the pre-emphasis and the encoder change no byte count) | 563320 B, 563912 B, 564108 B (KIT PAN), then 565620 B (the notes, 2026-11-02), 565628 B (DRUMS 2, 2026-11-03), 566004 B then 566020 B (NOTES' sections, 2026-11-04), 566404 B (OCT- / OCT+ PREV / NEXT, ENV NOTES, the same day), 566564 B ("@n" in the notes, 2026-11-06): **15000 B left**; static RAM 63184 B (the NOTES screen's text, 512 B) |
 | Data region (0x93000..0xE0000): projects, the user sample slots of 80 KB (USR1 and USR2 now hold the songs: USR3 and USR4 are the user's; free: 0xC4000..0xC7FFF, the old user preset banks 0xDC000..0xDFFFF, the FM6 bank 0xE5000..0xE6FFF, 0xFB000) | about 308 KB |
 | Songs 1..8 (0xA0000..0xAFFFF, A/B) and the pedal settings (0xB0000 / 0xB1000); songs 9..16 (0xB4000..0xC3FFF, A/B, since 2026-10-14) | 72 KB of USR1's 80 KB, 64 KB of USR2's; the kit pair USR3+4 stays the user's |
 | ADPCM sample audio | about 11 KB per second (mono 22 kHz, 4 bit) |

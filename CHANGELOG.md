@@ -22,7 +22,9 @@ ABOUT; the editor shows it next to the connect button.
   shows the section's first line while nothing else is announced; **ENV on LIVE** opens NOTES, the section's note
   and the song's in full (KNOB 1 or ALGORITHM scrolls; KNOB 2 or PRESETS turns to another section's, under its number and
   name, "no note" when it has none: to read ahead, what plays stays as it is, and the screen opens on the section
-  playing), ENV again or HOME back. A song with notes needs this firmware; 0.9.3 refuses it.
+  playing), ENV again or HOME back. A song with notes needs this firmware; 0.9.3 refuses it. **`@2` in a note is
+  section 2's name**: "@" and the section's number (the pedal's, SECTIONS'), shown as the name, so a cue is short to
+  write and follows a rename; "@0", a number past the count or "@" alone print as typed.
 - **OCT- and OCT+ tapped cue the previous and next section on LIVE** (and on NOTES), what ENV and LFO did. OCT+
   held with a white key is still "on the next bar" (a tap is a release within half a second with no key meanwhile).
   **ENV opens NOTES** (OCT- did, for a day); LFO does nothing with a song, and with none it turns the page of the
@@ -33,7 +35,10 @@ ABOUT; the editor shows it next to the connect button.
 - **The editor's player follows**: the same stand-in layers, the same pans, the re-rendered kit.
 - **Song notes and section notes** in the Song tab, sent with the song and read back from the device. The player's
   LIVE view shows the section's first line (the song's when it has none) on its state line while nothing is
-  announced, as the device does.
+  announced, as the device does, `@2` shown as section 2's name. Duplicate, New section, Split, Merge and Delete in
+  the Song tab renumber the notes' `@n` so they keep pointing at the same section (a deleted section's becomes its
+  name). Under each notes field, while the note has an `@`, a preview of it as the device shows it: the names in
+  colour, the `@n` as their tooltip, one that names no section struck through.
 
 ## 0.9.3 (2026-11-01)
 
