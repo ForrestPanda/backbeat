@@ -90,7 +90,11 @@ the speaker and the TRS out; the pre-emphasis cap and the pans are recipe number
   recordings' own hiss and the 2x lanes' images with it. The old roll-off had been a gentle low pass over all of that.
   Rendered at 0, 3 and 6 dB for an A/B (`build/host/compare.html`, four players on one playhead), the user: "maybe
   3db felt better"; the whole mix's top (11 to 22 kHz) against its mids (2 to 8 kHz): 0.9.3 -8.9 dB, 0 dB -9.5, 3 dB
-  -8.2, 6 dB -7.3.
+  -8.2, 6 dB -7.3. Heard again 2026-11-06 as a pair with everything else the same (0 and 3 dB, the pans on in both,
+  `build/host/compare-preemph.html`; the renders came out byte for byte the 11-02 ones, so only that page's 0.9.3
+  player had differed in its pans): "my ears are not enough to hear a clear difference, let's keep as is". The cap
+  stays 3 dB. The song used has no shaker, clap, open hat, pedal, rim or cowbell; the hi tom only in a section the
+  play list skips.
 - *The encoder (`sampleio.ima_encode_beam`, used by `gen_samples.py` for the built-in set).* A beam search over the
   encoder's states, 16 kept, instead of the nibble nearest each sample: a nibble also sets the next step, so the
   nearest is often not the cheapest run. Same decoder, same bytes. Measured: +1.5 to 2 dB SNR on the crash and ride
