@@ -553,7 +553,12 @@ next bar). No named sections, one song, no fill tied to a section change.
    package `backbeat-0.9.3.fwsc`, identity `FM-1_988` still: KNOB 2 scrolls the songs on LIVE, F#4, G#4, A#4 "on
    the next bar", the pairs (C#4 and D#4 the break, C#5 and D#5 the ending), and the editor's reconnect (a device
    gone away waited for and connected again by itself, in Firefox too; the keys and the reconnect are in 7 and the
-   note on the editor above). The panel drawing says 0.9.3.
+   note on the editor above). The panel drawing says 0.9.3. **0.9.4 (2026-11-06)**: version `BACKBEAT 0.9.4`, the
+   package `backbeat-0.9.4.fwsc`, identity `FM-1_988` still: the kit's sound without more samples (item 9, KIT PAN on
+   DRUMS 2), the notes on a song and its sections with "@n" for a section's name (item 10), OCT- / OCT+ tapped as PREV /
+   NEXT and ENV for NOTES; the editor's Song tab with the notes and their preview, its player's state line. A song with
+   notes needs this firmware. The panel drawing says 0.9.4. **Verified on the first unit by the user, 2026-11-06**: the
+   kit's sound, KIT PAN, the notes and "@n" on LIVE and NOTES, OCT- / OCT+ as PREV / NEXT, ENV for NOTES.
 8. **More flash for the kit (proposed 2026-10-29, not started).** The user asked whether the samples could be
    compressed and loaded into RAM for better sound, since RAM is free and flash is not. Measured that day: the kit is
    IMA ADPCM, 4 bits a sample at 22 kHz (11 KB a second; 399 478 B, 36 s), played in place from the memory-mapped
@@ -586,7 +591,8 @@ next bar). No named sections, one song, no fill tied to a section change.
    gun), the pitch jitter with HUMANIZE, and a pan per lane (a drummer's view, every sampled kit). Not taken yet, from
    the same review: a better interpolation filter in `drums_mix` (the images of the 2x lanes; 2 multiplies a voice
    sample), bake-time EQ and compression per lane, a block codec with a per-block shift in place of IMA (quieter tails
-   at the same bytes), and item 8 above. Verify on hardware: by ear; the cap and the pans are recipe numbers.
+   at the same bytes), and item 8 above. Heard on the unit with 0.9.4 (the user, 2026-11-06: verified); the cap and
+   the pans are recipe numbers.
    2026-11-02, after the user listened: the 6 dB render "noisier" than 0.9.3 (not the ADPCM noise, which fell: the
    cymbals' top against their body, the hiss and the images with it), the cap set to 3 dB from an A/B at 0, 3 and 6
    (`build/host/compare.html`); the pans liked, the kick expected in the middle (it is: the hats on the same beats lean
