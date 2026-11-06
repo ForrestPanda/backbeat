@@ -33,7 +33,7 @@ presets, the sampled instruments, the punch FX, the SLICER, live recording, the 
 three of its four tracks) is gone, see [docs/drums-only.md](docs/drums-only.md). What is left of SLOOP is its
 drum track, sequencer and sections (SLOOP's own manual is upstream). What this fork adds is in
 [docs/design.md](docs/design.md); what changed in each version is in [CHANGELOG.md](CHANGELOG.md), also on the
-site. The firmware reports itself as BACKBEAT 0.9.3 (the editor's INFO keeps its
+site. The firmware reports itself as BACKBEAT 0.9.4 (the editor's INFO keeps its
 `FELUCCA ` prefix, and the USB port names and the backup format stay SLOOP's, so the tools keep working).
 
 ## Getting started
@@ -51,7 +51,7 @@ official firmware is the same installer with M-VAVE's FM-1 V15 file, or M-VAVE's
 **Install.** Open the installer at <https://forrestpanda.github.io/backbeat/> in Chrome or Edge, plug in the
 FM-1 and follow the page. The package is also on the
 [releases page](https://github.com/ForrestPanda/backbeat/releases) and in [docs/firmware/](docs/firmware/), for
-the command line (`python3 tools/fm1_install.py backbeat-0.9.3.fwsc`) or a local copy of the site
+the command line (`python3 tools/fm1_install.py backbeat-0.9.4.fwsc`) or a local copy of the site
 (`cd docs && python3 -m http.server 8000`, then `http://localhost:8000/webapp/installer/`). If BackBeat
 stops starting after an install, hold **OCT-** alone while switching on: the BACKBEAT USB RESCUE screen
 takes the package again.

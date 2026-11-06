@@ -553,7 +553,11 @@ next bar). No named sections, one song, no fill tied to a section change.
    package `backbeat-0.9.3.fwsc`, identity `FM-1_988` still: KNOB 2 scrolls the songs on LIVE, F#4, G#4, A#4 "on
    the next bar", the pairs (C#4 and D#4 the break, C#5 and D#5 the ending), and the editor's reconnect (a device
    gone away waited for and connected again by itself, in Firefox too; the keys and the reconnect are in 7 and the
-   note on the editor above). The panel drawing says 0.9.3.
+   note on the editor above). The panel drawing says 0.9.3. **0.9.4 (2026-11-06)**: version `BACKBEAT 0.9.4`, the
+   package `backbeat-0.9.4.fwsc`, identity `FM-1_988` still: the kit's sound without more samples (item 9, KIT PAN on
+   DRUMS 2), the notes on a song and its sections with "@n" for a section's name (item 10), OCT- / OCT+ tapped as PREV /
+   NEXT and ENV for NOTES; the editor's Song tab with the notes and their preview, its player's state line. A song with
+   notes needs this firmware. The panel drawing says 0.9.4.
 8. **More flash for the kit (proposed 2026-10-29, not started).** The user asked whether the samples could be
    compressed and loaded into RAM for better sound, since RAM is free and flash is not. Measured that day: the kit is
    IMA ADPCM, 4 bits a sample at 22 kHz (11 KB a second; 399 478 B, 36 s), played in place from the memory-mapped

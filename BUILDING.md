@@ -49,10 +49,10 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 `JIELI_TOOLCHAIN` and `AC79_SDK` override the default locations
 (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`).
 
-`./build.sh --release 0.9.3` makes a release build: the version string `BACKBEAT 0.9.3` (`0.9-beta` gives
+`./build.sh --release 0.9.4` makes a release build: the version string `BACKBEAT 0.9.4` (`0.9-beta` gives
 `BACKBEAT 0.9-BETA`; until 0.9.2 a ` BETA` was appended to a plain version, so the 0.9.1 package says
 `BACKBEAT 0.9.1 BETA`; the package identity stays `FM-1_988`, BackBeat's own); the package is
-`build/felucca-0.9.3.fwsc`.
+`build/felucca-0.9.4.fwsc`.
 
 Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
 
