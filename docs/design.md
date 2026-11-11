@@ -1712,7 +1712,10 @@ live_big` and `live_state`'s big form, `panel.c live_view` (bit 9 of the setting
 BackBeat never wrote), `gfx.c`: the font's shift became a scale, the L and the new XL font (S at 5x, 80 px digits)
 share S's bitmaps and tables, so XL costs no flash of its own (`tools/gen_font.py`). ui_pages_test renders live-big,
 live-big-nocue, live-big-countin, live-big-cued. Not on the unit yet: to check by eye that the 5x digits draw
-within a frame at a bar change, and that the layout comes back after a power-off.
+within a frame at a bar change, and that the layout comes back after a power-off. 2026-11-09, the user: "with
+double digit bar numbers the UI can no longer show the beat count correctly, let's remove it as I don't think I've
+really used it, instead I prefer to follow through the bars": the beat of the bar is gone from the right of the big
+number (the header's lights still show it); the count-in keeps its COUNT label there, stopped keeps CUED: PLAY.
 
 ## SLOOP 2.7 to 2.8.4, what was taken (2026-10-30)
 

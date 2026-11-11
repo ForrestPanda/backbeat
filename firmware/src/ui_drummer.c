@@ -61,8 +61,9 @@
  *   HOME              on LIVE: the other layout (2026-10-29, asked: "a large number regarding the current beat of the
  *                     total beats in the measure", and only the section playing, not all of them; then "switch the
  *                     beat counter with the bar in section counter as that's what's most useful for me for
- *                     transitions"): the bar of the section as "3/8" five times the small font's size beside the
- *                     beat of the bar, no tiles, what comes next in large letters, the beat lights in its place
+ *                     transitions"): the bar of the section as "3/8" five times the small font's size (the beat
+ *                     of the bar beside it until 2026-11-09: two-digit bars ran into it, and "I prefer to follow
+ *                     through the bars"), no tiles, what comes next in large letters, the beat lights in its place
  *                     while nothing is coming (live_big, live_state); kept in the settings (panel.c live_view)
  * With no song loaded the white keys 1..16 load the page's songs 1..16 (LIVE shows them; ENV / LFO the page). On
  * SONGS (9 rows at a time, following the row picked): KNOB 1 / SELECT a row, REC or OCT+ loads it (and LIVE again),
@@ -520,14 +521,15 @@ UI_SMALL static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, 
 }
 
 /* the bar big (LIVE's other layout, HOME on LIVE; 2026-10-29): under the header, the section in large letters, the
- * bar of the section as "3/8" five times the small font's size (the count-in's count amber; stopped, the first bar
- * dim) with the beat of the bar at its right, then the progress ticked per bar; the state follows (live_state) */
-UI_SMALL static void live_big(uint32_t playing, const char *sec, uint32_t beat, uint32_t beats, uint32_t bar, uint32_t bars,
-                     uint32_t ci, uint32_t ci_n)
+ * bar of the section as "3/8" five times the small font's size (the count-in's count amber, COUNT at its right;
+ * stopped, the first bar dim, CUED: PLAY at its right), then the progress ticked per bar; the state follows
+ * (live_state). The beat of the bar sat at the right until 2026-11-09 (the user: two-digit bars ran into it, "I
+ * prefer to follow through the bars"); the header's lights show the beat */
+UI_SMALL static void live_big(uint32_t playing, const char *sec, uint32_t bar, uint32_t bars, uint32_t ci, uint32_t ci_n)
 {
     static uint32_t cache;
     char b[24];
-    uint32_t k, sig = studio_hash(playing * 3u + beat * 131u + beats * 1009u + bar * 17u + bars * 7919u + ci * 31u +
+    uint32_t k, sig = studio_hash(playing * 3u + bar * 17u + bars * 7919u + ci * 31u +
                                   ci_n * 37u + (sng_cur < 0) * lib_page() * 104729u, sec);
     int32_t x;
     if (!ui.force && sig == cache)
@@ -547,13 +549,9 @@ UI_SMALL static void live_big(uint32_t playing, const char *sec, uint32_t beat, 
     str_cpy(b + str_len(b), "/", 2);
     fmt_int(b + str_len(b), (int32_t)(ci ? ci_n : bars));
     cv_text(4, 36, &FONT_XL, b, ci ? C_AMB : playing ? C_WHITE : TE_G2);
-    if (ci || playing) {                            /* the beat of the bar at the right */
-        fmt_int(b, (int32_t)beat + 1);
-        str_cpy(b + str_len(b), "/", 2);
-        fmt_int(b + str_len(b), (int32_t)beats);
-        cv_text(236 - text_w(&FONT_S, ci ? "COUNT" : "BEAT"), 56, &FONT_S, ci ? "COUNT" : "BEAT", ci ? C_AMB : TE_G3);
-        cv_text(236 - text_w(&FONT_L, b), 72, &FONT_L, b, ci ? C_AMB : TE_G4);
-    } else {
+    if (ci) {                                       /* the count-in: the big number is its count */
+        cv_text(236 - text_w(&FONT_S, "COUNT"), 56, &FONT_S, "COUNT", C_AMB);
+    } else if (!playing) {
         x = 236 - text_w(&FONT_S, "CUED:");
         cv_text(x, 56, &FONT_S, "CUED:", TE_G3);
         cv_text(x, 72, &FONT_S, "PLAY", TE_G3);
@@ -866,7 +864,7 @@ UI_SMALL static void live_draw(void)
     }
     if (live_view) {                                /* the beat big: no lights, no tiles */
         live_head(playing, beat, beats, songname, 0);
-        live_big(playing, live_sec >= 0 ? sec : "", beat, beats, bar, bars, ci, ci_n);
+        live_big(playing, live_sec >= 0 ? sec : "", bar, bars, ci, ci_n);
         live_state(playing, next, 1, beat, beats);
         live_foot();
         return;

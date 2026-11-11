@@ -327,7 +327,7 @@ to 4 sections the whole names, up to 8 a name each, 9..16 a line each: the numbe
 playing lit, the one cued framed and blinking, the outro and any meter but 4/4 marked); and a footer with the kit, the pedal channel and a dot that lights when the pedal sends. The pedal's
 messages ("SONG: BLACK", "NEXT: SOLO") show in the footer. HOME tapped on LIVE turns its other layout, **the bar
 big**, for transitions: no tiles; the section in large letters, the bar of the section as "3/8" in digits five times
-the small font's size (the count-in's count, amber; dim when stopped) beside "BEAT 2/4", the progress under them,
+the small font's size (the count-in's count, amber; dim when stopped), the progress under it,
 and what comes in two lines, the word then the section in large letters (NEXT / CHORUS, FILL > / CHORUS); while
 nothing is coming, the beat lights in its place. The white keys still change section; the layout is kept in the
 settings. HOME again: the tiles. The white keys 1..16 change section when the one

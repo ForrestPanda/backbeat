@@ -27,6 +27,11 @@ ABOUT; the editor shows it next to the connect button.
   it waits. A plain CC 21 still plays the fill whole from the next bar line. In a section whose fill is in its marks,
   value 2 acts as value 1: fill mode on the whole next bar, to the section's end. The message when it is pressed
   says FILL AT THE END (it said FILL NEXT BAR).
+- **The bar big without the beat.** On LIVE's bar-big layout the beat of the bar no longer sits at the right of the
+  big number: with two-digit bars the two ran into each other. The header's beat lights still show the beat; the
+  count-in keeps its COUNT label. Pressed while the section's entry or break plays, the fill waits for the pattern's
+  end after it. On LIVE the third black key, A#3, is this fill: F#3, G#3 and A#3 are the fill now, on the next bar and
+  at the section's end (A#3 was a second F#3).
 
 ### Website
 
