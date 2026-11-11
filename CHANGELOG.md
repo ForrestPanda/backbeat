@@ -16,10 +16,20 @@ ABOUT; the editor shows it next to the connect button.
   same frozen value. The smoothing keeps fractions now, and the console's `status` shows the last raw sample too.
 - **The battery on LIVE.** The three-bar icon sits left of BPM in LIVE's header, with USB beside it while a host
   powers the unit. It was only on the parameter pages (FX, MASTER and the others).
+- **A tempo per section.** A section can carry a tempo of its own (`"bpm"` on the section in the JSON, the editor's
+  BPM box next to the section's time; blank: the song's). It takes effect as the section lands, on the bar, or at
+  once when cued from stopped, the count-in clicking at it; the song's tempo comes back with the next section that
+  has none. KNOB 1 and the tap then move the section's own tempo, LIVE's "bpm" label amber to say so, and SAVE held
+  keeps it with the section; the SECTIONS tiles show it where the meter goes. A song with one needs this firmware
+  (0.9.4 and earlier refuse it).
 
 ### Website
 
 - **The editor's player** has the new SNARE2 too.
+- **A tempo per section** in the section editor (a BPM box next to the time, the song's tempo as its placeholder), in
+  the player (the switch as the section lands, the BPM label amber while the tempo is the section's own, the tiles
+  showing it) and in `fm1_song.py`; the Guitar Pro and MIDI importers take a tempo change on a section's first bar as
+  that section's (they said it was ignored).
 
 
 ## 0.9.4 (2026-11-06)

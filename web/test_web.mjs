@@ -300,8 +300,62 @@ async function editorSongs() {
         "songs: notes: a preview under each field while the note has an @ (the names in colour, @n as the tooltip; one naming no section struck), refreshed on input and on a render (2026-11-06)");
     }
   }
+  {   /* a tempo per section (2026-11-07): "bpm" on a section, a byte before its note (flag bit 5), packed as the tool
+       * packs it, read back; out of range refused; the section editor keeps it; the player switches as the section
+       * lands (the count-in at it too), the song's back with one that has none, the box's value through sections
+       * without; the box and the player's label */
+    const sn = spec.sections;
+    const tp = { ...spec, sections: [{ ...sn[0], bpm: 92 }, { ...sn[1], notes: "slow burn" }, { ...sn[2], bpm: 150, notes: "fast, @1 next" }, sn[3], sn[4]] };
+    writeFileSync(join(tmp, "t.json"), JSON.stringify(tp));
+    execFileSync("python3", [join(HERE, "../tools/fm1_song.py"), join(tmp, "t.json"), "--out", join(tmp, "t.bin")], { stdio: "ignore" });
+    const tpy = new Uint8Array(readFileSync(join(tmp, "t.bin"))), tjs = E.SNG.pack(tp), th = E.SNG.check(tjs), tb = E.SNG.unpack(tjs);
+    ok(tjs.length === tpy.length && tjs.every((v, i) => v === tpy[i]) && th && th.sections[0].bpm && th.sections[0].bpmVal === 92 && !th.sections[1].bpm && th.sections[2].bpmVal === 150
+      && (tjs[th.sections[2].off + 14] & 48) === 48 && tjs[th.sections[2].noteOff - 1] === 150 && tb.sections[0].bpm === 92 && !("bpm" in tb.sections[1]) && tb.sections[2].bpm === 150
+      && tb.sections[2].notes === "fast, @1 next" && JSON.stringify(E.SNG.pack(tb)) === JSON.stringify(tjs),
+      "songs: a section's bpm: SNG.pack == tools/fm1_song.py, the byte before the note, read back as written");
+    const bad = (v) => { try { E.SNG.pack({ ...spec, sections: [{ ...sn[0], bpm: v }] }); return false; } catch (e) { return /bpm must be 40\.\.240/.test(e.message); } };
+    const tw = Uint8Array.from(tjs); tw[th.sections[0].off + th.sections[0].size - 1] = 39;
+    ok(bad(39) && bad(241) && bad("x") && !E.SNG.check(tw), "songs: a section's bpm out of range refused by the packer and the check");
+    ok(E.SED.norm({ ...sn[0], bpm: "110" }).bpm === 110 && !("bpm" in E.SED.norm({ ...sn[0], bpm: "" })) && !("bpm" in E.SED.norm({ ...sn[0], bpm: 300 }))
+      && E.SED.split({ ...sn[1], bpm: 70 }, 1)[1].bpm === 70 && E.SED.merge({ ...sn[0], bpm: 70 }, sn[1]).bpm === 70,
+      "songs: the section editor keeps a section's bpm (blank or out of range: none), through split and merge");
+    {
+      const st = E.PLAY.create({ ...tp, bpm: 112 });
+      E.PLAY.request(st, 1);                        /* a section without its own, from stopped: the song's */
+      ok(st.bpm === 112 && !st.secBpm, "play: a section without its own tempo starts at the song's");
+      st.bpm = 118;                                 /* the box: the song's tempo as the knob leaves it */
+      const toBar = (k) => { E.PLAY.request(st, k, true); let n = 0; while (st.sec !== k && n++ < 200) E.PLAY.tick(st); };
+      toBar(0);
+      ok(st.sec === 0 && st.bpm === 92 && st.secBpm && st.songBpm === 118, "play: the section's own tempo as it lands (the box's value kept as the song's)");
+      st.bpm = 96;                                  /* the box: this section's own now */
+      toBar(2);
+      ok(st.bpm === 150 && st.secBpm, "play: another with its own: its tempo");
+      toBar(1);
+      ok(st.bpm === 118 && !st.secBpm, "play: one without: the song's back, as the box left it");
+      toBar(3);
+      ok(st.bpm === 118, "play: and on through sections without their own");
+      toBar(0);
+      ok(st.bpm === 92, "play: the box's edit of a section's own tempo is not kept (as the device's unsaved knob)");
+      E.PLAY.stop(st);
+      const ci = E.PLAY.create(tp, 1);
+      E.PLAY.request(ci, 2);
+      const t0 = E.PLAY.tick(ci);
+      ok(ci.counting === 3 && ci.bpm === 150 && ci.secBpm && Math.abs(t0.secs - 60 / 150) < 1e-9, "play: cued from stopped with a count-in: the section's tempo at once, the clicks at it");
+      const ld = E.PLAY.create({ ...tp, bpm: 112 });
+      E.PLAY.request(ld, 0); E.PLAY.tick(ld);
+      E.PLAY.load(ld, { ...tp, bpm: 100, sections: [sn[1], { ...sn[0], bpm: 80 }] });   /* a song loaded while playing: its tempo with
+                                                        its first section, the section's own over it */
+      E.PLAY.request(ld, 1, true); let n = 0; while (ld.cur && n++ < 200) E.PLAY.tick(ld);
+      ok(!ld.cur && ld.sec === 1 && ld.bpm === 80 && ld.songBpm === 100 && ld.secBpm, "play: a song loaded while playing: its tempo, then the section's own");
+    }
+    ok(/<label>BPM <input id="sed-secbpm" type="number" min="40" max="240"/.test(html) && /\$\("sed-secbpm"\)\.addEventListener\("change"/.test(html)
+      && /function sedBpmLive\(\)/.test(html) && /\$\("pl-bpm-unit"\)\.classList\.toggle\("own", !!\(st && st\.secBpm && !ext\)\)/.test(html)
+      && /#pl-bpm-unit\.own \{ color: var\(--t3\); \}/.test(html) && /s\.bpm \? "  " \+ s\.bpm :/.test(html) && /sedSecBpm:/.test(html) && /playOwnBpm:/.test(html),
+      "songs: the section editor's BPM box (the song's as its placeholder), the player's amber BPM label and the tiles' tempo");
+  }
   {   /* a flam (2026-10-17): the hit byte's bit 6, the JSON's "flams" ('.' or 'f', only where the lane hits); the fill
        * bar's too; bit 7 still refused by the check */
+
     const f = E.SNG.pack({ name: "F", bpm: 120, sections: [{ name: "A", steps: 4, lanes: { SNARE: "x.x.", KICK: "x..." }, flams: { SNARE: "f...", KICK: "...f" },
                                                              fillbar: { steps: 4, lanes: { SNARE: "xxxx" }, flams: { SNARE: "...f" } } }] });
     const hf = E.SNG.check(f), bf = E.SNG.unpack(f);

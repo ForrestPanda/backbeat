@@ -79,6 +79,10 @@ static void sng_note(int32_t k, char *d, uint32_t n) { str_cpy(d, sng_cur < 0 ? 
 static uint32_t sng_ready(void) { return sng_cur >= 0 ? (1u << t_nsec) - 1u : 0u; }
 static uint32_t sng_bars(uint32_t k) { return k == 1u ? 2u : 1u; }
 static uint32_t sng_meter(uint32_t k) { return k == 1u ? 7u | 1u << 5 : 0u; }
+static uint32_t sng_sec_bpm(uint32_t k) { return k == 2u ? 90u : 0u; }   /* (2026-11-07: section 3's own tempo on its tile) */
+static void sng_tempo(uint32_t k) { (void)k; }
+static int sng_sec_tempo(void) { return 0; }
+
 static uint32_t sng_outro(void) { return t_outro; }
 static int sng_pending(void) { return 0; }
 static void sng_apply(uint32_t k) { sng_name(k, sng_ui_name); }

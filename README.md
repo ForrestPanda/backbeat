@@ -127,7 +127,12 @@ them 1..16; the pedal's PC and `fm1_song.py --put` count from 0 (song 1 is PC 0,
 the screens show 1..16, the value of CC 20 / 27 / 22 counts from 0 (section 1 is CC 20 value 0). Each section has a time signature (`"time"`, 4/4 if left out) and is
 a whole number of its bars: the FM-1 counts bars, so a change waits for the bar line. A pickup or a short intro is a
 short bar (4 steps of 1/16 is `"time": "1/4"`); `fm1_song.py` and the editor's section editor flag a section that
-is not whole bars and offer the signature that fits. Write one as JSON (`tests/example-song.json` is the model; `song_examples/` has three demo songs, docs/demos.md) and send it over USB:
+is not whole bars and offer the signature that fits. A section can have a tempo of its own (`"bpm"` on the section,
+40..240; the editor's BPM box next to the time, blank for the song's): it takes effect as the section lands, on the
+bar (at once from stopped, the count-in clicking at it), and the song's tempo comes back with the next section that
+has none. On the device KNOB 1 and the tap then move the section's own tempo (LIVE's "bpm" label turns amber) and
+SAVE held keeps it with the section; the SECTIONS tiles show it. The importer takes a tempo change that falls on a
+section's first bar as that section's. BackBeat 0.9.4 and earlier refuse a song with one. Write one as JSON (`tests/example-song.json` is the model; `song_examples/` has three demo songs, docs/demos.md) and send it over USB:
 
 ```
 python3 tools/fm1_song.py tests/example-song.json            # check it (and print its notes)
@@ -334,7 +339,8 @@ no fill: held while a white key is pressed, the change comes on the next bar; ta
 does (the state line says KEY: ON THE NEXT BAR until then; a second tap takes it back); tapped while a change waits for
 the section's end, that change moves to the next bar; the other black keys as the first. So a plain change is one press, and a fill into the change is a black key then a white one,
 as the pedal's CC 21 sent with its CC 20. OCT- and OCT+ tapped are the previous and next section
-(without a fill; OCT+ held with a white key still puts that section on the next bar). ENV opens NOTES. KNOB 1 (and SELECT) the tempo (turned fast it sweeps wider, a detent at a time when turned slowly;
+(without a fill; OCT+ held with a white key still puts that section on the next bar). ENV opens NOTES. KNOB 1 (and SELECT) the tempo, the section's own when it has one (turned fast it sweeps wider
+, a detent at a time when turned slowly;
 so every knob with a wide range), PRESETS the kit, KNOB 3 the drums' level, KNOB 4 the
 swing. KNOB 2 and ALGORITHM scroll through the songs of the page shown on SONGS, USER or FACTORY, loading each one as it
 goes (empty slots skipped, the ends stop; with a song of the other page loaded it starts from that page's edge). With no song loaded it says PICK A SONG and shows the 16 songs of the SONGS page shown (USER or FACTORY;

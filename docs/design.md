@@ -70,7 +70,7 @@ switches inside the patch are its sections. Starting a song is "go to intro".
   Sixteen songs on the device (eight until 2026-10-14: a set needs more).
 - A **section** (M3): a name, a drum pattern (1 to 64 steps at any of SLOOP's divisions, 16 lanes with a
   level, a ratchet and, since 2026-10-17, a flam per hit) with its fill conditions (FILL ONLY / NO FILL steps: the fill is inside
-  the pattern, not a second one), and the outro flag.
+  the pattern, not a second one), the outro flag, and (2026-11-07) a tempo of its own, optional: item 11 below.
 - **Why a section is at most 4 bars** (asked 2026-10-17). Because a section is a pattern, and a pattern is at most
   64 steps. Why that is 4 bars: at 1/16
   in 4/4, a bar is 16 steps, so 64 steps is 4 bars. The limit moves with the division and the meter: 8 bars at 1/8,
@@ -655,8 +655,42 @@ next bar). No named sections, one song, no fill tied to a section change.
    Duplicate or Delete shows the renumbering at once). The user's own songs' notes were rewritten with "@n" the same
    day (their folder, outside this repo; a name standing for several sections, or a repeated name, resolved in the
    song's order).
+11. **A tempo per section (2026-11-07, done; to verify on the unit).** Asked: "support for different bpms per section".
+   A section may carry its own tempo; one without plays at the song's. JSON `"bpm"` on a section (40..240;
+   `fm1_song.py`, the editor's `SNG.pack`, byte for byte the same). Packed (sng.c): one byte in the section's tail,
+   flag bit 5 (`SNG_F_BPM`), after the break and before the note, so the device's copy, move and delete of sections
+   carry it and the pack-back keeps it, on a new grid too (the tempo and the note are copied together after the
+   re-gridded blocks); `sng_check` 7 when out of range. A firmware before this refuses a song with one (check 6:
+   bytes left over), as with the notes, and this one reads older songs as before. **When it takes effect**
+   (`sng_tempo`, called by `sng_apply` as the section lands, on the bar, and by `pedal_section_to` when a section is
+   cued from stopped, so the count-in clicks at it and LIVE shows it): the section's own when it has one; the song's
+   back when it has none and the one before had its own; else nothing, so a song without any keeps today's behaviour,
+   the tempo set on LIVE going on through the sections. The song's tempo is kept meanwhile as the knob left it
+   (`sng.bpm` is refreshed from `G_BPM` as a section with its own lands from one without), so a tempo nudged on LIVE
+   in a verse is not lost through a bridge with its own. `sng.secbpm` says the tempo heard is the section's own:
+   KNOB 1, SELECT and the tap then move that one (LIVE's "bpm" label amber, `sng_sec_tempo`; the SECTIONS tiles show
+   a section's own tempo where the meter goes, amber, after "end"), `sng_same` counts a moved one as an edit (not
+   under a MIDI clock, whose tempo is the master's), and SAVE held writes it into the section and the song's into the
+   header (`sng_pack_section`, `sng_pack_knobs`); a section's own tempo moved and not saved is gone with the next
+   landing, as its unsaved hits would be. A song loaded while playing: `sng_globals` with its first section clears
+   `secbpm`, then that section's own over it. Not on the device: setting or clearing a section's own tempo (the
+   editor's; a SECTIONS-screen action would cost a row and a flag toggle, cheap if asked for). The editor
+   (`PLAY.tempo`, `secBpm`, `songBpm`: the same rules; the section editor's BPM box next to the time, the song's tempo
+   as its placeholder and in the tooltip, `sedBpmLive` into the player at once while that section plays; the player's
+   BPM label amber with a tooltip, the tiles' small text) and the importers (`gp2song.py`: `Bar.bpm`, the tempo in
+   force at the bar's start; a change on a section's first bar is the section's own; one inside a section counts
+   from its next bar and so reaches the next section whose first bar it is in force at, and the duplicate check
+   tells sections apart by it; MIDI set-tempo events, Guitar Pro's mix-table tempo on a beat; they said a tempo
+   change was ignored). Tests: song_test.c (slot 12: the check, the landing and the restore, the knob's save where it
+   came from, the count-in, the pack-back on a new grid, the image edits), test_web.mjs (the parity with the tool,
+   the player's switches, the loaded song, the count-in, the box and the label), midi2song_test.py and
+   gp2song_test.py (the outro's own tempo from a change on its first bar; a change inside the chorus not a section's).
+   Verify on hardware: a song with a bridge at another tempo, the switch on the bar, the knob's save, the label.
 
-The fork is **rebased** onto SLOOP upstream as it moves (2026-10-12: its editor and installer as an app
+
+
+The fork is **rebased** onto SLOOP upstream as it moves
+ (2026-10-12: its editor and installer as an app
 that works without internet; the offline copy keeps the importer and the kit too), so `git log
 upstream/main..HEAD` is exactly the fork's own work: `git fetch upstream && git rebase upstream/main`.
 `rerere` is on in the repository (`git config rerere.enabled`), so a conflict resolved once is replayed

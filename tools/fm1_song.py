@@ -42,6 +42,12 @@ first line on LIVE's state line while nothing else is announced (the song's when
 on ENV (NOTES); the editor's Song tab writes them. "@2" in the text is section 2's name when shown (the pedal's
 number; past the count, 0 or alone: as typed), kept as "@2" in the file. A firmware before 2026-11-02 refuses a
 song with notes.
+"bpm" on a section (2026-11-07): a tempo of its own, 40..240; left out, the section plays at the song's. It takes
+effect as the section lands (on the bar, or at once from stopped, the count-in clicking at it), and the song's tempo
+comes back with the next section that has none. On the device, KNOB 1 and the tap then move the section's own tempo
+(LIVE's "bpm" label amber), and SAVE held keeps it with the section. The editor's section editor has a BPM box per
+section (blank: the song's); the importer sets one from a tempo change in the file that falls on a section's first
+bar. A firmware before 2026-11-07 refuses a song with one.
 Lanes:
 KICK, KICK2, SNARE, CLAP, HAT, OPENHAT, PEDAL, RIM, SNARE2, LOWTOM, MIDTOM, HITOM, CRASH, RIDE, SHAKER, COWBELL
 (MIDTOM since 2026-10-14, where the conga was: "CONGA" still reads as it; spaces and case do not matter). div: 1/4 1/8 1/16 1/32 8T 16T 1/2 1BAR 2BAR. time: the section's meter,
@@ -299,6 +305,12 @@ def pack_section(sec, index):
             sys.exit(f"{name}: {key}: {n} steps is not whole bars of {bar}")
         body += bytes([n]) + pack_steps(parse_hits(eb, n, f"{name} {key}"))
         flags |= bit
+    if sec.get("bpm") is not None:                 # its own tempo (2026-11-07): a byte before the note
+        bpm = int(sec["bpm"])
+        if not 40 <= bpm <= 240:
+            sys.exit(f"{name}: bpm must be 40..240 (or left out: the song's)")
+        body += bytes([bpm])
+        flags |= 32
     note = note_bytes(sec.get("notes"), name)      # its note, last (2026-11-02)
     if note:
         body += bytes([len(note)]) + note
@@ -368,6 +380,9 @@ def describe(blob):
             if flags & bit:
                 tail += f"  + {what} of {blob[q]} steps"
                 q = walk(blob, q + 1, blob[q])
+        if flags & 32:                               # its own tempo (2026-11-07), before the note
+            tail += f"  at {blob[q]} BPM"
+            q += 1
         print(f"  {k}: {sname:12s} {steps:2d} steps {DIVS[div]:5s} {meter_str(meter) or '4/4':5s} {hits:3d} hits {size:4d} bytes"
               f"{'  OUTRO' if flags & 1 else ''}{tail}")
         if flags & 16:                               # its note (2026-11-02), last

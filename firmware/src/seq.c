@@ -878,6 +878,10 @@ static uint32_t sng_outro(void);                   /* the section flagged as the
 static int sng_pending(void);                      /* a song loaded while playing waits for its first section */
 static void sng_name(uint32_t k, char *out);
 static void sng_note(int32_t k, char *d, uint32_t n);   /* (2026-11-02: the notes, sng.c) */       /* section k's name (12 + 1 chars) */
+static uint32_t sng_sec_bpm(uint32_t k);           /* section k's own tempo, 0 none (2026-11-07, sng.c) */
+static void sng_tempo(uint32_t k);                 /* the tempo as section k lands or is cued from stopped: its own, or
+                                                    * the song's back */
+static int sng_sec_tempo(void);                    /* the tempo heard is the section's own (the knob sets that one) */
 /* the songs in flash as the SONGS screen lists them (ui_drummer.c): read again by sng_lib_refresh (sng.c, the
  * UI's loop) only when sng_lib_dirty is set (boot, a load, a write): a slot's read goes through its whole copy for
  * the CRC */

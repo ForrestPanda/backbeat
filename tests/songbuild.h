@@ -85,6 +85,15 @@ static uint32_t song_note(uint8_t *b, uint32_t pos, uint32_t end, const char *te
         w16(b + pos + 16, q - pos);
     return q;
 }
+/* a tempo of the section's own (2026-11-07): a byte after its blocks, before its note (so: before song_note); the
+ * flag and the size follow; the new end */
+static uint32_t song_bpm(uint8_t *b, uint32_t pos, uint32_t end, uint32_t bpm)
+{
+    b[pos + 14] |= (uint8_t)SNG_F_BPM;
+    b[end++] = (uint8_t)bpm;
+    w16(b + pos + 16, end - pos);
+    return end;
+}
 static uint32_t song_fb(uint8_t *b, uint32_t pos, uint32_t end, uint32_t fl, const char *const lane[DRUM_LANES])
 {
     return song_blk(b, pos, end, SNG_F_FILLBAR, fl, lane);

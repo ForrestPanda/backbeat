@@ -245,6 +245,7 @@
   .plive-tiles button.on { background: var(--t4); border-color: var(--t4); color: #000; }
   .plive-tiles button.on small { color: #000; }
   .plive-tiles button.cued { outline: 3px solid var(--t3); outline-offset: -3px; animation: plive-blink 0.6s steps(2, start) infinite; }
+  #pl-bpm-unit.own { color: var(--t3); }         /* the tempo heard is the section's own (2026-11-07), amber as the device's label */
   @keyframes plive-blink { to { outline-color: transparent; } }
   /* live mode (the Setlist tab's button): the stage view on a tablet: the set's song, the LIVE view and the transport,
      everything else away, sized to read from a music stand; the screen kept awake (setLive) */
@@ -615,6 +616,7 @@
             <label><span data-t="sedSteps"></span> <input id="sed-steps" type="number" min="1" max="64" style="width: 4em"></label>
             <select id="sed-div"></select>
             <label><span data-t="sedTime"></span> <input id="sed-time" type="text" size="4" maxlength="5" spellcheck="false" list="sed-times"></label>
+            <label>BPM <input id="sed-secbpm" type="number" min="40" max="240" style="width: 5em"></label>
             <datalist id="sed-times"><option value="4/4"><option value="3/4"><option value="2/4"><option value="5/4"><option value="6/8"><option value="7/8"><option value="9/8"><option value="12/8"><option value="5/8"><option value="7/4"></datalist>
             <label><input type="checkbox" id="sed-outro"> <span data-t="sedOutro"></span></label>
             <button id="sed-up" title="earlier">▲</button><button id="sed-down" title="later">▼</button>
@@ -2341,6 +2343,12 @@ const SNG = {
         body.push(n, ...SNG.stepsBytes(SNG.hitsOf(eb, n, `${name} ${key}`)));
         flags |= bit;
       }
+      if (sec.bpm != null && sec.bpm !== "") {     /* its own tempo (2026-11-07): a byte before the note */
+        const v = Math.round(+sec.bpm);
+        if (!(v >= 40 && v <= 240)) throw new Error(`${name}: bpm must be 40..240 (or left out: the song's)`);
+        body.push(v);
+        flags |= 32;
+      }
       const note = SNG.noteBytes(sec.notes, name);   /* its note, last (2026-11-02) */
       if (note.length) { body.push(note.length, ...note); flags |= 16; }
       const size = SNG.SEC_HDR + body.length;
@@ -2374,7 +2382,7 @@ const SNG = {
     if (!steps || steps > SNG.NSTEP || div >= SNG.DIVS.length || size < SNG.SEC_HDR + ((steps + 3) >> 2) + 2 * steps) return null;
     const m = b[off + 15];
     if ((m & 31) > 16 || (m & 0x80)) return null;
-    return { off, name: SNG.str(b, off), steps, div: SNG.DIVS[div], outro: !!(b[off + 14] & 1), fillbar: !!(b[off + 14] & 2), entry: !!(b[off + 14] & 4), brk: !!(b[off + 14] & 8), note: !!(b[off + 14] & 16), time: SNG.meterOf(m), size };
+    return { off, name: SNG.str(b, off), steps, div: SNG.DIVS[div], outro: !!(b[off + 14] & 1), fillbar: !!(b[off + 14] & 2), entry: !!(b[off + 14] & 4), brk: !!(b[off + 14] & 8), note: !!(b[off + 14] & 16), bpm: !!(b[off + 14] & 32), time: SNG.meterOf(m), size };
   },
   /* the header and the sections' offsets of a packed song, as sng_check (every step walked); null when it is not one */
   check(b) {
@@ -2409,6 +2417,10 @@ const SNG = {
         s[k + "Steps"] = b[q++];
         s[k + "Off"] = q;
         if (!walk(s[k + "Steps"])) return null;
+      }
+      if (s.bpm) {                                 /* its own tempo (2026-11-07): a byte, 40..240, before the note */
+        if (q >= pos + s.size || b[q] < 40 || b[q] > 240) return null;
+        s.bpmVal = b[q++];
       }
       if (s.note) {                                /* its note, last (2026-11-02): as long as its length byte says */
         if (q >= pos + s.size || !b[q] || q + 1 + b[q] !== pos + s.size) return null;
@@ -2457,6 +2469,7 @@ const SNG = {
       }
       steps(s.steps, lanes, rats, fills, flams);
       const sec = { name: s.name, steps: s.steps, div: s.div };
+      if (s.bpm) sec.bpm = s.bpmVal;
       if (s.note) sec.notes = SNG.noteStr(b, s.noteOff);
       if (s.time) sec.time = s.time;
       if (s.outro) sec.outro = true;
@@ -2647,7 +2660,20 @@ const PLAY = {
   create(spec, countIn = 0) {                        /* countIn: bars of clicks before a start from stopped (the device's setting) */
     return { spec, sec: -1, cur: null, step: 0, pos: 0, bar: 0, req: -1, brk: false, eb: null, ebN: 0, ebB: 0, atEnd: false, fill: false, fillBars: 0, fillWait: 0,
              endReq: 0, endBars: 0, endEb: false, playing: false, stopped: false, countIn, counting: 0, ciNum: 4, ciDen: 4, bpm: spec.bpm,
-             swing: +spec.swing || 0, swing8: spec.swing_grid === "1/8" };
+             songBpm: spec.bpm, secBpm: false, swing: +spec.swing || 0, swing8: spec.swing_grid === "1/8" };
+  },
+  /* the tempo as section k lands, or is cued from stopped (sng.c sng_tempo, 2026-11-07): its own ("bpm" on the
+     section) when it has one, the song's back when it has none and the one before had its own; else as the box
+     left it (a song without any: the tempo set in the player goes on through the sections). The song's tempo is kept
+     meanwhile as the box left it (songBpm); secBpm: the tempo heard is the section's own (the box edits that one) */
+  tempo(st, k) {
+    const s = st.spec.sections[k], v = s && s.bpm != null && s.bpm !== "" ? Math.round(+s.bpm) : 0;
+    if (v >= 40 && v <= 240) {
+      if (!st.secBpm) st.songBpm = st.bpm;
+      st.bpm = v; st.secBpm = true;
+    } else if (st.secBpm) {
+      st.bpm = st.songBpm; st.secBpm = false;
+    }
   },
   barU(s) { const m = SNG.meter(s.time); return (192 * m.num) / m.den; },
   secBars(s) { return Math.max(1, Math.ceil((s.steps * PLAY.STEP_U[s.div]) / PLAY.barU(s))); },
@@ -2694,6 +2720,7 @@ const PLAY = {
     if (st.counting) return;                         /* during the count-in: only what starts changes */
     if (!st.playing) {
       st.sec = -1; st.cur = null; st.playing = true; st.stopped = false; st.step = 0; st.pos = 0; st.bar = 0; st.fill = false;
+      PLAY.tempo(st, k);                             /* its own tempo now (the count-in clicks at it), or the song's back */
       if (st.countIn) {                              /* the clicks first (tick), in the section's meter; the section after them */
         const m = SNG.meter(st.spec.sections[k].time);
         st.ciNum = m.num; st.ciDen = m.den; st.counting = m.num * st.countIn;
@@ -2788,11 +2815,12 @@ const PLAY = {
     if (st.endBars && st.req < 0 && (st.bar >= st.endBars || over)) { PLAY.stop(st); return; }
     if (st.req >= 0 && !st.atEnd && !st.fill && !st.fillWait) {
       const entering = !!st.cur;
-      if (st.cur) { st.cur = null; st.bpm = st.spec.bpm; st.swing = +st.spec.swing || 0; st.swing8 = st.spec.swing_grid === "1/8"; }   /* (a song loaded while playing: its tempo
+      if (st.cur) { st.cur = null; st.bpm = st.songBpm = st.spec.bpm; st.secBpm = false; st.swing = +st.spec.swing || 0; st.swing8 = st.spec.swing_grid === "1/8"; }   /* (a song loaded while playing: its tempo
                                                         and swing with its first section, sng.c sng_globals) */
       const enter = st.brk || st.sec !== st.req || st.sec < 0 || entering;   /* (its entry: from another section, from stopped,
                                                         a song just loaded; never the section playing asked for again) */
       st.sec = st.req; st.req = -1; st.step = 0; st.pos = 0; st.bar = 0; st.fill = false; st.fillBars = 0; st.fillWait = 0;
+      PLAY.tempo(st, st.sec);                       /* its own tempo, or the song's back (2026-11-07) */
       const e = enter ? PLAY.ebOf(st.spec.sections[st.sec], st.brk) : null;
       st.eb = e && e.eb; st.ebN = e ? e.n : 0; st.ebB = e ? e.bars : 0; st.brk = false;
       if (st.ebB) st.endEb = !!st.endReq;         /* the ending's outro through its entry: its bars from the entry's end
@@ -3002,6 +3030,7 @@ const SED = {
     }
     const out = { name: String(sec.name || "PART").toUpperCase().slice(0, 12), steps: n, div: SNG.DIVS.includes(sec.div) ? sec.div : "1/16", lanes };
     if (sec.notes != null && String(sec.notes).trim()) out.notes = String(sec.notes).slice(0, 255);   /* (2026-11-02; packed as noteBytes makes them) */
+    if (sec.bpm != null && sec.bpm !== "") { const v = Math.round(+sec.bpm); if (v >= 40 && v <= 240) out.bpm = v; }   /* its own tempo (2026-11-07) */
     try { if (SNG.meterByte(sec.time)) { const m = SNG.meter(sec.time); out.time = `${m.num}/${m.den}`; } } catch (e) { /* a bad meter: 4/4 */ }
     if (sec.outro) out.outro = true;
     if (Object.keys(rats).length) out.ratchets = rats;
@@ -3599,7 +3628,7 @@ const TEXT = {
     gpiOpen: "ファイルを開く（Guitar Pro / MIDI / JSON）", gpiAuto: "マーカーを無視してドラムから", gpiKeep: "エディタのソングを残す：Guitar Pro / MIDI ファイルは小節だけを加え、JSON は今の小節を残す", gpiKept: "{file}：{n} 小節を {song} の横に（エディタのソングはそのまま）", gpiSections: "セクション", gpiSlot: "スロット", gpiLoading: "Python を読み込み中…", gpiInstalling: "PyGuitarPro を準備中…", gpiConverting: "変換中…", gpiFail: "変換できません: ", gpiNoSrc: "gp2song.py が見つかりません（エディタの隣か ../tools/ に置いてください）",
     sedTitle: "セクションエディタ", sedHelp: "ソングのセクションを手で直します：名前、順序、長さ、アウトロ、分割と結合、グリッドの打点（レベルとラチェット）、フィル条件（上の行：F = フィル時のみ、N = フィル時は休み）。Guitar Pro から読んだソングでは、ファイルの小節を選んでパターンやフィルにできます。",
     sedOpen: "JSON を開く", sedBlank: "新しいソング", sedNone: "Guitar Pro か MIDI を開くか、JSON を開くか、スロットの「編集」を押してください。", sedName: "名前", sedKit: "キット", sedSwing: "スウィング", sedSwingOn: "単位",
-    sedSteps: "ステップ", sedTime: "拍子", sedOutro: "アウトロ", sedDup: "複製", sedNew: "新規セクション", sedDel: "削除", sedSplit: "分割（小節）", sedSplitBtn: "分割", sedMerge: "次と結合",
+    sedSteps: "ステップ", sedTime: "拍子", sedSecBpm: "このセクション独自のテンポ（40..240）。空欄: 曲のテンポ {bpm}。セクションが始まると切り替わり、独自のテンポのない次のセクションで曲のテンポに戻る", playOwnBpm: "再生中のセクション独自のテンポ：ここで変えるとそのテンポが変わる。独自のテンポのないセクションで曲のテンポに戻る", sedOutro: "アウトロ", sedDup: "複製", sedNew: "新規セクション", sedDel: "削除", sedSplit: "分割（小節）", sedSplitBtn: "分割", sedMerge: "次と結合",
     sedBarWarn: "拍子の小節に揃っていません：切り替えは小節線まで待ちます。", sedBarFix: "拍子を {sig} に",
     sedPen: "ペン:", sedRat: "ラチェット", sedFlam: "フラム", sedMark: "フィル:", sedMarkAlways: "常に", sedMarkF: "フィル時のみ", sedMarkN: "フィル時は休み", sedGridHelp: "クリックでペンのレベル・ラチェット・フィル印の打点、同じ打点をもう一度で消す。フィル印が「フィル時のみ」「フィル時は休み」のとき、既にある打点をクリックするとその印を変えます（黄の枠: フィル時のみ、赤の枠: フィル時は休み）。上の行はステップ全体の印。", sedBarsHelp: "ファイルの小節（このセクションの範囲に印）：1〜4 小節を選んでパターンに、1 小節をフィルに。",
     sedHear: "クリックで音を聞く", sedKey: "キー: ", sedUndo: "元に戻す", sedRedo: "やり直す", sedPlaySec: "このセクションを試聴", sedKeys: "キー: n 通常、h 強、s 弱、g ゴースト、x 消去、r ラチェット、l フラム、m フィル印、[ ] 前後のセクション、Delete 選択ステップを消去、Ctrl+C / Ctrl+V ステップのコピーと貼り付け、Ctrl+Z / Ctrl+Y 元に戻す / やり直す、p このセクションを試聴。レーン名をクリックすると音が鳴ります。", sedCols: "ステップ（番号をクリック、Shift+クリックで範囲。フィル小節・エントリー・ブレイクの番号も：そこへコピーと貼り付け）:", sedCopy: "コピー", sedPaste: "貼り付け（選択位置に）", sedClear: "消去", sedCopied: "コピーしました: ", sedUseBars: "選んだ小節をパターンに", sedUseFill: "選んだ小節をフィルに", sedEntry: "エントリー", sedBreak: "ブレイク", sedEbNone: "なし", sedEbBar: "小節", sedEbBars: "小節", sedUseEntry: "選んだ小節をエントリーに", sedUseBreak: "選んだ小節をブレイクに", sedDivDropped: "セクションのステップの間に落ちる打点を捨てました（分割がファイルの 1/16 より粗い：先に細かくしてから選び直してください）: ", sedEbHelp: "エントリーとブレイク：セクションのパターンの前に鳴る小節（無音でも可）。終わるとパターンは頭から始まり、その間に押したセクションはその終わりで切り替わります。エントリーは別のセクションや停止から入るとき、ブレイクは CC 28（再生中のセクションにも）で鳴ります。グリッドではエントリーはパターンの左、ブレイクは右（どちらも青い隙間の向こう）。", sedFill: "フィル", sedNotes: "曲のメモ", sedSecNotes: "セクションのメモ", sedNotesPrev: "本体での表示: ", sedNotesNoSec: "この番号のセクションはありません（入力どおりに表示）", sedNotesHelp: "自由なテキスト、各 255 文字まで（本体のフォントは Latin-1）。本体は LIVE の状態行に 1 行目を、ENV で全文を表示します。@2 はセクション 2 の名前の略記です（名前で表示され、番号はここでのセクションの追加・分割・結合・削除に合わせて付け替えられます）。", sedFbInfo: " + フィル {n} ステップ", sedFbHelp: "隙間の右はこのセクション専用のフィル（追加の小節、1〜4）：フィルは次の小節線からこれを丸ごと演奏し（必要ならセクションの終わりを越えて）、その後パターンは頭から、または押したセクションへ。セクションが持つのはこれか、パターンに埋め込んだフィル印（アレンジャーキーボードのフィル：押した所から、印の位置で）のどちらかで、両方は持てません。追加すると、パターンの最後の小節（印どおりに鳴る形）が写され、印は消えます。", sedFbMerge: "フィルをパターンに統合", sedFbDropMarks: "印を捨てる", sedFbDropMarksHelp: "専用フィルを残し、パターンに埋め込まれたフィル印と条件を捨てます：「フィルのみ」の打点は消え（専用フィルがあると鳴らない）、「フィル以外」の打点は常に鳴ります。", sedBothWarn: "パターンにフィル印・条件が {n} 個あり、専用フィルもあります：本体は専用フィルを演奏し、印は鳴りません。パターンに統合するか、印を捨ててください。", sedMarkOff: "専用フィルがある間はフィル印を使えません（パターンに統合すれば使えます）", sedFbAddedMarks: "フィルを追加し、パターンの印を畳み込みました。フィルのみ / フィル以外: ", sedFbMarksDropped: "印を捨てました。消えた「フィルのみ」の打点 / 消した印と条件: ", sedFbMergeHelp: "フィルをパターンの最後の小節にフィル印として畳み込み、フィルを消します（追加の逆）：両方にある打点はそのまま、パターンだけの打点は「フィル以外」、フィルだけの打点は「フィルのみ」として書き込みます。以後フィルはセクションの終わりまで印どおりに鳴ります。両方にあって強さ・ラチェット・フラムが違う打点はパターンのものを残します。", sedFbMerged: "フィルを印としてパターンに統合しました。フィルのみ / フィル以外 / 両方: ", sedFbDiffer: "、フィルと違うのでパターンの打点を残した: ", sedFbDropped: "、パターンの先頭より前で捨てた: ", sedEdit: "編集", sedDropped: "パターンと重なるフィルの打点は捨てました: ", sedTooMany: "16 セクションまで", sedNoMerge: "結合できません（分割数が違うか 64 ステップ超）", sedDivLong: "分割数を変えられません（その分割数では 64 ステップ超）: 先にパターンを短くしてください", sedDivLoss: "{div} に変えると、新しいグリッドの間に落ちるヒット {n} 個が消えます（パターン、フィル小節、エントリー、ブレイク）。変更しますか？", sedDivHelp: "分割数を変えてもヒットは拍の上の位置を保ちます: 1/16 から 1/8 では間の 16 分が消え、1/8 から 1/16 では間に空のステップが入ります",
@@ -3741,7 +3770,7 @@ const TEXT = {
     gpiOpen: "Open a file (Guitar Pro, MIDI or JSON)", gpiAuto: "sections from the drums, ignoring the markers", gpiKeep: "keep the song in the editor: a Guitar Pro or MIDI file adds only its bars, a JSON keeps the bars already there", gpiKept: "{file}: its {n} bars beside {song} (the song in the editor kept)", gpiSections: "sections", gpiSlot: "slot", gpiLoading: "Loading Python…", gpiInstalling: "Preparing PyGuitarPro…", gpiConverting: "Converting…", gpiFail: "Cannot convert: ", gpiNoSrc: "gp2song.py not found (next to the editor, or in ../tools/)",
     sedTitle: "Section editor", sedHelp: "The song's sections by hand: names, order, length, the outro, split and merge, the hits on the grid (a level and a ratchet each), the fill conditions (the top row: F plays only during a fill, N rests then). For a song read from Guitar Pro, the file's bars can be picked as a section's pattern or its fill.",
     sedOpen: "Open JSON", sedBlank: "New song", sedNone: "Open a Guitar Pro or MIDI file, open a JSON, or press Edit on a slot.", sedName: "name", sedKit: "kit", sedSwing: "swing", sedSwingOn: "on the",
-    sedSteps: "steps", sedTime: "time", sedOutro: "outro", sedDup: "Duplicate", sedNew: "New section", sedDel: "Delete", sedSplit: "split at bar", sedSplitBtn: "Split", sedMerge: "Merge with next",
+    sedSteps: "steps", sedTime: "time", sedSecBpm: "the section's own tempo (40..240); blank: the song's, {bpm}. It takes effect as the section lands, and the song's comes back with the next section that has none", playOwnBpm: "the section playing has a tempo of its own: the box and the tap set that one; the song's comes back with a section that has none", sedOutro: "outro", sedDup: "Duplicate", sedNew: "New section", sedDel: "Delete", sedSplit: "split at bar", sedSplitBtn: "Split", sedMerge: "Merge with next",
     sedBarWarn: "Not whole bars of its time: a change waits for the bar line.", sedBarFix: "Set time to {sig}",
     sedPen: "pen:", sedRat: "ratchet", sedFlam: "flam", sedMark: "fill:", sedMarkAlways: "always", sedMarkF: "only in a fill", sedMarkN: "not in a fill", sedGridHelp: "Click a cell to set a hit with the pen's level, ratchet and fill mark; click the same hit again to clear it. With the fill mark on 'only in a fill' or 'not in a fill', clicking a hit that is there changes its mark instead (amber ring: only in a fill, red ring: not in a fill). The top row marks a whole step at once.", sedBarsHelp: "The file's bars (this section's own range marked): pick 1 to 4 as the pattern, or one as the fill.",
     sedHear: "click: hear this lane", sedKey: "key: ", sedUndo: "Undo", sedRedo: "Redo", sedPlaySec: "Play this section", sedKeys: "Keys: n normal, h hard, s soft, g ghost, x erase, r ratchet, l flam (a grace note before the hit), m fill mark, [ ] previous / next section, Delete clears the selected steps, Ctrl+C / Ctrl+V copy and paste them, Ctrl+Z / Ctrl+Y undo / redo, p plays this section. Click a lane's name to hear its sound.", sedCols: "steps (click a number, shift-click another for a range; the fill bar's, entry's and break's numbers too, to copy and paste there):", sedCopy: "Copy", sedPaste: "Paste at the selection", sedClear: "Clear", sedCopied: "copied: ", sedUseBars: "Pattern = selected bars", sedUseFill: "Fill = selected bars", sedEntry: "Entry", sedBreak: "Break", sedEbNone: "none", sedEbBar: "bar", sedEbBars: "bars", sedUseEntry: "Entry = selected bars", sedUseBreak: "Break = selected bars", sedDivDropped: "hits between the section's steps dropped (its division is coarser than the file's 1/16: set it finer first, then pick the bars again): ", sedEbHelp: "Entry and break: bars played before the section's pattern (silence too); after them the pattern starts from its top, and a section asked for meanwhile comes in at their end. The entry plays when the section comes in from another one or from stopped, the break on CC 28 (the section playing too). In the grid: the entry left of the pattern, the break at the right, each past a blue gap.", sedFill: "Fill", sedNotes: "Song notes", sedSecNotes: "Section notes", sedNotesPrev: "on the device: ", sedNotesNoSec: "no section with this number: shown as typed", sedNotesHelp: "free text, up to 255 characters each (Latin-1: the device's font); the device shows the first line on LIVE's state line while nothing is announced, and the whole on ENV. @2 stands for section 2's name (shown as the name; the number follows the sections as they are added, split, merged or deleted here)", sedFbInfo: " + a fill of {n} steps", sedFbHelp: "Right of the gap: the section's fill of its own, extra bars, 1 to 4: a fill plays them whole, from the next bar line (past the section's end if it must), then the pattern from its top, or the section asked for. A section has this or a fill embedded in the pattern as marks (an arranger keyboard's fill: from the press, where the marks sit), never both: added, it starts as the pattern's last bars the way the marks played them, and the marks go.", sedFbMerge: "Merge into the pattern", sedFbDropMarks: "Drop the marks", sedFbDropMarksHelp: "Keep the fill of its own and drop the fill marks and conditions embedded in the pattern: a hit only in a fill goes (never heard with a fill of its own), one not in a fill plays always.", sedBothWarn: "{n} fill mark(s) or condition(s) in the pattern and a fill of its own: the device plays the fill and never hears the marks. Merge into the pattern, or drop the marks.", sedMarkOff: "fill marks are off while the section has a fill of its own (merge it into the pattern to use them)", sedFbAddedMarks: "fill added; the pattern's marks folded in, only in a fill / not in a fill: ", sedFbMarksDropped: "marks dropped, hits only in a fill gone / marks and conditions cleared: ", sedFbMergeHelp: "The fill folded back into the pattern's last bars as fill marks, and removed (the opposite of adding one): a hit in both plays always, one in the pattern only is marked not in a fill, one in the fill only is written in as only in a fill. A fill then plays the marks to the section's end. A hit in both at another level, ratchet or flam keeps the pattern's.", sedFbMerged: "fill merged into the pattern as marks, only in a fill / not in a fill / both: ", sedFbDiffer: "; the pattern's hit kept where the fill's differed: ", sedFbDropped: "; before the pattern's start, dropped: ", sedEdit: "Edit", sedDropped: "fill hits dropped where the pattern hits too: ", sedTooMany: "at most 16 sections", sedNoMerge: "cannot merge (different division, or over 64 steps)", sedDivLong: "cannot change the division (over 64 steps at that one): shorten the pattern first", sedDivLoss: "Changing to {div} drops {n} hit(s) that fall between the new grid's steps (the pattern, fill bar, entry and break). Change anyway?", sedDivHelp: "Changing the division keeps the hits in their place on the beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between",
@@ -4821,6 +4850,9 @@ function sedRender() {
   dv.value = sec.div;
   dv.title = t("sedDivHelp");
   $("sed-outro").checked = !!sec.outro;
+  if (document.activeElement !== $("sed-secbpm")) $("sed-secbpm").value = sec.bpm ?? "";   /* its own tempo (2026-11-07); blank: the song's */
+  $("sed-secbpm").placeholder = String(sp.bpm);
+  $("sed-secbpm").title = t("sedSecBpm").replace("{bpm}", sp.bpm);
   const spb = SED.spb(sec), beat = SED.beat(sec), nb = SED.bars(sec), sb = $("sed-splitbar");
   if (document.activeElement !== $("sed-time")) $("sed-time").value = sec.time || "4/4";
   sb.replaceChildren(...Array.from({ length: Math.max(0, nb - 1) }, (_, i) => el("option", { value: String(i + 1), text: String(i + 1) })));
@@ -5045,6 +5077,24 @@ $("sed-time").addEventListener("change", () => {
   try { sedSet(SED.setTime(sec, $("sed-time").value.trim())); } catch (e) { sayK("songsBad", e.message); $("sed-time").value = sec.time || "4/4"; }
 });
 $("sed-outro").addEventListener("change", () => { const sec = sedSec(); if (sec) sedSet(SED.outro(sec, $("sed-outro").checked)); });
+$("sed-secbpm").addEventListener("change", () => {   /* the section's own tempo (2026-11-07); blank: the song's */
+  const sec = sedSec();
+  if (!sec) return;
+  const v = $("sed-secbpm").value.trim(), s = { ...sec };
+  delete s.bpm;
+  if (v !== "") s.bpm = Math.max(40, Math.min(240, Math.round(+v) || SONGED.spec.bpm));
+  sedSet(SED.norm(s));
+  sedBpmLive();
+});
+function sedBpmLive() {                                    /* the song playing below is this one: the section's tempo follows (at
+                                                              once while it plays, else as it lands) */
+  const st = SPLAY.st;
+  if (!st || !SPLAY.spec || SPLAY.name !== SONGED.name) return;
+  const sec = SONGED.spec.sections[SONGED.sel], ps = st.spec.sections[SONGED.sel];
+  if (!sec || !ps) return;
+  if (sec.bpm != null) ps.bpm = sec.bpm; else delete ps.bpm;
+  if (st.playing && !st.cur && st.sec === SONGED.sel) { PLAY.tempo(st, st.sec); playRender(); }
+}
 $("sed-barfix").addEventListener("click", () => { const sec = sedSec(); if (sec && $("sed-barfix").dataset.sig) sedSet(SED.setTime(sec, $("sed-barfix").dataset.sig)); });
 $("sed-up").addEventListener("click", () => { const k = SONGED.sel, a = SONGED.spec.sections; if (k > 0) { [a[k - 1], a[k]] = [a[k], a[k - 1]]; SONGED.sel--; sedRender(); } });
 $("sed-down").addEventListener("click", () => { const k = SONGED.sel, a = SONGED.spec.sections; if (k + 1 < a.length) { [a[k + 1], a[k]] = [a[k], a[k + 1]]; SONGED.sel++; sedRender(); } });
@@ -5366,6 +5416,8 @@ function playRender(light = false) {
     const ext = PIN.clock && PCLK.on(PIN.clk, performance.now()), bpmIn = $("pl-bpm");
     if (document.activeElement !== bpmIn) bpmIn.value = sp ? String(st ? st.bpm : sp.bpm) : "";
     $("pl-bpm-unit").textContent = ext ? "ext" : "BPM";
+    $("pl-bpm-unit").classList.toggle("own", !!(st && st.secBpm && !ext));   /* the section's own tempo (2026-11-07) */
+    $("pl-bpm-unit").title = st && st.secBpm && !ext ? t("playOwnBpm") : "";
     for (const id of ["pl-bpm", "pl-bpm-dn", "pl-bpm-up", "pl-tap"]) $(id).disabled = !st || ext;
     $("pl-tap").title = "CC 26  " + t("sedKey") + "t";
     const box = $("play-secs"), n = sp ? sp.sections.length : 0;   /* the sections as the device's tiles, rows of four */
@@ -5375,7 +5427,8 @@ function playRender(light = false) {
     if (sp) sp.sections.forEach((s, k) => box.append(el("button", { class: n > 8 && k >> 3 === SPLAY.bank ? "keyed" : null,
       title: `CC 20 ${k}  ${t("sedKey")}${k < 8 ? k + 1 : `0, ${k - 7}`}  (when the section playing ends, no fill: F first for one; shift: CC 27, on the next bar; the FM-1: OCT+ held)`,
       onclick: (e) => { PLAY.request(st, k, e.shiftKey); playStart(); playRender(); } },
-      el("small", { text: `${k + 1}${n <= 8 ? (s.outro ? "  end" : s.time && s.time !== "4/4" ? "  " + s.time : "") : ""}` }), s.name)));
+      el("small", { text: `${k + 1}${n <= 8 ? (s.outro ? "  end" : s.bpm ? "  " + s.bpm : s.time && s.time !== "4/4" ? "  " + s.time : "") : ""}` }), s.name)));   /* (its own tempo, as the device's tiles) */
+
     $("play-prev").title = "CC 25  " + t("sedKey") + ",";
     $("play-next").title = "CC 24  " + t("sedKey") + ".";
     $("play-fill").title = "CC 21  " + t("sedKey") + "f";

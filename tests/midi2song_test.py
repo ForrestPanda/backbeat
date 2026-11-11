@@ -96,7 +96,8 @@ def make_synthetic():
 
 def make_odd():
     """type 0, one track, the drums on channel 10: four bars of 7/8 under a marker, then 4/4 with the outro; a tempo
-    change in the middle (ignored); every note 10..18 ticks off the grid (a humanised part: snapped back)"""
+    change on the outro's first bar (its own tempo, 2026-11-07); every note 10..18 ticks off the grid (a humanised
+    part: snapped back)"""
     ev = [(0, meta(0x03, b"Odd one")), (0, meta(0x51, (600000).to_bytes(3, "big"))), (0, meta(0x58, bytes([7, 3, 24, 8]))),
           (0, meta(0x06, b"Verse"))]
     bar7 = 7 * TPQ // 2
@@ -117,7 +118,7 @@ def make_odd():
     at = 4 * bar7
     ev.append((at, meta(0x58, bytes([4, 2, 24, 8]))))
     ev.append((at, meta(0x06, b"Outro")))
-    ev.append((at, meta(0x51, (400000).to_bytes(3, "big"))))      # 150 BPM from here: ignored
+    ev.append((at, meta(0x51, (400000).to_bytes(3, "big"))))      # 150 BPM from here: the outro's own tempo
     for i in range(2):
         put(at + i * BAR, 36); put(at + i * BAR, 49)
     return smf(0, [ev])
@@ -186,14 +187,16 @@ def main():
     r, spec = run(make_odd(), "odd.mid")
     print(r.stdout.strip())
     assert r.returncode == 0, r.stderr
-    assert spec["bpm"] == 100 and "1 tempo change ignored" in r.stdout and spec["name"] == "ODD ONE", (spec["bpm"], r.stdout)
+    assert spec["bpm"] == 100 and "1 tempo change (a section's first bar" in r.stdout and spec["name"] == "ODD ONE", (spec["bpm"], r.stdout)
     seven, four = spec["sections"]
+    assert "bpm" not in seven and four["bpm"] == 150 and "at 150 BPM (its own)" in r.stdout, (four, r.stdout)
     assert seven["time"] == "7/8" and seven["steps"] == 14 and seven["div"] == "1/16", seven
     assert seven["lanes"]["KICK"] == "x.....x......." and seven["lanes"]["HAT"] == "s.s.s.s.s.s.s." and seven["lanes"]["SNARE"] == "....x.....x...", seven["lanes"]
     assert four.get("outro") and "time" not in four and four["steps"] == 16 and four["lanes"]["CRASH"] == "x...............", four
     blob = fm1_song.pack(spec)
     assert fm1_song.sections(blob)[0][4] == 7 | 1 << 5 and fm1_song.sections(blob)[1][4] == 0
-    print("midi2song: type 0: a 7/8 section from the time signature, humanised notes back on the grid, the tempo change ignored PASS")
+    assert fm1_song.sections(blob)[1][3] & 32 and blob[-1] == 150 and not fm1_song.sections(blob)[0][3] & 32   # (the outro's
+    print("midi2song: type 0: a 7/8 section from the time signature, humanised notes back on the grid, the tempo change on the outro's first bar its own PASS")   # tempo byte: last, no note)
 
     r, spec = run(make_named(), "named.mid")
     print(r.stdout.strip())

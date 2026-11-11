@@ -27,11 +27,15 @@
  *                 (1..64, whole bars of the section's meter) then the steps, played once before the section's
  *                 pattern as it comes in (the entry: from another section or from stopped; the break: the pedal's
  *                 CC 28), the pattern from its top after them (seq.c eb_dstep / sng_eb)
+ *   tempo         (flags bit 5, since 2026-11-07) after the break, before the note: a byte, the section's own tempo
+ *                 40..240. It lands with the section (sng_tempo: the song's tempo comes back with the next section
+ *                 that has none); KNOB 1 and the tap then set this one, and SAVE held keeps it here, the song's in the
+ *                 header (sng_pack_section)
  *   note          (flags bit 4, since 2026-11-02) last in the section: a byte, its length 1..255, then the text (Latin-1,
  *                 newlines allowed): how to play it, written in the editor; LIVE's state line shows its first line while
  *                 nothing else is announced, OCT- on LIVE the whole (ui_drummer.c notes_draw). The song's own note, the
  *                 same form, after the last section when the header's flags have bit 1 (SNG_H_NOTE). A firmware before
- *                 these refuses a song that has them (check 6).
+ *                 these refuses a song that has them (check 6); the same for a section's tempo.
  * A section's meter is the bar the pedal counts while it plays (seq.c clk_meter): where a request lands, the fill
  * bar, the ending, the click and the count-in. (The first form, "SNG1", 10 or 14 bytes a step, never reached a
  * device: not read.)
@@ -52,6 +56,7 @@
 #define SNG_F_BREAK 8u                           /* ..a break (after the entry) */
 #define SNG_F_TAIL (SNG_F_FILLBAR | SNG_F_ENTRY | SNG_F_BREAK)   /* the blocks after the pattern, in this order */
 #define SNG_F_NOTE 16u                           /* ..a note (last; 2026-11-02): its length, then the text */
+#define SNG_F_BPM 32u                            /* ..a tempo of its own (a byte before the note; 2026-11-07) */
 #define SNG_H_SWING8 1u                          /* the header's flags: the swing moves the 8ths, not the section's steps */
 #define SNG_H_NOTE 2u                            /* ..a note of the song's after the last section (2026-11-02) */
 
@@ -60,6 +65,8 @@ typedef struct {
     uint16_t off[SNG_SECTIONS];                  /* each section's offset in it (nsec of them) */
     uint16_t bpm;
     uint8_t kit, swing, swing8, drlvl, drrev, nsec, pend;   /* swing8: SNG_H_SWING8; pend: tempo and kit wait for the next section */
+    uint8_t secbpm;                              /* the tempo heard is the section's own (SNG_F_BPM): bpm holds the song's
+                                                  * meanwhile, as the knob left it (sng_tempo) */
 } sng_t;
 static sng_t sng;
 
@@ -123,6 +130,11 @@ UI_SMALL static int sng_check(const uint8_t *b, uint32_t n, sng_t *out)
                 if (!q)
                     return 7;
             }
+        if (b[pos + 14] & SNG_F_BPM) {               /* its tempo (2026-11-07): a byte, 40..240 */
+            if (q >= end || b[q] < 40u || b[q] > 240u)
+                return 7;
+            q++;
+        }
         if (b[pos + 14] & SNG_F_NOTE) {              /* its note: the last bytes, as long as its length byte says */
             if (q >= end || !b[q] || q + 1u + b[q] != end)
                 return 7;
@@ -190,17 +202,53 @@ static uint32_t sng_bars(uint32_t k)             /* the bars its pattern takes, 
     bars = (len * u + b - 1u) / b;
     return !bars ? 1u : bars > 64u ? 64u : bars;
 }
-/* section s's note (2026-11-02): the offset of its length byte, 0 none (the tail walked, checked at the load) */
-UI_SMALL static uint32_t sng_note_off(const uint8_t *s)
+/* what follows section s's blocks (the tail walked, checked at the load): the offset of its tempo byte (2026-11-07)
+ * or, without one, of its note's length byte (2026-11-02); 0 none */
+UI_SMALL static uint32_t sng_tail_off(const uint8_t *s)
 {
     uint32_t size = sng_u16(s + 16), q, i;
-    if (!(s[14] & SNG_F_NOTE))
+    if (!(s[14] & (SNG_F_NOTE | SNG_F_BPM)))
         return 0;
     q = sng_walk(s, SNG_SEC_HDR + ((uint32_t)s[12] + 3u) / 4u, s[12], size);
     for (i = SNG_F_FILLBAR; q && i <= SNG_F_BREAK; i <<= 1)
         if (s[14] & i)
             q = sng_walk(s, q + 1u, s[q], size);
     return q;
+}
+UI_SMALL static uint32_t sng_bpm_off(const uint8_t *s)   /* its tempo byte's offset, 0 none */
+{
+    return s[14] & SNG_F_BPM ? sng_tail_off(s) : 0u;
+}
+UI_SMALL static uint32_t sng_note_off(const uint8_t *s)  /* its note's length byte's offset, 0 none */
+{
+    uint32_t q = s[14] & SNG_F_NOTE ? sng_tail_off(s) : 0u;
+    return q && (s[14] & SNG_F_BPM) ? q + 1u : q;
+}
+/* section k's own tempo, 0: none (the song's) */
+UI_SMALL static uint32_t sng_sec_bpm(uint32_t k)
+{
+    const uint8_t *s = sng_cur >= 0 && k < sng.nsec ? sng_sec(k) : 0;
+    uint32_t q = s ? sng_bpm_off(s) : 0u;
+    return q ? s[q] : 0u;
+}
+/* the tempo heard is the section playing's own (LIVE's "bpm" label; the knob and the tap set that one) */
+static int sng_sec_tempo(void) { return sng_cur >= 0 && sng.secbpm; }
+/* the tempo as section k lands (sng_apply; the pedal cueing it from stopped, so the count-in clicks at it): its own
+ * when it has one, the song's back when it has none and the one before had its own; else as the knob left it (a
+ * song without any: the tempo set on LIVE goes on through the sections, as before). The song's tempo is kept
+ * meanwhile as the knob left it too: a tempo set on LIVE in a section without its own is not lost through one with */
+UI_SMALL static void sng_tempo(uint32_t k)
+{
+    uint32_t v = sng_sec_bpm(k);
+    if (v) {
+        if (!sng.secbpm)
+            sng.bpm = (uint16_t)song.g[G_BPM];
+        song.g[G_BPM] = (int16_t)clamp((int32_t)v, GP[G_BPM].min, GP[G_BPM].max);
+        sng.secbpm = 1;
+    } else if (sng.secbpm) {
+        song.g[G_BPM] = (int16_t)clamp((int32_t)sng.bpm, GP[G_BPM].min, GP[G_BPM].max);
+        sng.secbpm = 0;
+    }
 }
 /* the note of section k (k < 0: the song's) into d, n bytes with its end (cut when longer); empty: none. LIVE shows its
  * first line, the NOTES screen the whole (ui_drummer.c). "@2" in the text is section 2's name (2026-11-06, the user:
@@ -273,6 +321,7 @@ UI_SMALL static void sng_globals(void)                    /* the song's tempo, k
     song.g[G_DRREV] = (int16_t)clamp((int32_t)sng.drrev, GP[G_DRREV].min, GP[G_DRREV].max);
     TDRUM->p[P_E0] = (int16_t)clamp((int32_t)sng.kit, DRUM_KIT_DESC.min, DRUM_KIT_DESC.max);
     sng.pend = 0;
+    sng.secbpm = 0;
 }
 
 /* section k into the drum track: at an audio-block boundary (live_block, on the bar), or from the main
@@ -319,6 +368,7 @@ UI_SMALL static void sng_apply(uint32_t k)
     sng_name(k, sng_ui_name);
     if (sng.pend)
         sng_globals();
+    sng_tempo(k);                                /* its own tempo, or the song's back (2026-11-07) */
     sync_reload = 1;
     ui.force = 1;
 }
@@ -428,11 +478,13 @@ UI_SMALL static uint32_t sng_pack_rediv(const uint8_t *q, uint32_t n, uint32_t u
  * as they are, or on the new grid when the division changed: sng_pack_rediv), into out (room bytes): its size, 0 = it
  * does not fit (SNG_MAX). Nudges and locks are not kept: SNG2 has no room for them (sng_lossy says so) */
 /* the song's header bytes 16..21 as the knobs left them (2026-10-29: LIVE's tempo, kit, drum level and swing were
- * never saved; the name and the swing grid as they were) */
+ * never saved; the name and the swing grid as they were). The tempo heard being the section's own, the song's is the
+ * one kept meanwhile (sng_tempo), the section's goes to the section (sng_pack_section) */
 UI_SMALL static void sng_pack_knobs(uint8_t *out)
 {
-    out[16] = (uint8_t)song.g[G_BPM];
-    out[17] = (uint8_t)(song.g[G_BPM] >> 8);
+    uint32_t bpm = sng.secbpm ? sng.bpm : (uint32_t)song.g[G_BPM];
+    out[16] = (uint8_t)bpm;
+    out[17] = (uint8_t)(bpm >> 8);
     out[18] = (uint8_t)clamp(TDRUM->p[P_E0], 0, DRUM_KITS - 1);
     out[19] = (uint8_t)clamp(song.g[G_SWING], 0, 100);
     out[20] = (uint8_t)clamp(song.g[G_DRLVL], 0, 127);
@@ -497,8 +549,9 @@ UI_SMALL static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t roo
         n = sng_pack_track(out, n, room, s, s[14], s[15]);   /* its name, flags (the outro, the tail's) and meter */
         if (!n)
             return 0;
-        if (s[14] & (SNG_F_TAIL | SNG_F_NOTE)) { /* its fill bar of its own, entry and break, as they are (the device
-                                                  * edits the pattern), or on the new grid; its note as it is */
+        if (s[14] & (SNG_F_TAIL | SNG_F_NOTE | SNG_F_BPM)) {   /* its fill bar of its own, entry and break, as they are
+                                                  * (the device edits the pattern), or on the new grid; its tempo and
+                                                  * note as they are */
             uint32_t from = sng_walk(s, SNG_SEC_HDR + ((uint32_t)s[12] + 3u) / 4u, s[12], size);
             uint32_t odiv = s[13] % NDIV_STEP, ndiv = (uint32_t)t->p[P_SDIV] % NDIV_STEP;
             if (!from || from >= size)
@@ -520,7 +573,7 @@ UI_SMALL static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t roo
                     n += w;
                     from = sng_walk(s, from + 1u, s[from], size);   /* (checked at the load) */
                 }
-                if (s[14] & SNG_F_NOTE) {        /* the note after them, as it is (2026-11-02) */
+                if (s[14] & (SNG_F_NOTE | SNG_F_BPM)) {   /* the tempo and the note after them, as they are */
                     if (!from || n + size - from > room)
                         return 0;
                     memcpy(out + n, s + from, size - from);
@@ -530,6 +583,12 @@ UI_SMALL static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t roo
         }
         out[at + 16] = (uint8_t)(n - at);        /* its size, the tail counted */
         out[at + 17] = (uint8_t)((n - at) >> 8);
+        if ((s[14] & SNG_F_BPM) && sng.secbpm && (int32_t)k == live_sec) {   /* its own tempo as the knob left it
+                                                  * (2026-11-07; the song's: sng_pack_knobs) */
+            uint32_t o = sng_bpm_off(out + at);
+            if (o)
+                out[at + o] = (uint8_t)clamp(song.g[G_BPM], 40, 240);
+        }
     }
     if (sng.xip[23] & SNG_H_NOTE) {              /* the song's note after the sections, as it is (2026-11-02) */
         const uint8_t *s = sng_sec(sng.nsec - 1u), *q = s + sng_u16(s + 16);
@@ -565,6 +624,10 @@ UI_SMALL static int sng_same(uint32_t k)
             if ((on & 1u) && *q++ != sng_pack_hit(d, i, l))
                 return 0;
     }
+    i = sng_bpm_off(s);                          /* its own tempo moved by the knob or the tap (2026-11-07; not under
+                                                  * a MIDI clock, whose tempo is the master's) */
+    if (i && !mclk_on() && (uint32_t)song.g[G_BPM] != s[i])
+        return 0;
     return 1;
 }
 

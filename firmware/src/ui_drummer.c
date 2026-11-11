@@ -487,7 +487,7 @@ UI_SMALL static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, 
     uint32_t k, sig = studio_hash((uint32_t)song.g[G_BPM] * 7u + playing * 3u + beat * 131u + beats * 1009u +
                                   (ui.bpm_t != 0) * 104729u + (uint32_t)(sng_cur + 1) * 37u + (uint32_t)mclk_on() * 11u +
                                   lights * 15485863u + (uint32_t)batt_shown() * 7777u +
-                                  (usb.config && !usb.suspended) * 99991u, songname);
+                                  (usb.config && !usb.suspended) * 99991u + (uint32_t)sng_sec_tempo() * 4441u, songname);
     int32_t x, w, cw;
     if (!ui.force && sig == cache)
         return;
@@ -504,7 +504,8 @@ UI_SMALL static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, 
     fmt_int(b, song.g[G_BPM]);
     x = 236 - text_w(&FONT_L, b);
     cv_text(x, 2, &FONT_L, b, ui.bpm_t ? C_WHITE : TE_G4);
-    cv_text(x - 28, 22, &FONT_S, mclk_on() ? "ext" : "bpm", TE_G3);
+    cv_text(x - 28, 22, &FONT_S, mclk_on() ? "ext" : "bpm", sng_sec_tempo() && !mclk_on() ? C_AMB : TE_G3);   /* amber: the
+                                                     * section's own tempo (2026-11-07): the knob and the tap set that one */
     batt_icon(x - 52, 23, 1);                        /* the battery left of "bpm" (asked 2026-11-06), USB while a host is there */
     te_play_icon(x - 24, 4, (int)playing);
     w = 232 / (int32_t)beats;                        /* the beats of the bar, as wide as the screen */
@@ -773,7 +774,10 @@ UI_SMALL static void live_tiles(uint32_t playing, int32_t req, uint32_t top)   /
                 char cut[13];
                 if (i == outro)
                     cv_text(x + 52 - text_w(&FONT_S, "end"), y, &FONT_S, "end", on ? C_BLACK : TE_RED);
-                else if (m) {
+                else if (sng_sec_bpm(i)) {          /* its own tempo (2026-11-07), amber as LIVE's label */
+                    fmt_int(cut, (int32_t)sng_sec_bpm(i));
+                    cv_text(x + 52 - text_w(&FONT_S, cut), y, &FONT_S, cut, on ? C_BLACK : C_AMB);
+                } else if (m) {
                     meter_str(cut, m);
                     cv_text(x + 52 - text_w(&FONT_S, cut), y, &FONT_S, cut, on ? C_BLACK : TE_G3);
                 }

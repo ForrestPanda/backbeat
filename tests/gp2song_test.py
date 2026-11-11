@@ -134,6 +134,12 @@ def make_song():
     for i in range(14, 18):                        # the verse again: skipped as a duplicate
         emit_bar(drums, i, verse(i % 2))
         emit_bar(perc, i, ev())
+    # a tempo change on the outro's first beat (the mix table): the outro's own tempo (2026-11-07); one in the middle
+    # of the chorus's third bar: from its next bar, inside the section, so not a section's; the song's tempo back on
+    # the verse's return (else that verse, at 90, is another section, not the duplicate the test counts on)
+    drums.measures[12].voices[0].beats[0].effect.mixTableChange = gp.MixTableChange(tempo=gp.MixTableItem(value=90))
+    drums.measures[10].voices[0].beats[2].effect.mixTableChange = gp.MixTableChange(tempo=gp.MixTableItem(value=130))
+    drums.measures[14].voices[0].beats[0].effect.mixTableChange = gp.MixTableChange(tempo=gp.MixTableItem(value=120))
     return song
 
 
@@ -217,7 +223,10 @@ def main():
     assert names == ["VERSE", "CHORUS", "OUTRO"], names
     assert spec["bpm"] == 120
     v, c, o = spec["sections"]
+    assert o["bpm"] == 90 and "bpm" not in v and "bpm" not in c and "3 tempo changes" in r.stdout, (o.get("bpm"), r.stdout)   # (2026-11-07)
+
     assert v["steps"] == 32 and v["div"] == "1/16", v
+
     assert v["lanes"]["KICK"][:27] == "x.......x.......x.......x.x", v["lanes"]["KICK"]
     assert v["lanes"]["HAT"].startswith("s.s.s.s.s.s.s.s.s.s.s.s."), v["lanes"]["HAT"]      # soft hats
     assert v["lanes"]["SNARE"][:16] == "....x.......x...", v["lanes"]["SNARE"]

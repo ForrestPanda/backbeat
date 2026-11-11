@@ -163,6 +163,8 @@ static void pedal_section_to(uint32_t s, uint32_t how, uint32_t brk)
     if (!song.playing) {
         char b[13];
         pedal_fill = 0;
+        sng_tempo(s);                             /* its own tempo now, or the song's back: the count-in clicks at it,
+                                                   * LIVE shows it (2026-11-07) */
         pedal_name(s, b);
         str_cpy(sng_ui_next, b, sizeof sng_ui_next);   /* (the screen: cued, in amber, until it starts) */
         if (pedal.count && !ci_on && !mclk_on()) {   /* the count-in: the clicks, the start after them

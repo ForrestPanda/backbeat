@@ -156,6 +156,19 @@ int main(int argc, char **argv)
         p = song_sec(blob[11], p, "OUT", 16, 2, SNG_F_OUTRO, "x...............", 0, 0, 0);
         blob_n[11] = song_note(blob[11], 0, p, "Ampero: bank 2, scene A");
     }
+    {   /* slot 12: tempos (2026-11-07): a song at 120 whose BRIDGE has its own 90 (with a break and a note after it),
+         * whose OUT has 150 and no other tail; VERSE and CHORUS none */
+        const char *brk[DRUM_LANES] = {0, 0, 0, 0, "x..............."};
+        uint32_t p = song_hdr(blob[12], "TEMPOS", 120, 0, 4), s;
+        p = song_sec(blob[12], p, "VERSE", 16, 2, 0, "x...x...x...x...", "....x.......x...", 0, 0);
+        s = p; p = song_sec(blob[12], p, "BRIDGE", 16, 2, 0, "x.......x.......", "....X.......X...", "x.x.x.x.x.x.x.x.", 0);
+        p = song_blk(blob[12], s, p, SNG_F_BREAK, 16, brk);
+        p = song_bpm(blob[12], s, p, 90);
+        p = song_note(blob[12], s, p, "half time feel");
+        p = song_sec(blob[12], p, "CHORUS", 16, 2, 0, "x...x...x...x...", "....x.......x...", "x.x.x.x.x.x.x.x.", 0);
+        s = p; p = song_sec(blob[12], p, "OUT", 16, 2, SNG_F_OUTRO, "x...............", 0, 0, 0);
+        blob_n[12] = song_bpm(blob[12], s, p, 150);
+    }
     pos = song_hdr(blob[1], "SLOW", 100, 2, 1);
     pos = song_sec(blob[1], pos, "ONLY", 16, 2, 0, "x.x.x.x.x.x.x.x.", 0, 0, 0);
     blob_n[1] = pos;
@@ -864,6 +877,85 @@ int main(int argc, char **argv)
     }
     printf("song: notes (2026-11-02): checked (lengths, flags), read, kept through the pack-back on a new grid and the image edits PASS\n");
 
+    /* ---- a tempo per section (2026-11-07): checked, lands with the section on the bar, the song's back with one that
+     * has none, the knob's edits saved where the tempo heard came from, kept through the pack-back and the image edits */
+    {
+        static uint8_t out[SNG_MAX], img[SNG_MAX];
+        char nb[64];
+        sng_t tmp;
+        uint32_t n, m, at, pb;
+        assert(sng_check(blob[12], blob_n[12], &tmp) == 0 && tmp.nsec == 4u && tmp.bpm == 120u);
+        assert(sng_sec_bpm(0) == 0u);                                      /* (no song loaded yet: nothing) */
+        memcpy(img, blob[12], blob_n[12]);
+        pb = tmp.off[1] + sng_u16(img + tmp.off[1] + 16) - 1u - 14u - 1u;  /* BRIDGE's tempo byte: before its note */
+        assert(img[pb] == 90u);
+        img[pb] = 39;  assert(sng_check(img, blob_n[12], &tmp) == 7);      /* out of range */
+        img[pb] = 241; assert(sng_check(img, blob_n[12], &tmp) == 7);
+        img[pb] = 90; img[tmp.off[1] + 14] &= (uint8_t)~SNG_F_BPM;
+        assert(sng_check(img, blob_n[12], &tmp) == 7);                    /* no flag: the note's length byte is 90 */
+        img[tmp.off[1] + 14] |= (uint8_t)SNG_F_BPM;
+        assert(sng_check(img, blob_n[12], &tmp) == 0);                    /* (the offsets again: a failed check stops short) */
+        img[tmp.off[3] + 14] &= (uint8_t)~SNG_F_BPM;
+        assert(sng_check(img, blob_n[12], &tmp) == 6);                    /* no flag on OUT: a byte left over */
+        pc(16, 12); advance(CTL); sng_poll();                             /* stopped: VERSE, the song's 120 */
+        assert(sng_cur == 12 && !song.playing && song.g[G_BPM] == 120 && !sng_sec_tempo());
+        assert(sng_sec_bpm(0) == 0u && sng_sec_bpm(1) == 90u && sng_sec_bpm(2) == 0u && sng_sec_bpm(3) == 150u);
+        sng_note(1, nb, sizeof nb); assert(!strcmp(nb, "half time feel"));   /* (the note after the tempo byte) */
+        song.g[G_BPM] = 125;                                               /* the knob on LIVE: the song's tempo */
+        cc(16, 20, 1); advance(CTL * 3u);                                  /* BRIDGE from stopped: 90 at once */
+        assert(song.playing && live_sec == 1 && song.g[G_BPM] == 90 && sng_sec_tempo() && sng.bpm == 125u);
+        bar = bar_len();
+        cc(16, 20, 2); advance(bar / 2u);                                  /* CHORUS cued: still 90 until it lands */
+        assert(live_sec == 1 && live_req == 2 && song.g[G_BPM] == 90);
+        advance(bar);
+        assert(live_sec == 2 && song.g[G_BPM] == 125 && !sng_sec_tempo());   /* the song's back, as the knob left it */
+        bar = bar_len();
+        cc(16, 20, 3); advance(bar + CTL * 2u);                            /* OUT: 150 */
+        assert(live_sec == 3 && song.g[G_BPM] == 150 && sng_sec_tempo() && sng_same(3));
+        song.g[G_BPM] = 160;                                               /* the knob: OUT's own tempo now */
+        assert(!sng_same(3));                                              /* (edited, as a hit would be) */
+        bar = bar_len();
+        cc(16, 20, 1); advance(bar + CTL * 2u);                            /* BRIDGE: 90; OUT's 160 not saved: gone */
+        assert(live_sec == 1 && song.g[G_BPM] == 90 && sng.bpm == 125u);
+        cc(16, 20, 3); advance(bar_len() + CTL * 2u);
+        assert(live_sec == 3 && song.g[G_BPM] == 150);
+        cc(16, 23, 0); advance(bar_len() + CTL * 2u);                      /* stop */
+        assert(!song.playing && live_sec == 3);
+        song.g[G_BPM] = 140;                                               /* the knob stopped, then SAVE held: OUT's
+                                                                            * tempo 140, the header's the song's 125 */
+        n = sng_pack_section(3, out, sizeof out);
+        assert(n == blob_n[12] && !sng_check(out, n, &tmp) && tmp.bpm == 125u);
+        assert((out[tmp.off[3] + 14] & SNG_F_BPM) && out[tmp.off[3] + sng_u16(out + tmp.off[3] + 16) - 1u] == 140u);
+        assert(out[pb] == 90u && (out[tmp.off[1] + 14] & SNG_F_NOTE));    /* BRIDGE's as it was, its note too */
+        memcpy(blob[12], out, n); blob_n[12] = n;
+        pc(16, 12); advance(CTL); sng_poll();                              /* loaded again, stopped: VERSE at 125 */
+        assert(sng_cur == 12 && song.g[G_BPM] == 125 && !sng_sec_tempo() && sng_sec_bpm(3) == 140u);
+        pedal.count = 1;                                                   /* the count-in: cued from stopped, OUT's
+                                                                            * tempo at once, the clicks at it */
+        cc(16, 20, 3); advance(CTL);
+        assert(!song.playing && ci_on && song.g[G_BPM] == 140 && sng_sec_tempo());
+        advance(4u * 60u * FS / 140u + CTL * 3u);
+        assert(song.playing && live_sec == 3 && song.g[G_BPM] == 140);
+        cc(16, 23, 0); advance(bar_len() + CTL * 2u);
+        pedal.count = 0;
+        fm1_irq_off(); sng_apply(1); live_sec = 1; fm1_irq_on();            /* BRIDGE picked stopped, on a finer grid:
+                                                                            * the pack-back keeps its tempo and note */
+        assert(song.g[G_BPM] == 90 && pattern_rediv(TDRUM, 3) && TDRUM->p[P_SLEN] == 32);
+        n = sng_pack_section(1, out, sizeof out);
+        assert(n && !sng_check(out, n, &tmp) && (out[tmp.off[1] + 14] & (SNG_F_BPM | SNG_F_NOTE)) == (SNG_F_BPM | SNG_F_NOTE));
+        memcpy(blob[12], out, n); blob_n[12] = n;
+        pc(16, 12); advance(CTL); sng_poll();
+        assert(sng_sec_bpm(1) == 90u && TDRUM->p[P_SDIV] == 2);
+        sng_note(1, nb, sizeof nb); assert(!strcmp(nb, "half time feel"));
+        memcpy(img, blob[12], blob_n[12]);                                /* the image edits: the tempo follows */
+        m = sng_image_edit(img, blob_n[12], sizeof img, SE_DUP, 3, &at);
+        assert(m && at == 4u && !sng_check(img, m, &tmp) && tmp.nsec == 5u);
+        memcpy(blob[12], img, m); blob_n[12] = m;
+        pc(16, 12); advance(CTL); sng_poll();
+        assert(sng_sec_bpm(3) == 140u && sng_sec_bpm(4) == 140u && sng_sec_bpm(1) == 90u);
+        TDRUM->p[P_SDIV] = 2;
+    }
+    printf("song: a tempo per section (2026-11-07): checked, lands on the bar, the song's back, the knob's saved where it came from, kept through the pack-back and the image edits PASS\n");
     /* ---- the division changed on the device (2026-10-29, seq.c pattern_rediv): the hits keep their place on the beat,
      * the section's fill bar in RAM follows, and the save packs its fill bar and entry on the new grid (sng_pack_rediv) */
     {
