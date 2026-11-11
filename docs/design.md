@@ -587,8 +587,8 @@ next bar). No named sections, one song, no fill tied to a section change.
    length in bars, the swing kept when the division changes, the bar-big layout without the beat, the battery reading
    unfrozen and its icon on LIVE, SNARE2 as the Red Zeppelin's Porkpie snare, and SLOOP 2.8.5's second flash part
    (the UC25HQ80). A song with a section's tempo or past 64 steps needs this firmware; the first autosave writes DRM2,
-   which 0.9.4 does not read. The panel drawing says 0.9.5. Not yet on the unit: items 11 to 13 and the swing each
-   carry their "verify on hardware" notes.
+   which 0.9.4 does not read. The panel drawing says 0.9.5. **Run on the first unit by the user the same day, 2026-11-11:
+   "everything working correctly"** (the items' "verify on hardware" lists stand as what was exercised).
 8. **More flash for the kit (proposed 2026-10-29, not started).** The user asked whether the samples could be
    compressed and loaded into RAM for better sound, since RAM is free and flash is not. Measured that day: the kit is
    IMA ADPCM, 4 bits a sample at 22 kHz (11 KB a second; 399 478 B, 36 s), played in place from the memory-mapped
@@ -685,7 +685,7 @@ next bar). No named sections, one song, no fill tied to a section change.
    Duplicate or Delete shows the renumbering at once). The user's own songs' notes were rewritten with "@n" the same
    day (their folder, outside this repo; a name standing for several sections, or a repeated name, resolved in the
    song's order).
-11. **A tempo per section (2026-11-07, done; to verify on the unit).** Asked: "support for different bpms per section".
+11. **A tempo per section (2026-11-07, done; on the unit with 0.9.5, 2026-11-11, the user: working).** Asked: "support for different bpms per section".
    A section may carry its own tempo; one without plays at the song's. JSON `"bpm"` on a section (40..240;
    `fm1_song.py`, the editor's `SNG.pack`, byte for byte the same). Packed (sng.c): one byte in the section's tail,
    flag bit 5 (`SNG_F_BPM`), after the break and before the note, so the device's copy, move and delete of sections
@@ -717,7 +717,7 @@ next bar). No named sections, one song, no fill tied to a section change.
    gp2song_test.py (the outro's own tempo from a change on its first bar; a change inside the chorus not a section's).
    Verify on hardware: a song with a bridge at another tempo, the switch on the bar, the knob's save, the label.
 
-12. **The fill at the section's end (CC 21 value 2; 2026-11-08, done; to verify on the unit).** Asked: "I feel the
+12. **The fill at the section's end (CC 21 value 2; 2026-11-08, done; on the unit with 0.9.5, 2026-11-11, the user: working).** Asked: "I feel the
    need to have an option to play the fill after section runs through, maybe CC 21 2". Since 2026-10-30 a fill bar of
    its own plays whole from the next bar line and the pattern restarts after it, which cuts a 4-bar phrase short
    when the fill is asked in its second bar. Value 2 places the fill bar on the section's last bars instead (as many
@@ -758,7 +758,7 @@ next bar). No named sections, one song, no fill tied to a section change.
    in the player), ui_pages_test.c (A#3). Verify on hardware: a 4-bar section with a fill bar, A#3 (or CC 21 2) in its
    first bar: the four bars through, the fill as a fifth, the pattern from its top; the same with an entry.
 
-13. **255 steps a pattern (2026-11-08, done; to verify on the unit).** Asked: "if a section contains no fills no
+13. **255 steps a pattern (2026-11-08, done; on the unit with 0.9.5, 2026-11-11, the user: working).** Asked: "if a section contains no fills no
    entry, not break can we make it longer than 64 steps? essentially having the combined steps of fills, entry, break
    pattern a bucket that can be distributed between each", then "let's make it possible to use 255 steps". Not a
    pool: `NSTEP` (core.h) went from 64 to 255, the song format's length byte, for each of the four buffers (the
