@@ -17,18 +17,6 @@ UI_SMALL static void fit(char *d, const char *src, const felucca_font_t *f, int3
         d[str_len(d) - 1u] = 0;
 }
 
-UI_SMALL static int32_t batt_level(void)                         /* ADC ch3 thresholds */
-{
-    return song.batt_raw >= 591 ? 3 : song.batt_raw >= 561 ? 2 : song.batt_raw >= 531 ? 1 : 0;
-}
-/* charging (a USB host powers us; there is no charger status line): bars fill 1, 2, 3
- * every 0.6 s, so the header is redrawn twice a second at most; else the level */
-UI_SMALL static int32_t batt_shown(void)
-{
-    if (usb.config && !usb.suspended)
-        return 1 + (int32_t)((fm1_ms / 600u) % 3u);
-    return batt_level();
-}
 
 /* top bar: transport, BPM, octave | USB, battery, CPU; messages replace it */
 UI_SMALL static void draw_head(void)
@@ -102,19 +90,7 @@ UI_SMALL static void draw_head(void)
         b[2] = 0;
         cv_text(158, 1, &FONT_S, b, C_HI);
     }
-    {   /* battery, 3 bars; USB when a host is there */
-        int32_t lvl = batt_shown(), k;
-        int32_t bx = 236 - 19;                          /* right edge (the CPU figure is in the console) */
-        cv_rect(bx, 4, 17, 1, C_GRAY);
-        cv_rect(bx, 12, 17, 1, C_GRAY);
-        cv_rect(bx, 4, 1, 9, C_GRAY);
-        cv_rect(bx + 16, 4, 1, 9, C_GRAY);
-        cv_rect(bx + 17, 6, 2, 5, C_GRAY);
-        for (k = 0; k < lvl; k++)
-            cv_rect(bx + 2 + k * 5, 6, 3, 5, lvl == 1 && batt_level() <= 1 ? C_WHITE : C_HI);
-        if (usb.config && !usb.suspended)
-            cv_text(bx - 28, 1, &FONT_S, "USB", C_DIM);
-    }
+    batt_icon(236 - 19, 4, 1);                      /* battery, 3 bars; USB when a host is there (the CPU figure is in the console) */
     cv_blit(0, Y_HEAD);
 }
 /* full redraw: the strips (head, columns, graph, foot) cover the rest, so only

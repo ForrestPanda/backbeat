@@ -49,6 +49,34 @@ UI_SMALL static void te_dial(int32_t cx, int32_t cy, int32_t r, int32_t ratio, u
         te_disc(cx, cy, 2, C_WHITE);
     }
 }
+UI_SMALL static int32_t batt_level(void)                         /* ADC ch3 thresholds */
+{
+    return song.batt_raw >= 591 ? 3 : song.batt_raw >= 561 ? 2 : song.batt_raw >= 531 ? 1 : 0;
+}
+/* charging (a USB host powers us; there is no charger status line): bars fill 1, 2, 3
+ * every 0.6 s, so the header is redrawn twice a second at most; else the level */
+UI_SMALL static int32_t batt_shown(void)
+{
+    if (usb.config && !usb.suspended)
+        return 1 + (int32_t)((fm1_ms / 600u) % 3u);
+    return batt_level();
+}
+/* the battery as 3 bars in a 19 x 9 frame at x, y, and "USB" to its left (at y - 3, the small font) while a host
+ * powers the unit; the parameter pages' header (ui_draw.c draw_head) and LIVE's (ui_drummer.c live_head) */
+UI_SMALL static void batt_icon(int32_t bx, int32_t by, int usb_text)
+{
+    int32_t lvl = batt_shown(), k;
+    cv_rect(bx, by, 17, 1, C_GRAY);
+    cv_rect(bx, by + 8, 17, 1, C_GRAY);
+    cv_rect(bx, by, 1, 9, C_GRAY);
+    cv_rect(bx + 16, by, 1, 9, C_GRAY);
+    cv_rect(bx + 17, by + 2, 2, 5, C_GRAY);
+    for (k = 0; k < lvl; k++)
+        cv_rect(bx + 2 + k * 5, by + 2, 3, 5, lvl == 1 && batt_level() <= 1 ? C_WHITE : C_HI);
+    if (usb_text && usb.config && !usb.suspended)
+        cv_text(bx - 28, by - 3, &FONT_S, "USB", C_DIM);
+}
+
 UI_SMALL static void te_play_icon(int32_t x, int32_t y, int playing)
 {
     int32_t i;

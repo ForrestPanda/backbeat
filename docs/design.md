@@ -1531,10 +1531,44 @@ enumerates and answers the identity SysEx. Over the console, 19 s after a boot, 
 `cpu_pct 0`, 21002 blocks skipped (15 s of the 19), `late 0`, the worst block 732 us; the audio halves, TIMER5's
 ticks and the UI frames advance at their rates between two `dbg` reads 2 s apart, no USB reset or suspend. So the
 core idles through `fm1_idle()` with the audio DMA, the scan and USB running, and the gate closes on the unit.
-**Still to verify** (the user): it plays, the panel, the TRS jack, the editor; the load back on a hit; the log over
+**The first run, 2026-11-06, and what it found.** An hour on the battery, stopped, the screen on, 0.9.4 verified: the
+log held 63 readings and every one was 625, the cable out or in. The reading never moved because SLOOP's smoothing,
+`raw += (b - raw) / 32` in whole counts (main.c, since SLOOP 2.0), adds nothing while a sample is within 31 counts of
+the reading: it freezes at the first sample after a boot and follows only a jump of 32 or more, then a count a frame
+while the gap stays that wide. So the screen's bars (thresholds 30 apart, ui_draw.c) and the log were both reading
+the boot value. Fixed: the IIR keeps an accumulator in 1/32 counts (`acc += b - acc / 32`, the reading `acc / 32`
+rounded); `status` prints `batt_last`, the last raw sample, next to `batt_raw`. The measurement starts again with
+this build on the unit; the run above is discarded. The user, asked where the battery shows (the parameter pages'
+header only, ui_draw.c draw_head; LIVE, SETUP and ABOUT have their own): "add it to the LIVE header", so the icon is
+`batt_icon` (ui_studio.c, with `batt_level` and `batt_shown`, moved there since ui_drummer.c comes before ui_draw.c in
+felucca.c) and LIVE's second row has it left of "bpm" (live_head, in its signature), USB to its left with a host.
+
+**Run 1 (2026-11-06, the fixed reading): stopped, the screen on, an hour.** `docs/battery/2026-11-06-run1-stopped-screen-on.csv`.
+The reading 619 with the cable in, 613 a minute after it went out, 604 after 61 minutes: -7.0 counts an hour over the
+whole hour, -5.7 over the last 50 minutes, -4.2 over the last 30: the first minutes are the surface charge going,
+the slope then settling. The gate was closed throughout. Against the icon's range (618 full, 531 the last bar's
+threshold, some 90 counts), a stopped unit with the screen on would run a day or so, if the curve stayed as flat:
+the cell's curve is not straight, so this is a first figure for the ranking only. Still to verify (the user): the load back on a hit; the log over
 a run. Found on the way: a setting changed in SETUP reached flash only when the menu closed (menu_close), so USB
 SERIAL set ON and the unit powered off from the menu lost it; now every change in the menu marks the settings for
 the save when quiet (ui_menu.c mi_set, `settings_later`; tests/ui_pages_test.c), the menu open or not.
+
+**Run 2 (2026-11-06): stopped, the screen dark, an hour.** `docs/battery/2026-11-06-run2-stopped-screen-dark.csv`.
+SETUP > SCREEN OFF = 1 MIN, the cable out: 613 with the cable in (the unit had charged a few minutes only, after run 1),
+606 the minute after, dark from minute 3, 602 at minute 61: -3.5 counts an hour over the 59 dark minutes, against
+run 1's -4.2 over its settled last half hour and -5.7 over its last 50. The screen is worth less than a count an
+hour, so a stopped unit lasts about as long dark as lit: the idle core and the codec draw the rest. (Run 2 started
+lower and later in the surface-charge decay than run 1, so part of the difference is that, not the screen.)
+Next: playing, the jack in an amp at its loudest.
+
+**Run 3, first try (2026-11-06): playing, the jack in an amp at its loudest, about 70 minutes: lost.** The unit was
+switched off before the cable went back in, and the log lives in RAM that a power-off clears (above). One number
+survives: `status` read 601 a minute after the next boot, the cable in. The cable in has so far pushed the reading
+up by 6 to 10 counts within a minute or two (619 against 613 in run 1, 613 against 606 in run 2), so the cell stood
+around 590 to 595 when the cable went in, down from run 2's 602: some 8 to 12 counts over 70 minutes, 7 to 10 an hour,
+two to three times the stopped rate. A guess from one reading, for the ranking only; the run is to be done again, the
+cable in before the switch goes off. If that rule bites again, the log could write a summary to flash every ten
+minutes.
 
 **Left (in the order the measurement should decide):** the backlight by PWM (PA2 is on or off and shared with the
 key matrix's /OE; the dark mode shows the scan can force it low for its reads, so a duty cycle from the 10 kHz tick

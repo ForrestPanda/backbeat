@@ -11,6 +11,11 @@ ABOUT; the editor shows it next to the connect button.
 - **SNARE2 is another drum now**: the Red Zeppelin kit's Porkpie snare (AVL Drumkits, Glen MacArthur, CC BY-SA 3.0, as
   the ride), brighter and with more wires. It was the same DRS Kit snare as SNARE, a softer layer on another take, so
   the two lanes sounded alike. The main snare, the rim and everything else stay as they were.
+- **The battery reading moves again.** The bars at the top of the screen showed the level read at power-on and
+  followed only a jump of 32 counts or more, a rounding flaw in SLOOP's smoothing since 2.0; the battery log had the
+  same frozen value. The smoothing keeps fractions now, and the console's `status` shows the last raw sample too.
+- **The battery on LIVE.** The three-bar icon sits left of BPM in LIVE's header, with USB beside it while a host
+  powers the unit. It was only on the parameter pages (FX, MASTER and the others).
 
 ### Website
 

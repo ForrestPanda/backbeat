@@ -478,7 +478,7 @@ UI_SMALL static void meter_str(char *b, uint32_t m)          /* "7/8" */
     fmt_int(b + str_len(b), (int32_t)meter_den(m));
 }
 
-/* the header: the song (its slot under it), the tempo big, the transport, the beat lights of the bar's meter (52 px;
+/* the header: the song (its slot under it), the tempo big, the battery, the transport, the beat lights of the bar's meter (52 px;
  * without the lights, the beat big below them, 40) */
 UI_SMALL static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, const char *songname, uint32_t lights)
 {
@@ -486,7 +486,8 @@ UI_SMALL static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, 
     char b[16];
     uint32_t k, sig = studio_hash((uint32_t)song.g[G_BPM] * 7u + playing * 3u + beat * 131u + beats * 1009u +
                                   (ui.bpm_t != 0) * 104729u + (uint32_t)(sng_cur + 1) * 37u + (uint32_t)mclk_on() * 11u +
-                                  lights * 15485863u, songname);
+                                  lights * 15485863u + (uint32_t)batt_shown() * 7777u +
+                                  (usb.config && !usb.suspended) * 99991u, songname);
     int32_t x, w, cw;
     if (!ui.force && sig == cache)
         return;
@@ -504,6 +505,7 @@ UI_SMALL static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, 
     x = 236 - text_w(&FONT_L, b);
     cv_text(x, 2, &FONT_L, b, ui.bpm_t ? C_WHITE : TE_G4);
     cv_text(x - 28, 22, &FONT_S, mclk_on() ? "ext" : "bpm", TE_G3);
+    batt_icon(x - 52, 23, 1);                        /* the battery left of "bpm" (asked 2026-11-06), USB while a host is there */
     te_play_icon(x - 24, 4, (int)playing);
     w = 232 / (int32_t)beats;                        /* the beats of the bar, as wide as the screen */
     cw = w - (beats > 8u ? 2 : 4);

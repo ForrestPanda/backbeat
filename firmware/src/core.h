@@ -169,6 +169,7 @@ typedef struct {
     uint32_t cpu_q8;             /* audio ISR load, 1/256 */
     uint32_t master_q12;
     int32_t batt_raw;            /* smoothed ADC ch3 (battery divider), 0 = not read yet */
+    int32_t batt_last;           /* the last sample of it, unsmoothed (the console's status) */
 } song_t;
 
 static track_t trk[NTRK];        /* the instrument: the drum track */

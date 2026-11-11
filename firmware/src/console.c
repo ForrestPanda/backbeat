@@ -205,6 +205,7 @@ UI_SMALL static void con_status(void)
     con_kv("drum_voices_peak", drums.vpeak);
     con_kv("drum_voices_full", (int32_t)drums.full);
     con_kv("batt_raw", song.batt_raw);
+    con_kv("batt_last", song.batt_last);
     con_kv("audio_gated", audio_gated);                 /* the audio gate (fx.c): 1 = the mix is being skipped */
     con_kv("gate_blocks", (int32_t)audio_gate_blocks);
     con_kv("screen_dark", fm1_dark);

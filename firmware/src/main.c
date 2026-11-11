@@ -215,10 +215,16 @@ UI_SMALL static void fm1_main(void)
         if ((uint32_t)(m - healthy_since) >= 30000u && bootguard.pending) {
             bootguard_clear(&bootguard);     /* 30 s of this boot, even if TIMER4 survived reset */
         }
-        {
-            int32_t b = fm1_adc_read(FM1_ADC_BATT);     /* battery: slow IIR */
-            if (b > 0)
-                song.batt_raw = song.batt_raw ? song.batt_raw + (b - song.batt_raw) / 32 : b;
+        {   /* battery: a slow IIR (1/32 a frame) kept in 1/32 counts. SLOOP's `raw += (b - raw) / 32` in whole
+             * counts added nothing while a sample was within 31 counts of the reading, so the reading froze at the
+             * first sample after a boot (found 2026-11-06: an hour on the battery logged one value) */
+            static int32_t acc;                         /* batt_raw * 32 */
+            int32_t b = fm1_adc_read(FM1_ADC_BATT);
+            if (b > 0) {
+                acc = acc ? acc + (b - (acc >> 5)) : b << 5;
+                song.batt_raw = (acc + 16) >> 5;
+                song.batt_last = b;
+            }
         }
         {
             int32_t a = fm1_adc_read(FM1_ADC_MASTER);
