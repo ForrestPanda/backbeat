@@ -1886,6 +1886,17 @@ arp, KBD HOLD, held notes, favourites, themes, the two cores, the browser's wasm
 MIDI notes), TUNE and DECAY per drum sound and the FX filter on the drums (flash and the song format), the OCT+
 per-step sheet (OCT+ is the mark here), REMOTE and DR MAP (the pedal map covers them), Match levels on the kit page.
 
+### SLOOP 2.8.5 (2026-11-11)
+
+The one commit after 2.8.4 (bac9c05, 2026-11-03), taken whole. **A second flash part.** FM-1 units sold from late
+2026, mostly on AliExpress, carry a UC25HQ80 flash (JEDEC 0xB36014) instead of the Puya P25Q80 (0x856014). The three
+checks that gate flash writes compared against the Puya id alone, so on such a unit projects stayed in RAM ("flash
+error") and the update loader refused to install. Now `hal/fm1_flash_id.h` holds both ids in `FL_JEDEC_OK()`, used by
+`persist_boot` (project.c), `recovery_main` (recovery.c) and `ldr_flash_known` (loader.c); the recovery test checks both
+ids pass, three others do not, and that the rescue reads the new id as flash_ok. Same size, same SPI NOR commands, so
+nothing else moves. **Verify on hardware:** no UC25HQ80 unit here; the first unit is a Puya part (0x856014, read
+through the mask ROM 2026-10-19) and is unaffected.
+
 ## Open questions
 
 - (answered 2026-10-19) The FM-1's TRS MIDI type: Type A (the Ampero over a plain stereo cable, milestone 7).

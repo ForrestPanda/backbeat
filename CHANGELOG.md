@@ -8,6 +8,10 @@ ABOUT; the editor shows it next to the connect button.
 
 ### Firmware
 
+- **Newer FM-1 units save and install.** Units sold from late 2026 (mostly on AliExpress) carry a UC25HQ80 flash chip
+  next to the Puya P25Q80 of the first batches. BackBeat, as SLOOP before 2.8.5, knew only the Puya: on a UC25HQ80 unit
+  songs stayed in RAM ("flash error") and the update loader refused to install. Both chips are known now (SLOOP
+  2.8.5's fix). Not yet tried on such a unit.
 - **SNARE2 is another drum now**: the Red Zeppelin kit's Porkpie snare (AVL Drumkits, Glen MacArthur, CC BY-SA 3.0, as
   the ride), brighter and with more wires. It was the same DRS Kit snare as SNARE, a softer layer on another take, so
   the two lanes sounded alike. The main snare, the rim and everything else stay as they were.
