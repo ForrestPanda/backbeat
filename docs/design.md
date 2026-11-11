@@ -581,6 +581,14 @@ next bar). No named sections, one song, no fill tied to a section change.
    NEXT and ENV for NOTES; the editor's Song tab with the notes and their preview, its player's state line. A song with
    notes needs this firmware. The panel drawing says 0.9.4. **Verified on the first unit by the user, 2026-11-06**: the
    kit's sound, KIT PAN, the notes and "@n" on LIVE and NOTES, OCT- / OCT+ as PREV / NEXT, ENV for NOTES.
+   **0.9.5 (2026-11-11)**: version `BACKBEAT 0.9.5`, the package `backbeat-0.9.5.fwsc`, identity `FM-1_988` still: a
+   tempo per section (item 11), the fill at the section's end on CC 21 value 2 and A#3 (item 12), 255 steps a pattern,
+   a fill bar, an entry and a break with the autosave as DRM2 and the editor protocol v12 (item 13), a section's
+   length in bars, the swing kept when the division changes, the bar-big layout without the beat, the battery reading
+   unfrozen and its icon on LIVE, SNARE2 as the Red Zeppelin's Porkpie snare, and SLOOP 2.8.5's second flash part
+   (the UC25HQ80). A song with a section's tempo or past 64 steps needs this firmware; the first autosave writes DRM2,
+   which 0.9.4 does not read. The panel drawing says 0.9.5. Not yet on the unit: items 11 to 13 and the swing each
+   carry their "verify on hardware" notes.
 8. **More flash for the kit (proposed 2026-10-29, not started).** The user asked whether the samples could be
    compressed and loaded into RAM for better sound, since RAM is free and flash is not. Measured that day: the kit is
    IMA ADPCM, 4 bits a sample at 22 kHz (11 KB a second; 399 478 B, 36 s), played in place from the memory-mapped
