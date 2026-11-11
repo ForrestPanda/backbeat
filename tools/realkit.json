@@ -20,7 +20,7 @@
   "OPENHAT": {"src": "bp", "key": 46, "layers": 2, "takes": 1, "len": 0.8, "min": 0.57, "rate": 32000, "gain": -8, "pan": -30},
   "PEDAL":   {"src": "bp", "key": 44, "layers": 2, "takes": 1, "len": 0.3, "min": 0.2, "rate": 32000, "gain": -10, "pan": -30},
   "RIM":     {"src": "drs", "key": 37, "layers": 2, "takes": 1, "len": 0.4, "min": 0.25, "rate": 32000, "gain": -6, "pan": 0, "mics": ["Snare_top"]},
-  "SNARE2":  {"src": "drs", "key": 38, "from_layer": 3, "take_from": 5, "layers": 1, "takes": 1, "len": 0.5, "min": 0.3, "rate": 22050, "gain": -2, "pan": 0},
+  "SNARE2":  {"src": "rz", "key": 38, "layers": 1, "takes": 1, "len": 0.5, "min": 0.3, "rate": 22050, "gain": -2, "pan": 0},
   "LOWTOM":  {"src": "mj", "key": 41, "layers": 2, "takes": 1, "len": 1.0, "min": 1.0, "rate": 22050, "gain": -2, "pan": 35},
   "HITOM":   {"src": "mj", "key": 48, "layers": 2, "takes": 1, "len": 0.9, "min": 0.9, "rate": 22050, "gain": -2.5, "pan": -12},
   "CRASH":   {"src": "mj", "key": 49, "layers": 1, "takes": 2, "len": 3.2, "min": 2.0, "rate": 32000, "gain": -6, "pan": -25},

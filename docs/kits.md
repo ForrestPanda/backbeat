@@ -44,7 +44,7 @@ built into the firmware (399 KB of the app's flash since 2026-10-22, the ride 2.
 | RIDE | Red Zeppelin 51 | 2 x 1 | 2.0 s (1.5 s until 2026-10-22: cut while it still rang, 16 dB under the hit) | 32000 |
 | KICK2 | Muldjord 35 | 1 | 0.45 s | 22050 |
 | SHAKER | CC0, VCSL's small shaker (a ride bell until 2026-10-21) | 1 | 0.3 s | 22050 |
-| SNARE2 | DRS Kit 38 (layer 3, another take) | 1 | 0.5 s | 22050 |
+| SNARE2 | Red Zeppelin 38, the Porkpie snare (since 2026-11-06; DRS Kit 38's layer 3 on another take before: the same drum as SNARE, the user: "the existing snares sound very similar") | 1 | 0.5 s | 22050 |
 | CLAP, COWBELL | CC0 | 1 | 0.35 s | 22050 |
 
 A hit's level picks the layer (hard, normal, soft, ghost; a MIDI note's velocity the nearest layer), the take is
@@ -58,7 +58,7 @@ ADPCM (the fit shortens the longest sounds above their floor); `--report` lists 
 `python3 tools/fm1_render.py song.json --kit 0`.
 
 Credit when sharing: "MuldjordKit by Lars Muldjord / DrumGizmo and the DRSKit's snare by DrumGizmo / DRS Drums, CC BY
-4.0; hi-hats from AVL Drumkits Black Pearl and the ride from Red Zeppelin, by Glen MacArthur, CC BY-SA 3.0; clap
+4.0; hi-hats from AVL Drumkits Black Pearl and the ride and second snare from Red Zeppelin, by Glen MacArthur, CC BY-SA 3.0; clap
 and cowbell from Versilian Studios, CC0".
 
 **The crash, and the hats left alone (2026-10-15, evening).** With the GM kits out of the image (`docs/design.md`),
@@ -129,6 +129,16 @@ Seen on the way, not changed: the DRS snare's hard layer is levelled by its take
 15 000 to 32 000 (the takes differ in crack more than in body), so in RMS over the first 50 ms the hard and normal
 layers are equally loud (about 5 000 against 5 100); the layering is heard as timbre more than as level. The
 `userkit_test` compares each layer's loudest take now, under the limiter (at LVL 100 a hard snare reaches `LIM_T`).
+
+**SNARE2 is the Red Zeppelin's Porkpie snare (2026-11-06).** The user: "the existing snares sound very similar, can we
+replace snare2 with a more 'snary' sample?" They were the same drum: SNARE2 was the DRS snare's third layer on another
+take. Seven snares were rendered on the lane through the engine for an A/B on one playhead (`build/host/compare-snare2.html`:
+an 8-bar test, SNARE on 2 and 4, then SNARE2 in its place, the two alone, SNARE2 ghosts): the DRS hardest layer, Muldjord's
+Tama snare, Red Zeppelin's Porkpie, Black Pearl's Pearl, Salamander's two (overheads only). Measured on the hit alone
+against its body (150 to 400 Hz): the wires (2 to 6 kHz) at -6.7 dB on the Porkpie against -11.6 on the old SNARE2 and
+-9.8 on SNARE, the air (6 to 11 kHz) -11.2 against -16.9, the ring to -20 dB 145 ms against 101; Black Pearl next
+(-9.7, -12.5, 104 ms), the rest darker or shorter. The user chose the Red Zeppelin. One take, 0.5 s, 22050 Hz, gain -2 dB,
+pan 0 as before; the kit 400 240 B of ADPCM (762 B more). The licence is one the kit already carries (the ride).
 
 ## Red Zeppelin (AVL Drumkits), the first rock kit tried
 

@@ -4,6 +4,19 @@ What changed in each version of BackBeat, the firmware and the website (the edit
 <https://forrestpanda.github.io/backbeat/>). The version is on the device's boot screen and in SETUP > SYSTEM >
 ABOUT; the editor shows it next to the connect button.
 
+## Unreleased
+
+### Firmware
+
+- **SNARE2 is another drum now**: the Red Zeppelin kit's Porkpie snare (AVL Drumkits, Glen MacArthur, CC BY-SA 3.0, as
+  the ride), brighter and with more wires. It was the same DRS Kit snare as SNARE, a softer layer on another take, so
+  the two lanes sounded alike. The main snare, the rim and everything else stay as they were.
+
+### Website
+
+- **The editor's player** has the new SNARE2 too.
+
+
 ## 0.9.4 (2026-11-06)
 
 ### Firmware
