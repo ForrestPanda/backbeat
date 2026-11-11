@@ -232,8 +232,22 @@ next bar). No named sections, one song, no fill tied to a section change.
    (`SED.setDiv`): the new grid's step j takes the old step at the same time, when there is one, else it is empty,
    so 1/16 to 1/8 keeps every other step, 1/8 to 1/16 puts an empty step between, 1/16 to 8T keeps the beats;
    the length in time is kept (rounded up to a step); ratchets, flams, marks and conditions go with their
-   steps, the fill bar, entry and break follow (the whole bars that fit); over 64 steps the change is refused
-   with a message. The firmware does the same for the SEQ layer's DIV knob, the PATTERN page's and the
+   steps, the fill bar, entry and break follow (the whole bars that fit); over NSTEP steps (255 since 2026-11-08) the change is refused
+   with a message. **The swing is kept** (2026-11-08; the user: a 1/8 solo's kick on the "and" of 3 under swing 67 "is
+   correctly swung", but on 16T, changed with the select, "the feeling is not the same"): the written rule put the
+   "and" on 16T's straight step 3 of 6, where no swing applies, while under swing 67 it sounded on the triplet, step
+   4. So a hit the swing moves (or that could land on a step the swing moves; one of the two, not both: between two
+   swung grids the written place rules) goes to the new grid's step nearest to where it sounds, when that is within
+   the swing's reach (the two shifts together) and nearer than its written place (`SED.redivMap`, seq.c `rediv_map`,
+   the same rule, times in 1/4800 beat; the shuffle's 8th-swing under 1/16 and 1/32 counted as the player and
+   `grid_den8` play it). A light swing keeps the written place (a 1/8 "and" under 33 or less is nearer the straight
+   16T step), no swing changes nothing; the steps stay in order, two hits on one step: the nearer sounding one. The
+   editor asks first when the swing places hits off their written step (`sedDivSwing`, with the hits that would go);
+   the device says DIV: SWING KEPT (`rediv_moved`). The save's re-grid of the packed blocks (`sng_pack_rediv`) and the
+   undo's return of the extras (ui.c `undo_swap`) use the same map. Tests: song_test.c (1/8 to 16T and back under 67, a
+   light swing, none, two hits for one "and", a shuffle's 16ths onto 8T), test_web.mjs (the same in `SED`, the
+   report, the strings). Verify on hardware: a 1/8 pattern with a hit on an "and" under swing 67, the SEQ layer's DIV
+   knob to 16T: the hit on the triplet step, the screen's DIV: SWING KEPT, EDIT + OCT- back. The firmware does the same for the SEQ layer's DIV knob, the PATTERN page's and the
    editor's SET (seq.c `pattern_rediv`: the steps, nudges, locks, conditions, the song's marks and the
    section's fill bar in RAM; the save re-grids the packed fill bar, entry and break, sng.c `sng_pack_rediv`;
    EDIT + OCT- undoes it: the snapshot's steps back and the extras re-gridded with them, `rediv_extras`).
@@ -1771,7 +1785,7 @@ held on LIVE, a song through the pedal, a restore of an older backup.
 
 **2026-10-29: the division re-grids the pattern.** Milestone 5b's note above. On the unit, to verify by hand: the
 SEQ layer's DIV knob on a section with hits (the hits stay on their beats, the length halves or doubles, the
-message over 64 steps), EDIT + OCT- after it, SAVE held after it (the section's fill bar and entry still right
+message over 64 steps, 255 since 2026-11-08; since 2026-11-08 also under swing 67 to 16T: an "and" on the triplet step and DIV: SWING KEPT), EDIT + OCT- after it, SAVE held after it (the section's fill bar and entry still right
 when the song comes back), and the editor's PATTERN page DIV with the drum grid open (the grid re-reads).
 
 **2026-10-29: drafting songs on the device (milestone 6e, all three steps).** The HIT knob, the song's header

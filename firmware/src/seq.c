@@ -921,31 +921,97 @@ static char sng_ui_next[13];                       /* the section the pedal aske
  * nudges, locks and conditions, the song's marks (fonly, fno, flam) and the section's fill bar go with their steps (its
  * entry and break at the save: sng.c sng_pack_rediv, the same rule on the packed steps). A pattern that would not fit
  * (over NSTEP steps) keeps its division: pattern_rediv_ok says so first, the UI tells (ui.c pattern_div_set). A step is
- * 1/48 of a beat or more (div_units), so the times compare as whole numbers. */
+ * 1/48 of a beat or more (div_units), so the times compare as whole numbers.
+ * The swing is kept (2026-11-08; the user: a 1/8 solo's kick on the "and" of 3 under swing 67 lost its feel on 16T).
+ * The swing moves the odd steps of a straight grid, so a hit's written time is not where it sounds: a 1/8 "and" under
+ * swing 67 sounds on the triplet, which 16T has a step for (step 4 of 6, where the written rule put it on the straight
+ * step 3), and a 16T hit on the triplet has no 1/8 step at its written time, though the swung "and" sounds there. So a
+ * hit that the swing moves, or that could land on a step the swing moves (one of the two, not both: between two swung
+ * grids the written place rules), goes to the new grid's step nearest to where it sounds when that is within the
+ * swing's reach (the two shifts together) and nearer than its written place (rediv_map). The light swings keep the
+ * written place (a 1/8 "and" under swing 33 or less is nearer the straight 16T step), no swing changes nothing. */
 static uint32_t div_u48(uint32_t div) { return div_units(div % NDIV_STEP) / (BEAT_U / 48u); }   /* a step, in 1/48 beat */
 static uint32_t rediv_len(uint32_t n, uint32_t uo, uint32_t un) { return (n * uo + un - 1u) / un; }   /* n steps of uo at un */
-/* the old step (uo units, n of them) at the new step j (un units): its index, or -1 (between old steps, or past them) */
-static int32_t rediv_src(uint32_t j, uint32_t n, uint32_t uo, uint32_t un)
+#define RD_F 100u                                /* a 1/48 beat in the re-grid's time (1/4800 beat: the swing's shift,
+                                                  * pct x step / 200, is whole in it for every step inside a beat) */
+#define RD_NONE 0xFFu                            /* no old step (NSTEP is 255: 255 never names one) */
+static uint8_t rediv_src_of[NSTEP];              /* rediv_map: the old step at each step of the new grid, or RD_NONE */
+static uint8_t rediv_moved;                      /* hits the swing placed off their written step (rediv_dsteps counts;
+                                                  * pattern_rediv clears; ui.c pattern_div_set says so) */
+static uint32_t trk_swing(const track_t *t) { return (uint32_t)clamp(t->p[P_SSWING] + song.g[G_SWING], 0, 100); }
+/* step i of div's grid as it sounds under swing pct, in RD_F units (trk_grid's swing: the odd steps of a straight grid
+ * pct x step / 200 late, grid_swing; under a song's shuffle the 8ths of a 1/16 or 1/32 grid swing so and the steps
+ * inside each share its length, grid_den8); *nom: its written time */
+static uint32_t rediv_onset(uint32_t div, uint32_t i, uint32_t pct, uint32_t *nom)
 {
-    uint32_t t = j * un;
-    return t % uo == 0u && t / uo < n ? (int32_t)(t / uo) : -1;
+    uint32_t u = div_u48(div) * RD_F, t = i * u;
+    *nom = t;
+    if (!pct || !swings(div))
+        return t;
+    if (seq_swing8 && (div == 2u || div == 3u)) {
+        uint32_t k = DIV_DEN[div] / 2u, u8 = 24u * RD_F, sw8 = pct * u8 / 200u, e = i / k, s = i % k;
+        return e * u8 + (e & 1u ? sw8 + s * ((u8 - sw8) / k) : s * ((u8 + sw8) / k));
+    }
+    return t + (i & 1u ? pct * u / 200u : 0u);
 }
-/* n steps (and the flams beside them, if given) of uo units re-gridded in place at un units, m steps (m <= NSTEP);
- * in place: a coarser grid reads at or past where it writes (j up), a finer one at or before (j down) */
+static uint32_t rediv_dist(uint32_t a, uint32_t b) { return a > b ? a - b : b - a; }
+/* the map of n steps at od onto m at nd (rediv_len, or the bars that fit) under swing pct, into rediv_src_of: a hit's
+ * written place (j x un = i x uo), or the step nearest to where it sounds when the swing moves one of the two and
+ * that is within the swing's reach and nearer (above). The map keeps the steps in order (two hits on one step: the
+ * nearer sounding one; a hit out of order: dropped) and, for the in-place copies (rediv_dsteps), reads at or past
+ * where it writes on a coarser grid, at or before on a finer one */
+static void rediv_map(uint32_t n, uint32_t m, uint32_t od, uint32_t nd, uint32_t pct)
+{
+    static uint16_t err[NSTEP];                  /* (the error of the hit mapped to each new step) */
+    uint32_t uo = div_u48(od), un = div_u48(nd), i, last = RD_NONE;
+    memset(rediv_src_of, RD_NONE, sizeof rediv_src_of);
+    for (i = 0; i < n; i++) {
+        uint32_t no, po = rediv_onset(od, i, pct, &no), so = rediv_dist(po, no), t = i * uo;
+        uint32_t best = RD_NONE, berr = 0, jc = po / (un * RD_F), j;
+        if (t % un == 0u && t / un < m) {         /* its written place */
+            uint32_t nn;
+            best = t / un;
+            berr = rediv_dist(rediv_onset(nd, best, pct, &nn), po);
+        }
+        for (j = jc > 0u ? jc - 1u : 0u; j <= jc + 1u && j < m; j++) {   /* the steps around where it sounds */
+            uint32_t nn, pn = rediv_onset(nd, j, pct, &nn), sn = rediv_dist(pn, nn), e = rediv_dist(pn, po);
+            if (!so == !sn || e > so + sn)        /* the swing moves neither or both: the written place rules; or it is
+                                                   * out of the swing's reach */
+                continue;
+            if (best == RD_NONE || e < berr) {
+                best = j;
+                berr = e;
+            }
+        }
+        if (best == RD_NONE || (un >= uo ? best > i : best < i))
+            continue;
+        if (last != RD_NONE && best <= last && (best < last || berr >= err[last]))
+            continue;
+        rediv_src_of[best] = (uint8_t)i;
+        err[best] = (uint16_t)berr;
+        last = best;
+    }
+}
+/* n steps (and the flams beside them, if given) of uo units re-gridded in place at un units, m steps (m <= NSTEP), as
+ * rediv_src_of says (the caller's rediv_map); in place: a coarser grid reads at or past where it writes (j up), a finer
+ * one at or before (j down) */
 static void rediv_dsteps(dstep_t *d, uint16_t *flam, uint32_t n, uint32_t m, uint32_t uo, uint32_t un)
 {
     uint32_t k;
     for (k = 0; k < m; k++) {
-        uint32_t j = un >= uo ? k : m - 1u - k;
-        int32_t i = rediv_src(j, n, uo, un);
-        if (i < 0) {
+        uint32_t j = un >= uo ? k : m - 1u - k, i = rediv_src_of[j];
+        if (i == RD_NONE) {
             memset(&d[j], 0, sizeof(dstep_t));
             if (flam)
                 flam[j] = 0;
-        } else if ((uint32_t)i != j) {
-            d[j] = d[i];
-            if (flam)
-                flam[j] = flam[i];
+        } else {
+            if (i * uo != j * un && dstep_mask(&d[i]))   /* (off its written time: the swing placed it) */
+                rediv_moved++;
+            if (i != j) {
+                d[j] = d[i];
+                if (flam)
+                    flam[j] = flam[i];
+            }
         }
     }
     for (k = m; k < n; k++) {                        /* shorter: the steps past the end cleared */
@@ -967,9 +1033,9 @@ static void fb_phrase(uint32_t div, uint32_t m)
     fb_bar = (uint8_t)bs;
     fb_bars = (uint8_t)(bs ? (fb_len + bs - 1u) / bs : 0u);
 }
-static void fb_rediv(uint32_t uo, uint32_t un, uint32_t div)   /* the section's fill bar follows the pattern's division */
+static void fb_rediv(uint32_t od, uint32_t nd)   /* the section's fill bar follows the pattern's division (od to nd) */
 {
-    uint32_t m;
+    uint32_t uo = div_u48(od), un = div_u48(nd), m;
     if (!fb_len)
         return;
     m = rediv_len(fb_len, uo, un);
@@ -977,30 +1043,31 @@ static void fb_rediv(uint32_t uo, uint32_t un, uint32_t div)   /* the section's 
         uint32_t b = 12u * meter_b16(clk_meter), bs = b % un == 0u ? b / un : 0u;
         m = bs && bs <= NSTEP ? NSTEP - NSTEP % bs : NSTEP;
     }
+    rediv_map(fb_len, m, od, nd, trk_swing(TDRUM));
     rediv_dsteps(fb_dstep, fb_flam, fb_len, m, uo, un);
     fb_len = (uint8_t)m;
-    fb_phrase(div, clk_meter);
+    fb_phrase(nd, clk_meter);
 }
 #else
-static void fb_rediv(uint32_t uo, uint32_t un, uint32_t div) { (void)uo; (void)un; (void)div; }
+static void fb_rediv(uint32_t od, uint32_t nd) { (void)od; (void)nd; }
 #endif
 /* what goes beside the steps (the nudges, the conditions, the song's marks, the locks) re-gridded as rediv_dsteps does
- * the steps: n steps of uo units onto m of un (the IRQ off: the caller's). Also ui.c undo_swap, after the steps and the
- * length swapped with the snapshot (taken on the other grid): the snapshot's steps come back, these follow the grid */
+ * the steps (rediv_src_of, the caller's rediv_map): n steps of uo units onto m of un (the IRQ off: the caller's). Also
+ * ui.c undo_swap, after the steps and the length swapped with the snapshot (taken on the other grid): the snapshot's
+ * steps come back, these follow the grid */
 static void rediv_extras(track_t *t, uint32_t n, uint32_t m, uint32_t uo, uint32_t un)
 {
     uint32_t k;
     for (k = 0; k < m; k++) {
-        uint32_t j = un >= uo ? k : m - 1u - k;
-        int32_t i = rediv_src(j, n, uo, un);
-        if (i < 0) {
+        uint32_t j = un >= uo ? k : m - 1u - k, i = rediv_src_of[j];
+        if (i == RD_NONE) {
             t->micro[j] = 0;
             step_fill_set(t, j, FC_NORM);
             drum_marks_clear(j);
-        } else if ((uint32_t)i != j) {
-            t->micro[j] = t->micro[(uint32_t)i];
-            step_fill_set(t, j, step_fill(t, (uint32_t)i));
-            drum_marks_move(j, (uint32_t)i);
+        } else if (i != j) {
+            t->micro[j] = t->micro[i];
+            step_fill_set(t, j, step_fill(t, i));
+            drum_marks_move(j, i);
         }
     }
     for (k = m; k < n; k++) {
@@ -1010,10 +1077,16 @@ static void rediv_extras(track_t *t, uint32_t n, uint32_t m, uint32_t uo, uint32
     }
     for (k = 0; k < NLOCK; k++) {                    /* a lock goes with its step, or goes (one past the old length would
                                                       * come alive on a longer grid: it goes too) */
-        uint32_t s = t->lock[k].step, u = s * uo;
+        uint32_t s = t->lock[k].step, j;
         if (s == LOCK_FREE)
             continue;
-        t->lock[k].step = s < n ? (u % un || u / un >= m ? LOCK_FREE : (uint8_t)(u / un)) : s < m ? LOCK_FREE : (uint8_t)s;
+        if (s >= n) {
+            t->lock[k].step = s < m ? LOCK_FREE : (uint8_t)s;
+            continue;
+        }
+        for (j = 0; j < m && rediv_src_of[j] != s; j++)
+            ;
+        t->lock[k].step = j < m ? (uint8_t)j : LOCK_FREE;
     }
 }
 /* the pattern of t onto the grid of div (the IRQ off meanwhile); 0: it would not fit, nothing changed. The caller marks
@@ -1029,11 +1102,13 @@ static int pattern_rediv(track_t *t, uint32_t div)
     if (!m || m > NSTEP)
         return 0;
     fm1_irq_off();
+    rediv_moved = 0;
+    rediv_map(len, m, old, div, trk_swing(t));
     rediv_dsteps(t->dstep, 0, len, m, uo, un);
     rediv_extras(t, len, m, uo, un);
     t->p[P_SLEN] = (int16_t)m;
     t->p[P_SDIV] = (int16_t)div;
-    fb_rediv(uo, un, div);
+    fb_rediv(old, div);
     fm1_irq_on();
     return 1;
 }

@@ -46,6 +46,12 @@ ABOUT; the editor shows it next to the connect button.
 - **Editor protocol v12.** Step numbers past 127 do not fit a SysEx byte, so the step commands carry two bytes
   (`web/EDITOR_PROTOCOL.md`). The website's editor speaks v12 only: it refuses a unit on 0.9.4 or earlier after
   INFO, as it refused SLOOP, until the unit is updated.
+- **The swing is kept when the division changes.** A hit kept its written place on the beat, but the swing moves
+  the off-beats of a straight grid: a 1/8 "and" under swing 67 sounds on the triplet, and on 16T it landed on the
+  straight step 3 of 6, where no swing applies, so the feel changed. Now a hit the swing moves goes to the new grid's
+  step nearest to where it sounds, when the swing brings one within reach (16T's triplet step; and back to 1/8, the
+  "and" again); a light swing or none changes nothing. The screen says DIV: SWING KEPT when it happens. The fill bar,
+  entry and break follow the same rule, at the save too.
 
 ### Website
 
@@ -64,6 +70,10 @@ ABOUT; the editor shows it next to the connect button.
 - **The file's bars are back in the section editor.** Since the bars select of 2026-11-08 the strip of a loaded
   Guitar Pro or MIDI file's bars (pick them as the pattern, the fill, the entry or the break) had vanished: the two
   shared an element id, and the strip's buttons were drawn inside the select. The test now checks every id is unique.
+- **The division change keeps the swing** in the section editor, as the device does: under the song's swing a hit
+  the swing moves lands on the new grid's step nearest to where it sounds (a 1/8 "and" under swing 67 on 16T's
+  triplet step, not the straight one). A dialog says how many hits that places off their written step before the
+  change, with the hits that would fall between the steps, if any.
 - **A tempo per section** in the section editor (a BPM box next to the time, the song's tempo as its placeholder), in
   the player (the switch as the section lands, the BPM label amber while the tempo is the section's own, the tiles
   showing it) and in `fm1_song.py`; the Guitar Pro and MIDI importers take a tempo change on a section's first bar as

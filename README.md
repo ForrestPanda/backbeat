@@ -173,8 +173,8 @@ tempo and START / STOP, as the FM-1 does with SETUP > PEDAL > MIDI CLOCK IN; **C
 (a Bluetooth MIDI pedal or interface), so a phone
 with nothing installed can be the player: Chrome or Edge on Android, Windows or macOS, from https or
 localhost (Chrome on Linux keeps Web Bluetooth behind a flag; Firefox and Safari on the iPhone have none). Its **Section editor** card edits a song by hand: names, order,
-length (at most 64 steps, 4 bars at 1/16: a section is a groove that repeats, `docs/design.md` says why), the division (changing it keeps the hits in their place on the
-beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between, the fill bar, entry and break follow; a pattern that would pass 64 steps is refused), the time signature, the outro, split and merge, the hits on a grid with levels, ratchets, flams (a grace note
+length in bars (at most 255 steps, 15 bars at 1/16; 64 steps until 2026-11-08, and `docs/design.md` says why a short groove that repeats is still the better section), the division (changing it keeps the hits in their place on the
+beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between, the fill bar, entry and break follow; under the song's swing a hit the swing moves lands where it sounds, a 1/8 "and" under a triplet swing on 16T's triplet step, and the editor says so first; a pattern that would pass 255 steps is refused), the time signature, the outro, split and merge, the hits on a grid with levels, ratchets, flams (a grace note
 before the hit) and fill marks, the fill
 conditions, the section's fill of its own (the Fill select, 1 to 4 extra bars, played whole from the next bar line; started as the pattern's last bars the way the marks played them, and the marks go: a section has embedded marks or a fill of its own, never both, and the editor keeps them apart, the mark pens off with a fill of its own, a file with both warned with a **Drop the marks** button;
 **Merge into the pattern** folds it back into those bars as fill marks and removes it: a hit in both plays always, one in the pattern only is marked
@@ -314,7 +314,7 @@ The panel in one picture (`tools/gen_panel.py`; also the web editor's Cheat shee
 | SEL | **SONGS**, your songs and the grooves (on SONGS: the other page, USER / FACTORY; on SECTIONS: the section copied after itself) | |
 | SAVE | nothing | on LIVE, SECTIONS or EDIT: the section into its song, with the song's tempo, kit, swing, drum level and reverb as the knobs left them |
 | EDIT | **SECTIONS**, the song's shape (from SECTIONS: the grid); on SONGS: that row's song and its SECTIONS, or on an empty slot a new song | SLOOP's erase / mute / undo layer |
-| SEQ | **EDIT**, the drum grid of the section playing (again: GRID / KIT) | the step layer, as SLOOP; its DIV knob (and the PATTERN page's) keeps the hits in their place on the beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between, the length follows (nudges, locks, conditions, marks and the section's fill bar with it; EDIT + OCT- undoes it; over 64 steps it is refused and the screen says so) |
+| SEQ | **EDIT**, the drum grid of the section playing (again: GRID / KIT) | the step layer, as SLOOP; its DIV knob (and the PATTERN page's) keeps the hits in their place on the beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between, the length follows (nudges, locks, conditions, marks and the section's fill bar with it; under the swing a hit the swing moves lands where it sounds, the screen says DIV: SWING KEPT; EDIT + OCT- undoes it; over 255 steps it is refused and the screen says so) |
 | GLO | **SETUP** (again, HOME or OCT-: closed) | |
 | LFO | on SONGS: FACTORY (ENV: USER); on LIVE with no song: the other page of its keys; with a song: nothing | |
 | PLAY | start the section cued (the count-in first), or stop | |

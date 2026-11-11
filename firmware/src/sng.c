@@ -442,15 +442,15 @@ UI_SMALL static void sng_lib_refresh(void)                /* seq.c sng_lib: ever
 }
 
 /* ---- a section edited on the device (EDIT, SAVE held) back into its song: the reverse of sng_apply */
-/* n packed steps at q (a block's: the fill bar's, the entry's, the break's) re-gridded from uo to un units (1/48 beat)
- * into out (room bytes): the count byte, then the steps; the section's division changed on the device (seq.c
- * pattern_rediv: the pattern's own steps were re-gridded in RAM, the same rule: the new grid's step j takes the old
- * step at its time, else it is empty); the whole bars that fit (bar: a bar's steps at un, 0 when not whole). The bytes
- * written, 0: no room */
-UI_SMALL static uint32_t sng_pack_rediv(const uint8_t *q, uint32_t n, uint32_t uo, uint32_t un, uint32_t bar, uint8_t *out, uint32_t room)
+/* n packed steps at q (a block's: the fill bar's, the entry's, the break's) re-gridded from division od to nd into out
+ * (room bytes): the count byte, then the steps; the section's division changed on the device (seq.c pattern_rediv: the
+ * pattern's own steps were re-gridded in RAM, the same rule, rediv_map: the new grid's step j takes the old step at its
+ * written time, or the one the swing has sounding there, else it is empty); the whole bars that fit (bar: a bar's
+ * steps at nd, 0 when not whole). The bytes written, 0: no room */
+UI_SMALL static uint32_t sng_pack_rediv(const uint8_t *q, uint32_t n, uint32_t od, uint32_t nd, uint32_t bar, uint8_t *out, uint32_t room)
 {
     uint16_t off[NSTEP];
-    uint32_t i, j, m = rediv_len(n, uo, un), w = 1;
+    uint32_t uo = div_u48(od), un = div_u48(nd), i, j, m = rediv_len(n, uo, un), w = 1;
     if (!n || n > NSTEP || !room)
         return 0;
     for (i = 0, j = 0; i < n; i++) {             /* each old step's offset */
@@ -459,12 +459,13 @@ UI_SMALL static uint32_t sng_pack_rediv(const uint8_t *q, uint32_t n, uint32_t u
     }
     if (m > NSTEP)
         m = bar && bar <= NSTEP ? NSTEP - NSTEP % bar : NSTEP;
+    rediv_map(n, m, od, nd, trk_swing(TDRUM));
     for (j = 0; j < m; j++) {
-        int32_t s = rediv_src(j, n, uo, un);
-        uint32_t sz = s >= 0 ? 2u + (uint32_t)__builtin_popcount(sng_u16(q + off[s])) : 2u;
+        uint32_t s = rediv_src_of[j];
+        uint32_t sz = s != RD_NONE ? 2u + (uint32_t)__builtin_popcount(sng_u16(q + off[s])) : 2u;
         if (w + sz > room)
             return 0;
-        if (s >= 0)
+        if (s != RD_NONE)
             memcpy(out + w, q + off[s], sz);
         else
             out[w] = out[w + 1] = 0;
@@ -563,12 +564,12 @@ UI_SMALL static uint32_t sng_pack_section(uint32_t k, uint8_t *out, uint32_t roo
                 memcpy(out + n, s + from, size - from);
                 n += size - from;
             } else {                             /* the division changed on the device: each block re-gridded */
-                uint32_t f, uo = div_u48(odiv), un = div_u48(ndiv), b = 12u * meter_b16(s[15]), bar = b % un ? 0u : b / un;
+                uint32_t f, un = div_u48(ndiv), b = 12u * meter_b16(s[15]), bar = b % un ? 0u : b / un;
                 for (f = SNG_F_FILLBAR; f <= SNG_F_BREAK; f <<= 1) {
                     uint32_t w;
                     if (!(s[14] & f))
                         continue;
-                    w = sng_pack_rediv(s + from + 1u, s[from], uo, un, bar, out + n, room - n);
+                    w = sng_pack_rediv(s + from + 1u, s[from], odiv, ndiv, bar, out + n, room - n);
                     if (!w)
                         return 0;
                     n += w;

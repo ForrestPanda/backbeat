@@ -47,5 +47,11 @@ drums_mix 6492
 # (x16). The host CPU check (regress.c, callgrind) says what it costs a sample: mix/idle 420, mix/idle_drums 690 -> 700
 # (+1.4 %), drums/busy 2428 -> 2430, every entry in budget. UI_SMALL (the same day) changes nothing here: the audio
 # path is not marked, and mix_block counts the same with and without it.
-mix_block 82466
+# The swing kept across the grids (2026-11-08, seq.c rediv_map): mix_block 22760 (as the 255-step build of the same
+# day laid it out, -72 % against the budget) -> 95378 (+16 %). No audio code changed: the compiler now puts the
+# step-fire path after bar_in_doubt / step_plays (the entry and break's steps) at the function's end with a jump back
+# into the middle, which the count reads as a 7000-byte loop around nearly everything (two levels more, x16). The
+# host CPU check says the same work: mix/idle 424, mix/idle_drums 705, drums/busy 3053, drums/busy_real 2081, every
+# entry as before the change.
+mix_block 95378
 fm1_alnk0_irq 30

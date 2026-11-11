@@ -1184,6 +1184,67 @@ int main(int argc, char **argv)
         TDRUM->p[P_SLEN] = 128;                      /* a pattern of 128 steps of 1/16 (8 bars) onto 1/32: 256, over 255: refused */
         assert(!pattern_rediv_ok(TDRUM, 3) && pattern_rediv_ok(TDRUM, 1) && TDRUM->p[P_SLEN] == 128);
         TDRUM->p[P_SLEN] = 32;
+
+        /* the swing kept across the grids (2026-11-08, seq.c rediv_map; the user: a 1/8 solo's kick on the "and" of 3
+         * under swing 67 lost its feel on 16T, where the written rule put it on the straight step 3 of 6): a hit the
+         * swing moves goes to the new grid's step nearest to where it sounds, the triplet step 4; its nudge, condition,
+         * lock and the fill bar's hit with it; back to 1/8 it is the "and" again. A light swing (20): the written place.
+         * No swing: as before. Two 16T hits, step 3 and the triplet, onto a swung 1/8: the triplet, which sounds there,
+         * takes the "and". A song's shuffle under 1/16 (the 16ths sound as triplets, the fourth of a beat at 5/6) onto
+         * 8T: the first three of each beat keep their sound, the fourth goes */
+        {
+            int16_t sw0 = song.g[G_SWING];
+            uint32_t k;
+            memset(TDRUM->dstep, 0, sizeof TDRUM->dstep); memset(TDRUM->micro, 0, sizeof TDRUM->micro); memset(TDRUM->fill, 0, sizeof TDRUM->fill);
+            for (k = 0; k < NLOCK; k++) TDRUM->lock[k].step = LOCK_FREE;
+            drum_fill_masks_clear();
+            TDRUM->p[P_SDIV] = 1; TDRUM->p[P_SLEN] = 8;    /* a bar of 1/8: the kick on 1, 3 and the "and" of 3, the snare on 2, 4 */
+            dstep_set(&TDRUM->dstep[0], 0, LV_NORM, 0); dstep_set(&TDRUM->dstep[4], 0, LV_NORM, 0); dstep_set(&TDRUM->dstep[5], 0, LV_HARD, 2);
+            dstep_set(&TDRUM->dstep[2], 1, LV_NORM, 0); dstep_set(&TDRUM->dstep[6], 1, LV_NORM, 0);
+            TDRUM->micro[5] = 3; step_fill_set(TDRUM, 5, FC_FILL); fm1_irq_off(); lock_set(TDRUM, 5, P_TFLT, 20); fm1_irq_on();
+            memset(fb_dstep, 0, sizeof fb_dstep); fb_len = 8; fb_phrase(1, 0); dstep_set(&fb_dstep[5], 0, LV_NORM, 0); dstep_set(&fb_dstep[4], 1, LV_NORM, 0);
+            song.g[G_SWING] = 67;
+            assert(pattern_rediv(TDRUM, 5) && TDRUM->p[P_SLEN] == 24 && lane_on(&TDRUM->dstep[0], 0) && lane_on(&TDRUM->dstep[12], 0) &&
+                   lane_on(&TDRUM->dstep[16], 0) && !lane_on(&TDRUM->dstep[15], 0) && dstep_lvl(&TDRUM->dstep[16], 0) == LV_HARD && dstep_rat(&TDRUM->dstep[16], 0) == 2u &&
+                   lane_on(&TDRUM->dstep[6], 1) && lane_on(&TDRUM->dstep[18], 1) && rediv_moved == 2u);   /* (the fill bar's kick moved too) */
+            assert(TDRUM->micro[16] == 3 && !TDRUM->micro[15] && step_fill(TDRUM, 16) == FC_FILL && step_fill(TDRUM, 15) == FC_NORM &&
+                   lock_find(TDRUM, 16, P_TFLT, 0) >= 0 && lock_find(TDRUM, 15, P_TFLT, 0) < 0 &&
+                   fb_len == 24u && fb_bar == 24u && lane_on(&fb_dstep[16], 0) && !lane_on(&fb_dstep[15], 0) && lane_on(&fb_dstep[12], 1));
+            assert(pattern_rediv(TDRUM, 1) && TDRUM->p[P_SLEN] == 8 && lane_on(&TDRUM->dstep[0], 0) && lane_on(&TDRUM->dstep[4], 0) && lane_on(&TDRUM->dstep[5], 0) &&
+                   dstep_rat(&TDRUM->dstep[5], 0) == 2u && lane_on(&TDRUM->dstep[2], 1) && lane_on(&TDRUM->dstep[6], 1) && !lane_on(&TDRUM->dstep[3], 0) &&
+                   TDRUM->micro[5] == 3 && step_fill(TDRUM, 5) == FC_FILL && lock_find(TDRUM, 5, P_TFLT, 0) >= 0 && fb_len == 8u && lane_on(&fb_dstep[5], 0) &&
+                   lane_on(&fb_dstep[4], 1) && rediv_moved == 2u);
+            song.g[G_SWING] = 20;
+            assert(pattern_rediv(TDRUM, 5) && lane_on(&TDRUM->dstep[15], 0) && !lane_on(&TDRUM->dstep[16], 0) && TDRUM->micro[15] == 3 && rediv_moved == 0u &&
+                   pattern_rediv(TDRUM, 1) && lane_on(&TDRUM->dstep[5], 0) && TDRUM->micro[5] == 3);
+            song.g[G_SWING] = 0;
+            assert(pattern_rediv(TDRUM, 5) && lane_on(&TDRUM->dstep[15], 0) && rediv_moved == 0u && pattern_rediv(TDRUM, 1) && lane_on(&TDRUM->dstep[5], 0));
+            song.g[G_SWING] = 67;
+            assert(pattern_rediv(TDRUM, 5) && lane_on(&TDRUM->dstep[16], 0));
+            dstep_set(&TDRUM->dstep[15], 0, LV_GHOST, 0);    /* the straight step 3 too */
+            assert(pattern_rediv(TDRUM, 1) && lane_on(&TDRUM->dstep[5], 0) && dstep_lvl(&TDRUM->dstep[5], 0) == LV_HARD && !lane_on(&TDRUM->dstep[3], 0) &&
+                   !lane_on(&TDRUM->dstep[6], 0));   /* the triplet's hit took the "and", the ghost on step 3 went */
+            memset(TDRUM->dstep, 0, sizeof TDRUM->dstep); memset(TDRUM->micro, 0, sizeof TDRUM->micro); memset(TDRUM->fill, 0, sizeof TDRUM->fill);
+            for (k = 0; k < NLOCK; k++) TDRUM->lock[k].step = LOCK_FREE;
+            fb_len = 0;
+            TDRUM->p[P_SDIV] = 2; TDRUM->p[P_SLEN] = 8;    /* two beats of 16ths on the hat under a shuffle */
+            for (k = 0; k < 8; k++) dstep_set(&TDRUM->dstep[k], 4, LV_NORM, 0);
+            seq_swing8 = 1;
+            assert(pattern_rediv(TDRUM, 4) && TDRUM->p[P_SLEN] == 6 && lane_on(&TDRUM->dstep[0], 4) && lane_on(&TDRUM->dstep[1], 4) && lane_on(&TDRUM->dstep[2], 4) &&
+                   lane_on(&TDRUM->dstep[3], 4) && lane_on(&TDRUM->dstep[4], 4) && lane_on(&TDRUM->dstep[5], 4) && rediv_moved == 4u);
+            assert(pattern_rediv(TDRUM, 2) && TDRUM->p[P_SLEN] == 8 && lane_on(&TDRUM->dstep[0], 4) && lane_on(&TDRUM->dstep[1], 4) && lane_on(&TDRUM->dstep[2], 4) &&
+                   !lane_on(&TDRUM->dstep[3], 4) && lane_on(&TDRUM->dstep[4], 4) && lane_on(&TDRUM->dstep[5], 4) && lane_on(&TDRUM->dstep[6], 4) && !lane_on(&TDRUM->dstep[7], 4));
+            seq_swing8 = 0;                              /* the same without the shuffle: the swing on the 16ths; the odd 16th sounds on
+                                                          * the triplet (1/3 of the beat) and keeps it, the straight 8th between goes */
+            for (k = 0; k < 8; k++) dstep_set(&TDRUM->dstep[k], 4, LV_NORM, 0);
+            assert(pattern_rediv(TDRUM, 4) && TDRUM->p[P_SLEN] == 6 && lane_on(&TDRUM->dstep[0], 4) && lane_on(&TDRUM->dstep[1], 4) && !lane_on(&TDRUM->dstep[2], 4) &&
+                   lane_on(&TDRUM->dstep[3], 4) && lane_on(&TDRUM->dstep[4], 4) && !lane_on(&TDRUM->dstep[5], 4));
+            assert(pattern_rediv(TDRUM, 2) && TDRUM->p[P_SLEN] == 8);
+            song.g[G_SWING] = sw0;
+            memset(TDRUM->dstep, 0, sizeof TDRUM->dstep);
+            TDRUM->p[P_SLEN] = 32;
+        }
+
         pc(16, 32); advance(CTL); sng_poll();
         assert(sng_cur == -1 && fb_len == 0u);
         blob_n[8] = 0;

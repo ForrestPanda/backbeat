@@ -806,8 +806,40 @@ function editorSed() {
     }
     ok(S.divLoss(d, "1/8") === 1 && S.divLoss(d, "8T") === 3 && S.divLoss(d, "1/32") === 0 && S.divLoss(d, "1/16") === 0 && S.divLoss(fb, "1/8") === 2 && S.divLoss(S.blank("L", 40), "1/32") === 0,
       "sed: the hits a change would drop counted (1/8: the hat on 16th 3; 8T: 3 of 5; finer: none; the fill bar's hat and the entry's kick too)");
-    ok(/sedDivLoss: "Changing to \{div\} drops \{n\} hit/.test(html) && /sedDivLoss: "\{div\} に変えると/.test(html) && /loss && !confirm\(t\("sedDivLoss"\)/.test(html),
+    ok(/sedDivLoss: "Changing to \{div\} drops \{n\} hit/.test(html) && /sedDivLoss: "\{div\} に変えると/.test(html) && /!rep\.moved && lossMsg && !confirm\(lossMsg\)/.test(html),
       "sed: the warning before hits are dropped, both languages, a confirm in the handler");
+    {   /* the swing kept across the grids (2026-11-08, SED.redivMap, as seq.c rediv_map): under swing 67 a 1/8 "and" sounds on
+         * the triplet, which 16T has a step for (step 4 of 6, not the straight step 3): the hit goes there with its ratchet,
+         * flam, mark and condition, the fill bar's hit too; back to 1/8 it is the "and" again. A light swing (20) or none: the
+         * written place. Two 16T hits, the straight step 3 and the triplet, onto a swung 1/8: the triplet's takes the "and", the
+         * other goes. A shuffle (the swing on the 8ths) under 1/16 onto 8T: the first three 16ths of a beat are the triplets,
+         * the fourth goes; without the shuffle the odd 16th sounds on the first triplet and keeps it, the straight 8th goes.
+         * The page says so before (sedDivSwing), both languages */
+      let s8 = S.blank("S", 8, "1/8");
+      s8 = S.setHit(s8, "KICK", 0, "x"); s8 = S.setHit(s8, "KICK", 4, "x"); s8 = S.setHit(s8, "KICK", 5, "X", 2, "", true); s8 = S.setHit(s8, "SNARE", 2, "x"); s8 = S.setHit(s8, "SNARE", 6, "x");
+      s8 = S.fbAdd(s8); s8 = S.setMark(s8, "KICK", 5, "F"); s8 = S.setCond(s8, 5, "F");   /* (the fill bar first: fbAdd takes the marked hits out of the pattern) */
+      const t16 = S.setDiv(s8, "16T", 67), rep = S.divReport(s8, "16T", 67);
+      ok(t16.steps === 24 && t16.lanes.KICK === "x...........x...X......." && t16.ratchets.KICK[16] === "2" && t16.flams.KICK[16] === "f" && t16.fills.KICK[16] === "F" && t16.fill[16] === "F"
+        && t16.lanes.SNARE === "......x...........x....." && t16.fillbar.steps === 24 && t16.fillbar.lanes.KICK === "x...........x...X......." && rep.moved === 2 && rep.lost === 0,
+        "sed: 1/8 -> 16T under swing 67: the \"and\" on the triplet step (4 of 6) with its ratchet, flam, mark and condition, the fill bar's too; 2 moved, none lost");
+      const back = S.setDiv(t16, "1/8", 67);
+      ok(back.steps === 8 && back.lanes.KICK === "x...xX.." && back.ratchets.KICK === ".....2.." && back.fill === ".....F.." && back.lanes.SNARE === "..x...x." && back.fillbar.lanes.KICK === "x...xX.."
+        && S.divReport(t16, "1/8", 67).moved === 2 && S.divReport(t16, "1/8", 67).lost === 0, "sed: and back to 1/8: the \"and\" again");
+      ok(S.setDiv(s8, "16T", 20).lanes.KICK === "x...........x..X........" && S.divReport(s8, "16T", 20).moved === 0 && S.setDiv(s8, "16T").lanes.KICK === "x...........x..X........"
+        && S.setDiv(s8, "16T", 0, true).lanes.KICK === "x...........x..X........" && S.divLoss(s8, "16T") === 0,
+        "sed: a light swing or none: the written place (the straight step 3 of 6)");
+      const both = S.setHit(t16, "KICK", 15, "g");
+      ok(S.setDiv(both, "1/8", 67).lanes.KICK === "x...xX.." && S.divReport(both, "1/8", 67).lost === 1 && S.setDiv(both, "1/8").lanes.KICK === "x...xg.." && S.divReport(both, "1/8").lost === 2,
+        "sed: the straight step 3 and the triplet both set, onto a swung 1/8: the triplet's hit takes the \"and\"; unswung, the straight one (the triplet's go, the fill bar's too)");
+      let sh = S.blank("H", 8);
+      for (let i = 0; i < 8; i++) sh = S.setHit(sh, "HAT", i, "x");
+      const t8s = S.setDiv(sh, "8T", 67, true), t8 = S.setDiv(sh, "8T", 67), rs = S.divReport(sh, "8T", 67, true);
+      ok(t8s.steps === 6 && t8s.lanes.HAT === "xxxxxx" && rs.moved === 4 && rs.lost === 2 && t8.lanes.HAT === "xx.xx." && S.divReport(sh, "8T", 67).lost === 4 && S.setDiv(sh, "8T").lanes.HAT === "x..x..",
+        "sed: a shuffle's 16ths onto 8T: three of each beat are the triplets, the fourth goes; the swing on the 16ths: the odd one sounds on the first triplet; no swing: the beats only");
+      ok(/sedDivSwing: "Swing \{sw\} is on, so \{n\} hit/.test(html) && /sedDivSwing: "スウィング \{sw\} が有効/.test(html) && /rep\.moved && !confirm\(t\("sedDivSwing"\)/.test(html)
+        && /SED\.setDiv\(sec, div, sw, on8\)/.test(html) && /on8 = SONGED\.spec\.swing_grid === "1\/8"/.test(html),
+        "sed: the swing warning before the change, both languages, the song's swing and its grid handed to setDiv");
+    }
     ok(/sedDivLong: "cannot change the division/.test(html) && /sedDivLong: "分割数を変えられません/.test(html) && /sedDivHelp: "Changing the division keeps the hits/.test(html) && /sedDivHelp: "分割数を変えても/.test(html)
       && /sayK\("sedDivLong"\); sedRender\(\)/.test(html) && /dv\.title = t\("sedDivHelp"\)/.test(html), "sed: the message and the help in both languages, the handler refuses");
   }

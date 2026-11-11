@@ -3139,41 +3139,83 @@ const SED = {
   setSteps(sec, steps) { return SED.norm({ ...sec, steps }); },
   setBars(sec, bars) { return SED.setSteps(sec, bars * (SNG.fillbarSteps(sec) || sec.steps)); },   /* whole bars of its time (2026-11-08) */
 
-  /* a step string (n steps of uo units, 1/48 beat) re-gridded at un units, m steps: the new grid's step j takes the old
-     step at the same time, when there is one (j x un = i x uo), else a rest */
-  regrid(str, n, m, uo, un) {
-    const s = SED.pad(str, n);
-    let out = "";
-    for (let j = 0; j < m; j++) { const t = j * un; out += t % uo === 0 && t / uo < n ? s[t / uo] : "."; }
-    return out;
+  /* step i of div's grid as it sounds under the song's swing (0..100; on8: the swing on the 8ths, "swing_grid" "1/8"),
+     in 1/4800 beat, and as written: [sounds, written]. As the player and the device (PLAY.step, seq.c trk_grid): on the
+     straight grids inside a beat the odd steps start swing x step / 200 late; under a shuffle the 8ths of a 1/16 or 1/32
+     grid swing so and the steps inside each share its length; the triplet grids and the long steps never swing */
+  onset(div, i, swing, on8) {
+    const u = (PLAY.STEP_U[div] || 12) * 100, nom = i * u, sw = Math.max(0, Math.min(100, Math.round(+swing) || 0));
+    if (!sw || !["1/4", "1/8", "1/16", "1/32"].includes(div)) return [nom, nom];
+    if (on8 && (div === "1/16" || div === "1/32")) {
+      const k = div === "1/16" ? 2 : 4, u8 = 2400, sw8 = Math.floor((sw * u8) / 200), e = Math.floor(i / k), s = i % k;
+      return [e * u8 + (e % 2 ? sw8 + s * Math.floor((u8 - sw8) / k) : s * Math.floor((u8 + sw8) / k)), nom];
+    }
+    return [nom + (i % 2 ? Math.floor((sw * u) / 200) : 0), nom];
   },
+  /* the map of a division change (seq.c rediv_map, the same rule): the old step at each of the m new steps (-1: none),
+     n old steps of division from onto division to. A hit keeps its written place on the beat (j x un = i x uo); but the
+     swing moves the odd steps of a straight grid, so a hit's written time is not where it sounds (2026-11-08; the
+     user: a 1/8 solo's kick on the "and" of 3 under swing 67 lost its feel on 16T, where it landed on the straight step
+     3 of 6: the swung "and" sounds on the triplet, step 4). So a hit the swing moves, or that could land on a step the
+     swing moves (one of the two, not both: between two swung grids the written place rules), goes to the new grid's
+     step nearest to where it sounds when that is within the swing's reach (the two shifts together) and nearer than
+     its written place; a light swing (33 or less on a 1/8 "and") keeps the written place, no swing changes nothing. The
+     steps stay in order (two hits on one step: the nearer sounding one) */
+  redivMap(n, m, from, to, swing, on8) {
+    const uo = PLAY.STEP_U[from] || 12, un = PLAY.STEP_U[to] || 12, src = new Array(m).fill(-1), err = new Array(m).fill(0);
+    let last = -1;
+    for (let i = 0; i < n; i++) {
+      const [po, no] = SED.onset(from, i, swing, on8), so = Math.abs(po - no), t = i * uo, jc = Math.floor(po / (un * 100));
+      let best = -1, berr = 0;
+      if (t % un === 0 && t / un < m) { best = t / un; berr = Math.abs(SED.onset(to, best, swing, on8)[0] - po); }
+      for (let j = Math.max(0, jc - 1); j <= jc + 1 && j < m; j++) {
+        const [pn, nn] = SED.onset(to, j, swing, on8), sn = Math.abs(pn - nn), e = Math.abs(pn - po);
+        if (!so === !sn || e > so + sn) continue;
+        if (best < 0 || e < berr) { best = j; berr = e; }
+      }
+      if (best < 0 || (un >= uo ? best > i : best < i)) continue;
+      if (last >= 0 && best <= last && (best < last || berr >= err[last])) continue;
+      src[best] = i; err[best] = berr; last = best;
+    }
+    return src;
+  },
+  /* a step string (n steps) re-gridded as the map says (redivMap): the old step's character at each new step, else a rest */
+  regrid(str, n, map) { const s = SED.pad(str, n); return map.map((i) => (i >= 0 ? s[i] : ".")).join(""); },
   /* the division changed (2026-10-29): the hits keep their place on the beat. 1/16 -> 1/8 keeps every other step (the
      16ths between go), 1/8 -> 1/16 puts an empty step between, 1/16 -> 8T keeps the beats; the length in time is kept,
-     rounded up to a step. The ratchets, flams, marks and conditions go with their steps; the fill bar, the entry and the
-     break the same (the whole bars that fit). null: the pattern would be over 64 steps (shorten it first). The firmware
-     does the same on the device (seq.c pattern_rediv) */
-  /* the hits setDiv would drop (they fall between the new grid's steps): the pattern's, the fill bar's, the entry's and
-     the break's together; 0 when none, or the change would be refused anyway. The page asks before (sedDivLoss) */
-  divLoss(sec, div) {
-    const uo = PLAY.STEP_U[sec.div] || 12, un = PLAY.STEP_U[div];
-    if (!un || un === uo) return 0;
-    const lost = (o, n) => Object.values(o || {}).reduce((k, v) => k + [...SED.pad(v, n)].filter((c, i) => c !== "." && (i * uo) % un !== 0).length, 0);
-    let n = lost(sec.lanes, sec.steps);
-    if (sec.fillbar) n += lost(sec.fillbar.lanes, Math.round(+sec.fillbar.steps) || SNG.fillbarSteps(sec) || sec.steps);
-    for (const key of ["entry", "break"]) if (SED.ebSteps(sec, key)) n += lost(sec[key].lanes, SED.ebSteps(sec, key));
-    return n;
+     rounded up to a step. Under the song's swing a hit the swing moves goes where it sounds (redivMap, 2026-11-08). The
+     ratchets, flams, marks and conditions go with their steps; the fill bar, the entry and the break the same (the
+     whole bars that fit). null: the pattern would be over 255 steps (shorten it first). The firmware does the same on
+     the device (seq.c pattern_rediv) */
+  /* what setDiv would do to the hits (the pattern's, the fill bar's, the entry's and the break's together): lost, the
+     ones that fall between the new grid's steps; moved, the ones the swing places off their written step. Both 0 when
+     the change would be refused anyway. The page asks before (sedDivLoss, sedDivSwing) */
+  divReport(sec, div, swing, on8) {
+    const uo = PLAY.STEP_U[sec.div] || 12, un = PLAY.STEP_U[div], r = { lost: 0, moved: 0 };
+    if (!un || un === uo) return r;
+    const count = (o, n) => {
+      const map = SED.redivMap(n, Math.min(Math.ceil((n * uo) / un), SNG.NSTEP), sec.div, div, swing, on8), at = new Array(n).fill(-1);
+      map.forEach((i, j) => { if (i >= 0) at[i] = j; });
+      for (const v of Object.values(o || {})) [...SED.pad(v, n)].forEach((c, i) => { if (c === ".") return; if (at[i] < 0) r.lost++; else if (at[i] * un !== i * uo) r.moved++; });
+    };
+    count(sec.lanes, sec.steps);
+    if (sec.fillbar) count(sec.fillbar.lanes, Math.round(+sec.fillbar.steps) || SNG.fillbarSteps(sec) || sec.steps);
+    for (const key of ["entry", "break"]) if (SED.ebSteps(sec, key)) count(sec[key].lanes, SED.ebSteps(sec, key));
+    return r;
   },
-  setDiv(sec, div) {
+  divLoss(sec, div, swing, on8) { return SED.divReport(sec, div, swing, on8).lost; },
+  setDiv(sec, div, swing, on8) {
     const uo = PLAY.STEP_U[sec.div] || 12, un = PLAY.STEP_U[div];
     if (!un || un === uo) return SED.norm({ ...sec, div });
     const n = sec.steps, m = Math.ceil((n * uo) / un);
     if (m > SNG.NSTEP) return null;
-    const re = (o, a, b) => Object.fromEntries(Object.entries(o || {}).map(([l, v]) => [l, SED.regrid(v, a, b, uo, un)]));
-    const out = { ...sec, div, steps: m, lanes: re(sec.lanes, n, m), ratchets: re(sec.ratchets, n, m), flams: re(sec.flams, n, m),
-                  fills: re(sec.fills, n, m), fill: SED.regrid(sec.fill, n, m, uo, un) };
+    const re = (o, a, map) => Object.fromEntries(Object.entries(o || {}).map(([l, v]) => [l, SED.regrid(v, a, map)]));
+    const pm = SED.redivMap(n, m, sec.div, div, swing, on8);
+    const out = { ...sec, div, steps: m, lanes: re(sec.lanes, n, pm), ratchets: re(sec.ratchets, n, pm), flams: re(sec.flams, n, pm),
+                  fills: re(sec.fills, n, pm), fill: SED.regrid(sec.fill, n, pm) };
     const bar = SNG.fillbarSteps({ time: sec.time, div });
     const fit = (k) => { const b = Math.ceil((k * uo) / un); return b <= SNG.NSTEP ? b : bar ? SNG.NSTEP - (SNG.NSTEP % bar) : SNG.NSTEP; };
-    const blk = (o, k) => { const b = fit(k); return { steps: b, lanes: re(o.lanes, k, b), ratchets: re(o.ratchets, k, b), flams: re(o.flams, k, b) }; };
+    const blk = (o, k) => { const b = fit(k), map = SED.redivMap(k, b, sec.div, div, swing, on8); return { steps: b, lanes: re(o.lanes, k, map), ratchets: re(o.ratchets, k, map), flams: re(o.flams, k, map) }; };
     if (sec.fillbar) out.fillbar = blk(sec.fillbar, Math.round(+sec.fillbar.steps) || SNG.fillbarSteps(sec) || n);
     for (const key of ["entry", "break"]) if (SED.ebSteps(sec, key)) out[key] = blk(sec[key], SED.ebSteps(sec, key));
     return SED.norm(out);
@@ -3261,7 +3303,7 @@ const SED = {
   toDiv(blk, n, from, to) {
     const uo = PLAY.STEP_U[from || "1/16"] || 12, un = PLAY.STEP_U[to || "1/16"] || 12, lost = [];
     if (uo === un) return { blk: { steps: n, lanes: blk.lanes || {}, ratchets: blk.ratchets || {}, flams: blk.flams || {} }, lost };
-    const m = Math.ceil((n * uo) / un), re = (o) => Object.fromEntries(Object.entries(o || {}).map(([l, v]) => [l, SED.regrid(v, n, m, uo, un)]));
+    const m = Math.ceil((n * uo) / un), map = SED.redivMap(n, m, from || "1/16", to || "1/16", 0), re = (o) => Object.fromEntries(Object.entries(o || {}).map(([l, v]) => [l, SED.regrid(v, n, map)]));   /* (the file's bars as written: no swing) */
     for (const [l, v] of Object.entries(blk.lanes || {})) [...SED.pad(v, n)].forEach((c, i) => { if (c !== "." && (i * uo) % un !== 0) lost.push(`${l} ${i + 1}`); });
     return { blk: { steps: m, lanes: re(blk.lanes), ratchets: re(blk.ratchets), flams: re(blk.flams) }, lost };
   },
@@ -3661,7 +3703,7 @@ const TEXT = {
     sedSteps: "ステップ", sedBars: "小節数", sedBarsHelp: "パターンの長さを拍子の小節数で（1〜255 ステップに収まる数）。小節の途中で終わるファイルはステップ数で示し、隣のステップ欄で変えられます", sedTime: "拍子", sedSecBpm: "このセクション独自のテンポ（40..240）。空欄: 曲のテンポ {bpm}。セクションが始まると切り替わり、独自のテンポのない次のセクションで曲のテンポに戻る", playOwnBpm: "再生中のセクション独自のテンポ：ここで変えるとそのテンポが変わる。独自のテンポのないセクションで曲のテンポに戻る", sedOutro: "アウトロ", sedDup: "複製", sedNew: "新規セクション", sedDel: "削除", sedSplit: "分割（小節）", sedSplitBtn: "分割", sedMerge: "次と結合",
     sedBarWarn: "拍子の小節に揃っていません：切り替えは小節線まで待ちます。", sedBarFix: "拍子を {sig} に",
     sedPen: "ペン:", sedRat: "ラチェット", sedFlam: "フラム", sedMark: "フィル:", sedMarkAlways: "常に", sedMarkF: "フィル時のみ", sedMarkN: "フィル時は休み", sedGridHelp: "クリックでペンのレベル・ラチェット・フィル印の打点、同じ打点をもう一度で消す。フィル印が「フィル時のみ」「フィル時は休み」のとき、既にある打点をクリックするとその印を変えます（黄の枠: フィル時のみ、赤の枠: フィル時は休み）。上の行はステップ全体の印。", sedBarsHelp: "ファイルの小節（このセクションの範囲に印）：1 つをクリック、続けてもう 1 つで範囲（255 ステップに収まる数まで）。パターン、フィル、エントリー、ブレイクに。",
-    sedHear: "クリックで音を聞く", sedKey: "キー: ", sedUndo: "元に戻す", sedRedo: "やり直す", sedPlaySec: "このセクションを試聴", sedKeys: "キー: n 通常、h 強、s 弱、g ゴースト、x 消去、r ラチェット、l フラム、m フィル印、[ ] 前後のセクション、Delete 選択ステップを消去、Ctrl+C / Ctrl+V ステップのコピーと貼り付け、Ctrl+Z / Ctrl+Y 元に戻す / やり直す、p このセクションを試聴。レーン名をクリックすると音が鳴ります。", sedCols: "ステップ（番号をクリック、Shift+クリックで範囲。フィル小節・エントリー・ブレイクの番号も：そこへコピーと貼り付け）:", sedCopy: "コピー", sedPaste: "貼り付け（選択位置に）", sedClear: "消去", sedCopied: "コピーしました: ", sedUseBars: "選んだ小節をパターンに", sedUseFill: "選んだ小節をフィルに", sedEntry: "エントリー", sedBreak: "ブレイク", sedEbNone: "なし", sedEbBar: "小節", sedEbBars: "小節", sedUseEntry: "選んだ小節をエントリーに", sedUseBreak: "選んだ小節をブレイクに", sedDivDropped: "セクションのステップの間に落ちる打点を捨てました（分割がファイルの 1/16 より粗い：先に細かくしてから選び直してください）: ", sedEbHelp: "エントリーとブレイク：セクションのパターンの前に鳴る小節（無音でも可）。終わるとパターンは頭から始まり、その間に押したセクションはその終わりで切り替わります。エントリーは別のセクションや停止から入るとき、ブレイクは CC 28（再生中のセクションにも）で鳴ります。グリッドではエントリーはパターンの左、ブレイクは右（どちらも青い隙間の向こう）。", sedFill: "フィル", sedNotes: "曲のメモ", sedSecNotes: "セクションのメモ", sedNotesPrev: "本体での表示: ", sedNotesNoSec: "この番号のセクションはありません（入力どおりに表示）", sedNotesHelp: "自由なテキスト、各 255 文字まで（本体のフォントは Latin-1）。本体は LIVE の状態行に 1 行目を、ENV で全文を表示します。@2 はセクション 2 の名前の略記です（名前で表示され、番号はここでのセクションの追加・分割・結合・削除に合わせて付け替えられます）。", sedFbInfo: " + フィル {n} ステップ", sedFbHelp: "隙間の右はこのセクション専用のフィル（追加の小節、1〜4）：フィルは次の小節線からこれを丸ごと演奏し（必要ならセクションの終わりを越えて）、その後パターンは頭から、または押したセクションへ。セクションが持つのはこれか、パターンに埋め込んだフィル印（アレンジャーキーボードのフィル：押した所から、印の位置で）のどちらかで、両方は持てません。追加すると、パターンの最後の小節（印どおりに鳴る形）が写され、印は消えます。", sedFbMerge: "フィルをパターンに統合", sedFbDropMarks: "印を捨てる", sedFbDropMarksHelp: "専用フィルを残し、パターンに埋め込まれたフィル印と条件を捨てます：「フィルのみ」の打点は消え（専用フィルがあると鳴らない）、「フィル以外」の打点は常に鳴ります。", sedBothWarn: "パターンにフィル印・条件が {n} 個あり、専用フィルもあります：本体は専用フィルを演奏し、印は鳴りません。パターンに統合するか、印を捨ててください。", sedMarkOff: "専用フィルがある間はフィル印を使えません（パターンに統合すれば使えます）", sedFbAddedMarks: "フィルを追加し、パターンの印を畳み込みました。フィルのみ / フィル以外: ", sedFbMarksDropped: "印を捨てました。消えた「フィルのみ」の打点 / 消した印と条件: ", sedFbMergeHelp: "フィルをパターンの最後の小節にフィル印として畳み込み、フィルを消します（追加の逆）：両方にある打点はそのまま、パターンだけの打点は「フィル以外」、フィルだけの打点は「フィルのみ」として書き込みます。以後フィルはセクションの終わりまで印どおりに鳴ります。両方にあって強さ・ラチェット・フラムが違う打点はパターンのものを残します。", sedFbMerged: "フィルを印としてパターンに統合しました。フィルのみ / フィル以外 / 両方: ", sedFbDiffer: "、フィルと違うのでパターンの打点を残した: ", sedFbDropped: "、パターンの先頭より前で捨てた: ", sedEdit: "編集", sedDropped: "パターンと重なるフィルの打点は捨てました: ", sedTooMany: "16 セクションまで", sedNoMerge: "結合できません（分割数が違うか 255 ステップ超）", sedDivLong: "分割数を変えられません（その分割数では 255 ステップ超）: 先にパターンを短くしてください", sedDivLoss: "{div} に変えると、新しいグリッドの間に落ちるヒット {n} 個が消えます（パターン、フィル小節、エントリー、ブレイク）。変更しますか？", sedDivHelp: "分割数を変えてもヒットは拍の上の位置を保ちます: 1/16 から 1/8 では間の 16 分が消え、1/8 から 1/16 では間に空のステップが入ります",
+    sedHear: "クリックで音を聞く", sedKey: "キー: ", sedUndo: "元に戻す", sedRedo: "やり直す", sedPlaySec: "このセクションを試聴", sedKeys: "キー: n 通常、h 強、s 弱、g ゴースト、x 消去、r ラチェット、l フラム、m フィル印、[ ] 前後のセクション、Delete 選択ステップを消去、Ctrl+C / Ctrl+V ステップのコピーと貼り付け、Ctrl+Z / Ctrl+Y 元に戻す / やり直す、p このセクションを試聴。レーン名をクリックすると音が鳴ります。", sedCols: "ステップ（番号をクリック、Shift+クリックで範囲。フィル小節・エントリー・ブレイクの番号も：そこへコピーと貼り付け）:", sedCopy: "コピー", sedPaste: "貼り付け（選択位置に）", sedClear: "消去", sedCopied: "コピーしました: ", sedUseBars: "選んだ小節をパターンに", sedUseFill: "選んだ小節をフィルに", sedEntry: "エントリー", sedBreak: "ブレイク", sedEbNone: "なし", sedEbBar: "小節", sedEbBars: "小節", sedUseEntry: "選んだ小節をエントリーに", sedUseBreak: "選んだ小節をブレイクに", sedDivDropped: "セクションのステップの間に落ちる打点を捨てました（分割がファイルの 1/16 より粗い：先に細かくしてから選び直してください）: ", sedEbHelp: "エントリーとブレイク：セクションのパターンの前に鳴る小節（無音でも可）。終わるとパターンは頭から始まり、その間に押したセクションはその終わりで切り替わります。エントリーは別のセクションや停止から入るとき、ブレイクは CC 28（再生中のセクションにも）で鳴ります。グリッドではエントリーはパターンの左、ブレイクは右（どちらも青い隙間の向こう）。", sedFill: "フィル", sedNotes: "曲のメモ", sedSecNotes: "セクションのメモ", sedNotesPrev: "本体での表示: ", sedNotesNoSec: "この番号のセクションはありません（入力どおりに表示）", sedNotesHelp: "自由なテキスト、各 255 文字まで（本体のフォントは Latin-1）。本体は LIVE の状態行に 1 行目を、ENV で全文を表示します。@2 はセクション 2 の名前の略記です（名前で表示され、番号はここでのセクションの追加・分割・結合・削除に合わせて付け替えられます）。", sedFbInfo: " + フィル {n} ステップ", sedFbHelp: "隙間の右はこのセクション専用のフィル（追加の小節、1〜4）：フィルは次の小節線からこれを丸ごと演奏し（必要ならセクションの終わりを越えて）、その後パターンは頭から、または押したセクションへ。セクションが持つのはこれか、パターンに埋め込んだフィル印（アレンジャーキーボードのフィル：押した所から、印の位置で）のどちらかで、両方は持てません。追加すると、パターンの最後の小節（印どおりに鳴る形）が写され、印は消えます。", sedFbMerge: "フィルをパターンに統合", sedFbDropMarks: "印を捨てる", sedFbDropMarksHelp: "専用フィルを残し、パターンに埋め込まれたフィル印と条件を捨てます：「フィルのみ」の打点は消え（専用フィルがあると鳴らない）、「フィル以外」の打点は常に鳴ります。", sedBothWarn: "パターンにフィル印・条件が {n} 個あり、専用フィルもあります：本体は専用フィルを演奏し、印は鳴りません。パターンに統合するか、印を捨ててください。", sedMarkOff: "専用フィルがある間はフィル印を使えません（パターンに統合すれば使えます）", sedFbAddedMarks: "フィルを追加し、パターンの印を畳み込みました。フィルのみ / フィル以外: ", sedFbMarksDropped: "印を捨てました。消えた「フィルのみ」の打点 / 消した印と条件: ", sedFbMergeHelp: "フィルをパターンの最後の小節にフィル印として畳み込み、フィルを消します（追加の逆）：両方にある打点はそのまま、パターンだけの打点は「フィル以外」、フィルだけの打点は「フィルのみ」として書き込みます。以後フィルはセクションの終わりまで印どおりに鳴ります。両方にあって強さ・ラチェット・フラムが違う打点はパターンのものを残します。", sedFbMerged: "フィルを印としてパターンに統合しました。フィルのみ / フィル以外 / 両方: ", sedFbDiffer: "、フィルと違うのでパターンの打点を残した: ", sedFbDropped: "、パターンの先頭より前で捨てた: ", sedEdit: "編集", sedDropped: "パターンと重なるフィルの打点は捨てました: ", sedTooMany: "16 セクションまで", sedNoMerge: "結合できません（分割数が違うか 255 ステップ超）", sedDivLong: "分割数を変えられません（その分割数では 255 ステップ超）: 先にパターンを短くしてください", sedDivLoss: "{div} に変えると、新しいグリッドの間に落ちるヒット {n} 個が消えます（パターン、フィル小節、エントリー、ブレイク）。変更しますか？", sedDivSwing: "スウィング {sw} が有効なので、スウィングで動くヒット {n} 個は、書かれたステップではなく {div} で実際に鳴る位置に最も近いステップに置かれます（三連のスウィングなら 8 分の裏は三連の位置。本体も同じです）。変更しますか？", sedDivHelp: "分割数を変えてもヒットは拍の上の位置を保ちます: 1/16 から 1/8 では間の 16 分が消え、1/8 から 1/16 では間に空のステップが入ります",
     playTitle: "試聴", playCheat: "ペダルのコマンド（ペダルのチャンネルの MIDI CC）", playCheatCmd: "ペダル", playCheatWhat: "動作", playCheatKey: "キー",
     playC20: "再生中のセクションが終わったらセクション n（0 が最初）。停止中はそれで開始", playC27: "次の小節でセクション n",
     playC21: "フィル：専用フィルは次の小節から丸ごと、印は今から（最後の拍なら次の小節を丸ごと）", playC21n: "フィル：次の小節を丸ごと", playC21e: "フィル：セクションの終わりに。セクションを最後まで演奏してから専用フィルを丸ごと、次にパターンの頭か指定したセクション（専用フィルがなければ CC 21 1 と同じ、次の小節を丸ごと）",
@@ -3803,7 +3845,7 @@ const TEXT = {
     sedSteps: "steps", sedBars: "bars", sedBarsHelp: "The pattern's length in whole bars of its time (1 to what 255 steps hold); a loaded file's length between bars is named in steps, and the steps box beside sets it", sedTime: "time", sedSecBpm: "the section's own tempo (40..240); blank: the song's, {bpm}. It takes effect as the section lands, and the song's comes back with the next section that has none", playOwnBpm: "the section playing has a tempo of its own: the box and the tap set that one; the song's comes back with a section that has none", sedOutro: "outro", sedDup: "Duplicate", sedNew: "New section", sedDel: "Delete", sedSplit: "split at bar", sedSplitBtn: "Split", sedMerge: "Merge with next",
     sedBarWarn: "Not whole bars of its time: a change waits for the bar line.", sedBarFix: "Set time to {sig}",
     sedPen: "pen:", sedRat: "ratchet", sedFlam: "flam", sedMark: "fill:", sedMarkAlways: "always", sedMarkF: "only in a fill", sedMarkN: "not in a fill", sedGridHelp: "Click a cell to set a hit with the pen's level, ratchet and fill mark; click the same hit again to clear it. With the fill mark on 'only in a fill' or 'not in a fill', clicking a hit that is there changes its mark instead (amber ring: only in a fill, red ring: not in a fill). The top row marks a whole step at once.", sedBarsHelp: "The file's bars (this section's own range marked): click one, then another to select a run (as many as 255 steps hold), as the pattern, the fill, the entry or the break.",
-    sedHear: "click: hear this lane", sedKey: "key: ", sedUndo: "Undo", sedRedo: "Redo", sedPlaySec: "Play this section", sedKeys: "Keys: n normal, h hard, s soft, g ghost, x erase, r ratchet, l flam (a grace note before the hit), m fill mark, [ ] previous / next section, Delete clears the selected steps, Ctrl+C / Ctrl+V copy and paste them, Ctrl+Z / Ctrl+Y undo / redo, p plays this section. Click a lane's name to hear its sound.", sedCols: "steps (click a number, shift-click another for a range; the fill bar's, entry's and break's numbers too, to copy and paste there):", sedCopy: "Copy", sedPaste: "Paste at the selection", sedClear: "Clear", sedCopied: "copied: ", sedUseBars: "Pattern = selected bars", sedUseFill: "Fill = selected bars", sedEntry: "Entry", sedBreak: "Break", sedEbNone: "none", sedEbBar: "bar", sedEbBars: "bars", sedUseEntry: "Entry = selected bars", sedUseBreak: "Break = selected bars", sedDivDropped: "hits between the section's steps dropped (its division is coarser than the file's 1/16: set it finer first, then pick the bars again): ", sedEbHelp: "Entry and break: bars played before the section's pattern (silence too); after them the pattern starts from its top, and a section asked for meanwhile comes in at their end. The entry plays when the section comes in from another one or from stopped, the break on CC 28 (the section playing too). In the grid: the entry left of the pattern, the break at the right, each past a blue gap.", sedFill: "Fill", sedNotes: "Song notes", sedSecNotes: "Section notes", sedNotesPrev: "on the device: ", sedNotesNoSec: "no section with this number: shown as typed", sedNotesHelp: "free text, up to 255 characters each (Latin-1: the device's font); the device shows the first line on LIVE's state line while nothing is announced, and the whole on ENV. @2 stands for section 2's name (shown as the name; the number follows the sections as they are added, split, merged or deleted here)", sedFbInfo: " + a fill of {n} steps", sedFbHelp: "Right of the gap: the section's fill of its own, extra bars, 1 to 4: a fill plays them whole, from the next bar line (past the section's end if it must), then the pattern from its top, or the section asked for. A section has this or a fill embedded in the pattern as marks (an arranger keyboard's fill: from the press, where the marks sit), never both: added, it starts as the pattern's last bars the way the marks played them, and the marks go.", sedFbMerge: "Merge into the pattern", sedFbDropMarks: "Drop the marks", sedFbDropMarksHelp: "Keep the fill of its own and drop the fill marks and conditions embedded in the pattern: a hit only in a fill goes (never heard with a fill of its own), one not in a fill plays always.", sedBothWarn: "{n} fill mark(s) or condition(s) in the pattern and a fill of its own: the device plays the fill and never hears the marks. Merge into the pattern, or drop the marks.", sedMarkOff: "fill marks are off while the section has a fill of its own (merge it into the pattern to use them)", sedFbAddedMarks: "fill added; the pattern's marks folded in, only in a fill / not in a fill: ", sedFbMarksDropped: "marks dropped, hits only in a fill gone / marks and conditions cleared: ", sedFbMergeHelp: "The fill folded back into the pattern's last bars as fill marks, and removed (the opposite of adding one): a hit in both plays always, one in the pattern only is marked not in a fill, one in the fill only is written in as only in a fill. A fill then plays the marks to the section's end. A hit in both at another level, ratchet or flam keeps the pattern's.", sedFbMerged: "fill merged into the pattern as marks, only in a fill / not in a fill / both: ", sedFbDiffer: "; the pattern's hit kept where the fill's differed: ", sedFbDropped: "; before the pattern's start, dropped: ", sedEdit: "Edit", sedDropped: "fill hits dropped where the pattern hits too: ", sedTooMany: "at most 16 sections", sedNoMerge: "cannot merge (different division, or over 255 steps)", sedDivLong: "cannot change the division (over 255 steps at that one): shorten the pattern first", sedDivLoss: "Changing to {div} drops {n} hit(s) that fall between the new grid's steps (the pattern, fill bar, entry and break). Change anyway?", sedDivHelp: "Changing the division keeps the hits in their place on the beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between",
+    sedHear: "click: hear this lane", sedKey: "key: ", sedUndo: "Undo", sedRedo: "Redo", sedPlaySec: "Play this section", sedKeys: "Keys: n normal, h hard, s soft, g ghost, x erase, r ratchet, l flam (a grace note before the hit), m fill mark, [ ] previous / next section, Delete clears the selected steps, Ctrl+C / Ctrl+V copy and paste them, Ctrl+Z / Ctrl+Y undo / redo, p plays this section. Click a lane's name to hear its sound.", sedCols: "steps (click a number, shift-click another for a range; the fill bar's, entry's and break's numbers too, to copy and paste there):", sedCopy: "Copy", sedPaste: "Paste at the selection", sedClear: "Clear", sedCopied: "copied: ", sedUseBars: "Pattern = selected bars", sedUseFill: "Fill = selected bars", sedEntry: "Entry", sedBreak: "Break", sedEbNone: "none", sedEbBar: "bar", sedEbBars: "bars", sedUseEntry: "Entry = selected bars", sedUseBreak: "Break = selected bars", sedDivDropped: "hits between the section's steps dropped (its division is coarser than the file's 1/16: set it finer first, then pick the bars again): ", sedEbHelp: "Entry and break: bars played before the section's pattern (silence too); after them the pattern starts from its top, and a section asked for meanwhile comes in at their end. The entry plays when the section comes in from another one or from stopped, the break on CC 28 (the section playing too). In the grid: the entry left of the pattern, the break at the right, each past a blue gap.", sedFill: "Fill", sedNotes: "Song notes", sedSecNotes: "Section notes", sedNotesPrev: "on the device: ", sedNotesNoSec: "no section with this number: shown as typed", sedNotesHelp: "free text, up to 255 characters each (Latin-1: the device's font); the device shows the first line on LIVE's state line while nothing is announced, and the whole on ENV. @2 stands for section 2's name (shown as the name; the number follows the sections as they are added, split, merged or deleted here)", sedFbInfo: " + a fill of {n} steps", sedFbHelp: "Right of the gap: the section's fill of its own, extra bars, 1 to 4: a fill plays them whole, from the next bar line (past the section's end if it must), then the pattern from its top, or the section asked for. A section has this or a fill embedded in the pattern as marks (an arranger keyboard's fill: from the press, where the marks sit), never both: added, it starts as the pattern's last bars the way the marks played them, and the marks go.", sedFbMerge: "Merge into the pattern", sedFbDropMarks: "Drop the marks", sedFbDropMarksHelp: "Keep the fill of its own and drop the fill marks and conditions embedded in the pattern: a hit only in a fill goes (never heard with a fill of its own), one not in a fill plays always.", sedBothWarn: "{n} fill mark(s) or condition(s) in the pattern and a fill of its own: the device plays the fill and never hears the marks. Merge into the pattern, or drop the marks.", sedMarkOff: "fill marks are off while the section has a fill of its own (merge it into the pattern to use them)", sedFbAddedMarks: "fill added; the pattern's marks folded in, only in a fill / not in a fill: ", sedFbMarksDropped: "marks dropped, hits only in a fill gone / marks and conditions cleared: ", sedFbMergeHelp: "The fill folded back into the pattern's last bars as fill marks, and removed (the opposite of adding one): a hit in both plays always, one in the pattern only is marked not in a fill, one in the fill only is written in as only in a fill. A fill then plays the marks to the section's end. A hit in both at another level, ratchet or flam keeps the pattern's.", sedFbMerged: "fill merged into the pattern as marks, only in a fill / not in a fill / both: ", sedFbDiffer: "; the pattern's hit kept where the fill's differed: ", sedFbDropped: "; before the pattern's start, dropped: ", sedEdit: "Edit", sedDropped: "fill hits dropped where the pattern hits too: ", sedTooMany: "at most 16 sections", sedNoMerge: "cannot merge (different division, or over 255 steps)", sedDivLong: "cannot change the division (over 255 steps at that one): shorten the pattern first", sedDivLoss: "Changing to {div} drops {n} hit(s) that fall between the new grid's steps (the pattern, fill bar, entry and break). Change anyway?", sedDivSwing: "Swing {sw} is on, so {n} hit(s) the swing moves land on the {div} step nearest to where they sound, not on their written step (a 1/8 \"and\" under a triplet swing: the triplet step; the device does the same). Change anyway?", sedDivHelp: "Changing the division keeps the hits in their place on the beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between",
     playTitle: "Play", playCheat: "Pedal commands (MIDI CC on the pedal channel)", playCheatCmd: "pedal", playCheatWhat: "does", playCheatKey: "key",
     playC20: "section n (0 = the first) when the one playing ends; stopped: starts with it", playC27: "section n on the next bar",
     playC21: "fill: a fill of its own whole on the next bar; marks from now (in the last beat: the whole next bar)", playC21n: "fill: the whole next bar", playC21e: "fill at the section's end: the section through, then its fill of its own, then the pattern or the section asked for (no fill of its own: as CC 21 1, the whole next bar)",
@@ -5106,13 +5148,18 @@ function sedSwingLive() {                                  /* the song playing b
 $("sed-secname").addEventListener("input", () => { const sec = sedSec(); if (sec) { SONGED.spec.sections[SONGED.sel] = SED.rename(sec, $("sed-secname").value); const chips = $("sed-chips").children[SONGED.sel]; if (chips) chips.textContent = `${SONGED.sel + 1}: ${sedSec().name}${sedSec().outro ? "*" : ""}`; } });
 $("sed-steps").addEventListener("change", () => { const sec = sedSec(); if (sec) sedSet(SED.setSteps(sec, +$("sed-steps").value)); });
 $("sed-nbars").addEventListener("change", () => { const sec = sedSec(), n = +$("sed-nbars").value; if (sec && n) sedSet(SED.setBars(sec, n)); });
-$("sed-div").addEventListener("change", () => {   /* the hits keep their place on the beat (SED.setDiv); over 64 steps: refused */
+$("sed-div").addEventListener("change", () => {   /* the hits keep their place on the beat (SED.setDiv), under the song's swing
+                                                     where they sound; over 255 steps: refused */
   const sec = sedSec();
   if (!sec) return;
-  const div = $("sed-div").value, r = SED.setDiv(sec, div), loss = r ? SED.divLoss(sec, div) : 0;
+  const div = $("sed-div").value, sw = Math.round(+SONGED.spec.swing) || 0, on8 = SONGED.spec.swing_grid === "1/8";
+  const r = SED.setDiv(sec, div, sw, on8), rep = r ? SED.divReport(sec, div, sw, on8) : { lost: 0, moved: 0 };
   if (!r) { sayK("sedDivLong"); sedRender(); return; }
-  if (loss && !confirm(t("sedDivLoss").replace("{n}", loss).replace("{div}", div))) { sedRender(); return; }   /* hits between the new
-                                                     grid's steps would go: asked first (Cancel: the select back) */
+  const lossMsg = rep.lost ? t("sedDivLoss").replace("{n}", rep.lost).replace("{div}", div) : "";
+  if (rep.moved && !confirm(t("sedDivSwing").replace("{sw}", sw).replace("{n}", rep.moved).replace("{div}", div) + (lossMsg ? "\n\n" + lossMsg : ""))) { sedRender(); return; }   /* the
+                                                     swing is on and places hits off their written steps: said first; with the hits
+                                                     that would go, if any (Cancel: the select back) */
+  if (!rep.moved && lossMsg && !confirm(lossMsg)) { sedRender(); return; }   /* hits between the new grid's steps would go: asked first */
   sedSet(r);
 });
 $("sed-time").addEventListener("change", () => {

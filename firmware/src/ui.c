@@ -139,8 +139,9 @@ UI_SMALL static int undo_swap(int redo)
                                                       * follow it (seq.c rediv_extras: those of steps dropped on the way
                                                       * out are gone) */
         uint32_t uo = div_u48((uint32_t)div), un = div_u48(trk_div(t));
+        rediv_map((uint32_t)(len > 0 ? len : 1), trk_len(t), (uint32_t)div, trk_div(t), trk_swing(t));
         rediv_extras(t, (uint32_t)(len > 0 ? len : 1), trk_len(t), uo, un);
-        fb_rediv(uo, un, trk_div(t));
+        fb_rediv((uint32_t)div, trk_div(t));
     }
     undo.undone = (uint8_t)!redo;
     fm1_irq_on();
@@ -165,8 +166,9 @@ UI_SMALL static void cursor_fix(void)                           /* LEN got short
 }
 
 /* the pattern's DIV set (the SEQ layer's knob, the PATTERN page, the editor's SET): the hits keep their place on the
- * beat and the length follows (seq.c pattern_rediv); over 64 steps nothing changes and the screen says so. sess: the
- * undo session to mark (0: a new one). 1: changed; 0: the same, or refused */
+ * beat and the length follows (seq.c pattern_rediv); over NSTEP steps nothing changes and the screen says so; a hit the
+ * swing placed off its written step, where it sounds (2026-11-08): the screen says the swing was kept. sess: the undo
+ * session to mark (0: a new one). 1: changed; 0: the same, or refused */
 UI_SMALL static int pattern_div_set(track_t *t, uint32_t div, uint32_t sess)
 {
     if (div == trk_div(t))
@@ -178,6 +180,8 @@ UI_SMALL static int pattern_div_set(track_t *t, uint32_t div, uint32_t sess)
     }
     undo_mark(t, sess ? sess : (undo_sess += 4u) | 3u);
     pattern_rediv(t, div);
+    if (rediv_moved)
+        ui_say("DIV: SWING KEPT", "");
     sync_reload = 1;                                   /* (the editor reads the steps again) */
     cursor_fix();
     if ((uint32_t)ui.step_page * 16u >= trk_len(t))
