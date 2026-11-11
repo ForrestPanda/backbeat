@@ -453,7 +453,11 @@ next bar). No named sections, one song, no fill tied to a section change.
    (`sections_pick`: `sng_apply`, not `pedal_section`, which would start the transport); a grid edited and not saved
    warns on the first move away and drops on the next within 3 s (`sng_same`: the drum track compared with the
    section as packed); playing, the pick cues for the section's end as LIVE's keys. KNOB 1 the section, KNOB 2 its
-   steps, KNOB 3 its division (`pattern_div_set`), KNOB 4 the tempo. SEL copies it after itself, ENV / LFO move it,
+   length in bars (`sec_bar_steps`; 2026-11-08, asked: "I don't think it makes sense to have pattern lengths that are
+   not multiple of a bar size", so the device and the editor's section length count bars, as the entry, fill and
+   break do; its steps until then, and still when a bar is not whole steps at the division), KNOB 3 its division
+   (`pattern_div_set`), KNOB 4 the tempo. SEL copies it after itself, ENV / LFO move it,
+
    OCT+ turns the outro mark, REC held takes it out (the hold ring says DELETE): `sng_edit(op, k)` in project.c
    packs the song with the drum track as the section playing (`sng_pack_section`), changes the image in place
    (`sng.c sng_image_edit`: memmove for the copy and the removal, three reversals for a move, one outro at most) and

@@ -850,8 +850,15 @@ int main(int argc, char **argv)
         t_same = 1; encs[panel.enc[EN_K1]] = 5; frame();
         check(live_sec == 2, "SECTIONS: KNOB 1 stops at the last section");
         l0 = TDRUM->p[P_SLEN]; encs[panel.enc[EN_K2]] = 1; frame();
-        check(TDRUM->p[P_SLEN] == (int16_t)clamp(l0 + 1, 1, NSTEP) && !strncmp(ui.msg, "STEPS ", 6), "SECTIONS: KNOB 2 the steps");
-        encs[panel.enc[EN_K2]] = -1; frame(); TDRUM->p[P_SLEN] = l0;   /* (the turn back accelerates: as before) */
+        {   /* the length in bars (2026-11-08): a turn adds a bar of the section's meter at its division */
+            int32_t bar = (int32_t)sec_bar_steps();
+            check(bar > 0 && TDRUM->p[P_SLEN] == (int16_t)(clamp((l0 + bar - 1) / bar + 1, 1, (int32_t)NSTEP / bar) * bar) && !strncmp(ui.msg, "BARS ", 5),
+                  "SECTIONS: KNOB 2 the length, a bar more");
+            encs[panel.enc[EN_K2]] = -1; frame();
+            check(TDRUM->p[P_SLEN] == (int16_t)(clamp((l0 + bar - 1) / bar, 1, (int32_t)NSTEP / bar) * bar), "SECTIONS: KNOB 2 back: a bar less");
+        }
+        TDRUM->p[P_SLEN] = l0;
+
         d0 = TDRUM->p[P_SDIV]; l0 = TDRUM->p[P_SLEN]; encs[panel.enc[EN_K3]] = 1; frame();
         check(TDRUM->p[P_SDIV] == d0 + 1 && !strncmp(ui.msg, "DIV ", 4) && TDRUM->p[P_SLEN] != l0, "SECTIONS: KNOB 3 the division (the pattern re-gridded)");
         encs[panel.enc[EN_K3]] = -1; frame();

@@ -32,6 +32,8 @@ ABOUT; the editor shows it next to the connect button.
   count-in keeps its COUNT label. Pressed while the section's entry or break plays, the fill waits for the pattern's
   end after it. On LIVE the third black key, A#3, is this fill: F#3, G#3 and A#3 are the fill now, on the next bar and
   at the section's end (A#3 was a second F#3).
+- **A section's length counts bars.** On the SECTIONS screen KNOB 2 adds or takes a bar of the section's time at its
+  division (it moved a step at a time); when a bar is not whole steps at that division, steps as before.
 - **255 steps.** A pattern, a fill bar, an entry and a break each hold up to 255 steps (64 before): 15 bars at 1/16
   in 4/4, 31 at 1/8, 7 at 1/32. A song with a section, entry, fill bar or break past 64 steps needs this firmware
   (0.9.4 and earlier refuse it as "not a song"). On the SEQ and GRID screens the first four black keys pick a page
@@ -50,6 +52,9 @@ ABOUT; the editor shows it next to the connect button.
 - **The editor's player** has the new SNARE2 too.
 - **The fill at the section's end** in the player: a fifth button on the fill row, the key `g`, CC 21 value 2 from
   the pedal listened to, FILL AT THE END on the state line; the Pedal card lists it.
+- **The section's length is a number of bars** in the section editor, a select like the Entry, Fill and Break ones
+  (1 to what 255 steps hold). A file whose pattern ends between bars shows its steps there, with the steps box beside
+  it to set them.
 - **255 steps** in the section editor: the length, the Fill, Entry and Break selects go to what 255 steps hold (15
   bars of 1/16 in 4/4), the LEN control and the drum grid too; merge and the division change refuse past 255 (64
   before). The editor speaks protocol v12 and refuses a unit on 0.9.4 or earlier until it is updated.

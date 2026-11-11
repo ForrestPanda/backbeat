@@ -379,7 +379,8 @@ EDIT tapped on LIVE opens it: the song's sections as LIVE's tiles, the one picke
 and name big with its steps, division, bars, meter and outro mark. The picked section is the one the grid edits:
 stopped, KNOB 1 or a white key puts it in the drum track at once (a grid edited and not saved: the first move away
 says UNSAVED: AGAIN TO DROP, the next within 3 s drops the edits; "edited" shows in amber meanwhile); playing, it
-is cued for the section's end, as LIVE's keys cue. KNOB 2 sets its steps, KNOB 3 its division (the hits keep their
+is cued for the section's end, as LIVE's keys cue. KNOB 2 sets its length in bars (in steps when a bar is not whole steps at its division), KNOB 3 its division (the hits keep their
+
 place on the beat, as the SEQ layer's DIV), KNOB 4 the tempo. SEL copies the section after itself ("VERSE 2" when
 the name has room; the copy is not the outro), ENV and LFO move it a place left or right, OCT+ makes it the outro or
 takes the mark off (one outro at most), REC held for two seconds takes it out of the song (not the only one); each

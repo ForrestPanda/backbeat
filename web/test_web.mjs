@@ -812,6 +812,16 @@ function editorSed() {
       && /sayK\("sedDivLong"\); sedRender\(\)/.test(html) && /dv\.title = t\("sedDivHelp"\)/.test(html), "sed: the message and the help in both languages, the handler refuses");
   }
   ok(S.setSteps(sec, 16).lanes.KICK === "x.......X......." && S.setSteps(sec, 48).lanes.KICK.length === 48, "sed: steps cut and pad the strings");
+  ok(S.setBars(sec, 3).steps === 48 && S.setBars({ ...sec, time: "7/8" }, 2).steps === 28 && S.setBars({ ...sec, div: "1/8" }, 4).steps === 32 && S.setBars({ ...sec, div: "8T", time: "7/8" }, 2).steps === sec.steps * 2,
+    "sed: the length in bars of its time at its division (2026-11-08); a bar not whole steps: the pattern's length as the bar");
+  {   /* every id once (2026-11-09: the pattern's bars select and the file's bar strip were both "sed-bars", so the
+       * strip's buttons went into the select and the file's bars vanished from the page) */
+    const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]), dup = ids.filter((x, i) => ids.indexOf(x) !== i);
+    ok(dup.length === 0 && ids.includes("sed-bars") && ids.includes("sed-nbars"), "editor: every element id once (duplicates: " + dup.join(", ") + ")");
+  }
+  ok(/id="sed-nbars"/.test(html) && /id="sed-steps-l" hidden/.test(html) && /\$\("sed-nbars"\)\.addEventListener\("change"/.test(html) && /sedBars: "bars"/.test(html) && /sedBars: "小節数"/.test(html),
+    "editor: the section's length is a select of bars, the steps box beside it only when the length is not whole bars");
+
   const bars = [{ lanes: { KICK: "x...x...x...x...", HAT: "x.x.x.x.x.x.x.x." } }, { lanes: { KICK: "x...x...x.x.x...", SNARE: "....x.......x..." }, ratchets: { SNARE: "............2..." } }];
   const fb = S.fromBars(bars, "CHORUS");
   ok(fb.steps === 32 && fb.lanes.KICK === "x...x...x...x...x...x...x.x.x..." && fb.lanes.SNARE.slice(16) === "....x.......x..." && fb.ratchets.SNARE[28] === "2", "sed: a pattern from two bars of the file");

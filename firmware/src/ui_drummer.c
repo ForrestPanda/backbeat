@@ -13,7 +13,9 @@
  *   SECTIONS  EDIT tapped (2026-10-29, docs/design.md 6e: a song drafted on the device): the song's shape. The
  *          section picked (KNOB 1, the white keys) is the one the grid edits: stopped it goes into the drum track at
  *          once (the grid's unsaved edits: the first move warns, the next drops them), playing it is cued for the
- *          section's end as LIVE's keys cue. KNOB 2 its steps, KNOB 3 its division (the hits keep their beat),
+ *          section's end as LIVE's keys cue. KNOB 2 its length in bars (2026-11-08; steps when a bar is not whole
+ *          steps at its division), KNOB 3 its division (the hits keep their beat),
+
  *          KNOB 4 the tempo; SEL copies it after itself, ENV / LFO move it, OCT+ makes it the outro (or not), REC
  *          held takes it out; each of these writes the song, the grid's edits with it (SAVE held saves the grid
  *          alone). EDIT again: the grid; HOME: LIVE. On SONGS, EDIT on a row loads that song's SECTIONS; on an
@@ -185,6 +187,13 @@ UI_SMALL static void live_say(const char *a, int32_t v)      /* a knob turned: "
     char b[8];
     fmt_int(b, v);
     ui_say(a, b);
+}
+/* a bar of the grid in its steps, in the meter playing at the drum track's division (seq.c eb_bar_steps without its
+ * fallback): 0 when a bar is not whole steps (7/8 in triplets), the length then counted in steps */
+UI_SMALL static uint32_t sec_bar_steps(void)
+{
+    uint32_t u = div_units((uint32_t)TDRUM->p[P_SDIV] % NDIV_STEP) / (BEAT_U / 48u), b = 12u * meter_b16(clk_meter);
+    return u && b % u == 0u && b / u <= NSTEP ? b / u : 0u;
 }
 
 /* ---- SECTIONS (EDIT tapped) */
@@ -379,10 +388,20 @@ UI_SMALL static void drummer_input(uint32_t pressed, uint32_t home)
             int32_t from = song.playing && live_req >= 0 ? live_req : live_sec;
             sections_pick((uint32_t)clamp(from + s, 0, (int32_t)sec_count() - 1));
         }
-        if ((s = panel_enc(EN_K2)) != 0) {
-            t->p[P_SLEN] = (int16_t)clamp(t->p[P_SLEN] + accel(EN_K2, s, 63), 1, NSTEP);
-            cursor_fix();
-            live_say("STEPS ", t->p[P_SLEN]);
+        if ((s = panel_enc(EN_K2)) != 0) {         /* its length, in bars of its meter (2026-11-08, asked: a pattern is whole
+                                                   * bars, as the entry, fill and break are; the editor's select the same); a
+                                                   * bar that is not whole steps at this division: in steps, as before */
+            uint32_t bar = sec_bar_steps();
+            if (bar) {
+                int32_t n = clamp(((int32_t)t->p[P_SLEN] + (int32_t)bar - 1) / (int32_t)bar + (s > 0 ? 1 : -1), 1, (int32_t)(NSTEP / bar));
+                t->p[P_SLEN] = (int16_t)(n * (int32_t)bar);
+                cursor_fix();
+                live_say("BARS ", n);
+            } else {
+                t->p[P_SLEN] = (int16_t)clamp(t->p[P_SLEN] + accel(EN_K2, s, 63), 1, NSTEP);
+                cursor_fix();
+                live_say("STEPS ", t->p[P_SLEN]);
+            }
         }
         if ((s = panel_enc(EN_K3)) != 0) {
             if (pattern_div_set(t, (uint32_t)clamp(t->p[P_SDIV] + s, 0, (int32_t)NDIV_STEP - 1), 0))
