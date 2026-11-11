@@ -58,6 +58,12 @@ ABOUT; the editor shows it next to the connect button.
 - **255 steps** in the section editor: the length, the Fill, Entry and Break selects go to what 255 steps hold (15
   bars of 1/16 in 4/4), the LEN control and the drum grid too; merge and the division change refuse past 255 (64
   before). The editor speaks protocol v12 and refuses a unit on 0.9.4 or earlier until it is updated.
+- **Any run of the file's bars.** In the section editor the bars of a loaded Guitar Pro or MIDI file can be selected
+  as a run of any length that 255 steps hold (15 bars of 4/4 at 1/16), for the pattern, the fill, the entry or the
+  break; the limit was 4 bars. The importer's own 4-bar patterns are unchanged.
+- **The file's bars are back in the section editor.** Since the bars select of 2026-11-08 the strip of a loaded
+  Guitar Pro or MIDI file's bars (pick them as the pattern, the fill, the entry or the break) had vanished: the two
+  shared an element id, and the strip's buttons were drawn inside the select. The test now checks every id is unique.
 - **A tempo per section** in the section editor (a BPM box next to the time, the song's tempo as its placeholder), in
   the player (the switch as the section lands, the BPM label amber while the tempo is the section's own, the tiles
   showing it) and in `fm1_song.py`; the Guitar Pro and MIDI importers take a tempo change on a section's first bar as

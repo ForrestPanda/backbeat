@@ -1384,6 +1384,15 @@ function editorMeter() {
   ok(refused && D.setTime(four, "3/4").time === "3/4" && D.bars(D.setTime(four, "3/4")) === 2, "sed: setTime: a bad meter refused; 16 steps in 3/4 are two bars");
   const fb = D.fromBars([{ steps: 14, time: "7/8", lanes: { KICK: "x.....x......." } }, { steps: 14, time: "7/8", lanes: { SNARE: "....x.....x..." } }], "IMP");
   ok(fb.steps === 28 && fb.time === "7/8" && fb.lanes.KICK === "x.....x......." + ".".repeat(14) && fb.lanes.SNARE.slice(14) === "....x.....x...", "sed: fromBars with the file's 7/8 bars");
+  {   /* as many bars as 255 steps hold (2026-11-09; 4 until then): 15 bars of 16 steps, the 16th left; 7/8 bars (14 steps): 18 */
+    const b16 = Array.from({ length: 20 }, (_, i) => ({ lanes: { KICK: ".".repeat(i % 16) + "x" + ".".repeat(15 - (i % 16)) } })), b14 = Array.from({ length: 20 }, () => ({ steps: 14, time: "7/8", lanes: {} }));
+    const p = D.fromBars(b16, "LONG");
+    ok(D.barsFit(b16) === 15 && p.steps === 240 && p.lanes.KICK.length === 240 && p.lanes.KICK[14 * 16 + 14] === "x" && D.barsFit(b14) === 18 && D.fromBars(b14, "S").steps === 252
+      && D.barsFit(b16.slice(0, 3)) === 3 && D.barsFit([{ steps: 300, lanes: {} }]) === 1,
+      "sed: fromBars takes as many of the file's bars as 255 steps hold (15 of 4/4, 18 of 7/8), the rest left; a lone bar always");
+    ok(/SED\.barsFit\(SONGED\.bars\.slice\(SONGED\.barA - 1, n\)\) === n - SONGED\.barA \+ 1\) SONGED\.barB = n/.test(html) && !/barA \+ 4/.test(html),
+      "sed: the strip's selection runs as far as 255 steps hold, no four-bar cap");
+  }
   /* PC while playing (PLAY.load): the pattern playing goes on, the new song's sections from the next asked for, its tempo with it */
   const other = { name: "OTHER", bpm: 90, sections: [four, seven] };
   const g = P.create(spec);
