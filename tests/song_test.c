@@ -169,6 +169,27 @@ int main(int argc, char **argv)
         s = p; p = song_sec(blob[12], p, "OUT", 16, 2, SNG_F_OUTRO, "x...............", 0, 0, 0);
         blob_n[12] = song_bpm(blob[12], s, p, 150);
     }
+    {   /* slot 13: the fill at the section's end (2026-11-08): FOUR, 4 bars with a fill bar of one (a snare roll), and ONE */
+        const char *fb[DRUM_LANES] = {"x...x...x...x...", 0, "xxxxxxxxxxxxxxxx"};
+        uint32_t p = song_hdr(blob[13], "ENDFILL", 120, 0, 2), s = p;
+        p = song_sec(blob[13], p, "FOUR", 64, 2, 0,
+                     "x.......x.......x.......x.......x.......x.......x.......x.......",
+                     "....x.......x.......x.......x.......x.......x.......x.......x...", 0, 0);
+        p = song_fb(blob[13], s, p, 16, fb);
+        blob_n[13] = song_sec(blob[13], p, "ONE", 16, 2, 0, "x...x...x...x...", 0, 0, 0);
+    }
+    {   /* slot 14: the fill at the end asked during an entry (2026-11-09): FOUR as slot 13's, with a 2-bar entry (a crash on
+         * its step 0) before it, and ONE */
+        const char *fb[DRUM_LANES] = {"x...x...x...x...", 0, "xxxxxxxxxxxxxxxx"};
+        const char *ent[DRUM_LANES] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "X..............................."};
+        uint32_t p = song_hdr(blob[14], "ENTFILL", 120, 0, 2), s = p;
+        p = song_sec(blob[14], p, "FOUR", 64, 2, 0,
+                     "x.......x.......x.......x.......x.......x.......x.......x.......",
+                     "....x.......x.......x.......x.......x.......x.......x.......x...", 0, 0);
+        p = song_fb(blob[14], s, p, 16, fb);
+        p = song_blk(blob[14], s, p, SNG_F_ENTRY, 32, ent);
+        blob_n[14] = song_sec(blob[14], p, "ONE", 16, 2, 0, "x...x...x...x...", 0, 0, 0);
+    }
     pos = song_hdr(blob[1], "SLOW", 100, 2, 1);
     pos = song_sec(blob[1], pos, "ONLY", 16, 2, 0, "x.x.x.x.x.x.x.x.", 0, 0, 0);
     blob_n[1] = pos;
@@ -956,6 +977,151 @@ int main(int argc, char **argv)
         TDRUM->p[P_SDIV] = 2;
     }
     printf("song: a tempo per section (2026-11-07): checked, lands on the bar, the song's back, the knob's saved where it came from, kept through the pack-back and the image edits PASS\n");
+
+    /* ---- the fill at the section's end (CC 21 value 2, 2026-11-08; after the end since 2026-11-09, the user: "the fill
+     * should happen after the section reaches its end"): the section through, then its fill bar of its own, whole, as
+     * extra bars, then the pattern from its top or the section cued; asked in the last bar: as a plain press; without a
+     * fill bar of its own: as value 1, the whole next bar; the ending's stop after the fill ---- */
+    {
+        uint32_t fb, bar;
+        cc(16, 23, 0); advance(CTL * 2u);
+        pc(16, 13); advance(CTL); sng_poll();
+        assert(sng_cur == 13 && fb_bars == 1u && fb_bar == 16u && sng_bars(0) == 4u && song.g[G_BPM] == 120);
+        bar = bar_len();
+        cc(16, 20, 0); advance(CTL * 3u);                                  /* FOUR from stopped */
+        assert(song.playing && live_sec == 0 && live_bar == 0);
+        advance(bar / 4u);                                                 /* bar 0, its second beat */
+        cc(16, 21, 2); advance(CTL * 2u);
+        assert(!pedal_fill && pedal_fill_wait == 4u && !fill_now);        /* four bar lines: the section's end */
+        advance(bar);
+        assert(!pedal_fill && pedal_fill_wait == 3u && live_bar == 1 && !fill_now);
+        advance(bar * 2u);
+        assert(!pedal_fill && pedal_fill_wait == 1u && live_bar == 3 && !fill_now);   /* the last bar plays, the pattern's */
+        assert(drum_src(TDRUM, TDRUM->seq_idx, TDRUM->seq_idx, &fb) == &TDRUM->dstep[TDRUM->seq_idx] && !fb);
+        while (!pedal_fill)
+            advance(CTL);
+        while (TDRUM->seq_idx != 2u)                                       /* a fifth bar: the fill bar, its step 2 */
+            advance(CTL);
+        assert(pedal_fill && fill_now && pedal_fill_bars == 1u && !pedal_fill_wait && live_bar == 4 &&
+               drum_src(TDRUM, 2, 2, &fb) == &fb_dstep[2] && fb);
+        while (pedal_fill)                                                 /* over: the pattern from its top */
+            advance(CTL);
+        advance(CTL * 2u);
+        assert(!fill_now && live_bar == 0 && live_sec == 0 && drum_src(TDRUM, TDRUM->seq_idx, TDRUM->seq_idx, &fb) == &TDRUM->dstep[TDRUM->seq_idx] && !fb);
+        while (TDRUM->seq_idx != 36u)                                      /* bar 2, its second beat: two bar lines to go */
+            advance(CTL);
+        cc(16, 21, 2); advance(CTL * 2u);
+        assert(!pedal_fill && pedal_fill_wait == 2u);
+        cc(16, 20, 1); advance(CTL * 2u);                                  /* ONE asked for: after the fill */
+        assert(live_req == 1 && !pedal_at_end && pedal_fill_wait == 2u);
+        while (!pedal_fill)
+            advance(CTL);
+        assert(fill_now && live_bar == 4 && live_req == 1 && drum_src(TDRUM, TDRUM->seq_idx, TDRUM->seq_idx, &fb) == &fb_dstep[TDRUM->seq_idx] && fb);
+        while (live_req >= 0)
+            advance(CTL);
+        assert(live_sec == 1 && !pedal_fill && !fill_now && live_bar == 0);
+        cc(16, 20, 0); advance(bar + CTL * 4u);                            /* FOUR again, after ONE's bar */
+        assert(live_sec == 0 && live_bar == 0);
+        while (TDRUM->seq_idx != 52u)                                      /* bar 3, its second beat: the last bar */
+            advance(CTL);
+        cc(16, 21, 2); advance(CTL * 2u);
+        assert(!pedal_fill && pedal_fill_wait == 1u && !fill_now);        /* one bar line: as a plain press */
+        while (TDRUM->seq_idx != 2u)
+            advance(CTL);
+        assert(pedal_fill && fill_now && pedal_fill_bars == 1u && live_bar == 4 && drum_src(TDRUM, 2, 2, &fb) == &fb_dstep[2] && fb);
+        while (TDRUM->seq_idx != 18u)                                      /* over: the pattern from its top, bar 1 by now */
+            advance(CTL);
+        assert(!pedal_fill && !fill_now && live_bar == 1 && drum_src(TDRUM, 18, 18, &fb) == &TDRUM->dstep[18] && !fb);
+        while (TDRUM->seq_idx != 20u)
+            advance(CTL);
+        cc(16, 21, 2); advance(CTL * 2u);                                  /* in bar 1: three bar lines to the end */
+        assert(pedal_fill_wait == 3u);
+        cc(16, 22, 127); advance(CTL * 2u);                                /* the ending (no outro): the section ends, the fill,
+                                                                            * then the stop */
+        assert(pedal_end_bars == 4u && pedal_fill_wait == 3u && song.playing);
+        while (!pedal_fill)
+            advance(CTL);
+        advance(CTL * 2u);
+        assert(fill_now && live_bar == 4 && song.playing);
+        advance(bar);
+        assert(!song.playing && !pedal_fill && !pedal_end_bars);
+        pc(16, 6); advance(CTL); sng_poll();                               /* (the VERSE's fill bar: asked in bar 0 of 2, two
+                                                                            * bar lines, the fill as a third bar) */
+        bar = bar_len();
+        cc(16, 20, 0); advance(CTL * 3u);
+        assert(song.playing && live_sec == 0 && fb_bars == 1u && sng_bars(0) == 2u);
+        advance(bar / 4u);
+        cc(16, 21, 2); advance(CTL * 2u);
+        assert(!pedal_fill && pedal_fill_wait == 2u);
+        while (!pedal_fill)
+            advance(CTL);
+        while (TDRUM->seq_idx != 2u)
+            advance(CTL);
+        assert(pedal_fill && fill_now && live_bar == 2 && drum_src(TDRUM, 2, 2, &fb) == &fb_dstep[2] && fb);
+        cc(16, 20, 1); advance(bar + CTL * 4u);                            /* PLAIN, no fill bar of its own: as value 1, the
+                                                                            * whole next bar (2026-11-09; a plain press before) */
+        assert(live_sec == 1 && fb_bars == 0u);
+        advance(bar / 4u);
+        cc(16, 21, 2); advance(CTL * 2u);
+        assert(!pedal_fill && pedal_fill_wait == 1u && !fill_now);
+        while (!pedal_fill)
+            advance(CTL);
+        assert(fill_now && pedal_fill_bars == 1u && !pedal_fill_wait && live_bar == 1);
+        cc(16, 23, 0); advance(CTL * 2u);
+    }
+    printf("song: the fill at the section's end (CC 21 value 2, 2026-11-08, after the end 2026-11-09): the section through, its fill bar after it, the pattern or the section cued, the ending's stop after it PASS\n");
+    /* ---- the same asked during the section's entry (2026-11-09; the user: "the fill happens before the section reaches its
+     * end"): the entry plays whole, the pattern its bars, the fill after them; from the entry's first bar or its last; a
+     * section cued meanwhile lands after the fill ---- */
+    {
+        uint32_t fb, bar;
+        cc(16, 23, 0); advance(CTL * 2u);
+        pc(16, 14); advance(CTL); sng_poll();
+        assert(sng_cur == 14 && fb_bars == 1u && sng_bars(0) == 4u);
+        bar = bar_len();
+        cc(16, 20, 0); advance(CTL * 3u);                                  /* FOUR from stopped: its 2-bar entry first */
+        assert(song.playing && live_sec == 0 && eb_bars == 2u && eb_len == 32u);
+        advance(bar / 4u);                                                 /* the entry's bar 0, its second beat */
+        cc(16, 21, 2); advance(CTL * 2u);
+        assert(!pedal_fill && pedal_fill_wait == 6u && eb_bars == 2u);    /* the entry's bar 1, the pattern's 4: then the fill */
+        advance(bar);
+        assert(!pedal_fill && pedal_fill_wait == 5u && eb_bars == 2u && eb_len == 32u);   /* the entry goes on, not cut */
+        while (eb_len)
+            advance(CTL);
+        assert(live_bar == 0 && !pedal_fill && pedal_fill_wait == 4u);
+        while (!pedal_fill)
+            advance(CTL);
+        while (TDRUM->seq_idx != 2u)                                       /* the pattern's bars through: the fill bar */
+            advance(CTL);
+        assert(pedal_fill && fill_now && pedal_fill_bars == 1u && live_bar == 4 && drum_src(TDRUM, 2, 2, &fb) == &fb_dstep[2] && fb);
+        while (pedal_fill)
+            advance(CTL);
+        advance(CTL * 2u);
+        assert(!fill_now && live_bar == 0 && live_sec == 0 && eb_len == 0u);   /* the pattern from its top, no entry */
+        cc(16, 27, 1); advance(bar + CTL * 4u);                            /* ONE on the next bar, then FOUR at its end: its entry */
+        assert(live_sec == 1);
+        cc(16, 20, 0); advance(CTL * 2u);
+        while (live_req >= 0)
+            advance(CTL);
+        assert(live_sec == 0 && eb_bars == 2u && live_bar == 0);
+        advance(bar + bar / 2u);                                           /* the entry's last bar */
+        assert(live_bar == 1 && eb_len == 32u);
+        cc(16, 21, 2); advance(CTL * 2u);
+        assert(!pedal_fill && pedal_fill_wait == 5u);                     /* one of the entry's, the pattern's four */
+        cc(16, 20, 1); advance(CTL * 2u);                                  /* ONE cued: after the fill */
+        assert(live_req == 1 && !pedal_at_end && pedal_fill_wait == 5u);
+        while (!pedal_fill)
+            advance(CTL);
+        advance(CTL * 2u);
+        assert(fill_now && live_bar == 4 && live_req == 1 && eb_len == 0u && drum_src(TDRUM, TDRUM->seq_idx, TDRUM->seq_idx, &fb) == &fb_dstep[TDRUM->seq_idx] && fb);
+        while (live_req >= 0)
+            advance(CTL);
+        assert(live_sec == 1 && !pedal_fill && live_bar == 0);
+        cc(16, 23, 0); advance(CTL * 2u);
+    }
+    printf("song: the fill at the section's end asked during its entry (2026-11-09): the entry whole, the pattern's bars, the fill after them, from the entry's first or last bar, the section cued after it PASS\n");
+
+
     /* ---- the division changed on the device (2026-10-29, seq.c pattern_rediv): the hits keep their place on the beat,
      * the section's fill bar in RAM follows, and the save packs its fill bar and entry on the new grid (sng_pack_rediv) */
     {

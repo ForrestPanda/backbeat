@@ -89,7 +89,7 @@ Footswitches send MIDI on channel 16 (default) to the TRS jack or over USB:
 | --- | --- |
 | CC 20, value 0..15 | section 1..16 of the song (no song loaded: 0..3, SLOOP's A..D) when the section playing has played its pattern out (a 1-bar section: the next bar; a fill pending: the bar after it), no fill of its own; stopped: start with it. The section already playing: nothing. A section with an entry comes in through it (below) |
 | CC 27, value 0..15 | that section on the next bar, without waiting for the section's end, no fill of its own |
-| CC 21 | the fill, of two kinds. A section with a fill of its own (extra bars, 1 to 4, the section editor's Fill select or the importer's): it plays whole, from the next bar line, past the section's end if fewer bars are left, then the pattern from its top (the screen says FILL NEXT BAR while it waits). A section without one, its fill embedded in the pattern as marks, as an arranger keyboard's: fill mode from now to the section's end, the marks heard where they sit, the pattern on with no restart (nothing marked: nothing changes); pressed in the bar's last beat, the whole next bar. Sent with a CC 20 / 22 / 24 / 25 / 27 (either order), the fill into that change, which lands on the bar after the fill. Value 1: the whole next bar from anywhere in this one, for a fill that leads off its bar |
+| CC 21 | the fill, of two kinds. A section with a fill of its own (extra bars, 1 to 4, the section editor's Fill select or the importer's): it plays whole, from the next bar line, past the section's end if fewer bars are left, then the pattern from its top (the screen says FILL NEXT BAR while it waits). A section without one, its fill embedded in the pattern as marks, as an arranger keyboard's: fill mode from now to the section's end, the marks heard where they sit, the pattern on with no restart (nothing marked: nothing changes); pressed in the bar's last beat, the whole next bar. Sent with a CC 20 / 22 / 24 / 25 / 27 (either order), the fill into that change, which lands on the bar after the fill. Value 1: the whole next bar from anywhere in this one, for a fill that leads off its bar. Value 2: the fill at the section's end: the section plays through, then its fill of its own, whole, as extra bars, then the pattern from its top or the section asked for (the screen says FILL AT THE END while it waits); in a section without a fill of its own it is value 1, the whole next bar |
 | CC 22, value 0..15 | ending: the section playing ends, that section once as the outro (its entry first, if it has one), stop on the bar (other values: the song's flagged outro, or the section ends, then stop; the outro playing already: it plays to its end, then stop) |
 | CC 28, value n | the break: section n through its break, when the section playing ends (as CC 20; with CC 21 on the switch: the fill, then the break); the section playing too. Value 127 (not a section): the section playing's, so one switch serves every song. No break written: its entry; neither: a bar of rest. Stopped: start with it |
 | CC 23 | stop now |
@@ -162,7 +162,8 @@ with the kit's pads as the pedal would, on a view of the device's LIVE screen (t
 time signature, the section with its bar and a progress ticked per bar, the count-in, what comes next, the sections
 as tiles, all in time with what you hear): the tiles are the footswitches, with fills, the ending, stop, the song's
 swing and the count-in as the device has them; keys (shown under the tiles): 1..8 a section (0 switches them to 9..16 and back), shift + the key on the next
-bar, f a fill (F: the whole next bar), comma and period previous / next, e the ending, space stop; **MIDI in from** and **Listen to the pedal** let the real pedal (the
+bar, f a fill (F: the whole next bar, g: at the section's end), comma and period previous / next, e the ending, space stop; **MIDI in from** and **Listen to the pedal** let the real pedal (the
+
 Ampero, or a USB MIDI interface between it and the computer, or the FM-1 itself with SETUP > MIDI 2 > TRS TO USB on:
 what its TRS jack receives, over its USB: "A tablet beside the FM-1" below) drive that player with the same CCs and PCs as the
 FM-1, on the Pedal card's channel (PC n opens song n of the FM-1 connected, or of the simulated one), so the
@@ -332,12 +333,13 @@ nothing is coming, the beat lights in its place. The white keys still change sec
 settings. HOME again: the tiles. The white keys 1..16 change section when the one
 playing ends, with OCT+ held on the next bar (the state line says KEY: ON THE NEXT BAR), with no fill of their own; the first black key (F#3) asks for a fill (as CC 21:
 a fill of its own whole from the next bar line; embedded marks from now to the section's end, with OCT+ held from the next bar), the second (G#3) the fill from the next bar (the same as F#3 with a fill of its own),
+the third (A#3) the **fill at the section's end** (as CC 21 value 2: the section plays through, then its fill of its own, then the pattern from its top or the section asked for),
 the pair C#4 and D#4 the break (as CC 28: the section playing comes in again through its break when it ends); the pair C#5 and D#5 the **ending** (as CC 22 value 127: the song's outro once, its entry first, then the stop; with no outro the section playing ends, then the stop); the last (F#5) the
 **tap tempo** (as CC 26, song loaded or not), its light flashing the tempo (with PLAY while playing; stopped, at the
 tempo, so a tap or a MIDI clock shows at once); the second octave's trio (F#4, G#4, A#4) is **on the next bar** like OCT+,
 no fill: held while a white key is pressed, the change comes on the next bar; tapped alone, the next white key's change
 does (the state line says KEY: ON THE NEXT BAR until then; a second tap takes it back); tapped while a change waits for
-the section's end, that change moves to the next bar; the other black keys as the first. So a plain change is one press, and a fill into the change is a black key then a white one,
+the section's end, that change moves to the next bar. So a plain change is one press, and a fill into the change is a black key then a white one,
 as the pedal's CC 21 sent with its CC 20. OCT- and OCT+ tapped are the previous and next section
 (without a fill; OCT+ held with a white key still puts that section on the next bar). ENV opens NOTES. KNOB 1 (and SELECT) the tempo, the section's own when it has one (turned fast it sweeps wider
 , a detent at a time when turned slowly;

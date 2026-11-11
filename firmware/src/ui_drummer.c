@@ -24,7 +24,9 @@
  *   black keys        (since 2026-10-19, asked: "the first black key a fill now, the second a fill next bar, the
  *                     fourth a break") F#3, the first: the fill (CC 21: the rest of this bar; from its last beat,
  *                     the next bar); with OCT+ held, the whole next bar (CC 21 value 1: the same hold as the white
- *                     keys' "next bar"). G#3, the second: the whole next bar always (CC 21 value 1). C#4 and D#4,
+ *                     keys' "next bar"). G#3, the second: the whole next bar always (CC 21 value 1). A#3, the third:
+ *                     the fill after the section's end (CC 21 value 2: the section through, then its fill bar of
+ *                     its own; 2026-11-09, asked: "the third option for fills"; it was the first's twin). C#4 and D#4,
  *                     the pair: the break (CC 28 value 127: the section playing comes in again through its break
  *                     when it ends; stopped, the one cued starts through it). C#5 and D#5, the pair: the ending
  *                     (CC 22 value 127: the song's outro once, then the stop; 2026-10-30, asked; both keys of each
@@ -35,8 +37,7 @@
  *                     one. So I meant F#4,G#4,A#4"): held, a white key changes on the next bar (seq.c KB_NEXTBAR, as
  *                     OCT+ held); tapped with a change cued for the section's end, that change moves to the next bar;
  *                     tapped with nothing cued, the next white key changes on the next bar (key_nextbar, the state
- *                     line says KEY: ON THE NEXT BAR; a second tap, a white key or the stop clears it). The other
- *                     black key, A#3, as the first
+ *                     line says KEY: ON THE NEXT BAR; a second tap, a white key or the stop clears it)
  *   OCT- OCT+         tapped: previous, next (as CC 25, 24, without their fill; 2026-11-04, asked: "make oct- / oct+ in
  *                     live mode cue the previous and the next section", ENV / LFO were, since 2026-10-30): acted on
  *                     the release, within 400 ms and no key meanwhile, so OCT+ held with a white key stays "on the
@@ -154,6 +155,9 @@ static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.
         key_nextbar = 0;
     } else if (b == 1) {                            /* the second black key (G#3): the whole next bar (CC 21 value 1) */
         pedal_cc(PEDAL_CC_FILL, 1u);
+    } else if (b == 2) {                            /* the third (A#3): the fill after the section's end (CC 21 value 2;
+                                                     * 2026-11-09, asked: "the third option for fills") */
+        pedal_cc(PEDAL_CC_FILL, 2u);
     } else if (b >= 5 && b <= 7) {                  /* F#4, G#4, A#4 (2026-11-01): the change cued for the section's end
                                                      * goes on the next bar instead; nothing cued: the next white key's
                                                      * change will (a second tap takes it back) */
@@ -170,8 +174,8 @@ static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.
                                                      * 2026-10-30; the pair 2026-11-01) */
         pedal_cc(PEDAL_CC_ENDING, 127u);
     else
-        pedal_cc(PEDAL_CC_FILL, nextbar ? 1u : 0u); /* the first (F#3) and A#3: a fill to the bar's end (CC 21); OCT+
-                                                     * held: the whole next bar (value 1) */
+        pedal_cc(PEDAL_CC_FILL, nextbar ? 1u : 0u); /* the first (F#3): a fill to the bar's end (CC 21); OCT+ held: the
+                                                     * whole next bar (value 1) */
     fm1_irq_on();
 }
 
@@ -647,9 +651,11 @@ UI_SMALL static void live_state(uint32_t playing, const char *next, uint32_t big
         str_cpy(b + 6, next, 13);
         np = 6;
     } else if (pedal_fill_wait) {                 /* the fill on the next bar line: a fill bar of its own, whole; none,
-                                                   * asked in the bar's last beat */
-        str_cpy(b, "FILL NEXT BAR", sizeof b);
+                                                   * asked in the bar's last beat; later: after the section's end
+                                                   * (CC 21 value 2) */
+        str_cpy(b, pedal_fill_wait > 1u ? "FILL AT THE END" : "FILL NEXT BAR", sizeof b);
         c = TE_DRUM;
+
     } else if (fill) {
         str_cpy(b, "FILL", sizeof b);
         c = TE_DRUM;

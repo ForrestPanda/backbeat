@@ -49,7 +49,7 @@ repeats its message does no harm; next / previous / tap count presses.
 | CC 20, value n | go to section n when the section playing has played its pattern out (its bars, counted from where it started), no fill of its own; a 1-bar section: the next bar; a fill pending (asked before or after): on the bar after the fill instead; stopped: start the loop with it. n the section playing, nothing cued: nothing; with an ending pending it cancels the ending, as any section | done (n = 0..3, A..D; at the section's end 2026-10-13; no fill 2026-10-14; after a fill 2026-10-15) |
 | CC 27, value n | on the next bar, without waiting for the section's end, no fill of its own (a fill pending: after it) | done (no fill bar 2026-10-14) |
 | CC 28, value n | the break: section n through its break (bars written to play before its pattern, below), when the section playing ends, as CC 20 (a fill pending: after it, so one switch can send the fill and the break); the section playing too (it comes in again through its break). n not a section (127): the section playing's (stopped: the one cued, else the first). No break written: its entry; neither: a bar of rest. Stopped: the loop starts with it. CC 20, 22, 24, 25, 27 bring a section in through its **entry**, if written, from another section or from stopped; the section playing asked for again stays a no-op | done 2026-10-18 (firmware, the browser player, the section editor) |
-| CC 21, value v | the fill. A section with a fill bar of its own, as an arranger's fill-in: from now to the end of this bar (the fill bar instead of the pattern's, its step i at the bar's step i), then the pattern again from its top on the next bar, or the section asked for. A section without one: fill mode from now to the section's end (the FILL ONLY hits in, the NO FILL hits out, where they sit; a section with no fill at all: nothing changes), then the pattern on from its top, no restart, or the section asked for at that end. Asked for in the bar's last beat: the whole next bar (no fill bar, in the section's last bar: the whole next cycle). Value 1: the whole next bar from anywhere in this one (a fill bar whose hits lead off the bar); in a fill, the next bar a fill too. Any other value: from now. Sent with a section change (the same footswitch, either order): the fill into it, the change on the bar after the fill | done (to the pattern's end 2026-10-13; the arrangers' way 2026-10-15; value 1 2026-10-16; to the section's end without a fill bar 2026-10-17) |
+| CC 21, value v | the fill. A section with a fill bar of its own, as an arranger's fill-in: from now to the end of this bar (the fill bar instead of the pattern's, its step i at the bar's step i), then the pattern again from its top on the next bar, or the section asked for. A section without one: fill mode from now to the section's end (the FILL ONLY hits in, the NO FILL hits out, where they sit; a section with no fill at all: nothing changes), then the pattern on from its top, no restart, or the section asked for at that end. Asked for in the bar's last beat: the whole next bar (no fill bar, in the section's last bar: the whole next cycle). Value 1: the whole next bar from anywhere in this one (a fill bar whose hits lead off the bar); in a fill, the next bar a fill too. Value 2: the fill at the section's end: the section through, then its fill bar of its own, whole, then the pattern from its top or the section asked for (on the section's last bars, replacing them, until 2026-11-09); no fill bar of its own: as value 1, the whole next bar (a plain press until 2026-11-09). Any other value: from now. Sent with a section change (the same footswitch, either order): the fill into it, the change on the bar after the fill | done (to the pattern's end 2026-10-13; the arrangers' way 2026-10-15; value 1 2026-10-16; to the section's end without a fill bar 2026-10-17; value 2 2026-11-08, item 12) |
 | CC 22, value n | ending: the section playing ends (as CC 20), section n once as the outro, stop on the bar; n empty or out of range: the section ends, then stop | done (at the section's end 2026-10-13) |
 | CC 23 | stop now | done |
 | CC 24 / CC 25 | next / previous section, empty ones skipped, wrapping, as CC 20; stopped (nothing cued): the first / the last | done |
@@ -358,7 +358,8 @@ next bar). No named sections, one song, no fill tied to a section change.
      key or the stop clears it). A fill into a change on the next bar is F#3 then F#4 + a white key. Then "make
      break work on both keys of the pair C#4 and D#4, and C#5 and D#5 both the ending": the pairs, so the foot or
      the hand need not tell the two apart (`b == 3 || b == 4`, `b == 8 || b == 9`); the fill now is F#3 and A#3.
-     Test: ui_pages_test.)
+     Test: ui_pages_test. 2026-11-09, asked: A#3 "the third option for fills", the fill at the section's end, CC 21
+     value 2 (item 12), so the three fills sit on the first three black keys: now, the next bar, the end.)
    - **The editor and a device that goes away** (2026-11-01, the user: "improve usb handling on the web ui, detect
      disconnected, allow to reconnect without reloading"): before, only Web MIDI's statechange was watched (an
      unplug said "lost", a port coming back reconnected once, 800 ms later), and a device that stayed enumerated but
@@ -686,6 +687,47 @@ next bar). No named sections, one song, no fill tied to a section change.
    the player's switches, the loaded song, the count-in, the box and the label), midi2song_test.py and
    gp2song_test.py (the outro's own tempo from a change on its first bar; a change inside the chorus not a section's).
    Verify on hardware: a song with a bridge at another tempo, the switch on the bar, the knob's save, the label.
+
+12. **The fill at the section's end (CC 21 value 2; 2026-11-08, done; to verify on the unit).** Asked: "I feel the
+   need to have an option to play the fill after section runs through, maybe CC 21 2". Since 2026-10-30 a fill bar of
+   its own plays whole from the next bar line and the pattern restarts after it, which cuts a 4-bar phrase short
+   when the fill is asked in its second bar. Value 2 places the fill bar on the section's last bars instead (as many
+   as it has), so the phrase plays through, the fill ends with the section, and the pattern is at its top after it
+   (the restart after a fill bar lands on the same bar line) or the section asked for lands there, as CC 20 would.
+   `pedal_fill_req(PF_END)` set `pedal_fill_wait` to the bar lines to the fill's first bar (`live_sec_bars` minus
+   `fb_bars` minus the bar the section is in; the next day's note below moves the fill after the end); `live_block` already counted that variable down, so nothing changed
+   there, and LIVE says FILL AT THE END while it is more than a bar line away (`live_state`). Asked once those bars
+   have begun (the fill could not end with the section), or in a section without a fill bar of its own (fill mode
+   runs to the section's end anyway, the marks where they sit): as a plain press. A section cued before
+   or after lands at the fill's end, the section's end; the ending's stop too. The editor's player:
+   `PLAY.fillNext(st, "end")`, the same rule; a fifth button on the fill row, the key `g`, `PEDALIN` decodes CC 21 2 and says FILL AT THE END,
+   the state line too; the Pedal card's table lists it. Tests: song_test.c (slot 13, a 4-bar section with a 1-bar fill
+   bar: asked in bar 0 it waits three bar lines, the fill on bar 3, the pattern from its top; a section cued lands
+   after it; asked in bar 3, as a plain press; the ending's stop after it; the 2-bar VERSE and a section without a
+   fill bar), test_web.mjs (the same in the player, the decoder, the markup). Verify on hardware: a 4-bar section
+   with a fill bar, CC 21 2 pressed in its first bar: the fill on the fourth, the phrase whole, the label.
+   **After the end, not on the last bars (2026-11-09).** The user: "if fill at end of section is pressed well before
+   the end, the fill happens before the section reaches its end", and when the fill was moved to the pattern's last
+   bar after an entry: "the fill should happen after the section reaches its end, it seems it's replacing its last few
+   bars". So value 2 is now: the section plays through to its end, then its fill bar, whole, as extra bars, then the
+   pattern from its top (the restart after a fill bar) or the section cued. `pedal_fill_req(PF_END)` sets
+   `pedal_fill_wait` to the bar lines to the section's end: the pattern's bars (`sng_bars(live_sec)`) minus the bar
+   it is in, plus the entry's or break's bars left while one plays (the first version counted the entry's bars as the
+   section's, `live_sec_bars`, and put the fill on the entry's last bar). In the last bar that is one bar line, a
+   plain press. The ending's stop (`live_block`) now waits for a fill that starts on its bar line, as it did for one
+   pending (`!pedal_fill && !pedal_fill_wait` beside `fill_over`). **Without a fill bar of its own** (the fill in the
+   marks), value 2 was a plain press, fill mode from now; the user the same day: "if the section does not have fill
+   bars (they are embedded) CC 21 2 behaves the same as CC 21 1": so it is value 1 then, the whole next bar, fill mode
+   from the next bar line to the section's end (`pedal_fill_req`: `mode != PF_NOW` sets the press in the last beat;
+   `PLAY.fillNext`: `next` truthy). The player the same (`PLAY.secBars`, `st.ebB`,
+   `PLAY.bar`). **The device's key**: A#3 on LIVE is this fill (asked the same day: "make the fill keys A#2? behave as
+   the third option for fills"; the key's name on the panel is A#3, the first octave's third black key; it was F#3's
+   twin), so F#3, G#3, A#3 are the fill now, on the next bar, after the end. Tests: song_test.c (slot 13: asked in bar
+   0 of 4, four bar lines, the fill on a fifth bar, the pattern from its top; a section cued lands after it; asked in
+   bar 3, one; the ending's stop after the fill; the 2-bar VERSE; slot 14: FOUR with a 2-bar entry, asked in the
+   entry's first bar, six, the entry whole; in its last, five, a section cued after the fill), test_web.mjs (the same
+   in the player), ui_pages_test.c (A#3). Verify on hardware: a 4-bar section with a fill bar, A#3 (or CC 21 2) in its
+   first bar: the four bars through, the fill as a fifth, the pattern from its top; the same with an entry.
 
 
 

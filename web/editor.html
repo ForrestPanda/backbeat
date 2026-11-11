@@ -399,7 +399,8 @@
   /* the Play card's transport: previous / fill / next, under them play / stop / ending: two rows of three, a thumb each
      on a tablet (the count-in and humanize below, in their own row) */
   .ptrans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 8px; }
-  .ptrans.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }   /* the pedal's rows: previous, fill, fill next bar, next; play, stop, break, ending */
+  .ptrans.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }   /* the pedal's rows: previous, fill, fill next bar, fill at the end, next; play, stop, break, ending */
+  .ptrans.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .ptrans button { min-height: 44px; padding: 8px 10px; white-space: normal; overflow-wrap: anywhere; }
   .setnav { margin: 0 0 12px; align-items: center; } .setnav b { font-size: 20px; font-weight: 400; color: var(--fg); min-width: 8em; }                 /* (the set's song in the player) */
   #sysinfo th { padding-right: 24px; }
@@ -671,6 +672,7 @@
             <tr><td>CC 27 n</td><td data-t="playC27"></td><td><kbd>shift 1–8</kbd></td></tr>
             <tr><td>CC 21 0</td><td data-t="playC21"></td><td><kbd>f</kbd></td></tr>
             <tr><td>CC 21 1</td><td data-t="playC21n"></td><td><kbd>F</kbd></td></tr>
+            <tr><td>CC 21 2</td><td data-t="playC21e"></td><td><kbd>g</kbd></td></tr>
             <tr><td>CC 28 n</td><td data-t="playC28"></td><td><kbd>b</kbd></td></tr>
             <tr><td>CC 22 n</td><td data-t="playC22"></td><td><kbd>e</kbd></td></tr>
             <tr><td>CC 23</td><td data-t="playC23"></td><td><kbd>space</kbd></td></tr>
@@ -692,7 +694,7 @@
           <div class="plive-keys" data-t="playKeys"></div>
         </div>
         <div id="play-bar">   <!-- the transport: the pedal's buttons, play (the device's PLAY key) and stop under them -->
-          <div class="ptrans four"><button id="play-prev" data-t="playPrev"></button><button id="play-fill" data-t="playFill"></button><button id="play-fillnext" data-t="playFillNext"></button><button id="play-next" data-t="playNext"></button></div>
+          <div class="ptrans five"><button id="play-prev" data-t="playPrev"></button><button id="play-fill" data-t="playFill"></button><button id="play-fillnext" data-t="playFillNext"></button><button id="play-fillend" data-t="playFillEnd"></button><button id="play-next" data-t="playNext"></button></div>
           <div class="ptrans four"><button id="play-play" class="pri" data-t="playPlay"></button><button id="play-stop" class="warn" data-t="playStop"></button><button id="play-break" data-t="playBreak"></button><button id="play-end" data-t="playEnd"></button></div>
           <p class="bar"><label><span data-t="pedalCount"></span> <select id="play-count"></select></label>
             <label><span data-t="playHum"></span> <select id="play-hum"></select></label></p>
@@ -2744,9 +2746,24 @@ const PLAY = {
                                                        last bar: the next cycle). Asked again while one plays: nothing new,
                                                        except in the last beat of its last bar: another fill, straight on.
                                                        next (CC 21 value 1, the key F): as asked in the last beat, from
-                                                       anywhere in the bar; with a fill bar of its own the same as f */
+                                                       anywhere in the bar; with a fill bar of its own the same as f.
+                                                       "end" (CC 21 value 2, the key g; 2026-11-08, after the end since
+                                                       2026-11-09): the section through, then its fill bar of its own, whole,
+                                                       then the pattern from its top or the section asked for: fillWait
+                                                       counts the bar lines to the section's end (an entry or break playing:
+                                                       its bars left first); with no fill bar of its own: as F, the whole
+                                                       next bar (2026-11-09) */
     if (!st.playing || st.counting || st.sec < 0) return;
-    const s = PLAY.playing(st), barU = PLAY.barU(s), beat = 192 / SNG.meter(s.time).den, at = next ? barU - 1 : st.pos % barU;
+    const s = PLAY.playing(st), barU = PLAY.barU(s), beat = 192 / SNG.meter(s.time).den, at = next ? barU - 1 : st.pos % barU;   /* ("end" without a fill bar
+                                                        of its own: as true, the whole next bar; 2026-11-09) */
+    if (next === "end" && s.fillbar && !st.fill && !st.fillWait) {
+      const n = PLAY.secBars(s);                   /* the pattern's bars */
+      st.fillWait = st.eb ? st.ebB - (st.bar % st.ebB) + n : n - (st.bar % n);   /* bar lines to the section's end: the entry's
+                                                        or break's left, then the pattern's (1 in the last bar); bar counts
+                                                        them down, the fill bar from there */
+      if (st.req >= 0) st.atEnd = false;           /* a section cued: on the bar after the fill */
+      return;
+    }
     if (!st.fill && !st.fillWait) {
       if (s.fillbar || at + beat >= barU) st.fillWait = 1;   /* a fill bar of its own: whole, from the next bar line; none, in
                                                         the bar's last beat: the next bar, whole */
@@ -2812,7 +2829,8 @@ const PLAY = {
     } else if (st.fillWait && !--st.fillWait) { PLAY.ebCut(st); st.fill = true; st.fillBars = PLAY.fillBars(PLAY.playing(st), ebOver ? 0 : st.bar); }   /* (right
                                                         after an entry or break: from the pattern's top, restarted below) */
     if (st.atEnd && st.bar % PLAY.curBars(st) === 0) st.atEnd = false;   /* waiting for the section's end */
-    if (st.endBars && st.req < 0 && (st.bar >= st.endBars || over)) { PLAY.stop(st); return; }
+    if (st.endBars && st.req < 0 && (over || (st.bar >= st.endBars && !st.fill && !st.fillWait))) { PLAY.stop(st); return; }   /* (a fill
+                                                        pending or starting here pulls the stop to its end; 2026-11-09) */
     if (st.req >= 0 && !st.atEnd && !st.fill && !st.fillWait) {
       const entering = !!st.cur;
       if (st.cur) { st.cur = null; st.bpm = st.songBpm = st.spec.bpm; st.secBpm = false; st.swing = +st.spec.swing || 0; st.swing8 = st.spec.swing_grid === "1/8"; }   /* (a song loaded while playing: its tempo
@@ -2915,7 +2933,8 @@ const PEDALIN = {
     switch (data[1]) {
       case 20: return { kind: "section", k: v, now: false };
       case 27: return { kind: "section", k: v, now: true };
-      case 21: return { kind: "fill", next: v === 1 };   /* (value 1: the whole next bar) */
+      case 21: return { kind: "fill", next: v === 1 ? true : v === 2 ? "end" : false };   /* (value 1: the whole next bar; 2: at
+                                                                                             the section's end) */
       case 22: return { kind: "ending", k: v };
       case 23: return { kind: "stop" };
       case 24: return { kind: "step", dir: 1 };
@@ -2930,7 +2949,7 @@ const PEDALIN = {
     const name = (k) => (spec && spec.sections[k] ? spec.sections[k].name : String(k));
     switch (a.kind) {
       case "section": return (a.now ? "NOW: " : "NEXT: ") + name(a.k);
-      case "fill": return a.next ? "FILL NEXT BAR" : "FILL";
+      case "fill": return a.next === "end" ? "FILL AT THE END" : a.next ? "FILL NEXT BAR" : "FILL";
       case "break": return "BREAK: " + (spec && spec.sections[a.k] ? name(a.k) : "THIS ONE");
       case "ending": return "ENDING" + (spec && spec.sections[a.k] ? ": " + name(a.k) : spec && PLAY.outro(spec) != null ? ": " + name(PLAY.outro(spec)) : "");
       case "stop": return "STOP";
@@ -3634,11 +3653,11 @@ const TEXT = {
     sedHear: "クリックで音を聞く", sedKey: "キー: ", sedUndo: "元に戻す", sedRedo: "やり直す", sedPlaySec: "このセクションを試聴", sedKeys: "キー: n 通常、h 強、s 弱、g ゴースト、x 消去、r ラチェット、l フラム、m フィル印、[ ] 前後のセクション、Delete 選択ステップを消去、Ctrl+C / Ctrl+V ステップのコピーと貼り付け、Ctrl+Z / Ctrl+Y 元に戻す / やり直す、p このセクションを試聴。レーン名をクリックすると音が鳴ります。", sedCols: "ステップ（番号をクリック、Shift+クリックで範囲。フィル小節・エントリー・ブレイクの番号も：そこへコピーと貼り付け）:", sedCopy: "コピー", sedPaste: "貼り付け（選択位置に）", sedClear: "消去", sedCopied: "コピーしました: ", sedUseBars: "選んだ小節をパターンに", sedUseFill: "選んだ小節をフィルに", sedEntry: "エントリー", sedBreak: "ブレイク", sedEbNone: "なし", sedEbBar: "小節", sedEbBars: "小節", sedUseEntry: "選んだ小節をエントリーに", sedUseBreak: "選んだ小節をブレイクに", sedDivDropped: "セクションのステップの間に落ちる打点を捨てました（分割がファイルの 1/16 より粗い：先に細かくしてから選び直してください）: ", sedEbHelp: "エントリーとブレイク：セクションのパターンの前に鳴る小節（無音でも可）。終わるとパターンは頭から始まり、その間に押したセクションはその終わりで切り替わります。エントリーは別のセクションや停止から入るとき、ブレイクは CC 28（再生中のセクションにも）で鳴ります。グリッドではエントリーはパターンの左、ブレイクは右（どちらも青い隙間の向こう）。", sedFill: "フィル", sedNotes: "曲のメモ", sedSecNotes: "セクションのメモ", sedNotesPrev: "本体での表示: ", sedNotesNoSec: "この番号のセクションはありません（入力どおりに表示）", sedNotesHelp: "自由なテキスト、各 255 文字まで（本体のフォントは Latin-1）。本体は LIVE の状態行に 1 行目を、ENV で全文を表示します。@2 はセクション 2 の名前の略記です（名前で表示され、番号はここでのセクションの追加・分割・結合・削除に合わせて付け替えられます）。", sedFbInfo: " + フィル {n} ステップ", sedFbHelp: "隙間の右はこのセクション専用のフィル（追加の小節、1〜4）：フィルは次の小節線からこれを丸ごと演奏し（必要ならセクションの終わりを越えて）、その後パターンは頭から、または押したセクションへ。セクションが持つのはこれか、パターンに埋め込んだフィル印（アレンジャーキーボードのフィル：押した所から、印の位置で）のどちらかで、両方は持てません。追加すると、パターンの最後の小節（印どおりに鳴る形）が写され、印は消えます。", sedFbMerge: "フィルをパターンに統合", sedFbDropMarks: "印を捨てる", sedFbDropMarksHelp: "専用フィルを残し、パターンに埋め込まれたフィル印と条件を捨てます：「フィルのみ」の打点は消え（専用フィルがあると鳴らない）、「フィル以外」の打点は常に鳴ります。", sedBothWarn: "パターンにフィル印・条件が {n} 個あり、専用フィルもあります：本体は専用フィルを演奏し、印は鳴りません。パターンに統合するか、印を捨ててください。", sedMarkOff: "専用フィルがある間はフィル印を使えません（パターンに統合すれば使えます）", sedFbAddedMarks: "フィルを追加し、パターンの印を畳み込みました。フィルのみ / フィル以外: ", sedFbMarksDropped: "印を捨てました。消えた「フィルのみ」の打点 / 消した印と条件: ", sedFbMergeHelp: "フィルをパターンの最後の小節にフィル印として畳み込み、フィルを消します（追加の逆）：両方にある打点はそのまま、パターンだけの打点は「フィル以外」、フィルだけの打点は「フィルのみ」として書き込みます。以後フィルはセクションの終わりまで印どおりに鳴ります。両方にあって強さ・ラチェット・フラムが違う打点はパターンのものを残します。", sedFbMerged: "フィルを印としてパターンに統合しました。フィルのみ / フィル以外 / 両方: ", sedFbDiffer: "、フィルと違うのでパターンの打点を残した: ", sedFbDropped: "、パターンの先頭より前で捨てた: ", sedEdit: "編集", sedDropped: "パターンと重なるフィルの打点は捨てました: ", sedTooMany: "16 セクションまで", sedNoMerge: "結合できません（分割数が違うか 64 ステップ超）", sedDivLong: "分割数を変えられません（その分割数では 64 ステップ超）: 先にパターンを短くしてください", sedDivLoss: "{div} に変えると、新しいグリッドの間に落ちるヒット {n} 個が消えます（パターン、フィル小節、エントリー、ブレイク）。変更しますか？", sedDivHelp: "分割数を変えてもヒットは拍の上の位置を保ちます: 1/16 から 1/8 では間の 16 分が消え、1/8 から 1/16 では間に空のステップが入ります",
     playTitle: "試聴", playCheat: "ペダルのコマンド（ペダルのチャンネルの MIDI CC）", playCheatCmd: "ペダル", playCheatWhat: "動作", playCheatKey: "キー",
     playC20: "再生中のセクションが終わったらセクション n（0 が最初）。停止中はそれで開始", playC27: "次の小節でセクション n",
-    playC21: "フィル：専用フィルは次の小節から丸ごと、印は今から（最後の拍なら次の小節を丸ごと）", playC21n: "フィル：次の小節を丸ごと",
+    playC21: "フィル：専用フィルは次の小節から丸ごと、印は今から（最後の拍なら次の小節を丸ごと）", playC21n: "フィル：次の小節を丸ごと", playC21e: "フィル：セクションの終わりに。セクションを最後まで演奏してから専用フィルを丸ごと、次にパターンの頭か指定したセクション（専用フィルがなければ CC 21 1 と同じ、次の小節を丸ごと）",
     playC28: "セクション n をブレイクから（127 は再生中のもの）", playC22: "エンディング：アウトロ n を 1 回、そして停止（127 はソングのアウトロ）",
     playC23: "すぐに停止", playC24: "次 / 前のセクション", playC26: "タップテンポ", playCPC: "ソング：0〜15 スロット、16〜31 ファクトリー・グルーヴ",
-    playCheatNote: "セクションへのフィル：CC 21 と CC 20 を同じスイッチに。タイルを Shift+クリック：次の小節で。停止中、カウントインが設定されていれば先にクリック。",     playKitDefault: "キット: エディタの隣のもの ", kitPreloaded: "ドラムキット: Muldjord (DrumGizmo, CC BY) をパッドに: ", playPrev: "前のセクション", playNext: "次のセクション", playFill: "フィル", playFillNext: "次の小節にフィル", playEnd: "エンディング", playBreak: "ブレイク", playPlay: "再生", playTap: "タップ", playStop: "停止", playKitFiles: "キットの WAV を選ぶ", playNoSong: "ソングを開くか、スロットの「試聴」を押してください", playNoKit: "キット: なし（ドラムキットページのパッド、または WAV）", playKitPads: "キット: ドラムキットページのパッド", playKitWavs: "キット: WAV ", playBtn: "試聴", playBar: "小節 ", playCued: "待機中",
-    playKeys: "キー: 1〜8 セクション（0: 9〜16 と切り替え、Shift: 次の小節で）・ f フィル（F: 次の小節を丸ごと）・ , . 前 / 次 ・ e エンディング ・ b ブレイク ・ スペース 停止 ・ - / + テンポ ・ t タップ",
+    playCheatNote: "セクションへのフィル：CC 21 と CC 20 を同じスイッチに。タイルを Shift+クリック：次の小節で。停止中、カウントインが設定されていれば先にクリック。",     playKitDefault: "キット: エディタの隣のもの ", kitPreloaded: "ドラムキット: Muldjord (DrumGizmo, CC BY) をパッドに: ", playPrev: "前のセクション", playNext: "次のセクション", playFill: "フィル", playFillNext: "次の小節にフィル", playFillEnd: "終わりにフィル", playEnd: "エンディング", playBreak: "ブレイク", playPlay: "再生", playTap: "タップ", playStop: "停止", playKitFiles: "キットの WAV を選ぶ", playNoSong: "ソングを開くか、スロットの「試聴」を押してください", playNoKit: "キット: なし（ドラムキットページのパッド、または WAV）", playKitPads: "キット: ドラムキットページのパッド", playKitWavs: "キット: WAV ", playBtn: "試聴", playBar: "小節 ", playCued: "待機中",
+    playKeys: "キー: 1〜8 セクション（0: 9〜16 と切り替え、Shift: 次の小節で）・ f フィル（F: 次の小節を丸ごと、g: セクションの終わりに）・ , . 前 / 次 ・ e エンディング ・ b ブレイク ・ スペース 停止 ・ - / + テンポ ・ t タップ",
     playHum: "ヒューマナイズ", humOff: "オフ", humLight: "軽め", humMore: "強め",
     pinFrom: "MIDI 入力", pinClock: "MIDI クロックに合わせる", liveLead: "画面を先に", pinListen: "ペダルを聴く", pinStop: "聴くのをやめる", pinNone: "（使える MIDI 機器なし）", pinFm1: "FM-1：TRS ジャック（SETUP > MIDI 2 > TRS TO USB をオン）", pinOn: "チャンネル {ch} を聴いています", pinNoMidi: "このブラウザには Web MIDI がありません", bleConnect: "Bluetooth で接続", bleOff: "{name} を切断", bleOffLog: "Bluetooth を切断しました", bleOn: "Bluetooth: {name} に接続、チャンネル {ch} を聴いています", bleNo: "このブラウザには Web Bluetooth がありません。Android・Windows・macOS の Chrome か Edge で開いてください（Linux の Chrome は chrome://flags の Web Bluetooth を有効に。Firefox と Safari にはありません）", bleCtx: "Web Bluetooth は https か http://localhost のページでしか使えません。このページは ", bleNone: "デバイスが選ばれませんでした", bleLost: "Bluetooth が切れました。再接続します", bleGone: "Bluetooth が切れました。もう一度「Bluetooth で接続」を押してください", pinNoSong: "ソングがありません（スロットの「試聴」か、ソングを開いてください）", pinHelp: "本物のペダル（Ampero、または間の USB MIDI インターフェース）でブラウザのプレーヤーを動かします。FM-1 と同じ CC 20..28 と PC を、ペダルカードのチャンネルで受けます。PC n はセット（セットリストタブ）の n 曲目、なければ接続中の FM-1（または模擬 FM-1）のスロット n のソングを開きます。PC 16〜31 はファクトリー・グルーヴ。音を出すため、最初に「ペダルを聴く」を押してください。「MIDI クロックに合わせる」で、その入力のテンポと START / STOP に従います（FM-1 の SETUP > PEDAL > MIDI CLOCK IN と同じ。カウントインはなし）。FM-1 をこの機器の USB につなぎ、SETUP > MIDI 2 > TRS TO USB をオンにすると、FM-1 自体がここの入力になります（TRS ジャックが受けたペダルとクロック）。MIDI インターフェースなしでプレーヤーが FM-1 に従います。「Bluetooth で接続」は代わりに BLE MIDI でペダルを受けます（Bluetooth MIDI のペダル、または MIDI ブリッジを入れた FM-1）。Android・Windows・macOS の Chrome か Edge で、https か localhost のページから（Linux の Chrome はフラグが必要）。Firefox と iPhone の Safari には Web Bluetooth がありません。", pedalTitle: "ペダル", pedalHelp: "ペダルボードの MIDI チャンネル（CC 20..28 と PC）と、停止中にセクションを押したときのカウントイン（クリック 1〜2 小節）。電源を切っても保持されます。", pedalCh: "チャンネル", pedalSet: "設定", pedalClock: "MIDI クロック入力", clockTrs: "TRS ジャック", clockUsb: "USB",
     pedalClockHelp: "ペダルボードのクロックのテンポと START / STOP に従います（Ampero: CLOCK OUT (TRS) をオン）。すぐに設定されます", pedalNow: "今: ", pedalOff: "オフ", pedalAny: "すべて", pedalCount: "カウントイン", pedalBar: "1 小節", pedalBars: "2 小節",
@@ -3776,11 +3795,11 @@ const TEXT = {
     sedHear: "click: hear this lane", sedKey: "key: ", sedUndo: "Undo", sedRedo: "Redo", sedPlaySec: "Play this section", sedKeys: "Keys: n normal, h hard, s soft, g ghost, x erase, r ratchet, l flam (a grace note before the hit), m fill mark, [ ] previous / next section, Delete clears the selected steps, Ctrl+C / Ctrl+V copy and paste them, Ctrl+Z / Ctrl+Y undo / redo, p plays this section. Click a lane's name to hear its sound.", sedCols: "steps (click a number, shift-click another for a range; the fill bar's, entry's and break's numbers too, to copy and paste there):", sedCopy: "Copy", sedPaste: "Paste at the selection", sedClear: "Clear", sedCopied: "copied: ", sedUseBars: "Pattern = selected bars", sedUseFill: "Fill = selected bars", sedEntry: "Entry", sedBreak: "Break", sedEbNone: "none", sedEbBar: "bar", sedEbBars: "bars", sedUseEntry: "Entry = selected bars", sedUseBreak: "Break = selected bars", sedDivDropped: "hits between the section's steps dropped (its division is coarser than the file's 1/16: set it finer first, then pick the bars again): ", sedEbHelp: "Entry and break: bars played before the section's pattern (silence too); after them the pattern starts from its top, and a section asked for meanwhile comes in at their end. The entry plays when the section comes in from another one or from stopped, the break on CC 28 (the section playing too). In the grid: the entry left of the pattern, the break at the right, each past a blue gap.", sedFill: "Fill", sedNotes: "Song notes", sedSecNotes: "Section notes", sedNotesPrev: "on the device: ", sedNotesNoSec: "no section with this number: shown as typed", sedNotesHelp: "free text, up to 255 characters each (Latin-1: the device's font); the device shows the first line on LIVE's state line while nothing is announced, and the whole on ENV. @2 stands for section 2's name (shown as the name; the number follows the sections as they are added, split, merged or deleted here)", sedFbInfo: " + a fill of {n} steps", sedFbHelp: "Right of the gap: the section's fill of its own, extra bars, 1 to 4: a fill plays them whole, from the next bar line (past the section's end if it must), then the pattern from its top, or the section asked for. A section has this or a fill embedded in the pattern as marks (an arranger keyboard's fill: from the press, where the marks sit), never both: added, it starts as the pattern's last bars the way the marks played them, and the marks go.", sedFbMerge: "Merge into the pattern", sedFbDropMarks: "Drop the marks", sedFbDropMarksHelp: "Keep the fill of its own and drop the fill marks and conditions embedded in the pattern: a hit only in a fill goes (never heard with a fill of its own), one not in a fill plays always.", sedBothWarn: "{n} fill mark(s) or condition(s) in the pattern and a fill of its own: the device plays the fill and never hears the marks. Merge into the pattern, or drop the marks.", sedMarkOff: "fill marks are off while the section has a fill of its own (merge it into the pattern to use them)", sedFbAddedMarks: "fill added; the pattern's marks folded in, only in a fill / not in a fill: ", sedFbMarksDropped: "marks dropped, hits only in a fill gone / marks and conditions cleared: ", sedFbMergeHelp: "The fill folded back into the pattern's last bars as fill marks, and removed (the opposite of adding one): a hit in both plays always, one in the pattern only is marked not in a fill, one in the fill only is written in as only in a fill. A fill then plays the marks to the section's end. A hit in both at another level, ratchet or flam keeps the pattern's.", sedFbMerged: "fill merged into the pattern as marks, only in a fill / not in a fill / both: ", sedFbDiffer: "; the pattern's hit kept where the fill's differed: ", sedFbDropped: "; before the pattern's start, dropped: ", sedEdit: "Edit", sedDropped: "fill hits dropped where the pattern hits too: ", sedTooMany: "at most 16 sections", sedNoMerge: "cannot merge (different division, or over 64 steps)", sedDivLong: "cannot change the division (over 64 steps at that one): shorten the pattern first", sedDivLoss: "Changing to {div} drops {n} hit(s) that fall between the new grid's steps (the pattern, fill bar, entry and break). Change anyway?", sedDivHelp: "Changing the division keeps the hits in their place on the beat: 1/16 to 1/8 drops the 16ths between, 1/8 to 1/16 puts an empty step between",
     playTitle: "Play", playCheat: "Pedal commands (MIDI CC on the pedal channel)", playCheatCmd: "pedal", playCheatWhat: "does", playCheatKey: "key",
     playC20: "section n (0 = the first) when the one playing ends; stopped: starts with it", playC27: "section n on the next bar",
-    playC21: "fill: a fill of its own whole on the next bar; marks from now (in the last beat: the whole next bar)", playC21n: "fill: the whole next bar",
+    playC21: "fill: a fill of its own whole on the next bar; marks from now (in the last beat: the whole next bar)", playC21n: "fill: the whole next bar", playC21e: "fill at the section's end: the section through, then its fill of its own, then the pattern or the section asked for (no fill of its own: as CC 21 1, the whole next bar)",
     playC28: "section n through its break (127: the one playing)", playC22: "ending: outro n once, then stop (127: the song's outro)",
     playC23: "stop now", playC24: "next / previous section", playC26: "tap tempo", playCPC: "song: 0–15 the slots, 16–31 the factory grooves",
-    playCheatNote: "A fill into a section: CC 21 and CC 20 on one switch. Shift-click a tile: on the next bar. Stopped, a section counts in first if Count-in is set.",     playKitDefault: "kit: the device's kit served next to the editor ", kitPreloaded: "Drum kit: Muldjord (DrumGizmo, CC BY) on the pads: ", playPrev: "Previous section", playNext: "Next section", playFill: "Fill", playFillNext: "Fill next bar", playEnd: "Ending", playBreak: "Break", playPlay: "Play", playTap: "Tap", playStop: "Stop", playKitFiles: "Choose the kit's WAVs", playNoSong: "Open a Guitar Pro file, or press Play on a slot", playNoKit: "kit: none (the Drum kit page's pads, or WAVs)", playKitPads: "kit: the Drum kit page's pads", playKitWavs: "kit: WAVs ", playBtn: "Play", playBar: "bar ", playCued: "cued",
-    playKeys: "keys: 1–8 a section (0: switches to 9–16 and back; shift: on the next bar) · f fill (F: the whole next bar) · , . previous / next · e ending · b break · space stop · - / + tempo · t tap",
+    playCheatNote: "A fill into a section: CC 21 and CC 20 on one switch. Shift-click a tile: on the next bar. Stopped, a section counts in first if Count-in is set.",     playKitDefault: "kit: the device's kit served next to the editor ", kitPreloaded: "Drum kit: Muldjord (DrumGizmo, CC BY) on the pads: ", playPrev: "Previous section", playNext: "Next section", playFill: "Fill", playFillNext: "Fill next bar", playFillEnd: "Fill at the end", playEnd: "Ending", playBreak: "Break", playPlay: "Play", playTap: "Tap", playStop: "Stop", playKitFiles: "Choose the kit's WAVs", playNoSong: "Open a Guitar Pro file, or press Play on a slot", playNoKit: "kit: none (the Drum kit page's pads, or WAVs)", playKitPads: "kit: the Drum kit page's pads", playKitWavs: "kit: WAVs ", playBtn: "Play", playBar: "bar ", playCued: "cued",
+    playKeys: "keys: 1–8 a section (0: switches to 9–16 and back; shift: on the next bar) · f fill (F: the whole next bar; g: at the section's end) · , . previous / next · e ending · b break · space stop · - / + tempo · t tap",
     playHum: "humanize", humOff: "off", humLight: "light", humMore: "more",
     pinFrom: "MIDI in from", pinClock: "Follow its MIDI clock", liveLead: "Screen ahead", pinListen: "Listen to the pedal", pinStop: "Stop listening", pinNone: "(no MIDI device available)", pinFm1: "FM-1: its TRS jack (SETUP > MIDI 2 > TRS TO USB on)", pinOn: "listening on channel {ch}", pinNoMidi: "this browser has no Web MIDI", bleConnect: "Connect Bluetooth", bleOff: "Disconnect {name}", bleOffLog: "Bluetooth disconnected", bleOn: "Bluetooth: {name} connected, listening on channel {ch}", bleNo: "this browser has no Web Bluetooth: open the page in Chrome or Edge on Android, Windows or macOS (on Linux, Chrome keeps it behind its Web Bluetooth flag in chrome://flags; Firefox and Safari have none)", bleCtx: "Web Bluetooth works only on https or http://localhost pages: this page is ", bleNone: "no device chosen", bleLost: "Bluetooth connection lost, reconnecting", bleGone: "Bluetooth connection lost: press Connect Bluetooth again", pinNoSong: "no song (press Play on a slot, or open one)", pinHelp: "The real pedal (the Ampero, or a USB MIDI interface between them) drives the player in the browser: the same CC 20..28 and PC as the FM-1, on the Pedal card's channel. PC n opens song n of the set (the Setlist tab), else the song in slot n of the FM-1 connected (or the simulated one); PC 16 to 31 the factory grooves. Press Listen first: the browser plays sound only after a click. With Follow its MIDI clock the player takes that input's tempo and START / STOP, as the FM-1 with SETUP > PEDAL > MIDI CLOCK IN (no count-in: the master counts). With the FM-1 on this device's USB and its SETUP > MIDI 2 > TRS TO USB on, the FM-1 itself is an input here: the pedal and the clock its TRS jack receives, so the player follows the FM-1 with no MIDI interface of its own. Connect Bluetooth takes the pedal over BLE MIDI instead (a Bluetooth MIDI pedal, or an FM-1 running the MIDI bridge): Chrome or Edge on Android, Windows or macOS, from https or localhost (Chrome on Linux needs its Web Bluetooth flag); Firefox and Safari on the iPhone have no Web Bluetooth.", pedalTitle: "Pedal", pedalHelp: "The pedalboard's MIDI channel (its CC 20..28 and PC), and the count-in: a section pressed while stopped first clicks one or two bars at the tempo. Kept through power-off.", pedalCh: "channel", pedalSet: "Set", pedalClock: "MIDI clock in", clockTrs: "TRS jack", clockUsb: "USB",
     pedalClockHelp: "the tempo and START / STOP from the pedalboard's clock (on the Ampero: CLOCK OUT (TRS) on); set at once", pedalNow: "now: ", pedalOff: "off", pedalAny: "any", pedalCount: "count-in", pedalBar: "1 bar", pedalBars: "2 bars",
@@ -5390,7 +5409,8 @@ function playLiveDraw() {
     else if (ev.req >= 0 && ev.sec >= 0 && (ev.wait || ev.fill)) { say = `FILL > ${sp.sections[ev.req].name}`; cls += " fill"; }   /* (a fill into the change) */
     else if (ev.req >= 0 && ev.sec >= 0 && ev.brk) say = `BREAK: ${sp.sections[ev.req].name}`;   /* (CC 28: through its break) */
     else if (ev.req >= 0 && ev.sec >= 0) say = `NEXT: ${sp.sections[ev.req].name}`;
-    else if (ev.wait) { say = "FILL NEXT BAR"; cls += " fill"; }
+    else if (ev.wait) { say = ev.wait > 1 ? "FILL AT THE END" : "FILL NEXT BAR"; cls += " fill"; }   /* (more than a bar line
+                                                            away: after the section's end, CC 21 value 2) */
     else if (ev.fill) { say = "FILL"; cls += " fill"; }
   }
   if (!say && sp && shown >= 0 && sp.sections[shown]) {   /* nothing announced: the section's note, its first line (the song's
@@ -5401,7 +5421,7 @@ function playLiveDraw() {
   stEl.textContent = say;
   stEl.className = cls;
   const cued = ev ? ev.req : st ? st.req : -1;
-  for (const id of ["play-prev", "play-fill", "play-fillnext", "play-next", "play-break", "play-end"]) $(id).disabled = !st;   /* (no song: nothing to drive) */
+  for (const id of ["play-prev", "play-fill", "play-fillnext", "play-fillend", "play-next", "play-break", "play-end"]) $(id).disabled = !st;   /* (no song: nothing to drive) */
   $("play-play").disabled = !st || st.playing;
   $("play-stop").disabled = !st || !st.playing;
   [...$("play-secs").children].forEach((b, k) => {
@@ -5433,6 +5453,7 @@ function playRender(light = false) {
     $("play-next").title = "CC 24  " + t("sedKey") + ".";
     $("play-fill").title = "CC 21  " + t("sedKey") + "f";
     $("play-fillnext").title = "CC 21, value 1  " + t("sedKey") + "F";
+    $("play-fillend").title = "CC 21, value 2  " + t("sedKey") + "g  (" + t("playC21e") + ")";
     $("play-end").title = "CC 22  " + t("sedKey") + "e";
     $("play-break").title = "CC 28 127  " + t("sedKey") + "b  (the section playing through its break, at its end; F first for a fill into it)";
     $("play-stop").title = "CC 23  " + t("sedKey") + "space";
@@ -5459,12 +5480,13 @@ $("play-prev").addEventListener("click", () => { if (SPLAY.st) { PLAY.step(SPLAY
 $("play-next").addEventListener("click", () => { if (SPLAY.st) { PLAY.step(SPLAY.st, 1); playStart(); playRender(); } });
 $("play-fill").addEventListener("click", () => { if (SPLAY.st) { PLAY.fillNext(SPLAY.st); playRender(true); } });
 $("play-fillnext").addEventListener("click", () => { if (SPLAY.st) { PLAY.fillNext(SPLAY.st, true); playRender(true); } });
+$("play-fillend").addEventListener("click", () => { if (SPLAY.st) { PLAY.fillNext(SPLAY.st, "end"); playRender(true); } });
 $("play-play").addEventListener("click", () => playPlay());
 /* the player's buttons act on the mouse's press, not its release (a click comes 50 to 150 ms after the press): the
    press clicks the button at once and the click of the release is dropped; keys (Enter, space) and touch, which may be a
    scroll, keep the click. Any press or key with a song in the player wakes the audio (playWake) */
 const PRESS = { btn: null };
-const pressBtn = (t) => t instanceof Element ? t.closest("#play-play, #play-stop, #play-break, #play-end, #play-prev, #play-next, #play-fill, #play-fillnext, #play-secs button") : null;
+const pressBtn = (t) => t instanceof Element ? t.closest("#play-play, #play-stop, #play-break, #play-end, #play-prev, #play-next, #play-fill, #play-fillnext, #play-fillend, #play-secs button") : null;
 document.addEventListener("pointerdown", (e) => {
   PRESS.btn = null;
   if (SPLAY.st) playWake();
@@ -5523,6 +5545,8 @@ document.addEventListener("keydown", (e) => {                /* keys 1..8: the s
   else if (e.key === "." || e.key === ",") { PLAY.step(SPLAY.st, e.key === "." ? 1 : -1); playStart(); playRender(); }
   else if (e.key === "f") PLAY.fillNext(SPLAY.st);
   else if (e.key === "F") PLAY.fillNext(SPLAY.st, true);   /* (shift: the whole next bar, CC 21 value 1) */
+  else if (e.key === "g") PLAY.fillNext(SPLAY.st, "end");   /* (at the section's end, CC 21 value 2) */
+
   else if (e.key === "e") PLAY.ending(SPLAY.st, null);
   else if (e.key === "b") { PLAY.brk(SPLAY.st, -1); playStart(); playRender(); }   /* (CC 28 127: the section playing's break) */
   else if (e.key === " " || e.key === "s") { e.preventDefault(); playStop(); playRender(true); }

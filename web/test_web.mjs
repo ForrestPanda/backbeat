@@ -477,7 +477,8 @@ function editorPlay() {
     && /N_SYNC\[\] = \{"INT", "USB", "TRS"\}/.test(fw("params.c")),
     "pedal card: MIDI clock in (off, TRS, USB) writes the FM-1's SYNC global (0 off, 1 USB, 2 TRS), as SETUP > PEDAL > MIDI CLOCK IN");
   ok(/\/\^\(\?:Digit\|Numpad\)\(\[1-8\]\)\$\/\.exec\(e\.code\)/.test(html) && /e\.key === "f"\) PLAY\.fillNext/.test(html) && /data-t="playKeys"/.test(html)
-    && /e\.key === "F"\) PLAY\.fillNext\(SPLAY\.st, true\)/.test(html)
+    && /e\.key === "F"\) PLAY\.fillNext\(SPLAY\.st, true\)/.test(html) && /e\.key === "g"\) PLAY\.fillNext\(SPLAY\.st, "end"\)/.test(html)
+    && /id="play-fillend" data-t="playFillEnd"/.test(html) && /<td>CC 21 2<\/td><td data-t="playC21e">/.test(html)
     && /@media \(max-width: 600px\) \{/.test(html) && /body\.live #grvcard, body\.live #play-bar p\.bar \{ display: none; \}/.test(html)
     && /\.sedgrid \{ --cell: 26px; \}/.test(html) && /cols\.push\("var\(--cell, 18px\)"\)/.test(html)
     && /playKeys: "keys: 1–8 a section \(0: switches to 9–16/.test(html) && /SPLAY\.bank = SPLAY\.bank \? 0 : 1/.test(html)
@@ -925,6 +926,87 @@ function editorFillBar() {
   ok(D.norm(sec).fillbar.steps === 16 && D.norm(sec).fillbar.lanes.CRASH === "...............X" && D.norm({ ...sec, fillbar: { lanes: { KICK: "x" } } }).fillbar.lanes.KICK === "x..............."
     && !("fillbar" in D.norm(spec.sections[1])) && D.norm({ ...sec, fillbar: { steps: 8, lanes: {} } }).fillbar.steps === 8,
     "sed: norm keeps the fill bar (its strings the length of its steps: one bar, or as said)");
+  {   /* the fill at the section's end (CC 21 value 2, the key g; 2026-11-08; after the end since 2026-11-09): the section
+       * through, then its fill bar of its own, whole, then the pattern from its top or the section cued; asked in the last
+       * bar: as a plain press; in a section without one: as the next bar's fill */
+    const four = { name: "FOUR", steps: 64, div: "1/16", lanes: { KICK: "x.......".repeat(8) }, fillbar: { steps: 16, lanes: { SNARE: "x".repeat(16) } } };
+    const sp = { name: "E", bpm: 120, sections: [four, { name: "ONE", steps: 16, div: "1/16", lanes: { KICK: "x...x...x...x..." } }] };
+    const e = P.create(sp);
+    P.request(e, 0); for (let i = 0; i < 4; i++) P.tick(e);           /* bar 0, its second beat */
+    P.fillNext(e, "end");
+    ok(!e.fill && e.fillWait === 4, "play: the fill at the end asked in bar 0 of 4: four bar lines, the section's end");
+    for (let i = 4; i < 16; i++) P.tick(e);
+    ok(!e.fill && e.fillWait === 3 && e.bar === 1, "play: ..bar 1, waiting");
+    for (let i = 0; i < 32; i++) P.tick(e);
+    ok(!e.fill && e.fillWait === 1 && e.bar === 3, "play: ..bar 3, the last, the pattern's");
+    for (let i = 0; i < 16; i++) P.tick(e);
+    ok(e.fill && !e.fillWait && e.fillBars === 1 && e.bar === 4, "play: ..a fifth bar: the fill bar");
+    for (let i = 0; i < 16; i++) P.tick(e);
+    ok(!e.fill && e.bar === 0 && e.step === 0 && e.sec === 0, "play: ..over: the pattern from its top");
+    for (let i = 0; i < 36; i++) P.tick(e);                           /* bar 2, its second beat */
+    P.fillNext(e, "end"); P.request(e, 1);
+    ok(!e.fill && e.fillWait === 2 && e.req === 1 && !e.atEnd, "play: asked in bar 2, then a section: two bar lines; the section after the fill");
+    for (let i = 36; i < 64; i++) P.tick(e);
+    ok(e.fill && e.bar === 4 && e.req === 1, "play: ..bar 4 the fill, the section waiting");
+    for (let i = 0; i < 16; i++) P.tick(e);
+    ok(e.sec === 1 && !e.fill && e.bar === 0 && e.req < 0, "play: ..ONE after the fill");
+    P.request(e, 0); for (let i = 0; i < 16; i++) P.tick(e);          /* FOUR again, after ONE's bar */
+    ok(e.sec === 0 && e.bar === 0, "play: ..FOUR again");
+    for (let i = 0; i < 52; i++) P.tick(e);                           /* bar 3, its second beat: the last bar */
+    P.fillNext(e, "end");
+    ok(!e.fill && e.fillWait === 1 && e.bar === 3, "play: asked in the last bar: one bar line, as a plain press");
+    for (let i = 52; i < 64; i++) P.tick(e);
+    ok(e.fill && e.bar === 4 && e.fillBars === 1, "play: ..the fill bar after the section");
+    for (let i = 0; i < 16; i++) P.tick(e);
+    ok(!e.fill && e.bar === 0 && e.step === 0, "play: ..then the pattern from its top");
+    for (let i = 0; i < 20; i++) P.tick(e);                           /* bar 1, its second beat */
+    P.fillNext(e, "end"); P.ending(e, null);
+    ok(!e.fill && e.fillWait === 3 && e.endBars === 4 && e.playing, "play: the fill at the end, then the ending (no outro): the stop after the fill");
+    for (let i = 20; i < 64; i++) P.tick(e);
+    ok(e.fill && e.bar === 4 && e.playing, "play: ..bar 4 the fill, still playing");
+    for (let i = 0; i < 16; i++) P.tick(e);
+    ok(!e.playing && !e.fill && !e.endBars, "play: ..the stop at the fill's end");
+    const one = P.create(sp); P.request(one, 1); for (let i = 0; i < 4; i++) P.tick(one);
+    P.fillNext(one, "end");
+    ok(!one.fill && one.fillWait === 1, "play: no fill bar of its own: as the next bar's fill (value 1), the whole next bar (2026-11-09)");
+    for (let i = 4; i < 16; i++) P.tick(one);
+    ok(one.fill && one.fillBars === 1 && !one.fillWait && one.bar === 1, "play: ..fill mode from the next bar line");
+    {   /* the same asked during the section's entry (2026-11-09; the user: "the fill happens before the section reaches its
+         * end"): the entry plays whole, the pattern its bars, the fill after them; a section cued lands after the fill */
+      const fourE = { ...four, entry: { bars: 2, lanes: { CRASH: "X" + ".".repeat(31) } } };
+      const sp2 = { name: "E2", bpm: 120, sections: [fourE, sp.sections[1]] };
+      const e2 = P.create(sp2);
+      P.request(e2, 0); for (let i = 0; i < 4; i++) P.tick(e2);        /* FOUR from stopped: its entry, bar 0, its second beat */
+      ok(e2.sec === 0 && !!e2.eb && e2.ebB === 2 && e2.bar === 0, "play: FOUR comes in through its 2-bar entry");
+      P.fillNext(e2, "end");
+      ok(!e2.fill && e2.fillWait === 6, "play: the fill at the end asked in the entry's first bar: six bar lines (the entry's last, the pattern's four)");
+      for (let i = 4; i < 16; i++) P.tick(e2);
+      ok(!e2.fill && e2.fillWait === 5 && e2.bar === 1 && !!e2.eb, "play: ..the entry's last bar plays, not cut");
+      for (let i = 0; i < 16; i++) P.tick(e2);
+      ok(!e2.fill && e2.fillWait === 4 && e2.bar === 0 && !e2.eb, "play: ..the pattern from its top, the wait going on");
+      for (let i = 0; i < 64; i++) P.tick(e2);
+      ok(e2.fill && !e2.fillWait && e2.fillBars === 1 && e2.bar === 4, "play: ..the pattern's four bars through: the fill bar");
+      for (let i = 0; i < 16; i++) P.tick(e2);
+      ok(!e2.fill && e2.bar === 0 && e2.sec === 0 && !e2.eb, "play: ..over: the pattern from its top, no entry");
+      P.request(e2, 1, true); for (let i = 0; i < 16; i++) P.tick(e2); /* ONE on the next bar */
+      ok(e2.sec === 1, "play: ONE on the next bar");
+      P.request(e2, 0); for (let i = 0; i < 16; i++) P.tick(e2);       /* FOUR at its end: its entry again */
+      ok(e2.sec === 0 && !!e2.eb && e2.bar === 0, "play: FOUR again, through its entry");
+      for (let i = 0; i < 24; i++) P.tick(e2);                          /* the entry's last bar, its third beat */
+      ok(e2.bar === 1 && !!e2.eb, "play: ..the entry's last bar");
+      P.fillNext(e2, "end"); P.request(e2, 1);
+      ok(!e2.fill && e2.fillWait === 5 && e2.req === 1 && !e2.atEnd, "play: asked in the entry's last bar: five bar lines; the section cued after the fill");
+      for (let i = 24; i < 32; i++) P.tick(e2);
+      for (let i = 0; i < 64; i++) P.tick(e2);
+      ok(e2.fill && e2.bar === 4 && e2.req === 1 && !e2.eb, "play: ..bar 4 the fill, the section waiting");
+      for (let i = 0; i < 16; i++) P.tick(e2);
+      ok(e2.sec === 1 && !e2.fill && e2.bar === 0 && e2.req < 0, "play: ..ONE after the fill");
+    }
+    ok(E.PEDALIN.route([0xBF, 21, 2], 16).next === "end" && E.PEDALIN.route([0xBF, 21, 1], 16).next === true && E.PEDALIN.route([0xBF, 21, 0], 16).next === false
+
+      && E.PEDALIN.say({ kind: "fill", next: "end" }) === "FILL AT THE END", "pedal in: CC 21 value 2 decoded, said as the device");
+  }
+
   {   /* the editor's operations: added from a marked pattern (what a fill played; the pattern's last bar as it plays
          outside one, the marks gone), edited, removed; through split (with the last bar) and merge (the last part's) */
     const m = D.norm({ name: "M", steps: 32, div: "1/16", lanes: { KICK: "x.......x.......x.......x.......", HAT: "x.x.x.x.x.x.x.x.x.x.x.x.x.x.x.x.", HITOM: "............................x.x." },
@@ -1081,7 +1163,7 @@ function editorFillBar() {
     const w = q4.fillWait, e4 = []; for (let i = 4; i < 68; i++) e4.push(P.tick(q4));
     ok(w === 1 && e4[0].wait === 1 && !e4[11].fill && e4[12].fill && e4[12].bar === 1 && e4[12].hits.some((x) => x.lane === 0) && e4[43].fill && !e4[44].fill && e4[44].step === 0 && e4[44].bar === 0,
       "fill bar (two bars, a 4-bar section): asked in bar 0 it plays bars 1 and 2, whole; then the pattern from its top (the phrase cut short, as the player asked)");
-    ok(/say = "FILL NEXT BAR"; cls \+= " fill";/.test(html) && !/FILL AT THE END/.test(html), "play: the page says FILL NEXT BAR while one waits (never at the end any more)");
+    ok(/say = ev\.wait > 1 \? "FILL AT THE END" : "FILL NEXT BAR"; cls \+= " fill";/.test(html), "play: the page says FILL NEXT BAR while one waits a bar line, FILL AT THE END while it waits for the section's last bars (CC 21 value 2)");
   }
 }
 
@@ -2041,7 +2123,8 @@ function editorTabs() {
     ok(/sayK\("gpiFail", String\(e\.message \|\| e\)\.trim\(\)\.split\("\\n"\)\.pop\(\)\);/.test(script), "gpi: a failed conversion shows the error's last line (a Python traceback ends in a newline: it showed nothing)");
     /* the player steps through the sections (CC 24 / 25, keys . and ,) and says a section pressed again is a fill */
     ok(/id="play-prev" data-t="playPrev"/.test(html) && /id="play-next" data-t="playNext"/.test(html)
-      && /class="ptrans four"><button id="play-prev"[^\n]*id="play-fill"[^\n]*id="play-fillnext" data-t="playFillNext"[^\n]*id="play-next"/.test(html)
+      && /class="ptrans five"><button id="play-prev"[^\n]*id="play-fill"[^\n]*id="play-fillnext" data-t="playFillNext"[^\n]*id="play-fillend"[^\n]*id="play-next"/.test(html)
+
       && /\$\("play-fillnext"\)\.title = "CC 21, value 1  " \+ t\("sedKey"\) \+ "F"/.test(script) && /\$\("play-fillnext"\)\.addEventListener\("click", \(\) => \{ if \(SPLAY\.st\) \{ PLAY\.fillNext\(SPLAY\.st, true\)/.test(script) && /\$\("play-prev"\)\.title = "CC 25  " \+ t\("sedKey"\) \+ ","/.test(script)
       && /\$\("play-next"\)\.title = "CC 24  " \+ t\("sedKey"\) \+ "\."/.test(script) && /e\.key === "\." \|\| e\.key === ","/.test(script) && /no fill: F first for one/.test(script)
       && /PLAY\.step\(SPLAY\.st, -1\)/.test(script) && /PLAY\.step\(SPLAY\.st, 1\)/.test(script),

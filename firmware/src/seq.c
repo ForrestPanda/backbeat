@@ -846,7 +846,10 @@ static uint32_t live_bar = 0xFFFFFFFFu;            /* clk_beat / 4 of the last b
 static volatile uint8_t pedal_fill;                /* the pedal's fill plays, for pedal_fill_bars (this bar counted) */
 static volatile uint8_t pedal_at_end;              /* live_req (or the ending's stop) waits for the section's end */
 static volatile uint8_t pedal_fill_wait;           /* the fill starts on the next bar line (1): a fill bar of its own, whole
-                                                    * (2026-10-30); none, CC 21 in the bar's last beat (the next bar, whole) */
+                                                    * (2026-10-30); none, CC 21 in the bar's last beat (the next bar, whole);
+                                                    * more: bar lines to the fill bar on the section's last bars (CC 21
+                                                    * value 2, 2026-11-08), counted down in live_block */
+
 static volatile uint8_t pedal_end_req;             /* bars of the outro asked for (taken when its section starts) */
 static volatile uint32_t pedal_end_bars;           /* stop when the section playing has played this many (0: none) */
 static volatile uint8_t pedal_end_eb;              /* the ending's outro landed through its entry: pedal_end_req is taken
@@ -1147,8 +1150,11 @@ static __attribute__((noinline)) void live_block(void)   /* once a block while p
     if (pedal_at_end && live_bar % live_sec_bars() == 0u)   /* a request waits for the section's end: the pedal counts
                                                      * its bars since it started (live_bar), its pattern's the period */
         pedal_at_end = 0;                           /* the end: the request lands below, the ending's stop counts */
-    if (pedal_end_bars && live_req < 0 && (live_bar >= pedal_end_bars || fill_over)) {   /* the ending: the outro has
-                                                     * played (a fill pending pulled the stop to its end) */
+    if (pedal_end_bars && live_req < 0 &&
+        (fill_over || (live_bar >= pedal_end_bars && !pedal_fill && !pedal_fill_wait))) {   /* the ending: the outro has
+                                                     * played (a fill pending pulls the stop to its end: one asked for
+                                                     * after the section's end, CC 21 value 2, starts on this bar line;
+                                                     * 2026-11-09) */
         pedal_end_bars = 0;
         pedal_fill = 0;
         seq_stop();

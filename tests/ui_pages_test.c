@@ -632,20 +632,19 @@ int main(int argc, char **argv)
              * change, on the bar after it */
             static const uint8_t BLACK[11] = {1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25};
             uint32_t b, all = 1, now = 1;
-            for (b = 0; b < 9u; b++) {
-                if (b != 0u && b != 2u)                  /* (G#3 the next bar's fill, C#4 and D#4 the break, the trio; C#5 and
-                                                         * D#5 the ending since 2026-10-30, the pairs 2026-11-01; the last,
-                                                         * F#5: the tap tempo since 2026-10-22, below) */
-                    continue;
-                pedal_fill = 0; pedal_fill_wait = 0;
-                key(BLACK[b]); frames(2);
-                all &= (pedal_fill || pedal_fill_wait) && song.playing;
-                now &= pedal_fill && !pedal_fill_wait;  /* (the stub's section has no fill bar: the fill now, not the wait) */
-            }
-            check(all && now, "LIVE: the first black key (F#3) and A#3: the fill now (CC 21), playing on");
+            pedal_fill = 0; pedal_fill_wait = 0;        /* (C#4 and D#4 the break, the trio; C#5 and D#5 the ending since
+                                                         * 2026-10-30, the pairs 2026-11-01; the last, F#5: the tap tempo
+                                                         * since 2026-10-22, below) */
+            key(BLACK[0]); frames(2);
+            all &= (pedal_fill || pedal_fill_wait) && song.playing;
+            now &= pedal_fill && !pedal_fill_wait;      /* (the stub's section has no fill bar: the fill now, not the wait) */
+            check(all && now, "LIVE: the first black key (F#3): the fill now (CC 21), playing on");
             pedal_fill = 0; pedal_fill_wait = 0;
             key(BLACK[1]); frames(2);
             check(!pedal_fill && pedal_fill_wait && song.playing, "LIVE: the second black key (G#3): the fill on the next bar (CC 21 value 1), no hold");
+            pedal_fill = 0; pedal_fill_wait = 0;
+            key(BLACK[2]); frames(2);
+            check(!pedal_fill && pedal_fill_wait == 1u && song.playing, "LIVE: the third black key (A#3): the fill at the end (CC 21 value 2; no fill bar: as value 1, the next bar)");
             for (b = 5; b < 8u; b++) {                  /* each of the trio, tapped alone: no fill, the next white key armed */
                 pedal_fill = 0; pedal_fill_wait = 0; live_req = -1; pedal_at_end = 0; key_nextbar = 0;
                 key(BLACK[b]); frames(2);

@@ -22,10 +22,17 @@ ABOUT; the editor shows it next to the connect button.
   has none. KNOB 1 and the tap then move the section's own tempo, LIVE's "bpm" label amber to say so, and SAVE held
   keeps it with the section; the SECTIONS tiles show it where the meter goes. A song with one needs this firmware
   (0.9.4 and earlier refuse it).
+- **The fill at the section's end: CC 21 value 2.** The section plays through to its end, then its fill of its own,
+  whole, as extra bars, then the pattern from its top or the section asked for; the screen says FILL AT THE END while
+  it waits. A plain CC 21 still plays the fill whole from the next bar line. In a section whose fill is in its marks,
+  value 2 acts as value 1: fill mode on the whole next bar, to the section's end. The message when it is pressed
+  says FILL AT THE END (it said FILL NEXT BAR).
 
 ### Website
 
 - **The editor's player** has the new SNARE2 too.
+- **The fill at the section's end** in the player: a fifth button on the fill row, the key `g`, CC 21 value 2 from
+  the pedal listened to, FILL AT THE END on the state line; the Pedal card lists it.
 - **A tempo per section** in the section editor (a BPM box next to the time, the song's tempo as its placeholder), in
   the player (the switch as the section lands, the BPM label amber while the tempo is the section's own, the tiles
   showing it) and in `fm1_song.py`; the Guitar Pro and MIDI importers take a tempo change on a section's first bar as
