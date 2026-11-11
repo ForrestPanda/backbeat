@@ -13,7 +13,7 @@ reader is here (since 2026-10-19). The file's format is told from its first byte
 The score's section markers (Intro, Verse 1, Chorus...) bound the sections; the measures of a section give
 its drum pattern: the run of 1, 2 or 4 bars that most of the section repeats (at 1/16; at 1/32, and then
 at most 2 bars, when many hits sit between 16ths). The bars that deviate from the pattern at the end of
-the section (up to 4, 64 steps, since 2026-10-20), or the bar that does most often at the end of a phrase, is the fill: the section's fill bar of its own ("fillbar" in
+the section (up to 4 bars, the importer's own cap, since 2026-10-20; the format holds 255 steps since 2026-11-08), or the bar that does most often at the end of a phrase, is the fill: the section's fill bar of its own ("fillbar" in
 the JSON, since 2026-10-15: that bar as it is, levels, ratchets and flams, which a fill plays instead of the bar it is
 asked in; before, its hits were marks on the pattern's last bar, "fills", and a hit on a step the pattern also
 hit lost its own level). A grace note on a hit is a flam ("flams", since 2026-10-17); two notes a 32nd apart are a
@@ -25,8 +25,9 @@ the outro. GM drum notes go to the 16 lanes (kick 35 36, snare 38 40, side stick
 the congas and bongos 60..64 are left out: no lane since the mid tom took the conga's); accents and ghost notes become HARD and GHOST hits, velocities otherwise the four levels (under
 50 ghost, under 80 soft, under 110 normal, else hard); two 32nd hits in one 16th step become a ratchet.
 A section's meter is its pattern bars' time signature ("time": "7/8" in the JSON; 4/4 is left out): the
-device counts the pedal's bars, the click and the count-in in it. Tempo changes inside the file are ignored
-(the song has one tempo). A triplet feel marked on the score (two 8ths played as a triplet's quarter and 8th: a
+device counts the pedal's bars, the click and the count-in in it. A tempo change on a section's first bar is the
+section's own tempo ("bpm" on the section, 2026-11-07); elsewhere inside the file it is ignored (the song's tempo is
+the first). A triplet feel marked on the score (two 8ths played as a triplet's quarter and 8th: a
 shuffle) becomes the song's swing, 67 (2:1), on the 8ths ("swing_grid": "1/8", since 2026-10-19: a 1/16 pattern with its
 hats on the 8ths shuffles; swing on the 16ths, the default, would move only the steps between them). The JSON is
 meant to be edited afterwards.
@@ -64,7 +65,8 @@ OUTRO_NAMES = ("OUTRO", "ENDING", "END", "CODA")
 MATCH = 0.75                                  # a pattern: this share of the bars agree with it
 NEAR = 0.1                                    # a shorter pattern scoring this close to the best is taken
 SNG_MAX = 3800                                # the packed song (firmware/src/sng.c SNG_MAX)
-NSTEP = 64                                    # steps a pattern, a fill bar, an entry or a break holds (seq.c NSTEP)
+NSTEP = 255                                   # steps a pattern, a fill bar, an entry or a break holds (seq.c NSTEP; 64 until 2026-11-08)
+
 SNG_SECTIONS = 16                             # sections a song holds (seq.c SNG_SECTIONS; 8 until 2026-10-14)
 METER_DENS = (2, 4, 8, 16)                    # the meters a section can have (sng.c): n 1..16 over these
 OFFGRID_32 = 0.125                            # 1/32 when this share of the hits sit between 16ths
@@ -80,11 +82,12 @@ SHUFFLE_SWING = 67                            # a Guitar Pro triplet feel as the
 
 class Bar:
     """one bar of the file, whichever format it came from: its length in QUARTER ticks, its time signature
-    (numerator, denominator) and its notes, (position in the bar, lane, level, flam)"""
-    __slots__ = ("length", "ts", "notes")
+    (numerator, denominator), its notes, (position in the bar, lane, level, flam), and the tempo in force at its
+    start (2026-11-07: a change on a section's first bar is the section's own "bpm"; None: not known)"""
+    __slots__ = ("length", "ts", "notes", "bpm")
 
-    def __init__(self, length, ts):
-        self.length, self.ts, self.notes = length, ts, []
+    def __init__(self, length, ts, bpm=None):
+        self.length, self.ts, self.notes, self.bpm = length, ts, [], bpm
 
 
 def level_of_velocity(v):
@@ -112,8 +115,23 @@ def read_gp(source, track=None):
     if not tracks:
         raise ValueError("no percussion track in this file (--track n to pick one)")
     bars = []
+    tempo, changes = int(song.tempo), 0
     for k, h in enumerate(song.measureHeaders):
-        bar = Bar(h.length, (h.timeSignature.numerator, h.timeSignature.denominator.value))
+        for t in song.tracks:                      # a tempo change on the measure's first beat (any track: the mix table)
+            for voice in t.measures[k].voices:     # counts from this bar; later in it, from the next
+                for beat in voice.beats:
+                    mtc = beat.effect.mixTableChange
+                    v = getattr(getattr(mtc, "tempo", None), "value", None) if mtc else None
+                    if v and beat.start == h.start and int(v) != tempo:
+                        tempo, changes = int(v), changes + 1
+        bar = Bar(h.length, (h.timeSignature.numerator, h.timeSignature.denominator.value), tempo)
+        for t in song.tracks:
+            for voice in t.measures[k].voices:
+                for beat in voice.beats:
+                    mtc = beat.effect.mixTableChange
+                    v = getattr(getattr(mtc, "tempo", None), "value", None) if mtc else None
+                    if v and beat.start != h.start and int(v) != tempo:
+                        tempo, changes = int(v), changes + 1
         for t in tracks:
             for voice in t.measures[k].voices:
                 for beat in voice.beats:
@@ -124,7 +142,8 @@ def read_gp(source, track=None):
                             bar.notes.append((beat.start - h.start, GM[note.value], gp_level(note), note.effect.grace is not None))
         bars.append(bar)
     markers = [(h.number - 1, (h.marker.title or "").strip()) for h in song.measureHeaders if h.marker]
-    info = f"{song.tempo} BPM, {len(bars)} measures, percussion: " + ", ".join(f"track {t.number} {t.name.strip()!r}" for t in tracks)
+    info = (f"{song.tempo} BPM, {len(bars)} measures, percussion: " + ", ".join(f"track {t.number} {t.name.strip()!r}" for t in tracks)
+            + (f"; {changes} tempo change{'s' if changes > 1 else ''} (a section's first bar: its own tempo)" if changes else ""))
     feels = collections.Counter(h.tripletFeel.name for h in song.measureHeaders if h.tripletFeel.name != "none")   # the shuffle
     feel = feels.most_common(1)[0][0] if feels and 2 * sum(feels.values()) >= len(bars) else None   # mark: on most measures
     return song.title, int(song.tempo), bars, markers, info, feel
@@ -220,6 +239,7 @@ def read_midi(data, track=None, title=None):
     metas = sorted((e for ev in tracks for e in ev if e[1] == 0xFF), key=lambda e: e[0])
     tempos = [e for e in metas if e[2] == 0x51 and len(e[3]) == 3]
     bpm = round(60e6 / max(1, int.from_bytes(tempos[0][3], "big"))) if tempos else 120
+    tempo_at = sorted((round(e[0] * scale), round(60e6 / max(1, int.from_bytes(e[3], "big")))) for e in tempos)   # (tick, BPM)
     sigs = sorted((round(e[0] * scale), e[3][0], 1 << e[3][1]) for e in metas if e[2] == 0x58 and len(e[3]) >= 2 and e[3][0])
     marks = [(round(e[0] * scale), text(e[3])) for e in metas if e[2] == 0x06]
     marks = marks or [(round(e[0] * scale), text(e[3])) for e in metas if e[2] == 0x07]
@@ -252,12 +272,14 @@ def read_midi(data, track=None, title=None):
             i += 1
     # the bars: the time signatures in force (a change takes the bar line it sits on, or the next)
     end = max([t for t, _, _, _ in notes] + [s[0] for s in sigs] + [m[0] for m in marks] + [0]) + 1
-    bars, starts, start, si, ts = [], [], 0, 0, (4, 4)
+    bars, starts, start, si, ts, ti, tempo = [], [], 0, 0, (4, 4), 0, bpm
     while start < end and len(bars) < MIDI_MAX_BARS:
         while si < len(sigs) and sigs[si][0] <= start + MIDI_SNAP:
             ts, si = sigs[si][1:], si + 1
+        while ti < len(tempo_at) and tempo_at[ti][0] <= start + MIDI_SNAP:   # (a change inside a bar: from the next)
+            tempo, ti = tempo_at[ti][1], ti + 1
         length = QUARTER * 4 * ts[0] // ts[1]
-        bars.append(Bar(length, ts))
+        bars.append(Bar(length, ts, tempo))
         starts.append(start)
         start += length
     for t, lane, level, flam in sorted(notes):
@@ -277,7 +299,7 @@ def read_midi(data, track=None, title=None):
     name0 = names[0] if names[0] and not any(w in names[0].upper() for w in MIDI_DRUM_NAMES) else ""
     info = (f"{bpm} BPM, {len(bars)} bars, type {fmt}, drums: {how}: "
             + ", ".join(f"track {k} {names[k - 1]!r} ({len(ns)} notes)" for k, ns in picked)
-            + (f"; {len(tempos) - 1} tempo change{'s' if len(tempos) > 2 else ''} ignored" if len(tempos) > 1 else ""))
+            + (f"; {len(tempos) - 1} tempo change{'s' if len(tempos) > 2 else ''} (a section's first bar: its own tempo)" if len(tempos) > 1 else ""))
     return name0 or title, bpm, bars, sorted(markers), info, None   # (no triplet feel in a MIDI file)
 
 
@@ -337,7 +359,7 @@ def make_section(name, bar_list, outro, max_bars=4):
     max_bars = min(max_bars, 2 if div == "1/32" else 4)
     bars = [bar_hits(b, tps) for b in bar_list]
     p, pattern, score = best_period(bars, max_bars)
-    # the fill: the bars at the end that deviate (several, up to 64 steps, since 2026-10-20: a 2-bar fill in the file
+    # the fill: the bars at the end that deviate (several, up to max_bars, since 2026-10-20: a 2-bar fill in the file
     # was cut to its last bar), only in a section that keeps to its pattern and with a whole pattern before them;
     # else the most common deviating bar at the end of a phrase
     steps_per_bar = pattern[0][0]
@@ -414,7 +436,7 @@ def body_key(sec):
     def strip(l, v):
         m = marks.get(l, "")
         return "".join("." if (i < len(cond) and cond[i] == "F") or (i < len(m) and m[i] == "F") else ch for i, ch in enumerate(v))
-    return json.dumps({"steps": sec["steps"], "div": sec["div"],
+    return json.dumps({"steps": sec["steps"], "div": sec["div"], "bpm": sec.get("bpm"),
                        "lanes": {l: strip(l, v) for l, v in sec["lanes"].items() if set(strip(l, v)) != {"."}},
                        "ratchets": {l: strip(l, v) for l, v in sec.get("ratchets", {}).items() if set(strip(l, v)) != {"."}},
                        "flams": {l: strip(l, v) for l, v in sec.get("flams", {}).items() if set(strip(l, v)) != {"."}}},
@@ -555,6 +577,8 @@ def convert(source, sections=None, track=None, kit=KIT_DEFAULT, keep_duplicates=
     for sname, sbars, first, last in secs:
         outro = any(sname.startswith(w) for w in OUTRO_NAMES)
         sec, p, score, has_fill, dropped = make_section(sname, sbars, outro)
+        if sbars[0].bpm and sbars[0].bpm != tempo and 40 <= sbars[0].bpm <= 240:   # a tempo change on its first bar:
+            sec["bpm"] = sbars[0].bpm              # the section's own (2026-11-07; fm1_song.py "bpm" on a section)
         key = body_key(sec)
         if key in seen and not keep_duplicates and not wanted and not outro:   # (the outro stays: the ending needs it)
             kept = out[seen[key]]
@@ -570,7 +594,8 @@ def convert(source, sections=None, track=None, kit=KIT_DEFAULT, keep_duplicates=
         hits = sum(c != "." for v in sec["lanes"].values() for c in v)
         log(f"  {sname:12s} bars {first:3d}-{last:3d}: pattern {p} bar{'s' if p > 1 else ''} ({score:.0%} of {len(sbars)}), "
             f"{sec['steps']} steps {sec['div']}{' in ' + sec['time'] if 'time' in sec else ''}, {hits} hits"
-            f"{(', a fill' if has_fill == 1 else f', a {has_fill}-bar fill') if has_fill else ''}{', OUTRO' if outro else ''}")
+            f"{(', a fill' if has_fill == 1 else f', a {has_fill}-bar fill') if has_fill else ''}{', OUTRO' if outro else ''}"
+            f"{', at ' + str(sec['bpm']) + ' BPM (its own)' if 'bpm' in sec else ''}")
         for step, lanes in dropped:
             log(f"    fill hit dropped at step {step + 1} ({', '.join(lanes)}): the pattern hits there too")
         out.append(sec)
@@ -587,6 +612,7 @@ def convert(source, sections=None, track=None, kit=KIT_DEFAULT, keep_duplicates=
     # found by index: their names are the markers cut to 12 characters, so two may share one
     def packed_size(secs_):                        # as tools/fm1_song.py packs it: 2 bytes a step and a byte a hit (the fill
         return 32 + sum(18 + (x["steps"] + 3) // 4 + 2 * x["steps"] + sum(c != "." for v in x["lanes"].values() for c in v)   # bar's too)
+                        + ("bpm" in x)
                         + (1 + 2 * x["fillbar"]["steps"] + sum(c != "." for v in x["fillbar"]["lanes"].values() for c in v) if "fillbar" in x else 0)
                         for x in secs_)
     limits = [4] * len(out)
@@ -598,6 +624,8 @@ def convert(source, sections=None, track=None, kit=KIT_DEFAULT, keep_duplicates=
         limits[i] //= 2
         sbars, outro = src[i]
         sec, p, score, has_fill, dropped = make_section(out[i]["name"], sbars, outro, limits[i])
+        if sbars[0].bpm and sbars[0].bpm != tempo and 40 <= sbars[0].bpm <= 240:
+            sec["bpm"] = sbars[0].bpm
         out[i] = sec
         log(f"  {out[i]['name']}: pattern cut to {p} bar{'s' if p > 1 else ''} ({score:.0%}) so the song fits its flash sector")
     if not any(s.get("outro") for s in out):
