@@ -60,8 +60,8 @@ async function editorMock() {
   const C = E.CMD;
   const { rq, ev, done } = attachMock({});
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.nengines === 0 && !info.engines.length && info.ntrk === 1 && info.proto === 11 && E.PROTO === 11 && info.pcount === 71 && info.gcount === 45
-    && info.pe0 === 63 && info.nstep === 64, "editor: INFO v11: no engine, one track, protocol 11 (71 / 45 / pe0 63)");
+  ok(info.nengines === 0 && !info.engines.length && info.ntrk === 1 && info.proto === 12 && E.PROTO === 12 && info.pcount === 71 && info.gcount === 45
+    && info.pe0 === 63 && info.nstep === 255, "editor: INFO v12: no engine, one track, protocol 12, 255 steps (71 / 45 / pe0 63)");
   let descs = 0;
   for (let i = 0; i < info.pcount; i++) if (E.parse[C.DESC](await rq(E.req.desc(0, i))).label) descs++;
   ok(descs === info.pcount, "editor: DESC for every parameter");
@@ -145,8 +145,8 @@ async function editorMock() {
   const page = html.slice(html.indexOf("async function load(d)"), html.indexOf("async function getDescOrNull"));
   ok(oi.proto === 10 && oi.nengines === 12 && oi.ntrk === 4 && od && /if \(!\(d\.info\.proto >= PROTO\)\)/.test(page)
     && page.indexOf("proto >= PROTO") < page.indexOf("getDescOrNull(0, i)") && /sayK\("fwRefused", e\.refused\)/.test(html)
-    && /fwRefused: "[^"]*BackBeat[^"]*11/.test(html) && (html.match(/fwRefused: "/g) || []).length === 2,
-    "editor: a device below protocol 11: refused right after INFO, said in both languages");
+    && /fwRefused: "[^"]*BackBeat[^"]*12/.test(html) && (html.match(/fwRefused: "/g) || []).length === 2,
+    "editor: a device below protocol 12 (0.9.4, SLOOP): refused right after INFO, said in both languages");
   o.done();
 }
 
@@ -369,7 +369,7 @@ async function editorSongs() {
     && back.sections[2].fillbar.lanes.SNARE === spec.sections[2].fillbar.lanes.SNARE && back.sections[2].fillbar.lanes.CRASH === "...............X" && !("fillbar" in back.sections[1])
     && E.SNG.hits(js, h) > 0, "songs: the CHORUS's fill bar of its own: in the header's flag, packed as the tool packs it, unpacked to the same strings");
   let bad = 0;
-  for (const x of [{ ...spec, bpm: 300 }, { ...spec, sections: [] }, { ...spec, sections: [{ ...spec.sections[0], steps: 65 }] },
+  for (const x of [{ ...spec, bpm: 300 }, { ...spec, sections: [] }, { ...spec, sections: [{ ...spec.sections[0], steps: 256 }] },
                    { ...spec, sections: [{ ...spec.sections[0], lanes: { KICK: "x...q" } }] }, { ...spec, sections: [{ ...spec.sections[0], div: "1/3" }] }]) {
     try { E.SNG.pack(x); } catch (e) { bad++; }
   }
@@ -775,7 +775,7 @@ function editorSed() {
   ok(S.split(sec, 2) === null && S.split(sec, 0) === null, "sed: no split outside the pattern");
   const back = S.merge(parts[0], parts[1]);
   ok(back.steps === 32 && back.lanes.KICK === sec.lanes.KICK && back.fill === sec.fill, "sed: merge gives the section back");
-  ok(S.merge(parts[0], S.setDiv(parts[1], "1/8")) === null && S.merge(S.blank("A", 40), S.blank("B", 40)) === null, "sed: no merge across divisions or over 64 steps");
+  ok(S.merge(parts[0], S.setDiv(parts[1], "1/8")) === null && S.merge(S.blank("A", 128), S.blank("B", 128)) === null && S.merge(S.blank("A", 40), S.blank("B", 40)).steps === 80, "sed: no merge across divisions or over 255 steps (80 fits since 2026-11-08)");
   {   /* the division changed (2026-10-29): the hits keep their place on the beat (the firmware does the same: seq.c
        * pattern_rediv): 1/16 -> 1/8 keeps every other step with its ratchet, flam, mark and condition, the 16ths between
        * go; 1/8 -> 1/16 puts an empty step between; a triplet keeps the beats; the fill bar, entry and break follow; over
@@ -792,15 +792,17 @@ function editorSed() {
     const t8 = S.setDiv(d, "8T");
     ok(t8.steps === 12 && t8.lanes.KICK === "x..........." && t8.lanes.SNARE === "...x........" && !t8.lanes.HAT && S.setDiv(t8, "1/16").lanes.SNARE === "....x...........",
       "sed: 1/16 -> 8T: the beats stay (12 steps), the rest goes; and back");
-    ok(S.setDiv(S.blank("L", 40), "1/32") === null && S.setDiv(S.blank("L", 32), "1/32").steps === 64 && S.setDiv(S.blank("L", 7), "1/8").steps === 4 && JSON.stringify(S.setDiv(d, "1/16")) === JSON.stringify(d),
-      "sed: over 64 steps refused; 32 -> 64 fits; 7 sixteenths: 4 eighths (rounded up); the same division: as it is");
+    ok(S.setDiv(S.blank("L", 128), "1/32") === null && S.setDiv(S.blank("L", 40), "1/32").steps === 80 && S.setDiv(S.blank("L", 32), "1/32").steps === 64 && S.setDiv(S.blank("L", 7), "1/8").steps === 4 && JSON.stringify(S.setDiv(d, "1/16")) === JSON.stringify(d),
+      "sed: over 255 steps refused (128 -> 256); 40 -> 80 and 32 -> 64 fit; 7 sixteenths: 4 eighths (rounded up); the same division: as it is");
     let fb = S.fbAdd(S.setHit(d, "SNARE", 14, "x")); fb = S.ebSet(fb, "entry", 1); fb = S.ebSetHit(fb, "entry", "KICK", 4, "X"); fb = S.ebSetHit(fb, "entry", "KICK", 5, "x");
     const h = S.setDiv(fb, "1/8");
     ok(h.fillbar.steps === 8 && h.fillbar.lanes.SNARE === "..x....x" && h.fillbar.lanes.KICK === "xX......" && S.ebBars(h, "entry") === 1 && S.ebSteps(h, "entry") === 8 && h.entry.lanes.KICK === "..X.....",
       "sed: the fill bar and the entry follow (the 16th between gone)");
-    {   /* a 2-bar pattern with a 4-bar fill bar (64 steps) onto 1/32: the pattern 64 steps, the fill bar the 2 bars that fit */
-      const w = S.setDiv(S.fbSet(S.blank("F", 32), 4), "1/32");
-      ok(S.fbBars(S.fbSet(S.blank("F", 32), 4)) === 4 && w.steps === 64 && w.fillbar.steps === 64 && S.fbBars(w) === 2, "sed: a 4-bar fill bar onto 1/32: the 2 bars that fit");
+    {   /* a 2-bar pattern with a 4-bar fill bar (64 steps) onto 1/32: the pattern 64 steps, the fill bar 128, whole (255 a block
+         * since 2026-11-08; the 2 bars that fit in 64 before); a 16-bar one (255 steps): the 7 bars that fit (224) */
+      const w = S.setDiv(S.fbSet(S.blank("F", 32), 4), "1/32"), w16 = S.setDiv(S.fbSet(S.blank("F", 32), 15), "1/32");
+      ok(S.fbBars(S.fbSet(S.blank("F", 32), 4)) === 4 && w.steps === 64 && w.fillbar.steps === 128 && S.fbBars(w) === 4 && w16.fillbar.steps === 224 && S.fbBars(w16) === 7,
+        "sed: a 4-bar fill bar onto 1/32: whole, 128 steps; a 15-bar one: the 7 bars that fit");
     }
     ok(S.divLoss(d, "1/8") === 1 && S.divLoss(d, "8T") === 3 && S.divLoss(d, "1/32") === 0 && S.divLoss(d, "1/16") === 0 && S.divLoss(fb, "1/8") === 2 && S.divLoss(S.blank("L", 40), "1/32") === 0,
       "sed: the hits a change would drop counted (1/8: the hat on 16th 3; 8T: 3 of 5; finer: none; the fill bar's hat and the entry's kick too)");
@@ -903,12 +905,12 @@ function editorFillBar() {
   ok(S.fillbarSteps({ time: "7/8", div: "1/16" }) === 14 && S.fillbarSteps({ div: "16T" }) === 24 && S.fillbarSteps({ time: "7/8", div: "8T" }) === null && S.fillbarSteps({ div: "2BAR" }) === null,
     "fill bar: one bar of the section's time at its div (7/8 in 16ths: 14; 16T: 24); 7/8 in 8T or a 2BAR step: not whole");
   let bad = 0;
-  for (const x of [{ ...sec, fillbar: { steps: 0, lanes: {} } }, { ...sec, fillbar: { steps: 65, lanes: {} } }, { ...sec, fillbar: { lanes: { KICK: "q" } } },
+  for (const x of [{ ...sec, fillbar: { steps: 0, lanes: {} } }, { ...sec, fillbar: { steps: 256, lanes: {} } }, { ...sec, fillbar: { lanes: { KICK: "q" } } },
                    { ...sec, fillbar: { lanes: {}, fills: { KICK: "F" } } }, { ...sec, div: "2BAR", steps: 2, lanes: { KICK: "xx" }, fills: {}, fillbar: { lanes: {} } }, { ...sec, fillbar: 3 }]) {
     try { S.pack({ ...spec, sections: [x] }); } catch (e) { bad++; }
   }
   ok(bad === 6 && S.pack({ ...spec, sections: [{ ...sec, div: "2BAR", steps: 2, lanes: { KICK: "xx" }, fills: {}, fillbar: { steps: 1, lanes: {} } }] }).length > 0,
-    "fill bar: 0 or 65 steps, a bad hit, marks in it, a bar that is not whole steps (unless steps say), not an object: refused");
+    "fill bar: 0 or 256 steps, a bad hit, marks in it, a bar that is not whole steps (unless steps say), not an object: refused");
   const back = S.unpack(b);
   ok(JSON.stringify(S.pack(back)) === JSON.stringify(b) && back.sections[0].fillbar.steps === 16 && back.sections[0].fillbar.lanes.HITOM === "........x.x.x.x."
     && back.sections[0].fillbar.ratchets.HITOM === "..............2." && back.sections[0].fills.HAT === "..............................N." && !back.sections[1].fillbar,
@@ -1030,7 +1032,7 @@ function editorFillBar() {
       ok(two.fillbar.steps === 32 && two.fillbar.lanes.HITOM === ".".repeat(28) + "x.x." && two.fillbar.lanes.KICK === "........x.......x.......x......." && D.fbBars(two) === 2
         && long.fillbar.steps === 64 && long.fillbar.lanes.HITOM.slice(32) === ".".repeat(28) + "x.x." && /^\.{32}/.test(long.fillbar.lanes.HITOM) && D.fbBars(long) === 4
         && cut.fillbar.steps === 16 && wide.fillbar.steps === 48 && wide.fillbar.lanes.HITOM === "............x.x." + ".".repeat(32) && D.fbBars(m) === 0 && !("fillbar" in D.fbSet(two, 0))
-        && D.ebMax(m) === 4,
+        && D.ebMax(m) === 15,
         "sed: a fill of 2 or 4 bars from the pattern's last bars (rests before its start), cut to 1, a 1-bar one made 3 (rests after), removed");
       const wf2 = D.withFill(m, [{ lanes: { SNARE: "x..............." } }, { lanes: { HITOM: "............xxxx" }, ratchets: { HITOM: "...............2" } }]);
       ok(wf2.sec.fillbar.steps === 32 && wf2.sec.fillbar.lanes.SNARE === "x" + ".".repeat(31) && wf2.sec.fillbar.ratchets.HITOM[31] === "2" && D.fbBars(wf2.sec) === 2,
@@ -1186,10 +1188,10 @@ function editorEntryBreak() {
     && back.sections[0].break.bars === 1 && back.sections[0].break.lanes.HAT === lane(16, [0]) && S.hits(b, h) === 4 + 1 + 3 + 2 + 8,
     "entry/break: unpacked in bars, packed to the same bytes; their hits counted");
   let bad = 0;
-  for (const x of [{ ...groove, entry: { bars: 5 } }, { ...groove, entry: { steps: 20 } }, { ...groove, entry: { fills: { KICK: "F" } } }, { ...groove, entry: [] }, { ...one, break: 3 }]) {
+  for (const x of [{ ...groove, entry: { bars: 16 } }, { ...groove, entry: { steps: 20 } }, { ...groove, entry: { fills: { KICK: "F" } } }, { ...groove, entry: [] }, { ...one, break: 3 }]) {
     try { S.pack({ ...spec, sections: [x] }); } catch (e) { bad++; }
   }
-  ok(bad === 5, "entry/break: past 64 steps, not whole bars, fill marks, not an object: refused");
+  ok(bad === 5 && S.pack({ ...spec, sections: [{ ...groove, entry: { bars: 15 } }] }).length > 0, "entry/break: past 255 steps (16 bars), not whole bars, fill marks, not an object: refused; 15 bars fit");
   {
     const tmp = mkdtempSync(join(tmpdir(), "eb-"));
     writeFileSync(join(tmp, "eb.json"), JSON.stringify(spec));
@@ -1268,10 +1270,10 @@ function editorEntryBreak() {
      (with the first part) and merge (the first's), taken from the file's bars */
   const D = E.SED;
   const g = D.norm(groove);
-  ok(g.entry.bars === 4 && !("steps" in g.entry) && g.entry.lanes.CRASH.length === 64 && D.ebSteps(g, "entry") === 64 && D.ebBars(g, "entry") === 4 && D.ebMax(g) === 4
-    && D.norm({ ...groove, entry: { bars: 9 } }).entry.bars === 4 && D.norm({ ...groove, entry: { steps: 20 } }).entry.bars === 1
-    && D.ebMax({ ...groove, time: "7/8" }) === 4 && D.ebMax({ ...groove, div: "1/8" }) === 8 && !("break" in g),
-    "sed: norm keeps them in whole bars (64 steps at most: 4 bars of 1/16, 8 of 1/8)");
+  ok(g.entry.bars === 4 && !("steps" in g.entry) && g.entry.lanes.CRASH.length === 64 && D.ebSteps(g, "entry") === 64 && D.ebBars(g, "entry") === 4 && D.ebMax(g) === 15
+    && D.norm({ ...groove, entry: { bars: 19 } }).entry.bars === 15 && D.norm({ ...groove, entry: { bars: 9 } }).entry.bars === 9 && D.norm({ ...groove, entry: { steps: 20 } }).entry.bars === 1
+    && D.ebMax({ ...groove, time: "7/8" }) === 18 && D.ebMax({ ...groove, div: "1/8" }) === 31 && !("break" in g),
+    "sed: norm keeps them in whole bars (255 steps at most: 15 bars of 1/16, 31 of 1/8, 18 of 7/8)");
   const a1 = D.ebSet(g, "break", 1), a2 = D.ebSetHit(a1, "break", "KICK", 12, "X", 2), a3 = D.ebSet(a2, "break", 2), a4 = D.ebSet(a3, "break", 1);
   ok(a1.break.bars === 1 && Object.keys(a1.break.lanes).length === 0 && a2.break.lanes.KICK === lane(16, [12], "X") && a2.break.ratchets.KICK === lane(16, [12], "2")
     && D.ebCell(a2, "break", "KICK", 12).hit === "X" && D.ebCell(a2, "break", "KICK", 12).rat === 2 && a3.break.lanes.KICK === lane(32, [12], "X") && a4.break.lanes.KICK === lane(16, [12], "X")
@@ -1607,8 +1609,8 @@ async function editorBackup() {
   const obj = (id) => A.objects.find((o) => o.id === id);
   ok(A.format === "sloop-backup" && A.objects.map((o) => o.id).join() === "0,1,9,32,33,34,35," + songIds.join() + ",24" && obj(9).len === 1464
     && songIds.every((id) => obj(id).len === 0) && obj(24).len === 16 && obj(34).len > 512 && obj(33).len === 0 && obj(35).len === 0
-    && obj(32).len === 0 && E.bkProjFormat(E.b64dec(obj(0).data)) === "DRM1" && obj(1).len === 88 && E.b64dec(obj(1).data).subarray(48, 84).every((x) => x === 0),
-    "backup: LIST + GET: 24 objects (the working project as DRM1, the settings (PER3, bytes 48..83 zero), sample in USR3, the SYN kits, USR1 and USR2 empty, 16 empty song slots, the pedal settings)");
+    && obj(32).len === 0 && E.bkProjFormat(E.b64dec(obj(0).data)) === "DRM2" && obj(1).len === 88 && E.b64dec(obj(1).data).subarray(48, 84).every((x) => x === 0),
+    "backup: LIST + GET: 24 objects (the working project as DRM2, the settings (PER3, bytes 48..83 zero), sample in USR3, the SYN kits, USR1 and USR2 empty, 16 empty song slots, the pedal settings)");
   await rq(E.req.smpErase(1), { timeout: 2500, retries: 0 });
   await rq(E.req.set(0, 50, 5));
   const r0 = await E.backupRestore(rq, JSON.parse(JSON.stringify(A)));   /* as written to disk and read back */
@@ -1639,13 +1641,13 @@ async function editorBackup() {
     "backup: a SLOOP backup restores the rest; its presets, FM6 bank and USR1 are skipped and said");
   ok(/if \(skipped\.length\) sayK\("bkSkipped", bkSkipNames\(skipped\)\);/.test(html) && (html.match(/bkSkipUsr1: "/g) || []).length === 2,
     "backup: the page says what was left out (both languages)");
-  /* the project formats the firmware reads: DRM1 and SLOOP 2.x's FUN4..6; SLOOP 1.x's (or an unknown one): refused, nothing written */
+  /* the project formats the firmware reads: DRM2, DRM1 and SLOOP 2.x's FUN4..6; SLOOP 1.x's (or an unknown one): refused, nothing written */
   const pc = fw("project.c");
-  ok(/PROJ_MAGIC 0x44524D31u/.test(pc) && /PROJ_MAGIC_V6 0x46554E36u/.test(pc) && /PROJ_MAGIC_V4 0x46554E34u/.test(pc) && !/PROJ_MAGIC_V3/.test(pc)
-    && E.bkProjFormat(Uint8Array.of(0x31, 0x4D, 0x52, 0x44)) === "DRM1" && E.bkProjOk(Uint8Array.of(0x36, 0x4E, 0x55, 0x46, 1)) && E.bkProjOk(Uint8Array.of(0x34, 0x4E, 0x55, 0x46))
+  ok(/PROJ_MAGIC 0x44524D32u/.test(pc) && /PROJ_MAGIC_V1 0x44524D31u/.test(pc) && /PROJ_MAGIC_V6 0x46554E36u/.test(pc) && /PROJ_MAGIC_V4 0x46554E34u/.test(pc) && !/PROJ_MAGIC_V3/.test(pc)
+    && E.bkProjFormat(Uint8Array.of(0x31, 0x4D, 0x52, 0x44)) === "DRM1" && E.bkProjOk(Uint8Array.of(0x31, 0x4D, 0x52, 0x44)) && E.bkProjFormat(Uint8Array.of(0x32, 0x4D, 0x52, 0x44)) === "DRM2" && E.bkProjOk(Uint8Array.of(0x32, 0x4D, 0x52, 0x44)) && E.bkProjOk(Uint8Array.of(0x36, 0x4E, 0x55, 0x46, 1)) && E.bkProjOk(Uint8Array.of(0x34, 0x4E, 0x55, 0x46))
     && !E.bkProjOk(Uint8Array.of(0x33, 0x4E, 0x55, 0x46)) && !E.bkProjOk(Uint8Array.of(1, 2, 3, 4)) && E.bkProjOk(new Uint8Array(0))
     && E.bkFwAtLeast("SLOOP 2.6", [2, 5, 1]) && !E.bkFwAtLeast("SLOOP 2.5", [2, 5, 1]) && !E.bkFwAtLeast("FELUCCA SLOOP 2.0 (MOCK)", [2, 5, 1]) && E.bkFwAtLeast("FELUCCA BACKBEAT 0.9", [2, 5, 1]),
-    "backup: project formats read (DRM1, FUN4..6 == project.c), the firmware compared");
+    "backup: project formats read (DRM2, DRM1, FUN4..6 == project.c), the firmware compared");
   {
     const F3 = JSON.parse(JSON.stringify(A)), p2 = F3.objects.find((x) => x.id === 0);
     const d = E.b64dec(p2.data);
@@ -1693,7 +1695,7 @@ async function editorV5() {
   const C = E.CMD;
   const { rq, ev, done } = attachMock({ watchMs: 1000 });
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.proto === 11 && /^FELUCCA BACKBEAT \d/.test(info.version) && info.pcount === 71 && info.gcount === 45 && info.pe0 === 63, "v5..v11: INFO ends with the protocol version (11: drums only); 45 globals");
+  ok(info.proto === 12 && info.nstep === 255 && /^FELUCCA BACKBEAT \d/.test(info.version) && info.pcount === 71 && info.gcount === 45 && info.pe0 === 63, "v5..v12: INFO ends with the protocol version (12: 255 steps) and NSTEP's high bits; 45 globals");
   /* the firmware says the same: the command numbers, INFO's layout, protocol 11 */
   const ec = fw("editor.c"), pc = fw("params.c");
   const en = (/enum \{ ED_INFO = 1,([^}]*)\}/.exec(ec) || [])[1] || "";
@@ -1703,7 +1705,7 @@ async function editorV5() {
     RELOAD: 24, PING: 25, STEP_CHANGED: 26, TRACK: 27, TRACK_CHANGED: 32, DRUM_STEP: 33, BK_LIST: 34, BK_PUT: 36, LOCK_GET: 37, LOCK_SET: 38,
     MICRO_GET: 39, MICRO_SET: 40, FILL_GET: 41, FILL_SET: 42 };
   ok(Object.entries(want).every(([k, v]) => C[k] === v && num("ED_" + k) === v)
-    && /#define ED_PROTO 11u/.test(ec) && /ed_b\(ED_PROTO\);/.test(ec) && /ed_b\(0\);\s*\/\* the engines \(drums only: none, no names\) \*\//.test(ec)
+    && /#define ED_PROTO 12u/.test(ec) && /ed_b\(NSTEP >> 7\);/.test(ec) && /ed_b\(ED_PROTO\);/.test(ec) && /ed_b\(0\);\s*\/\* the engines \(drums only: none, no names\) \*\//.test(ec)
     && /#define ED_NOENG 0u/.test(ec) && !/case ED_PRESET:|case ED_PROJECT:|case ED_NAMES:|case ED_UP_|case ED_FM6_/.test(ec) && num("ED_PROJECT") === 9 && !("PROJECT" in C)
     && /enum \{ ED_DSYN_LIST = 72, ED_DSYN_GET, ED_DSYN_PUT, ED_DSYN_STORE, ED_DSYN_PLAY \};/.test(fw("editor_dsyn.c"))
     && C.DSYN_LIST === 72 && C.DSYN_PLAY === 76, "v5..v11: command numbers and INFO == editor.c / editor_dsyn.c (11; no engine; PRESET, PROJECT (9 reserved), NAMES, UP_*, FM6_* gone)");
@@ -1725,7 +1727,7 @@ async function editorV5() {
   const ds = E.parse[C.DRUM_STEP](await rq(E.req.drumStep(5, d)));
   const dg = E.parse[C.DRUM_STEP](await rq(E.req.drumStep(5)));
   ok(ds.index === 5 && dg.on === d.on && dg.lvl.join() === d.lvl.join() && dg.rat.join() === d.rat.join()
-    && E.req.drumStep(5, d)[1].every((b) => b >= 0 && b < 128) && E.req.drumStep(5, d)[1].length === 14, "v5: DRUM_STEP round trip (16 lanes, levels, ratchets)");
+    && E.req.drumStep(5, d)[1].every((b) => b >= 0 && b < 128) && E.req.drumStep(5, d)[1].length === 15, "v5: DRUM_STEP round trip (16 lanes, levels, ratchets; the index two bytes since v12)");
   ok(E.DRUM_LANES.length === 16 && E.DRUM_LANES[0][0] === 36 && E.DRUM_LANES[15][0] === 56 && E.LV_NAMES.join() === "NORM,GHOST,SOFT,HARD",
     "v5: the 16 lanes (kick .. cowbell), 4 levels");
   const dc = fw("drums.c");
@@ -1756,7 +1758,7 @@ async function editorV7() {
   const C = E.CMD;
   const { m, rq, ev, done } = attachMock({ watchMs: 1000 });
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.proto === 11, "v7: INFO ends with 11 (v11 includes v7)");
+  ok(info.proto === 12, "v7: INFO ends with 12 (v12 includes v7)");
   /* the lockable set == seq.c p_lockable (the ids as core.h names them) */
   const sc = fw("seq.c"), ch = fw("core.h");
   const ids = {}; let n = 0;
@@ -1771,24 +1773,24 @@ async function editorV7() {
     "v7: the lockable parameters (editor == seq.c p_lockable; LEN, MUTE are not; FILTER, the kit, the INSERT are)");
   /* MICRO: 64 bytes offset by 64; a set clamps to -32..31 */
   const mg = E.parse[C.MICRO_GET](await rq(E.req.microGet(0)));
-  ok(mg.track === 0 && mg.micro.length === 64 && mg.micro.every((x) => x === 0), "v7: MICRO_GET: 64 nudges, all 0");
+  ok(mg.track === 0 && mg.micro.length === 255 && mg.micro.every((x) => x === 0), "v7: MICRO_GET: 255 nudges, all 0");
   const ms = E.parse[C.MICRO_SET](await rq(E.req.microSet(0, 4, -8)));
   const ms2 = E.parse[C.MICRO_SET](await rq(E.req.microSet(0, 5, 100)));
   const ms3 = E.parse[C.MICRO_SET](await rq(E.req.microSet(0, 6, -100)));
   const mg2 = E.parse[C.MICRO_GET](await rq(E.req.microGet(0)));
   ok(ms.step === 4 && ms.micro === -8 && ms2.micro === 31 && ms3.micro === -32 && mg2.micro[4] === -8 && mg2.micro[5] === 31 && mg2.micro[6] === -32
-    && E.req.microSet(0, 4, -8)[1].join() === "0,4,56" && E.req.microSet(0, 4, 31)[1][2] === 95 && E.req.microSet(0, 4, -32)[1][2] === 32,
+    && E.req.microSet(0, 4, -8)[1].join() === "0,4,0,56" && E.req.microSet(0, 4, 31)[1][3] === 95 && E.req.microSet(0, 4, -32)[1][3] === 32 && E.req.microSet(0, 200, 0)[1].join() === "0,72,1,64",
     "v7: MICRO_SET (sent + 64: -8 -> 56, 31 -> 95, -32 -> 32), clamped to -32..31");
   /* LOCK: set, move, list, delete; refused on a non-lockable parameter, bounded */
   const l1 = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 2, ids.P_E0, 1)));
   const l2 = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 2, ids.P_TFLT, 500)));
   const l3 = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 2, ids.P_SLEN, 8)));
-  const l4 = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 70, ids.P_E0, 1)));
+  const l4 = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 255, ids.P_E0, 1)));
   const lg = E.parse[C.LOCK_GET](await rq(E.req.lockGet(0)));
   ok(l1.rc === 0 && l1.has === 1 && l1.value === 1 && l2.rc === 0 && l2.value === 63 && l3.rc === 2 && !l3.has && l3.value === null && l4.rc === 1
     && lg.track === 0 && lg.locks.length === 2 && lg.locks[0].step === 2 && lg.locks[0].param === ids.P_E0 && lg.locks[1].value === 63
-    && E.req.lockSet(0, 2, 5, -30)[1].length === 5 && E.req.lockSet(0, 2, 5)[1].length === 3,
-    "v7: LOCK_SET makes and clamps a lock (FILT 500 -> 63), refuses LEN (rc 2) and step 70 (rc 1); LOCK_GET lists them");
+    && E.req.lockSet(0, 2, 5, -30)[1].length === 6 && E.req.lockSet(0, 2, 5)[1].length === 4,
+    "v7: LOCK_SET makes and clamps a lock (FILT 500 -> 63), refuses LEN (rc 2) and step 255 (rc 1); LOCK_GET lists them");
   const l5 = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 2, ids.P_E0, 3)));
   const l6 = E.parse[C.LOCK_SET](await rq(E.req.lockSet(0, 2, ids.P_E0)));
   const lg2 = E.parse[C.LOCK_GET](await rq(E.req.lockGet(0)));
@@ -1813,21 +1815,21 @@ async function editorV8() {
   const C = E.CMD;
   const { m, rq, ev, done } = attachMock({ watchMs: 1000 });
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.proto === 11, "v8: INFO ends with 11 (v11 includes v8)");
+  ok(info.proto === 12, "v8: INFO ends with 12 (v12 includes v8)");
   /* the condition codes == core.h FC_*; the bit layout of a 2-bit step field */
   const ch = fw("core.h"), sc = fw("seq.c");
-  ok(/enum \{ FC_NORM, FC_FILL, FC_NOFILL \}/.test(ch) && /uint8_t fill\[NSTEP \/ 4\];/.test(ch)
+  ok(/enum \{ FC_NORM, FC_FILL, FC_NOFILL \}/.test(ch) && /uint8_t fill\[\(NSTEP \+ 3\) \/ 4\];/.test(ch)
     && /t->fill\[idx \/ 4u\] >> \(2u \* \(idx % 4u\)\)\) & 3u/.test(sc) && E.FC.FILL === 1 && E.FC.NOFILL === 2,
     "v8: FC codes and the 2-bit layout == core.h / seq.c step_fill");
   const g0 = E.parse[C.FILL_GET](await rq(E.req.fillGet(0)));
-  ok(g0.track === 0 && g0.fill.length === 16 && g0.fill.every((x) => x === 0), "v8: FILL_GET: 16 bytes, every step normal");
+  ok(g0.track === 0 && g0.fill.length === 64 && g0.fill.every((x) => x === 0), "v8: FILL_GET: 64 bytes (255 steps), every step normal");
   const s1 = E.parse[C.FILL_SET](await rq(E.req.fillSet(0, 4, E.FC.FILL)));
   const s2 = E.parse[C.FILL_SET](await rq(E.req.fillSet(0, 3, E.FC.NOFILL)));   /* (bits 6..7 of byte 0: the top bit crosses pack7) */
   const s3 = E.parse[C.FILL_SET](await rq(E.req.fillSet(0, 63, 3)));            /* 3: normal */
   const g1 = E.parse[C.FILL_GET](await rq(E.req.fillGet(0)));
   ok(s1.step === 4 && s1.cond === 1 && s2.cond === 2 && s3.cond === 0 && g1.fill[1] === 1 && g1.fill[0] === 0x80 && g1.fill[15] === 0
     && E.fillGet(g1.fill, 4) === 1 && E.fillGet(g1.fill, 3) === 2 && E.fillGet(g1.fill, 5) === 0
-    && E.req.fillSet(0, 4, 1)[1].join() === "0,4,1" && E.req.fillGet(2)[1].join() === "2",
+    && E.req.fillSet(0, 4, 1)[1].join() === "0,4,0,1" && E.req.fillGet(2)[1].join() === "2",
     "v8: FILL_SET sets a step (3 -> normal); FILL_GET returns the bytes as stored (0x80 through pack7)");
   {
     const b = new Uint8Array(16); E.fillSet(b, 7, 2); E.fillSet(b, 0, 1); E.fillSet(b, 7, 0);
@@ -1938,8 +1940,8 @@ async function editorSong() {
     "settings: mock: read, send (rc 0, bytes 48..83 zeroed), a bad magic (rc 2), while playing too (rc 0: no rc 3 any more)");
   done();
   /* the page */
-  ok(/id="lenval" type="number" min="1" max="64"/.test(html) && /if \(!s && id === pSlen\(\)\) lenChanged\(\);/.test(html) && /function lenChanged\(\) \{ renderSteps\(\); \}/.test(html),
-    "editor: the LEN control (1..64), the drum lanes redrawn when LEN changes");
+  ok(/id="lenval" type="number" min="1" max="255"/.test(html) && /if \(!s && id === pSlen\(\)\) lenChanged\(\);/.test(html) && /function lenChanged\(\) \{ renderSteps\(\); \}/.test(html),
+    "editor: the LEN control (1..255), the drum lanes redrawn when LEN changes");
 }
 
 /* ------------------------------------- SLOOP 2.5: the DRUM SYNTH page (v10) --- */

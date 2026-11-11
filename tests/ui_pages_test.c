@@ -1387,12 +1387,12 @@ int main(int argc, char **argv)
                   "EDIT + OCT+: redone, onto 1/8 again");
             edges_btn |= BT(B_OCTDN); fm1_in.buttons |= BT(B_OCTDN); frame(); fm1_in.buttons &= ~BT(B_OCTDN); frame();
             release(B_EDIT); frames(2);
-            TDRUM->p[P_SLEN] = 64;
+            TDRUM->p[P_SLEN] = 128;                           /* (255 steps a pattern since 2026-11-08: 64 of 1/16 -> 1/32 fit now) */
             press(B_SEQ); frames(3);
             encs[panel.enc[EN_K2]] = 1; frame();
-            check(TDRUM->p[P_SDIV] == 2 && TDRUM->p[P_SLEN] == 64 && !strcmp(ui.msg, "DIV: OVER 64 STEPS"), "SEQ layer: 64 steps of 1/16 -> 1/32 refused, said");
+            check(TDRUM->p[P_SDIV] == 2 && TDRUM->p[P_SLEN] == 128 && !strcmp(ui.msg, "DIV: TOO MANY STEPS"), "SEQ layer: 128 steps of 1/16 -> 1/32 (256) refused, said");
             encs[panel.enc[EN_K2]] = -1; frame();
-            check(TDRUM->p[P_SDIV] == 1 && TDRUM->p[P_SLEN] == 32 && dstep_lvl(&TDRUM->dstep[1], 0) == LV_HARD, "..-> 1/8 fits: 32 steps");
+            check(TDRUM->p[P_SDIV] == 1 && TDRUM->p[P_SLEN] == 64 && dstep_lvl(&TDRUM->dstep[1], 0) == LV_HARD, "..-> 1/8 fits: 64 steps");
             release(B_SEQ); frames(2);
             {   /* the PATTERN page (SEQ's family): KNOB 2 is DIV there too */
                 uint32_t j, hit = 0;
@@ -1403,14 +1403,15 @@ int main(int argc, char **argv)
                     else { encs[panel.enc[EN_SELECT]] = 1; frame(); }
                 }
                 encs[panel.enc[EN_K2]] = 1; frames(2);
-                check(hit && TDRUM->p[P_SDIV] == 2 && TDRUM->p[P_SLEN] == 64 && dstep_lvl(&TDRUM->dstep[2], 0) == LV_HARD && !dstep_mask(&TDRUM->dstep[1]),
+                check(hit && TDRUM->p[P_SDIV] == 2 && TDRUM->p[P_SLEN] == 128 && dstep_lvl(&TDRUM->dstep[2], 0) == LV_HARD && !dstep_mask(&TDRUM->dstep[1]),
                       "PATTERN page, KNOB 2: DIV 1/8 -> 1/16, the pattern follows");
                 go_home(); frame();
             }
             div_req = 1u + 1u;                                /* a learned CC set DIV 1/8 (seq.c midi_cc_set defers it to the UI) */
             frame();
-            check(TDRUM->p[P_SDIV] == 1 && TDRUM->p[P_SLEN] == 32 && !div_req && dstep_lvl(&TDRUM->dstep[1], 0) == LV_HARD,
+            check(TDRUM->p[P_SDIV] == 1 && TDRUM->p[P_SLEN] == 64 && !div_req && dstep_lvl(&TDRUM->dstep[1], 0) == LV_HARD,
                   "a MIDI-learned CC on DIV: applied in the main loop, the pattern follows");
+
             TDRUM->p[P_SDIV] = 2; TDRUM->p[P_SLEN] = 16; memset(TDRUM->dstep, 0, sizeof TDRUM->dstep);
             memset(TDRUM->micro, 0, sizeof TDRUM->micro); memset(TDRUM->fill, 0, sizeof TDRUM->fill);
             for (i = 0; i < NLOCK; i++) TDRUM->lock[i].step = LOCK_FREE;

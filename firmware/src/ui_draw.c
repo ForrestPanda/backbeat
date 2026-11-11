@@ -169,9 +169,11 @@ UI_SMALL static void draw_column(uint32_t c, const char *label, const char *val,
  * axis is the parameter value (the times themselves are exponential). */
 UI_SMALL static void graph_steps(const track_t *t, uint16_t c)
 {
-    uint32_t i, len = (uint32_t)t->p[P_SLEN];
-    for (i = 0; i < NSTEP; i++) {                    /* 4 rows of 16 thin bars */
-        int32_t x = 6 + (int32_t)(i % 16u) * 14 + (int32_t)(i % 16u) / 4 * 4, y = 6 + (int32_t)(i / 16u) * 24;
+    uint32_t i, len = (uint32_t)t->p[P_SLEN], at = song.playing ? t->seq_idx : ui.cursor, base = at / 64u * 64u;
+    for (i = base; i < base + 64u; i++) {            /* 4 rows of 16 thin bars: the 64 steps around the one playing (or the
+                                                      * cursor's, stopped; 255 steps since 2026-11-08) */
+        int32_t x = 6 + (int32_t)(i % 16u) * 14 + (int32_t)(i % 16u) / 4 * 4, y = 6 + (int32_t)(i % 64u / 16u) * 24;
+
         if (i >= len)
             continue;
         if (trk_step_on(t, i))

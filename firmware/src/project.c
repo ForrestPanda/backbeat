@@ -5,9 +5,10 @@
  * starts where you left it; the editor's backup carries it (object 0) and restores it. (SLOOP's four project slots
  * in .noinit RAM, its sections A..D, went with JAM 2026-10-27: docs/design.md.)
  *
- * Format DRM1 (written, fm1-drummer drums only): the globals, the drum track (its parameters, pattern, nudges and
- * conditions, locks), as format 6's drum track was stored. Read and converted, the drum track only (SLOOP's three
- * synth parts are gone): 6 ("FUN6", SLOOP 2.6: format 5 with the ten parameters of 2.6 in a byte each and each step's
+ * Format DRM2 (written, since 2026-11-08): the globals, the drum track (its parameters, pattern, nudges and
+ * conditions, locks) of NSTEP (255) steps, as format 6's drum track was stored but longer. Read and converted, the
+ * drum track only (SLOOP's three synth parts are gone): DRM1 (fm1-drummer drums only, 2026-10-14 .. 2026-11-08: the
+ * same of 64 steps; every unit's autosave before this version), 6 ("FUN6", SLOOP 2.6: format 5 with the ten parameters of 2.6 in a byte each and each step's
  * nudge and fill condition in one byte), 5 ("FUN5", SLOOP 2.4 .. 2.5: per step a nudge, the parameter locks, the fill
  * conditions; by id, the 2.6 parameters at their defaults, a lock on P_E0.. moved with it), 4 ("FUN4", SLOOP 2.0 ..
  * 2.3: no nudge, no lock). Formats 1..3 (SLOOP 1.x and before: no drum lanes yet) are not read any more: SLOOP 2.x
@@ -18,7 +19,8 @@
 #ifndef UI_SMALL                 /* (compiled for size on the unit: core.h; a host test or the loader alone: nothing) */
 #define UI_SMALL
 #endif
-#define PROJ_MAGIC 0x44524D31u                 /* "DRM1": the drum track */
+#define PROJ_MAGIC 0x44524D32u                 /* "DRM2": the drum track of NSTEP steps (2026-11-08) */
+#define PROJ_MAGIC_V1 0x44524D31u              /* "DRM1": the same of 64 steps (fm1-drummer until 2026-11-08); read only */
 #define PROJ_MAGIC_V6 0x46554E36u              /* "FUN6": SLOOP 2.6, four tracks; read only */
 #define PROJ_MAGIC_V5 0x46554E35u              /* "FUN5": SLOOP 2.4 .. 2.5; read only */
 #define PROJ_MAGIC_V4 0x46554E34u              /* "FUN4": SLOOP 2.0 .. 2.3; read only */
@@ -33,25 +35,43 @@ _Static_assert(G_DRDLY == PROJ_NG && G_TXSRC == PROJ_NG + 5u && G_COUNT == G_BEN
 #define PROJ_NC6 ((uint32_t)P_ITYPE)           /* the parameters kept in 16 bits, P_LEVEL .. P_VLEAD (as format 5), */
 #define PROJ_NX6 ((uint32_t)(P_E0 - P_ITYPE))  /* the 2.6 ones in a byte (0..127), then P_E0 .. P_E7 */
 _Static_assert(PROJ_NC6 == PROJ_NP_V5 - 8u && PROJ_NX6 == 10u, "format 6: format 5's parameters, then ten bytes");
-typedef struct {                               /* one track (format 6; DRM1's drum track the same) */
+#define NSTEP64 64u                            /* SLOOP's grid, the step count of formats 4..6 and DRM1 */
+typedef struct {                               /* one track of NSTEP steps (DRM2, 2026-11-08): format 6's track with
+                                                * the pattern, nudges and conditions of the song format's reach */
     int16_t p[PROJ_NC6];                       /* P_LEVEL .. P_VLEAD (pt_get, pt_set) */
     int16_t e[8];                              /* P_E0 .. P_E7 */
     uint8_t x[PROJ_NX6];                       /* P_ITYPE .. P_LPOL (2.6) */
-    uint8_t engine, preset;                    /* (format 6's synth parts; DRM1: 0) */
-    union {
-        step_t step[NSTEP];                    /* (format 6's synth parts) */
-        dstep_t dstep[NSTEP];                  /* the drum track: 16 lanes, the same size */
-    };
+    uint8_t engine, preset;                    /* (0) */
+    dstep_t dstep[NSTEP];                      /* the drum track: 16 lanes a step */
     uint8_t mf[NSTEP];                         /* each step's nudge (core.h MICRO_*, 6 bits) | its fill condition << 6 */
     plock_t lock[NLOCK];                       /* and its parameter locks (step LOCK_FREE = none) */
 } proj_trk_t;
-typedef struct {                               /* DRM1 */
+typedef struct {                               /* DRM2: as DRM1, the drum track of NSTEP steps */
     uint32_t magic, size;
     int16_t g[PROJ_NG];
     uint8_t drdly, rsv[3];                     /* G_DRDLY (SLOOP 2.5); rsv[0..1]: SETUP > TEXTURE (proj_tx_*) */
     proj_trk_t t;                              /* the drum track */
     uint32_t sum;
 } project_t;
+typedef struct {                               /* one track of 64 steps (format 6; DRM1's the same), read only */
+    int16_t p[PROJ_NC6];                       /* P_LEVEL .. P_VLEAD (pt_get, pt_set) */
+    int16_t e[8];                              /* P_E0 .. P_E7 */
+    uint8_t x[PROJ_NX6];                       /* P_ITYPE .. P_LPOL (2.6) */
+    uint8_t engine, preset;                    /* (format 6's synth parts; DRM1: 0) */
+    union {
+        step_t step[NSTEP64];                    /* (format 6's synth parts) */
+        dstep_t dstep[NSTEP64];                  /* the drum track: 16 lanes, the same size */
+    };
+    uint8_t mf[NSTEP64];                         /* each step's nudge (core.h MICRO_*, 6 bits) | its fill condition << 6 */
+    plock_t lock[NLOCK];                       /* and its parameter locks (step LOCK_FREE = none) */
+} proj_trk64_t;
+typedef struct {                               /* DRM1 (64 steps; read only since 2026-11-08) */
+    uint32_t magic, size;
+    int16_t g[PROJ_NG];
+    uint8_t drdly, rsv[3];                     /* G_DRDLY (SLOOP 2.5); rsv[0..1]: SETUP > TEXTURE (proj_tx_*) */
+    proj_trk64_t t;                              /* the drum track */
+    uint32_t sum;
+} project_drm1_t;
 UI_SMALL static int16_t pt_get(const proj_trk_t *t, uint32_t id)   /* p[id] of a stored track */
 {
     return id < PROJ_NC6 ? t->p[id] : id < P_E0 ? (int16_t)t->x[id - PROJ_NC6] : t->e[(id - P_E0) & 7u];
@@ -75,19 +95,19 @@ typedef struct {                               /* format 6 (SLOOP 2.6), read onl
     uint32_t magic, size;
     int16_t g[PROJ_NG];
     uint8_t sel, drdly, rsv[2];                /* (the selected track); 2.5: G_DRDLY; 2.6: the TEXTURE */
-    proj_trk_t t[PROJ_NTRK_OLD];
+    proj_trk64_t t[PROJ_NTRK_OLD];
     uint32_t sum;
 } project_v6_t;
 typedef struct {                               /* a track of format 5 (SLOOP 2.4 .. 2.5), read only */
     int16_t p[PROJ_NP_V5];
     uint8_t engine, preset;
     union {
-        step_t step[NSTEP];
-        dstep_t dstep[NSTEP];
+        step_t step[NSTEP64];
+        dstep_t dstep[NSTEP64];
     };
-    int8_t micro[NSTEP];                       /* each step's nudge (core.h) */
+    int8_t micro[NSTEP64];                       /* each step's nudge (core.h) */
     plock_t lock[NLOCK];                       /* and its parameter locks (step LOCK_FREE = none) */
-    uint8_t fill[NSTEP / 4];                   /* and its fill condition, 2 bits a step (FC_*) */
+    uint8_t fill[NSTEP64 / 4];                   /* and its fill condition, 2 bits a step (FC_*) */
 } proj_trk_v5_t;
 typedef struct {                               /* format 5, read only */
     uint32_t magic, size;
@@ -100,8 +120,8 @@ typedef struct {                               /* a track of format 4 (SLOOP 2.0
     int16_t p[PROJ_NP_V4];
     uint8_t engine, preset;
     union {
-        step_t step[NSTEP];
-        dstep_t dstep[NSTEP];
+        step_t step[NSTEP64];
+        dstep_t dstep[NSTEP64];
     };
 } proj_trk_v4_t;
 typedef struct {                               /* format 4, read only */
@@ -126,7 +146,7 @@ UI_SMALL static uint32_t proj_hash(const void *p, uint32_t n)   /* FNV-1a over n
 static uint32_t proj_sum(const project_t *p) { return proj_hash(p, sizeof *p - 4u); }
 static int proj_ok(const project_t *q) { return q->magic == PROJ_MAGIC && q->size == sizeof *q && q->sum == proj_sum(q); }
 
-/* ---- formats 4..6 -> DRM1: the drum track and the globals */
+/* ---- DRM1 and formats 4..6 -> DRM2: the drum track and the globals */
 /* no nudge, no lock, no condition (format 4); the 2.6 parameters at their defaults (formats 4, 5) */
 UI_SMALL static void proj_trk_plain(proj_trk_t *d)
 {
@@ -149,6 +169,32 @@ UI_SMALL static void proj_new(project_t *q, const int16_t *g)   /* q: DRM1, the 
     proj_trk_plain(&q->t);
 }
 
+/* a track of 64 steps (format 6, DRM1) into one of NSTEP: its steps first, the rest empty */
+UI_SMALL static void proj_trk_from64(proj_trk_t *d, const proj_trk64_t *s)
+{
+    memcpy(d->p, s->p, sizeof d->p);
+    memcpy(d->e, s->e, sizeof d->e);
+    memcpy(d->x, s->x, sizeof d->x);
+    d->engine = s->engine;
+    d->preset = s->preset;
+    memcpy(d->dstep, s->dstep, sizeof s->dstep);
+    memcpy(d->mf, s->mf, sizeof s->mf);
+    memcpy(d->lock, s->lock, sizeof d->lock);
+}
+/* DRM1 (n bytes in *v1, 64 steps) -> q: as it was, the steps past 64 empty (2026-11-08) */
+UI_SMALL static int proj_from_drm1(project_t *q, const project_drm1_t *v1, int n)
+{
+    if (n != (int)sizeof *v1 || v1->magic != PROJ_MAGIC_V1 || v1->size != sizeof *v1 ||
+        v1->sum != proj_hash(v1, sizeof *v1 - 4u))
+        return 0;
+    proj_new(q, v1->g);
+    q->drdly = v1->drdly;
+    memcpy(q->rsv, v1->rsv, sizeof q->rsv);
+    proj_trk_from64(&q->t, &v1->t);
+    q->sum = proj_sum(q);
+    return 1;
+}
+
 /* format 6 (n bytes in *v6) -> q: the drum track as it was, the globals, G_DRDLY and the TEXTURE */
 UI_SMALL static int proj_from_v6(project_t *q, const project_v6_t *v6, int n)
 {
@@ -159,7 +205,7 @@ UI_SMALL static int proj_from_v6(project_t *q, const project_v6_t *v6, int n)
     q->drdly = v6->drdly;
     q->rsv[0] = v6->rsv[0];
     q->rsv[1] = v6->rsv[1];
-    q->t = v6->t[PROJ_DRUM_OLD];
+    proj_trk_from64(&q->t, &v6->t[PROJ_DRUM_OLD]);
     q->t.engine = q->t.preset = 0;
     q->sum = proj_sum(q);
     return 1;
@@ -181,8 +227,8 @@ UI_SMALL static int proj_from_v5(project_t *q, const project_v5_t *v5, int n)
         d->p[k] = s->p[k];
     for (k = 0; k < 8u; k++)
         d->e[k] = s->p[PROJ_NP_V5 - 8u + k];
-    memcpy(d->dstep, s->dstep, sizeof d->dstep);
-    for (k = 0; k < NSTEP; k++)
+    memcpy(d->dstep, s->dstep, sizeof s->dstep);        /* (its 64 steps; the rest empty) */
+    for (k = 0; k < NSTEP64; k++)
         pt_set_mf(d, k, clamp(s->micro[k], MICRO_MIN, MICRO_MAX), (uint32_t)s->fill[k / 4u] >> (2u * (k % 4u)));
     for (k = 0; k < NLOCK; k++) {
         d->lock[k] = s->lock[k];
@@ -206,19 +252,20 @@ UI_SMALL static int proj_from_v4(project_t *q, const project_v4_t *v4, int n)
         q->t.p[k] = k < PROJ_NP_V4 - 8u ? s->p[k] : TP[k].def;   /* their defaults; P_E0.. moved */
     for (k = 0; k < 8u; k++)
         q->t.e[k] = s->p[PROJ_NP_V4 - 8u + k];
-    memcpy(q->t.dstep, s->dstep, sizeof q->t.dstep);
+    memcpy(q->t.dstep, s->dstep, sizeof s->dstep);
     q->sum = proj_sum(q);
     return 1;
 }
 
-/* n bytes of a stored project (DRM1, or formats 4..6 converted) -> slot q; 0 = not a project */
+/* n bytes of a stored project (DRM2, or DRM1 and formats 4..6 converted) -> slot q; 0 = not a project */
 UI_SMALL static int proj_import(project_t *q, const void *b, int n)
 {
     if (n == (int)sizeof *q && proj_ok((const project_t *)b)) {
         memcpy(q, b, sizeof *q);
         return 1;
     }
-    return proj_from_v6(q, (const project_v6_t *)b, n) || proj_from_v5(q, (const project_v5_t *)b, n) ||
+    return proj_from_drm1(q, (const project_drm1_t *)b, n) || proj_from_v6(q, (const project_v6_t *)b, n) ||
+           proj_from_v5(q, (const project_v5_t *)b, n) ||
            proj_from_v4(q, (const project_v4_t *)b, n);
 }
 

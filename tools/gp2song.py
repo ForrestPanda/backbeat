@@ -13,7 +13,7 @@ reader is here (since 2026-10-19). The file's format is told from its first byte
 The score's section markers (Intro, Verse 1, Chorus...) bound the sections; the measures of a section give
 its drum pattern: the run of 1, 2 or 4 bars that most of the section repeats (at 1/16; at 1/32, and then
 at most 2 bars, when many hits sit between 16ths). The bars that deviate from the pattern at the end of
-the section (up to 4, 64 steps, since 2026-10-20), or the bar that does most often at the end of a phrase, is the fill: the section's fill bar of its own ("fillbar" in
+the section (up to 4 bars, the importer's own cap, since 2026-10-20; the format holds 255 steps since 2026-11-08), or the bar that does most often at the end of a phrase, is the fill: the section's fill bar of its own ("fillbar" in
 the JSON, since 2026-10-15: that bar as it is, levels, ratchets and flams, which a fill plays instead of the bar it is
 asked in; before, its hits were marks on the pattern's last bar, "fills", and a hit on a step the pattern also
 hit lost its own level). A grace note on a hit is a flam ("flams", since 2026-10-17); two notes a 32nd apart are a
@@ -65,7 +65,8 @@ OUTRO_NAMES = ("OUTRO", "ENDING", "END", "CODA")
 MATCH = 0.75                                  # a pattern: this share of the bars agree with it
 NEAR = 0.1                                    # a shorter pattern scoring this close to the best is taken
 SNG_MAX = 3800                                # the packed song (firmware/src/sng.c SNG_MAX)
-NSTEP = 64                                    # steps a pattern, a fill bar, an entry or a break holds (seq.c NSTEP)
+NSTEP = 255                                   # steps a pattern, a fill bar, an entry or a break holds (seq.c NSTEP; 64 until 2026-11-08)
+
 SNG_SECTIONS = 16                             # sections a song holds (seq.c SNG_SECTIONS; 8 until 2026-10-14)
 METER_DENS = (2, 4, 8, 16)                    # the meters a section can have (sng.c): n 1..16 over these
 OFFGRID_32 = 0.125                            # 1/32 when this share of the hits sit between 16ths
@@ -358,7 +359,7 @@ def make_section(name, bar_list, outro, max_bars=4):
     max_bars = min(max_bars, 2 if div == "1/32" else 4)
     bars = [bar_hits(b, tps) for b in bar_list]
     p, pattern, score = best_period(bars, max_bars)
-    # the fill: the bars at the end that deviate (several, up to 64 steps, since 2026-10-20: a 2-bar fill in the file
+    # the fill: the bars at the end that deviate (several, up to max_bars, since 2026-10-20: a 2-bar fill in the file
     # was cut to its last bar), only in a section that keeps to its pattern and with a whole pattern before them;
     # else the most common deviating bar at the end of a phrase
     steps_per_bar = pattern[0][0]

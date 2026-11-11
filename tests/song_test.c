@@ -1170,11 +1170,20 @@ int main(int argc, char **argv)
         /* 1/16 -> 8T: the beats stay (steps 0, 4, 8..), the rest goes; 24 steps */
         assert(pattern_rediv(TDRUM, 4) && TDRUM->p[P_SLEN] == 24 && lane_on(&TDRUM->dstep[0], 0) && lane_on(&TDRUM->dstep[3], 0) && lane_on(&TDRUM->dstep[3], 2) &&
                !lane_on(&TDRUM->dstep[1], 4) && !lane_on(&TDRUM->dstep[2], 4) && lane_on(&TDRUM->dstep[3], 4) && fb_len == 12u && fb_bar == 12u);
-        /* a 4-bar fill bar (64 steps of 1/16) onto 1/32: the whole bars that fit, 2 (64 steps) */
+        /* a 4-bar fill bar (64 steps of 1/16) onto 1/32: whole, 128 steps (255 a block since 2026-11-08; until then the
+         * whole bars that fit in 64: 2) */
         assert(pattern_rediv(TDRUM, 2));
         fb_len = 64; fb_phrase(2, 0); assert(fb_bar == 16u && fb_bars == 4u);
-        assert(pattern_rediv(TDRUM, 3) && TDRUM->p[P_SLEN] == 64 && fb_len == 64u && fb_bar == 32u && fb_bars == 2u);
-        assert(!pattern_rediv_ok(TDRUM, 5) == 0 && pattern_rediv(TDRUM, 2) && TDRUM->p[P_SLEN] == 32);   /* (64 of 1/32 -> 16T: 48, fits) */
+        assert(pattern_rediv(TDRUM, 3) && TDRUM->p[P_SLEN] == 64 && fb_len == 128u && fb_bar == 32u && fb_bars == 4u);
+        assert(!pattern_rediv_ok(TDRUM, 5) == 0 && pattern_rediv(TDRUM, 2) && TDRUM->p[P_SLEN] == 32 && fb_len == 64u);   /* (64 of 1/32 -> 16T: 48, fits) */
+        /* over 255: a 16-bar fill bar of 1/16 (255 steps, 15 bars and 15 steps) onto 1/32 would be 510: the whole bars
+         * that fit, 7 (224 steps); the pattern of 32 doubles as before */
+        fb_len = 255; fb_phrase(2, 0); assert(fb_bar == 16u && fb_bars == 16u);
+        assert(pattern_rediv(TDRUM, 3) && TDRUM->p[P_SLEN] == 64 && fb_len == 224u && fb_bar == 32u && fb_bars == 7u);
+        assert(pattern_rediv(TDRUM, 2) && TDRUM->p[P_SLEN] == 32 && fb_len == 112u && fb_bars == 7u);
+        TDRUM->p[P_SLEN] = 128;                      /* a pattern of 128 steps of 1/16 (8 bars) onto 1/32: 256, over 255: refused */
+        assert(!pattern_rediv_ok(TDRUM, 3) && pattern_rediv_ok(TDRUM, 1) && TDRUM->p[P_SLEN] == 128);
+        TDRUM->p[P_SLEN] = 32;
         pc(16, 32); advance(CTL); sng_poll();
         assert(sng_cur == -1 && fb_len == 0u);
         blob_n[8] = 0;

@@ -105,7 +105,8 @@ the loop starts with that section. CC 23 cancels it; another section pressed mea
 `python3 tools/fm1_song.py --count-in 1`, the Song editor tab's pedal row, or SETUP > PEDAL on the device; hear it with
 `fm1_render.py --count-in 1`.
 
-**Entries and breaks.** A section can carry an entry and a break: one to four bars (64 steps), silence too, played
+**Entries and breaks.** A section can carry an entry and a break: one to fifteen bars (255 steps; one to four until
+2026-11-08), silence too, played
 before its pattern as it comes in; after them the pattern starts from its top, and a section pressed meanwhile comes in
 at their end (a song's 4 bars between two 3-bar phrases: the next section on the 5th bar, not the 4th). The entry
 plays when the section comes in from another section or from stopped; pressing the section already playing still does
@@ -413,10 +414,10 @@ is repeatable. The web editor's player does the same (its Humanize menu), and `t
 What else is on it, from SLOOP: one track, the drums (the kits: the
 synthesised kits, SYN1..SYN4 from the editor's Drum synth, your own sampled kits on the user slots; and this fork's
 MULDJORD), a pattern of
-up to 64 steps over 16 lanes with levels, ratchets, nudges, parameter locks and fill conditions, rolls, erase and
+up to 255 steps (64 until 2026-11-08) over 16 lanes with levels, ratchets, nudges, parameter locks and fill conditions, rolls, erase and
 mutes; the drum track's INSERT and FILTER, the delay and
 reverb sends, the master (DUST, DUCK, the DJ filter, the limiter), TEXTURE; MIDI in, out, clock and learn. The web
-editor (protocol v11) edits the pattern, the kits, the drum synth, the samples, songs and settings. (Gone
+editor (protocol v12) edits the pattern, the kits, the drum synth, the samples, songs and settings. (Gone
 from SLOOP's screens: TRACKS, the visualiser, the GLO pages and layer, the HOME-held menu; gone since 2026-10-27,
 JAM: SLOOP's sections A..D with their project slots, quick chain, song order and SONG screen, the SAVE layer that
 held them, and the editor's Jam tab.)
@@ -448,7 +449,7 @@ firmware ([BUILDING.md](BUILDING.md)): at your own risk.
 | `tools/fm1_emu.py` | the firmware on the fm1-emu emulator, songs imported into its flash: a script of keys, knobs and pedal MIDI, screens and sound saved |
 | `tools/fm1_song.py`, `song_examples/` | songs from JSON: check, pack, send, read back; `song_examples/` holds three original demo songs that show the features, each with its pedal plan in `docs/demos.md` (the factory songs are the grooves) |
 | `grooves/`, `docs/grooves.md` | generic grooves, not songs (two sections, verse and chorus, 4-bar phrases, a fill at each phrase's end; each one's tempo, meter, verse, chorus and fill in `docs/grooves.md`): classic rock, blues, rock ballad, slow rock, punk, half-time shuffle, train beat, one drop, four on the floor, metal gallop, a 6/8 ballad, and some to spark ideas (7/8, a tom groove, linear funk, three over four, ride and kick only); the firmware's factory songs, slots 1..16 in `grooves/factory.txt`'s order |
-| `web/editor.html` | the web editor (SLOOP's, drums only, protocol v11) with a Song editor tab (no FM-1 needed but to send and set the pedal): the pedal channel, Guitar Pro and MIDI file import (Pyodide), the section editor, a player; a Setlist tab: the device's sixteen slots; `web/test_web.mjs` tests it against the simulated FM-1 |
+| `web/editor.html` | the web editor (SLOOP's, drums only, protocol v12) with a Song editor tab (no FM-1 needed but to send and set the pedal): the pedal channel, Guitar Pro and MIDI file import (Pyodide), the section editor, a player; a Setlist tab: the device's sixteen slots; `web/test_web.mjs` tests it against the simulated FM-1 |
 | `web/kit/` | the kit the editor serves (the Muldjord Kit with two velocity layers), the files `tools/mkkit.py` makes the device image from |
 | `tools/gen_realkit.py`, `tools/realkit.json`, `assets/realkit/` | the built-in layered kit MULDJORD: the recipe, rendered once from the source kits into WAVs (layers, takes, levels, pans, pre-emphasis for the device's playback, fitted to 412 KB); `tools/gen_samples.py` builds them in as set REAL (a lookahead ADPCM encoder), the editor's player plays them (`web/realkit/`) |
 | `tools/fm1_render.py`, `tests/song_render.c` | a song played by the pedal, rendered to a WAV on the host |

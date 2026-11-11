@@ -40,7 +40,8 @@ def refused(sec):
     return False
 
 
-# an entry and a break (2026-10-18): whole bars of the section's time, 64 steps at most, after the fill bar, in order
+# an entry and a break (2026-10-18): whole bars of the section's time, NSTEP steps at most (255 since 2026-11-08, 64
+# before), after the fill bar, in order
 sec = {"name": "GROOVE", "steps": 48, "lanes": {"KICK": "x"}, "fillbar": {"lanes": {"SNARE": "x"}},
        "entry": {"bars": 4, "lanes": {"CRASH": "X"}}, "break": {"lanes": {}}}
 b = fm1_song.pack_section(sec, 0)
@@ -50,8 +51,8 @@ check(b[14] == 2 | 4 | 8 and b[q] == 16 and b[fm1_song.walk(b, q + 1, 16)] == 64
       "entry 4 bars, break 1 bar (silent): after the fill bar, their steps")
 check(fm1_song.pack_section(dict(sec, time="7/8", steps=14, fillbar=None, entry={"bars": 2}, **{"break": {"steps": 14}}),
                             0)[14] == 4 | 8, "7/8: 2 bars of 14 sixteenths, \"steps\" whole bars")
-check(refused(dict(sec, entry={"bars": 5})) and refused(dict(sec, entry={"steps": 20})) and
+check(refused(dict(sec, entry={"bars": 16})) and not refused(dict(sec, entry={"bars": 15})) and refused(dict(sec, entry={"steps": 20})) and
       refused(dict(sec, entry={"bars": 1, "fills": {}})) and refused(dict(sec, entry=[])),
-      "refused: past 64 steps, not whole bars, fill marks, not an object")
+      "refused: past 255 steps (16 bars; 15 fit), not whole bars, fill marks, not an object")
 print("song bars: " + ("FAILED" if fails else "PASS"))
 sys.exit(1 if fails else 0)

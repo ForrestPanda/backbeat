@@ -264,7 +264,7 @@ UI_SMALL static void pads_tick(void)                             /* once a frame
 UI_SMALL static void drum_screen_draw(void)
 {
     static uint32_t head, title_sig, body_sig, footer;
-    uint32_t i, j, len = (uint32_t)clamp(TDRUM->p[P_SLEN], 1, 64), kit = drum_kit(), sig, bank;
+    uint32_t i, j, len = (uint32_t)clamp(TDRUM->p[P_SLEN], 1, NSTEP), kit = drum_kit(), sig, bank;
     if (drum_cursor >= len) drum_cursor = (uint8_t)(len - 1u);
     bank = drum_cursor / 16u;
     {
@@ -398,8 +398,8 @@ static uint32_t lvl_rank(uint32_t lvl) { return lvl == LV_GHOST ? 0u : lvl == LV
 static int grid_keys_on(void) { return on_drum_page() && !drum_page && !ui.menu; }
 /* a key down on the GRID page: the white keys are the 16 steps of this page of steps for the sound of
  * KNOB 1 — an empty one is set (NORM, the sound heard; OCT- held a ghost, OCT+ a hard one, as the SEQ layer, since
- * 2026-10-29), a set one cleared; the first four black keys pick the page (steps 1-16, 17-32, 33-48, 49-64), as in
- * the SEQ layer. The cursor follows */
+ * 2026-10-29), a set one cleared; the first four black keys pick the page (steps 1-16, 17-32, 33-48, 49-64 of the 64
+ * the cursor is in; 255 steps since 2026-11-08: OCT- / OCT+ walk all the pages), as in the SEQ layer. The cursor follows */
 UI_SMALL static void grid_key(uint32_t k, uint32_t lvl)
 {
     static const int8_t PG[12] = {-1, 0, -1, 1, -1, 2, -1, -1, 3, -1, -1, -1};
@@ -407,8 +407,9 @@ UI_SMALL static void grid_key(uint32_t k, uint32_t lvl)
     int32_t w = key_white(k);
     dstep_t *st;
     if (w < 0) {
-        if (k < 12u && PG[k] >= 0 && (uint32_t)PG[k] * 16u < len) {
-            idx = (uint32_t)PG[k] * 16u + drum_cursor % 16u;
+        if (k < 12u && PG[k] >= 0 && (drum_cursor / 64u * 4u + (uint32_t)PG[k]) * 16u < len) {
+            idx = (drum_cursor / 64u * 4u + (uint32_t)PG[k]) * 16u + drum_cursor % 16u;
+
             drum_cursor = (uint8_t)(idx < len ? idx : len - 1u);
             ui.force = 1;
         }

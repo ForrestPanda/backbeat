@@ -172,7 +172,8 @@ UI_SMALL static int pattern_div_set(track_t *t, uint32_t div, uint32_t sess)
     if (div == trk_div(t))
         return 0;
     if (!pattern_rediv_ok(t, div)) {
-        ui_say("DIV: OVER 64 STEPS", "");
+        ui_say("DIV: TOO MANY STEPS", "");
+
         return 0;
     }
     undo_mark(t, sess ? sess : (undo_sess += 4u) | 3u);

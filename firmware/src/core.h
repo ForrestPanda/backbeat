@@ -18,7 +18,8 @@
 #include <stdint.h>
 #define NTRK 1                   /* the drum track */
 #define TRK_DRUM 0
-#define NSTEP 64
+#define NSTEP 255                /* steps a pattern, a fill bar, an entry or a break holds: the song format's byte
+                                  * (2026-11-08; SLOOP's 64 until then: project.c reads the 64-step formats) */
 #define HALF_FRAMES 256          /* I2S half buffer: 5.8 ms at 44.1 kHz */
 #define NELEM(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -140,7 +141,8 @@ typedef struct track {
     dstep_t dstep[NSTEP];        /* the pattern: 16 lanes a step (drums.c LANE_*) */
     int8_t micro[NSTEP];         /* each step's nudge, MICRO_MIN..MICRO_MAX (1/64 of a step; - early, + late) */
     plock_t lock[NLOCK];         /* parameter locks, unsorted (step LOCK_FREE = a free slot) */
-    uint8_t fill[NSTEP / 4];     /* each step's condition, 2 bits (seq.c step_fill): FC_* */
+    uint8_t fill[(NSTEP + 3) / 4];   /* each step's condition, 2 bits (seq.c step_fill): FC_* */
+
     /* the locks in force (seq.c lock_step): the params overridden now, what they were, what the lock set */
     uint8_t lk_n;
     uint8_t lk_param[NLOCK];

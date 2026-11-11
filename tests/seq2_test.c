@@ -752,7 +752,8 @@ static void t_plock(void)
     flt0 = t->p[P_TFLT];
     check(lock_set(t, 2, P_PAN, 40) && lock_set(t, 2, P_TFLT, -30) && !lock_set(t, 2, P_SLEN, 8) && !lock_set(t, 2, P_AMODE, 1),
           "2.4: lock_set takes P_PAN and P_TFLT, refuses P_SLEN and P_AMODE (not lockable)");
-    check(lock_set(t, 70, P_PAN, 1) == 0 && lock_set(t, 2, P_COUNT, 1) == 0, "2.4: lock_set bounds the step and the parameter");
+    check(lock_set(t, NSTEP, P_PAN, 1) == 0 && lock_set(t, 2, P_COUNT, 1) == 0, "2.4: lock_set bounds the step (255 since 2026-11-08) and the parameter");
+
     transport_req = 1;
     while (t->seq_idx != 2u) run_block();
     at2 = t->p[P_PAN];

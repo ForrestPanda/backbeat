@@ -68,11 +68,11 @@ switches inside the patch are its sections. Starting a song is "go to intro".
 
 - A **song** (done in M3): a name, a tempo, a kit, swing, drum level and reverb, up to 8 **sections**.
   Sixteen songs on the device (eight until 2026-10-14: a set needs more).
-- A **section** (M3): a name, a drum pattern (1 to 64 steps at any of SLOOP's divisions, 16 lanes with a
+- A **section** (M3): a name, a drum pattern (1 to 255 steps at any of SLOOP's divisions, 64 until 2026-11-08 (item 13), 16 lanes with a
   level, a ratchet and, since 2026-10-17, a flam per hit) with its fill conditions (FILL ONLY / NO FILL steps: the fill is inside
   the pattern, not a second one), the outro flag, and (2026-11-07) a tempo of its own, optional: item 11 below.
-- **Why a section is at most 4 bars** (asked 2026-10-17). Because a section is a pattern, and a pattern is at most
-  64 steps. Why that is 4 bars: at 1/16
+- **Why a section was at most 4 bars** (asked 2026-10-17; 255 steps since 2026-11-08: item 13, and the end of this
+  note). Because a section is a pattern, and a pattern was at most 64 steps. Why that is 4 bars: at 1/16
   in 4/4, a bar is 16 steps, so 64 steps is 4 bars. The limit moves with the division and the meter: 8 bars at 1/8,
   4 at 1/16, 5 at 8T (12 steps a bar), 2 at 16T (24 steps a bar), 2 at 1/32. That is also why the Guitar Pro
   importer looks for a repeating period of 1, 2 or 4 bars, and only 2 at 1/32. Why it is enough by design: a
@@ -81,7 +81,10 @@ switches inside the patch are its sections. Starting a song is "go to intro".
   are the pedal's: the fill bar and the next section. Material that never repeats, 16 different bars in a row, is a
   drum track rather than a drummer, and the device's RAM and flash were not spent on that. If a song really has a
   part with more than 4 distinct bars at 1/16, the way through is to split it into two sections and step through
-  them with the pedal, or with next-section cues, and the song keeps up to 16 sections for that.
+  them with the pedal, or with next-section cues, and the song keeps up to 16 sections for that. **Since 2026-11-08**
+  a pattern, a fill bar, an entry or a break holds 255 steps (15 bars at 1/16 in 4/4, 31 at 1/8, 7 at 1/32, 18 at 7/8;
+  item 13): the reasons above still say how a song is best written, they no longer bind it. The Guitar Pro importer
+  keeps its 4-bar period and 4-bar fill cap for the same reasons.
 - **Swing** (2026-10-14): a song's `"swing"` is SLOOP's 0..100 (0 straight, 100 MPC 75 %: `seq.c swing_units`, every
   second step of a straight grid that much late). The importer, `fm1_song.py` and the editor wrote 50 (MPC's "50 %",
   straight on the old scale), which the device played as a shuffle (MPC 62.5 %) while the web player ignored swing:
@@ -242,7 +245,7 @@ next bar). No named sections, one song, no fill tied to a section change.
    lanes (kick 35/36, snare 38/40, side stick 37 -> RIM, hats 42/44/46, toms 41..50, crash 49/57, ride
    51/59, cowbell 56, shaker 70, congas 62..64 (left out since 2026-10-14: the mid tom has their lane), clap 39), velocities become the four levels, a fill
    marked in the last bar (or the bar before a marker) becomes FILL ONLY steps, at 1/16 (or 1/32 when
-   the bar needs it), sections up to 64 steps (the drum pattern repeats inside longer sections if it
+   the bar needs it), sections up to 4 bars, the importer's own cap (64 steps at 1/16; the format holds 255 since 2026-11-08; the drum pattern repeats inside longer sections if it
    is the same). Later, other tracks of the file (the bass line) when bass comes back. The JSON stays
    the intermediate form, editable by hand.
    What the first version does: every percussion track merged; the pattern = the 1, 2, 3 or 4 bars
@@ -729,6 +732,41 @@ next bar). No named sections, one song, no fill tied to a section change.
    in the player), ui_pages_test.c (A#3). Verify on hardware: a 4-bar section with a fill bar, A#3 (or CC 21 2) in its
    first bar: the four bars through, the fill as a fifth, the pattern from its top; the same with an entry.
 
+13. **255 steps a pattern (2026-11-08, done; to verify on the unit).** Asked: "if a section contains no fills no
+   entry, not break can we make it longer than 64 steps? essentially having the combined steps of fills, entry, break
+   pattern a bucket that can be distributed between each", then "let's make it possible to use 255 steps". Not a
+   pool: `NSTEP` (core.h) went from 64 to 255, the song format's length byte, for each of the four buffers (the
+   pattern, the fill bar, the entry and the break). A pool would have put an offset under every step index in the
+   sequencer, the editor and the format for the same RAM; 255 each costs 10.3 KB of static RAM, which drums only had
+   freed (73776 of 98304 B after it, 63184 before). With it the pattern's bars and the fill bar's, entry's and break's go to what
+   255 steps hold (15 bars at 1/16 in 4/4, 31 at 1/8, 7 at 1/32, 18 at 7/8, `SED.ebMax`); the division change (5b)
+   refuses past 255 (the screen says DIV: TOO MANY STEPS); the song format did not change (sng.c always read the
+   length as a byte; a 0.9.4 unit refuses a song with a section past 64 steps at the check, "not a song", as it
+   refuses the tempo byte, so such a song wants this firmware), nor the sound (`tests/golden.txt` untouched).
+   **The autosave** is format DRM2 (project.c: the drum track of NSTEP steps, `proj_trk_t`); DRM1 (the 64-step
+   layout, every unit's autosave before this version), FUN6, FUN5 and FUN4 are read and converted (`proj_trk64_t`
+   frozen at 64 steps), so the working project comes back after the update and the first autosave then writes DRM2.
+   An older firmware does not read DRM2: after a downgrade the project starts plain (the songs are not touched, they
+   have their own slots). A project still fits a sector (3840 B payload): the track is 255 steps of 10 B, 255 nudge
+   and condition bytes, 64 locks, about 3.2 KB with the globals. **The editor protocol is v12** (`web/EDITOR_PROTOCOL.md`):
+   a 7-bit SysEx byte cannot hold a step past 127, so `DRUM_STEP`, `STEP_CHANGED`, `LOCK_GET` / `LOCK_SET`,
+   `MICRO_SET` and `FILL_SET` carry the step as two bytes (low 7 bits first), INFO's NSTEP byte holds the low 7 bits
+   and a byte after the protocol version the high ones, `MICRO_GET` sends NSTEP bytes and `FILL_GET` 64 packed bytes;
+   `STEP_GET` / `STEP_SET` / `TRACK_STEP`, kept for older tools, keep one byte (steps 0..127). The editor speaks v12
+   only, as it spoke v11 only: a unit on 0.9.4 or before is refused after INFO until it is updated (the Song tab and
+   the player need no device). **The device**: SEQ and GRID show 16 steps a page as before; the first four black keys
+   pick a page within the current group of 64 steps (ui_layers.c, ui_studio.c `PG`), OCT- / OCT+ walk all the pages,
+   and the overview strip (ui_draw.c `graph_steps`) shows the 64 steps around the playhead or the cursor. The
+   backup's working project object is DRM2 (the editor lists DRM2 with the formats a restore may hold). Tests:
+   project_test.c (DRM2 written and read back, DRM1 to DRM2 with the pattern, nudges, conditions and locks, a lock on
+   step 254 kept by apply), seq2_test.c (a lock on step 255 refused), song_test.c (a 255-step fill bar re-gridded to
+   1/32 keeps the 7 bars that fit, a 128-step pattern refuses 1/32), ui_pages_test.c (KNOB 2 in bars, 128 steps at
+   1/16 to 1/8 and the refusal at 1/32), song_bars_test.py (an entry of 16 bars refused, 15 taken), test_web.mjs (the
+   v12 encodings against the mock, 255 in the section editor, merge and setDiv limits, the backup's DRM2).
+   **Verify on hardware**: the update over a 0.9.4 working project (the pattern as it was after the first boot, then
+   a power cycle after an edit: DRM2 written and read), a 128-step pattern (the SEQ pages: black keys within the
+   group, OCT- / OCT+ across it, the strip following the playhead), the editor's grid at 255 steps with locks past
+   step 127 (LOCK_GET's two-byte steps), a song with a 15-bar entry and a 7-bar fill bar played from the pedal.
 
 
 The fork is **rebased** onto SLOOP upstream as it moves
@@ -768,6 +806,7 @@ the only big lever is `SMP_DATA`, and the acoustic kit is in it.
 | With entries and breaks (CC 28, 2026-10-18; the flams and the fills to the section's end before it) | 550984 B: **30580 B left**; static RAM 61312 B |
 | The ride 2.0 s (399478 B of ADPCM), the voice pick (at most four of a note, the quietest given way) and SETUP > LOAD, 2026-10-22 | 566616 B: **14948 B left**; static RAM 61344 B |
 | SLOOP 2.7 to 2.8.4 looked through (2026-10-30, below): the mix rounded, the rescue key, the clock's mean tempo, the knobs' acceleration, MIDI CLOCK OUT, the crash screen's stack and the stacks painted; then the non-audio functions compiled for size (`UI_SMALL`, clang minsize, SLOOP 2.7's) | 568460 B with the changes, **563116 B** with UI_SMALL: **18448 B left**; static RAM 61568 B |
+| 255 steps a pattern, a fill bar, an entry and a break (2026-11-08, item 13: the four step buffers, the DRM2 autosave, protocol 12; the tempo per section, CC 21 2 and the bars on KNOB 2 of the same days before it), then the swing kept across the grids (seq.c `rediv_map`, 5b) | 568484 B then 569380 B: **12184 B left**; static RAM 73776 B (10.6 KB more than the row below: the four step buffers at 255 steps and the project's staging) then 74544 B (the map and its errors) |
 | 0.9.3, then the kit's sound without more samples (2026-11-01, `docs/kits.md`): the stand-in layers, the pitch jitter, a pan per lane (the pre-emphasis and the encoder change no byte count) | 563320 B, 563912 B, 564108 B (KIT PAN), then 565620 B (the notes, 2026-11-02), 565628 B (DRUMS 2, 2026-11-03), 566004 B then 566020 B (NOTES' sections, 2026-11-04), 566404 B (OCT- / OCT+ PREV / NEXT, ENV NOTES, the same day), 566564 B ("@n" in the notes, 2026-11-06): **15000 B left**; static RAM 63184 B (the NOTES screen's text, 512 B) |
 | Data region (0x93000..0xE0000): projects, the user sample slots of 80 KB (USR1 and USR2 now hold the songs: USR3 and USR4 are the user's; free: 0xC4000..0xC7FFF, the old user preset banks 0xDC000..0xDFFFF, the FM6 bank 0xE5000..0xE6FFF, 0xFB000) | about 308 KB |
 | Songs 1..8 (0xA0000..0xAFFFF, A/B) and the pedal settings (0xB0000 / 0xB1000); songs 9..16 (0xB4000..0xC3FFF, A/B, since 2026-10-14) | 72 KB of USR1's 80 KB, 64 KB of USR2's; the kit pair USR3+4 stays the user's |
@@ -891,7 +930,7 @@ counts 3** (the user, the same day: "there's an extra bar between the 3-bar patt
 bar is 168"); 204-207 is a fill bar and a 3-bar break. So:
 
 - **An entry and a break, a section's own**, each bars written (any lanes, silence too, whole bars of its meter, 64
-  steps at most) played **before its pattern** as it comes in; after them the pattern starts from its top
+  steps at most then, 255 since 2026-11-08) played **before its pattern** as it comes in; after them the pattern starts from its top
   (`live_block` restarts it, as after a fill bar), and a section asked for meanwhile lands at their end: while one
   plays the section's bars are its bars (`eb_bars`, `live_sec_bars`). So a 4-bar break on P3-SYNTH with P3-GUITAR
   pressed during it puts the groove's top on 170, as a 4-bar entry on P3-GUITAR does. (The first form, the same
@@ -932,7 +971,7 @@ bar is 168"); 204-207 is a fill bar and a 3-bar break. So:
   `PLAY.brk` is CC 28), the transport's **Break** (CC 28 127, key b), the pedal input's CC 28, "BREAK: name" on the LIVE
   line. `tests/example-song.json` carries an entry (CHORUS) and a break (SOLO). Tests: test_web.mjs (editorEntryBreak).
 - **The section editor** (stage 3): **Entry** and **Break** selects beside the fill bar's button (none, or 1 to 4 bars of
-  1/16 in 4/4, 64 steps at most), a new one silent; their columns after the fill bar's, each after a wide blue gap,
+  1/16 in 4/4, 64 steps at most; 15 bars, 255 steps, since 2026-11-08), a new one silent; their columns after the fill bar's, each after a wide blue gap,
   blue dashed cells on the pen (level, ratchet, flam; no marks), bar lines inside; **Entry = selected bars** and
   **Break = selected bars** in the file's bar strip (1 to 4 bars, as they are: the same song's 166-169 and 205-207 in one
   click each). Through split both go with the first part, through merge the first's (`SED.ebSet`, `ebSetHit`,
@@ -953,11 +992,11 @@ firmware, the format and the browser player already played a fill bar of more th
 2026-10-15: its first bar from the press, cut from the front, then its others whole, the phrase ending on a bar line,
 then the pattern from its top or the section asked for); only the editor and the importer made one bar. Now:
 - **The section editor**: the fill bar's button became a **Fill** select beside Entry and Break (none, 1 to 4 bars,
-  64 steps at most, `SED.fbSet`, `fbBars`): a new one as before from the pattern's last bars the way a fill played
+  64 steps at most; 15 bars, 255 steps, since 2026-11-08; `SED.fbSet`, `fbBars`): a new one as before from the pattern's last bars the way a fill played
   them (`fbAdd(sec, empty, bars)`, rests before the pattern's start), shorter cut, longer rests; **Fill = selected
   bars** takes 1 to 4 bars of the file (`withFill` through `fromBars`).
 - **The importer** (`gp2song.py make_section`): the bars that deviate at a section's end are its fill, up to 4 (the
-  pattern's limit, 64 steps), only in a section that keeps to its pattern (`MATCH`) with a whole pattern before them;
+  pattern's limit then, 64 steps; the importer keeps the 4-bar cap since the limit went to 255 on 2026-11-08), only in a section that keeps to its pattern (`MATCH`) with a whole pattern before them;
   else one bar as before. The user's files: a chorus, two solos and a song's
   last part got 2-bar fills.
 - **It ends on the section's last bar line** (superseded 2026-10-30, the section "Two kinds of fill" below: a fill of its own plays whole from the next bar line) (asked the same day: "make the long fill end on the section's last bar
@@ -1330,7 +1369,7 @@ hazard; what it found and what was done:
   a 4-bar verse was heard in bar 4, and a fill's hit on a step the pattern also hits lost its own level. Now a
   section may carry a fill bar of its own, which a fill plays instead of the bar it is in (instead of the pattern's
   last bar until the evening of the same day: "Fills as the arrangers do them"). Decided:
-  - **The format**: section flag bit 1 (`SNG_F_FILLBAR`); after the pattern's steps a byte of steps (1..64, one bar
+  - **The format**: section flag bit 1 (`SNG_F_FILLBAR`); after the pattern's steps a byte of steps (1..64, 1..255 since 2026-11-08; one bar
     of the section's meter and division as packed) and those steps in the step form (lanes, a byte a hit: level and
     ratchet, no marks); the section's size covers it (sng.c `sng_walk`, check code 7 for a bad fill bar). In the
     JSON `"fillbar": {"steps": 16, "lanes": {...}, "ratchets": {...}}` (stage 2).
@@ -1556,6 +1595,41 @@ hazard; what it found and what was done:
   editor warns). Not chosen: a slot format with layers and takes (the editor, the upload tool and the firmware all
   change, for little gain on cymbals), and the installer writing the data region (a riskier update path; not before
   the alpha). Not started.
+- **512 steps a section** (asked 2026-11-09, the day after 255). Not a constant bump: the 255 is what a byte holds,
+  and three places lean on that byte. The autosave (DRM2) stores 10 bytes a step plus a nudge in one sector
+  (payload under 3840 B): a 512-step track is about 5760 B, so the project would span two flash objects and the
+  save stops being one atomic write (both halves need a serial checked at load). The song format's length, fill
+  bar, entry and break bytes become two (SNG3; sng.c, `fm1_song.py`, `gp2song.py`, the editor, the old format
+  still read). The locks' step byte (0xFF free) lives in the project too; the re-grid map, the fill bar and entry
+  lengths, the cursor and bank are bytes. MICRO_GET returns a byte a step in a 600-byte reply (chunking) and
+  FILL_GET grows to 128 packed bytes (protocol 13). RAM about +13 KB (the four step buffers, their flams, the
+  staging), from 74544 B to about 87800 of 98304. Unchanged: renders, the per-step work, the 16-step pages (32 of
+  them). The gain: 32 bars at 1/16, 16 at 1/32, 21 at 16T, where 255 stops one step short of 16 bars at 1/16.
+  **The cheaper step is 256**: a length byte of 0 meaning 256 (0 is invalid today) keeps SNG2 and DRM2, the project
+  still fits its sector (about 3100 B), RAM grows by a few dozen bytes; only the two 0xFF sentinels move (the lock's
+  free mark to its param byte, `RD_NONE` likewise). Not started; see the backing track entry below for where long
+  sections led.
+- **A backing track mode: a song played through** (the user, 2026-11-09: long sections made them "consider to have a
+  backing track mode for storing essentially a song's midi file"). Not the MIDI file itself (parsing it costs code
+  the image no longer has, and the pedal's bar-aware behaviour needs the sections and bars the importer computes once
+  on the computer) but two additions to the song, in this order.
+  **Layer 1, the arrangement**: a written order of sections with repeat counts, and the player advances by itself at
+  each section's end as CC 24 does on a press; the last entry carries the outro flag, so the song stops on the bar.
+  The pedal keeps every meaning (stop, fill, tap, CC 20 n jumps to marker n, next / previous marker, the ending; a
+  jump resets the arrangement's position; count-in unchanged). Format: a header flag and an order list of up to 32
+  pairs (section, repeats), about 70 B, SNG2 still readable (no list: the song loops as now). The importer writes the
+  order from the markers and merges identical sections (a verse heard four times costs one). The SONG page shows the
+  position (bar x of y); the site's player follows the list. About 1 KB of code, no RAM to speak of.
+  **Layer 2, the through-composed part**: a section type holding an event list instead of a pattern (a delta and a hit
+  byte a hit, nothing for silence, ticks of 1/96 beat so the file's feel survives the grid), played by tick on the
+  same step clock into the same voices (renders, levels and lanes the drummer's; velocities collapse to the three
+  levels as the importer does). Sizes: a rock part of 3 hits a beat over 4 minutes about 3 KB, a busy one (16th hats,
+  fills) about 6 KB; a whole song 3..8 KB, against a song sector's 3800 B and a storage without multi-sector objects.
+  Either one such section beside patterned ones inside the cap, or a home of its own in the free holes
+  (0xC4000..0xC7FFF and 0xDC000..0xDFFFF, 16 KB each, enough for two long tracks without A/B: a torn write loses only
+  that track, which the editor's file restores; read in place as the user samples are, no RAM copy).
+  Do the arrangement first, then count the transcriptions that still do not fit a sector: the event list is worth
+  its code only if that number is not zero. Not started.
 
 ## The battery (2026-10-27)
 

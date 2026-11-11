@@ -265,12 +265,15 @@ UI_SMALL static void layer_key(uint32_t layer, uint32_t k, uint32_t down)
     }
     switch (layer) {
     case LY_STEP:
-        if (w < 0) {                                    /* the first four black keys: pages 1..4 */
+        if (w < 0) {                                    /* the first four black keys: pages 1..4 of the 64 steps the page is
+                                                         * in (255 steps since 2026-11-08: OCT- / OCT+ walk all the pages) */
             static const int8_t PG[12] = {-1, 0, -1, 1, -1, 2, -1, -1, 3, -1, -1, -1};
-            if (k < 12u && PG[k] >= 0 && (uint32_t)PG[k] * 16u < trk_len(TDRUM))
-                ui.step_page = (uint8_t)PG[k];
+            uint32_t pg = ui.step_page / 4u * 4u + (uint32_t)(PG[k < 12u ? k : 0u] & 3);
+            if (k < 12u && PG[k] >= 0 && pg * 16u < trk_len(TDRUM))
+                ui.step_page = (uint8_t)pg;
             return;
         }
+
         ui.step_held |= (uint16_t)(1u << w);
         step_down((uint32_t)w);
         return;

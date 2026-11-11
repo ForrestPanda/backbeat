@@ -1,7 +1,7 @@
 # SLOOP editor protocol (SysEx over USB-MIDI)
 
 The firmware side is `firmware/src/editor.c` (SLOOP is based on Felucca: the frames keep its "FL"
-header). This fork, BackBeat (fm1-drummer until 2026-10-14), speaks **v11** (drums only, below); the sections after it are SLOOP's
+header). This fork, BackBeat (fm1-drummer until 2026-10-14), speaks **v12** (255 steps, below) over **v11** (drums only); the sections after them are SLOOP's
 history (v1..v10), which v11 keeps byte for byte where it did not take something away.
 
 Where the history names a place on the device, it is SLOOP's: on BackBeat (since 2026-10-14, README "On the device")
@@ -10,12 +10,39 @@ the GLO pages and the menu are SETUP (GLO tapped: "GLO > DRUMS" is SETUP > DRUMS
 (mute, solo, fill keys) are gone, and a fill is the pedal's CC 21 or the LIVE screen's black keys and SEL. The
 protocol does not change with them.
 
+## v12: 255 steps (2026-11-08)
+
+`NSTEP`, the steps a pattern (and a fill bar, an entry, a break) holds, went from 64 to 255 (core.h; docs/design.md
+item 13). A SysEx data byte holds 0..127, so every command that names a step past the pattern's first 128 carries
+the step as **two bytes, the low 7 bits first** (`lo | hi << 7`). The frames, the command numbers, the parameter and
+global ids and everything v11 says are otherwise unchanged. `web/editor.html` speaks v12 only: a device whose `INFO`
+ends with less than 12 (BackBeat 0.9.4 and before, SLOOP) is refused right after `INFO` (the status line says the
+device needs the current firmware).
+
+- **INFO**: the NSTEP byte holds `NSTEP & 0x7F` (127 for 255); after the protocol byte (12) one more byte,
+  `NSTEP >> 7` (1). So: version string, NENGINES 0, P_COUNT 71, G_COUNT 45, NSTEP low 127, P_E0 63, NTRK 1,
+  protocol 12, NSTEP high 1. A v11 reader that stops at the protocol byte sees 127 steps.
+- **DRUM_STEP** (33): request `track, step lo, step hi` (a read), or `track, step lo, step hi, on, 16 lanes...` as v6
+  describes with the step in two bytes; the reply `track, step lo, step hi, on, lanes...` likewise.
+- **STEP_CHANGED** (push 26): `step lo, step hi, 0`.
+- **LOCK_GET** (37): each lock as `step lo, step hi, param, value` (the value as before, two 7-bit bytes + 8192).
+- **LOCK_SET** (38): `track, step lo, step hi, param [, value lo, value hi]`; the reply `track, step lo, step hi,
+  param, rc, has, value`.
+- **MICRO_GET** (39): the reply's nudges are `NSTEP` bytes (255), each + 64. **MICRO_SET** (40): `track, step lo,
+  step hi, nudge + 64`; the reply `track, step lo, step hi, nudge + 64`.
+- **FILL_GET** (41): the conditions, two bits a step, as `(NSTEP + 3) / 4` = 64 bytes packed 7-bit (`pack7`, 74
+  bytes). **FILL_SET** (42): `track, step lo, step hi, condition`.
+- **STEP_GET** / **STEP_SET** (v5) and **TRACK_STEP** (v3), kept for older tools, keep their one-byte step: they
+  reach steps 0..127 only.
+- The working project backup object (0) is **"DRM2"** (the drum track of 255 steps); a restore also takes "DRM1"
+  (the 64-step one, BackBeat until 0.9.4) and SLOOP 2.x's "FUN4".."FUN6", as before.
+
 ## v11: BackBeat, drums only
 
 The device has one track, the drum track (track 0); SLOOP's synth side (three synth tracks, the twelve
 engines, presets, user presets, FM6) is gone from the firmware. The frames, the command numbers and the
 parameter and global ids are unchanged (the working project, locks and learned CCs name them by number; the ids of the
-synth side are unused, their `DESC` still answers). `web/editor.html` speaks v11 only: a device whose `INFO`
+synth side are unused, their `DESC` still answers). `web/editor.html` spoke v11 only (v12 only since 2026-11-08): a device whose `INFO`
 ends with less than 11 (SLOOP) is refused right after `INFO` (the status line says this editor is for the
 BackBeat firmware).
 
@@ -31,7 +58,7 @@ BackBeat firmware).
   sections (the drum track's own pattern loops).
 - **INFO** keeps its layout: version string (`FELUCCA BACKBEAT 0.9`: the `FELUCCA ` prefix kept; the editor
   shows what follows it), NENGINES = **0** (no engine names follow), P_COUNT 71, G_COUNT 45,
-  NSTEP 64, P_E0 63, NTRK **1**, protocol **11**.
+  NSTEP 64, P_E0 63, NTRK **1**, protocol **11** (v12: NSTEP's low 7 bits, protocol 12, then NSTEP's high bits).
 - **The engine byte** of `DUMP`, `RELOAD`, `TRACK` and `TRACK_DUMP` is 0, which equals NENGINES: v10's "no engine =
   the drum track" holds for the one track. The preset bytes are 0, `TRACK`'s selected track 0 and its solo mask 0.
   `P_E0` is the drum track's kit (`DESC`: KIT, the names of drums.c `DRUM_KIT_NAMES`); `P_E1..P_E7` are `-` (0..0).

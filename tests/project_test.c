@@ -24,13 +24,28 @@ static int check(const char *what, int ok)
 static void drum_steps(dstep_t *d)
 {
     uint32_t k;
-    memset(d, 0, NSTEP * sizeof *d);
-    for (k = 0; k < NSTEP; k++) {
+    memset(d, 0, 64u * sizeof *d);
+    for (k = 0; k < 64u; k++) {
         if (!(k % 4u)) dstep_set(&d[k], 0, LV_HARD, 0);
         if (k % 8u == 4u) dstep_set(&d[k], 2, LV_NORM, 1);
         dstep_set(&d[k], 4, k & 1u ? LV_GHOST : LV_SOFT, k % 3u);
     }
 }
+
+/* proj_trk_plain for a track of the old 64-step layout (the prefix p, e, x, engine, preset is the same) */
+static void plain64(proj_trk64_t *d)
+{
+    uint32_t k;
+    memset(d->mf, 0, sizeof d->mf);
+    for (k = PROJ_NC6; k < P_E0; k++)
+        pt_set((proj_trk_t *)d, k, TP[k].def);
+    for (k = 0; k < NLOCK; k++) {
+        d->lock[k].step = LOCK_FREE;
+        d->lock[k].param = 0;
+        d->lock[k].val = 0;
+    }
+}
+static void mf64(proj_trk64_t *d, uint32_t i, int32_t micro, uint32_t fill) { d->mf[i] = (uint8_t)(((uint32_t)micro & 63u) | (fill & 3u) << 6); }
 
 int main(void)
 {
@@ -38,10 +53,13 @@ int main(void)
     static project_v4_t v4;
     static project_v5_t v5;
     static project_v6_t v6;
-    static dstep_t pat[NSTEP];
+    static dstep_t pat[64];                     /* (the 64 steps of the old formats; 2026-11-08: NSTEP is 255, the rest empty) */
+    static project_drm1_t v1;
     static union {
         project_t drm;
+        project_drm1_t v1;
         project_v6_t v6;
+
         project_v5_t v5;
         project_v4_t v4;
     } buf;
@@ -52,8 +70,9 @@ int main(void)
                  P_CHORD + 1 == P_TFLT && P_TFLT + 1 == P_STRUM && P_STRUM + 1 == P_VLEAD && P_VLEAD + 1 == P_ITYPE &&
                  P_LPOL + 1 == P_E0 && P_E0 == 63 && P_COUNT == PROJ_NP_V5 + 10u && PROJ_NP_V5 == PROJ_NP_V4 + 3u &&
                  P_SLDEPTH + 1 == P_CHORD);
-    bad += check("DRM1 fits one flash object; 4 slots fit .noinit (with panel, settings, dbg, bootguard)",
-                 sizeof(project_t) <= 3840u && 4u * sizeof(project_t) <= 0x3D50u - 256u &&
+    bad += check("DRM2 fits one flash object; 4 slots fit .noinit (with panel, settings, dbg, bootguard); DRM1 was smaller",
+                 sizeof(project_t) <= 3840u && 4u * sizeof(project_t) <= 0x3D50u - 256u && sizeof(project_drm1_t) < sizeof(project_t) &&
+                 sizeof(v1.t.dstep) == 640u && sizeof(q.t.dstep) == 2550u &&
                  offsetof(project_t, t) == 8u + 2u * PROJ_NG + 4u && offsetof(project_t, sum) >= offsetof(project_t, t) + sizeof(proj_trk_t) &&
                  offsetof(project_t, sum) + 4u == sizeof(project_t));
     bad += check("formats 4 / 5 / 6 as SLOOP stored them (3112, 3840, 3816 bytes)",
@@ -141,14 +160,14 @@ int main(void)
         v6.g[i] = (int16_t)(600 + i);
     v6.sel = 3, v6.drdly = 66, v6.rsv[0] = 0x80u | 3u, v6.rsv[1] = 2;
     for (t = 0; t < PROJ_NTRK_OLD; t++) {
-        proj_trk_plain(&v6.t[t]);
+        plain64(&v6.t[t]);
         for (i = 0; i < P_COUNT; i++)
-            pt_set(&v6.t[t], i, i >= P_ITYPE && i < P_E0 ? (int32_t)(t + i) : (int32_t)(t * 100 + i));
+            pt_set((proj_trk_t *)&v6.t[t], i, i >= P_ITYPE && i < P_E0 ? (int32_t)(t + i) : (int32_t)(t * 100 + i));
         v6.t[t].engine = (uint8_t)t;
     }
     memcpy(v6.t[PROJ_DRUM_OLD].dstep, pat, sizeof pat);
-    pt_set_mf(&v6.t[PROJ_DRUM_OLD], 3, -32, FC_FILL);
-    pt_set_mf(&v6.t[PROJ_DRUM_OLD], 4, 31, FC_NOFILL);
+    mf64(&v6.t[PROJ_DRUM_OLD], 3, -32, FC_FILL);
+    mf64(&v6.t[PROJ_DRUM_OLD], 4, 31, FC_NOFILL);
     v6.t[PROJ_DRUM_OLD].lock[23].step = 63, v6.t[PROJ_DRUM_OLD].lock[23].param = P_TFLT, v6.t[PROJ_DRUM_OLD].lock[23].val = -30;
     v6.sum = proj_hash(&v6, sizeof v6 - 4u);
     memcpy(&buf, &v6, sizeof v6);
@@ -157,22 +176,52 @@ int main(void)
          pt_micro(&q.t, 3) == -32 && pt_fill(&q.t, 3) == FC_FILL && pt_micro(&q.t, 4) == 31 &&
          q.t.lock[23].step == 63 && q.t.lock[23].param == P_TFLT && q.t.lock[23].val == -30;
     for (i = 0; i < P_COUNT; i++)
-        ok &= pt_get(&q.t, i) == pt_get(&v6.t[PROJ_DRUM_OLD], i);
+        ok &= pt_get(&q.t, i) == pt_get((const proj_trk_t *)&v6.t[PROJ_DRUM_OLD], i);
     bad += check("FUN6 -> DRM1: the drum track as stored (lanes, nudges, conditions, locks, the 2.6 ones), DLY, TEXTURE", ok);
     v6.t[PROJ_DRUM_OLD].mf[7] ^= 1u;
     memcpy(&buf, &v6, sizeof v6);
     bad += check("FUN6 with a bad checksum: refused", !proj_import(&q2, &buf, (int)sizeof v6));
 
-    /* DRM1 as is; damaged, wrong size, another format's magic */
+    /* DRM2 as is; damaged, wrong size, another format's magic */
     q.sum = proj_sum(&q);
     memcpy(&buf, &q, sizeof q);
-    bad += check("DRM1 -> DRM1: as stored", proj_import(&q2, &buf, (int)sizeof q) && !memcmp(&q, &q2, sizeof q));
-    bad += check("DRM1 with a wrong length: refused", !proj_import(&q2, &buf, (int)sizeof q - 2));
+    bad += check("DRM2 -> DRM2: as stored", proj_import(&q2, &buf, (int)sizeof q) && !memcmp(&q, &q2, sizeof q));
+    bad += check("DRM2 with a wrong length: refused", !proj_import(&q2, &buf, (int)sizeof q - 2));
     buf.drm.t.dstep[2].on[0] ^= 4u;
-    bad += check("DRM1 with a bad checksum: refused", !proj_import(&q2, &buf, (int)sizeof q));
+    bad += check("DRM2 with a bad checksum: refused", !proj_import(&q2, &buf, (int)sizeof q));
     memcpy(&buf, &q, sizeof q);
     buf.drm.magic = PROJ_MAGIC_V6;
-    bad += check("DRM1 size with a FUN6 magic: refused", !proj_import(&q2, &buf, (int)sizeof q));
+    bad += check("DRM2 size with a FUN6 magic: refused", !proj_import(&q2, &buf, (int)sizeof q));
+    {   /* DRM1 (64 steps, the autosave of every BackBeat before 2026-11-08) -> DRM2: the track as it was, the steps past
+         * 64 empty; damaged: refused */
+        memset(&v1, 0, sizeof v1);
+        v1.magic = PROJ_MAGIC_V1;
+        v1.size = sizeof v1;
+        memcpy(v1.g, q.g, sizeof v1.g);
+        v1.drdly = q.drdly;
+        memcpy(v1.rsv, q.rsv, sizeof v1.rsv);
+        memcpy(v1.t.p, q.t.p, sizeof v1.t.p);
+        memcpy(v1.t.e, q.t.e, sizeof v1.t.e);
+        memcpy(v1.t.x, q.t.x, sizeof v1.t.x);
+        memcpy(v1.t.dstep, pat, sizeof pat);
+        for (i = 0; i < 64u; i++)
+            v1.t.mf[i] = q.t.mf[i];
+        memcpy(v1.t.lock, q.t.lock, sizeof v1.t.lock);
+        v1.sum = proj_hash(&v1, sizeof v1 - 4u);
+        memcpy(&buf, &v1, sizeof v1);
+        ok = proj_import(&q2, &buf, (int)sizeof v1) && proj_ok(&q2) && q2.magic == PROJ_MAGIC && !memcmp(q2.g, q.g, sizeof q.g) &&
+             q2.drdly == q.drdly && !memcmp(q2.t.dstep, pat, sizeof pat) && !memcmp(q2.t.lock, q.t.lock, sizeof q2.t.lock) &&
+             !memcmp(q2.t.p, q.t.p, sizeof q2.t.p) && !memcmp(q2.t.e, q.t.e, sizeof q2.t.e) && !memcmp(q2.t.x, q.t.x, sizeof q2.t.x);
+        for (i = 0; i < 64u; i++)
+            ok &= q2.t.mf[i] == q.t.mf[i];
+        for (i = 64u; i < NSTEP; i++)
+            ok &= q2.t.mf[i] == 0 && !dstep_mask(&q2.t.dstep[i]);
+        bad += check("DRM1 -> DRM2: the drum track as stored (64 steps, nudges, conditions, locks), the globals; the rest empty", ok);
+        buf.v1.t.dstep[3].on[0] ^= 1u;
+        bad += check("DRM1 with a bad checksum: refused", !proj_import(&q2, &buf, (int)sizeof v1));
+        memcpy(&buf, &v1, sizeof v1);
+        bad += check("DRM1 with a wrong length: refused", !proj_import(&q2, &buf, (int)sizeof v1 + 2));
+    }
     memcpy(&buf, &v6, sizeof v6);
     buf.v6.magic = PROJ_MAGIC_V5;
     bad += check("FUN6 size with a FUN5 magic: refused", !proj_import(&q2, &buf, (int)sizeof v6));
@@ -248,7 +297,7 @@ int main(void)
     /* a damaged image: a lock on a parameter that cannot lock, on a step past the end, with a value past the range, on
      * an unknown parameter: freed, freed, clamped, freed; a condition 3: normal; a kit past the list: clamped */
     q.t.lock[5].step = 4, q.t.lock[5].param = P_SLEN, q.t.lock[5].val = 8;
-    q.t.lock[6].step = 64, q.t.lock[6].param = P_PAN, q.t.lock[6].val = 1;
+    q.t.lock[6].step = 254, q.t.lock[6].param = P_PAN, q.t.lock[6].val = 1;   /* (the last step: kept since 2026-11-08; 255 is LOCK_FREE) */
     q.t.lock[7].step = 4, q.t.lock[7].param = P_PAN, q.t.lock[7].val = 999;
     q.t.lock[8].step = 4, q.t.lock[8].param = 200, q.t.lock[8].val = 1;
     pt_set_mf(&q.t, 4, 0, FC_FILL), pt_set_mf(&q.t, 5, 0, FC_NOFILL);   /* steps 5, 6: fill only, no fill; */
@@ -256,11 +305,11 @@ int main(void)
     pt_set(&q.t, P_ITYPE, 200);                    /* an INSERT type past the list: clamped */
     pt_set(&q.t, P_E0, 999);                       /* a kit past the list: the last */
     proj_apply(&q, 1);
-    ok = TDRUM->p[P_ITYPE] == TP[P_ITYPE].max && TDRUM->lock[5].step == LOCK_FREE && TDRUM->lock[6].step == LOCK_FREE &&
+    ok = TDRUM->p[P_ITYPE] == TP[P_ITYPE].max && TDRUM->lock[5].step == LOCK_FREE && TDRUM->lock[6].step == 254 &&
          TDRUM->lock[8].step == LOCK_FREE && TDRUM->lock[7].step == 4 && TDRUM->lock[7].val == TP[P_PAN].max &&
          step_fill(TDRUM, 4) == FC_FILL && step_fill(TDRUM, 5) == FC_NOFILL && TDRUM->fill[1] == 0x09 &&
          TDRUM->p[P_E0] == DRUM_KITS - 1;
-    bad += check("apply: INSERT 200 -> the last type, locks on LEN / step 64 / param 200 freed, PAN 999 -> 63, condition 3 -> normal, kit clamped", ok);
+    bad += check("apply: INSERT 200 -> the last type, locks on LEN / param 200 freed, one on step 254 kept, PAN 999 -> 63, condition 3 -> normal, kit clamped", ok);
 
     q2 = q;
     bad += check("2.6 SAVE > PROJECT > ERASE: an object of no bytes is no project (an empty slot, older SLOOP too)",

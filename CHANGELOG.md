@@ -32,12 +32,27 @@ ABOUT; the editor shows it next to the connect button.
   count-in keeps its COUNT label. Pressed while the section's entry or break plays, the fill waits for the pattern's
   end after it. On LIVE the third black key, A#3, is this fill: F#3, G#3 and A#3 are the fill now, on the next bar and
   at the section's end (A#3 was a second F#3).
+- **255 steps.** A pattern, a fill bar, an entry and a break each hold up to 255 steps (64 before): 15 bars at 1/16
+  in 4/4, 31 at 1/8, 7 at 1/32. A song with a section, entry, fill bar or break past 64 steps needs this firmware
+  (0.9.4 and earlier refuse it as "not a song"). On the SEQ and GRID screens the first four black keys pick a page
+  of 16 steps within the current 64, OCT- / OCT+ walk all the pages, and the overview strip follows the playhead or
+  the cursor through the pattern. The division change refuses a pattern that would pass 255 steps (it said 64).
+- **The working project is kept in a new format, DRM2.** The autosave of 0.9.4 and earlier (DRM1) and SLOOP 2.x's
+  (FUN4..FUN6) are read and converted at the first boot, so the pattern on the device comes back after the update;
+  the first autosave then writes DRM2, which an older firmware does not read (after a downgrade the project starts
+  plain; the songs are untouched). The editor's backup carries the working project as DRM2.
+- **Editor protocol v12.** Step numbers past 127 do not fit a SysEx byte, so the step commands carry two bytes
+  (`web/EDITOR_PROTOCOL.md`). The website's editor speaks v12 only: it refuses a unit on 0.9.4 or earlier after
+  INFO, as it refused SLOOP, until the unit is updated.
 
 ### Website
 
 - **The editor's player** has the new SNARE2 too.
 - **The fill at the section's end** in the player: a fifth button on the fill row, the key `g`, CC 21 value 2 from
   the pedal listened to, FILL AT THE END on the state line; the Pedal card lists it.
+- **255 steps** in the section editor: the length, the Fill, Entry and Break selects go to what 255 steps hold (15
+  bars of 1/16 in 4/4), the LEN control and the drum grid too; merge and the division change refuse past 255 (64
+  before). The editor speaks protocol v12 and refuses a unit on 0.9.4 or earlier until it is updated.
 - **A tempo per section** in the section editor (a BPM box next to the time, the song's tempo as its placeholder), in
   the player (the switch as the section lands, the BPM label amber while the tempo is the section's own, the tiles
   showing it) and in `fm1_song.py`; the Guitar Pro and MIDI importers take a tempo change on a section's first bar as

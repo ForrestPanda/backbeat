@@ -29,11 +29,11 @@ grace note of the same drum, a ghost, about 25 ms before it (a drummer's flam, w
 the step at most), the hit itself on the grid. "fills" marks a lane's hits one by one: '.' plays
 always, 'F' only during a fill (the pedal's CC 21, or the LIVE screen's black keys and SEL), 'N' never
 during one. The older "fill" string does the same for a whole step, every lane at once. "fillbar" (2026-10-15) is a
-fill bar of the section's own: one bar (of its time and div; "steps" inside it to say otherwise, 1..64) of "lanes",
+fill bar of the section's own: one bar (of its time and div; "steps" inside it to say otherwise, 1..255) of "lanes",
 "ratchets" and "flams" that a fill plays instead of the bar it is in, as it is (no marks there): from the press to the
 bar's end, its step i at the bar's step i (an arranger's fill-in), then the pattern from its top, or the change.
 "entry" and "break" (2026-10-18) are bars written to play before the section's pattern ("bars", default 1, of its time
-and div; or "steps", whole bars, 1..64 in all; "lanes", "ratchets", "flams", as written, no marks; no lanes at all:
+and div; or "steps", whole bars, 1..255 in all; "lanes", "ratchets", "flams", as written, no marks; no lanes at all:
 silence), the pattern from its top after them (a change asked for meanwhile lands at their end): the entry when
 the section comes in from another one or from stopped, the break on the pedal's CC 28 (docs/design.md).
 "notes" (2026-11-02), on the song and on a section: free text, how to play it ("3rd time: bridge a bar early"); up to
@@ -60,7 +60,8 @@ second step of a section's grid; "swing_grid": "1/8" (since 2026-10-19) moves th
 each sharing them: a shuffle for a 1/16 pattern with its hats on the 8ths (seq.c grid_den8; "1/16" is the default and
 left out). Up to 16 sections; the packed song
 ("SNG2": a section header of 18 bytes, the fill conditions, then a step: 2 bytes of lanes and a byte a hit) must
-stay under 3800 bytes: 64 steps of three hits take about 340 bytes, so 8 full sections fit, and 16 of the usual
+stay under 3800 bytes: 64 steps of three hits take about 340 bytes, so 8 sections of 4 bars fit, and 16 of the usual
+
 16..48 steps (about 60..150 bytes each).
 
 Sending needs mido (pip install mido python-rtmidi); the transfer is the editor protocol's backup PUT
@@ -88,7 +89,7 @@ SNG_HDR, SEC_HDR = 32, 18
 SNG_MAX = 3800
 KIT_DEFAULT = 0                                      # drums.c DRUM_REAL: MULDJORD, the layered kit, first (46 until 2026-10-15)
 SNG_SECTIONS = 16                                    # seq.c SNG_SECTIONS (8 until 2026-10-14)
-NSTEP = 64
+NSTEP = 255                                   # steps a pattern, a fill bar, an entry or a break holds (seq.c NSTEP; 64 until 2026-11-08)
 LANES = ["KICK", "KICK2", "SNARE", "CLAP", "HAT", "OPENHAT", "PEDAL", "RIM",
          "SNARE2", "LOWTOM", "MIDTOM", "HITOM", "CRASH", "RIDE", "SHAKER", "COWBELL"]
 DIVS = ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1BAR", "2BAR"]

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* fm1-drummer: songs. A song is up to 16 named drum sections (8 until 2026-10-14) (intro, verse, chorus, bridge, solo,
- * outro...), each a drum pattern (16 lanes, 1..64 steps, a level and a ratchet per hit, the fill
+ * outro...), each a drum pattern (16 lanes, 1..255 steps (64 until 2026-11-08), a level and a ratchet per hit, the fill
  * conditions), with the song's tempo, kit, swing, drum level and reverb. Up to 8 songs live in flash
  * (storage.c OBJ_SONG0.., A/B sectors 0xA0000..: the USR1 sample slot's place, given up: the drummer keeps
  * USR2 and the kit pair USR3+4; editor.c refuses sample uploads into USR1), packed; as the FM6 bank, a song is read in place through
@@ -14,17 +14,18 @@
  * usual 16..48 steps fit too; SNG_MAX is the limit, in bytes, not the sections)
  *   header (32)   "SNG2", name[12], bpm u16, kit, swing, drum level, drum reverb, nsec, flags (bit 0, since 2026-10-19:
  *                 the swing on the 8ths, SNG_H_SWING8, a shuffle: seq.c grid_den8; the other bits spare), rsv[8]
- *   per section   name[12], len (1..64), div (N_SDIV index), flags (bit 0: the outro), meter (0: 4/4; else the
+ *   per section   name[12], len (1..255; 64 until 2026-11-08, seq.c NSTEP), div (N_SDIV index), flags (bit 0: the outro), meter (0: 4/4; else the
+
  *                 numerator 1..16 in bits 0..4, the denominator in bits 5..6: SNG_DEN), size u16 (the section's
  *                 bytes, this header included); fill[(len + 3) / 4] (2 bits a step: FC_*); then each step: its lanes
  *                 u16, and a byte for each lane set, lowest first: level (bits 0..1, LV_*), ratchet (2..3: hits - 1),
  *                 mark (4..5: 1 only during a fill, 2 not during one: seq.c drum_fonly / drum_fno), flam (bit 6,
  *                 2026-10-17: a grace note before the hit, seq.c drum_flam / seq_flam; bit 7 spare)
- *   fill bar      (flags bit 1, since 2026-10-15) after the pattern's steps: its steps (a byte, 1..64, one bar of the
+ *   fill bar      (flags bit 1, since 2026-10-15) after the pattern's steps: its steps (a byte, 1..NSTEP, one bar of the
  *                 section's meter and division as packed), then each step as above (no marks: a fill plays it as it
  *                 is, instead of the bar the fill is in, its step i at the bar's step i: seq.c fb_dstep / drum_src)
  *   entry, break  (flags bit 2, bit 3, since 2026-10-18) after the fill bar, in that order: the same, a byte of steps
- *                 (1..64, whole bars of the section's meter) then the steps, played once before the section's
+ *                 (1..NSTEP, whole bars of the section's meter) then the steps, played once before the section's
  *                 pattern as it comes in (the entry: from another section or from stopped; the break: the pedal's
  *                 CC 28), the pattern from its top after them (seq.c eb_dstep / sng_eb)
  *   tempo         (flags bit 5, since 2026-11-07) after the break, before the note: a byte, the section's own tempo
@@ -200,7 +201,7 @@ static uint32_t sng_bars(uint32_t k)             /* the bars its pattern takes, 
     u = div_units((uint32_t)s[13] % NDIV_STEP) / (BEAT_U / 48u);
     b = 12u * meter_b16(s[15]);
     bars = (len * u + b - 1u) / b;
-    return !bars ? 1u : bars > 64u ? 64u : bars;
+    return !bars ? 1u : bars > 255u ? 255u : bars;
 }
 /* what follows section s's blocks (the tail walked, checked at the load): the offset of its tempo byte (2026-11-07)
  * or, without one, of its note's length byte (2026-11-02); 0 none */
