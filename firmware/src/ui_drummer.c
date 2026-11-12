@@ -164,7 +164,9 @@ static void drummer_key(uint32_t k, uint32_t nextbar)   /* a key down (ui_input.
     } else if (b >= 5 && b <= 7) {                  /* F#4, G#4, A#4 (2026-11-01): the change cued for the section's end
                                                      * goes on the next bar instead; nothing cued: the next white key's
                                                      * change will (a second tap takes it back) */
-        if (live_req >= 0 && pedal_at_end) {
+        if (live_req >= 0 && (pedal_at_end || pedal_fill || pedal_fill_wait)) {   /* (a fill pending into it: dropped,
+                                                     * the change takes the bar line, as CC 27; 2026-11-11) */
+            pedal_fill_drop();
             pedal_at_end = 0;
             key_nextbar = 0;
         } else {

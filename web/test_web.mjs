@@ -549,6 +549,31 @@ function editorPlay() {
     for (let i = 0; i < 16; i++) P.tick(v);
     ok(!v.playing, "play: ..then the stop");
   }
+  {   /* CC 27 with a fill (2026-11-11, asked: "the section transition takes precedence over the fill, and the fill does
+       * not play"): a fill playing or waiting is dropped, the section on the next bar; a fill asked for while a CC 27
+       * waits is ignored; CC 20 keeps the fill, the change on the bar after it (below) */
+    const q = P.create(spec);
+    P.request(q, 1); for (let i = 0; i < 4; i++) P.tick(q);   /* B (2 bars, no fill bar of its own), its second beat */
+    P.fillNext(q);
+    ok(q.fill && q.fillBars === 2, "play: CC 27 over a fill: a fill playing in B");
+    P.request(q, 0, true);
+    ok(q.req === 0 && !q.atEnd && !q.fill && !q.fillBars && !q.fillWait, "play: ..CC 27: the fill dropped, A cued for the next bar");
+    for (let i = 4; i < 16; i++) P.tick(q);
+    ok(q.sec === 0 && q.req < 0 && !q.fill && q.bar === 0, "play: ..A on the next bar, B's second bar never comes");
+    for (let i = 0; i < 4; i++) P.tick(q);
+    P.request(q, 1, true); P.fillNext(q); P.fillNext(q, true); P.fillNext(q, "end");
+    ok(q.req === 1 && !q.atEnd && !q.fill && !q.fillWait, "play: CC 27 first: the fills asked for after it ignored (now, the next bar, at the end)");
+    for (let i = 4; i < 16; i++) P.tick(q);
+    ok(q.sec === 1 && !q.fill && !q.fillWait, "play: ..B on the next bar, no fill");
+    for (let i = 0; i < 4; i++) P.tick(q);
+    P.fillNext(q, true); P.request(q, 0, true);
+    ok(q.req === 0 && !q.fill && !q.fillWait, "play: one switch, the fill on the next bar then CC 27: no fill");
+    for (let i = 4; i < 16; i++) P.tick(q);
+    ok(q.sec === 0 && !q.fill, "play: ..A on the next bar");
+    for (let i = 0; i < 4; i++) P.tick(q);
+    P.fillNext(q); P.request(q, 1);
+    ok(q.req === 1 && !q.atEnd && q.fill, "play: CC 20 keeps its way: the fill, then the change at its end");
+  }
   P.request(st, 0, true);                                  /* CC 27: on the next bar, without waiting for B's end, no fill */
   ok(!st.atEnd && !st.fill && st.req === 0, "play: CC 27: cued for the next bar, no fill");
   for (let i = 0; i < 16; i++) ev = P.tick(st);            /* the rest of bar 2 */

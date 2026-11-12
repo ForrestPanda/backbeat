@@ -841,8 +841,9 @@ static uint32_t live_bar = 0xFFFFFFFFu;            /* clk_beat / 4 of the last b
 /* fm1-drummer (pedal.c): the pedal's fill (CC 21) is an arranger's fill-in: from the press to the end of the bar
  * (FILL ONLY steps and F hits play, NO FILL and N rest; a fill bar of its own instead of the pattern's), then the
  * pattern again from its top on the next bar, or the section asked for meanwhile; asked for in the bar's last beat,
- * the whole next bar. A section change waits for the section's end (CC 20) or the next bar (CC 27), and with a fill
- * pending for the fill's end; an ending plays the outro for its bars, then stops on the bar */
+ * the whole next bar. A section change waits for the section's end (CC 20; a fill pending: for the fill's end) or
+ * lands on the next bar (CC 27: a fill pending or playing is dropped, the change wins, 2026-11-11); an ending plays
+ * the outro for its bars, then stops on the bar */
 static volatile uint8_t pedal_fill;                /* the pedal's fill plays, for pedal_fill_bars (this bar counted) */
 static volatile uint8_t pedal_at_end;              /* live_req (or the ending's stop) waits for the section's end */
 static volatile uint8_t pedal_fill_wait;           /* the fill starts on the next bar line (1): a fill bar of its own, whole

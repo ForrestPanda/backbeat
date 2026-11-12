@@ -664,6 +664,15 @@ int main(int argc, char **argv)
             check(live_req >= 0 && !pedal_at_end && !key_nextbar && !pedal_fill && !pedal_fill_wait,
                   "LIVE: a change cued for the end, A#4 tapped: that change on the next bar instead");
             live_req = -1; pedal_at_end = 0;
+            key(key_of_white(live_sec == 2 ? 0 : 2)); frames(2);   /* a change cued for the end, F#3's fill into it, then
+                                                             * F#4: the change on the next bar, the fill dropped (2026-11-11:
+                                                             * the change on the next bar wins over a fill, as CC 27) */
+            key(BLACK[0]); frames(2);
+            check(live_req >= 0 && !pedal_at_end && (pedal_fill || pedal_fill_wait), "LIVE: a white key, then F#3: the fill into the change");
+            key(BLACK[5]); frames(2);
+            check(live_req >= 0 && !pedal_at_end && !key_nextbar && !pedal_fill && !pedal_fill_wait,
+                  "LIVE: ..then F#4 tapped: the change on the next bar, the fill dropped (2026-11-11)");
+            live_req = -1; pedal_at_end = 0;
             fm1_in.notes |= 1u << BLACK[6]; frame();    /* G#4 held, a white key: on the next bar, as with OCT+ */
             key(key_of_white(live_sec == 2 ? 0 : 2)); frames(2);
             fm1_in.notes &= ~(1u << BLACK[6]); frame();

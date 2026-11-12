@@ -4,6 +4,21 @@ What changed in each version of BackBeat, the firmware and the website (the edit
 <https://forrestpanda.github.io/backbeat/>). The version is on the device's boot screen and in SETUP > SYSTEM >
 ABOUT; the editor shows it next to the connect button.
 
+## Unreleased
+
+### Firmware
+
+- **A change on the next bar wins over a fill.** CC 27, and on LIVE the "on the next bar" keys (F#4, G#4, A#4, or a
+  white key with OCT+ held), drop a fill pending or playing and land on the next bar line; a fill sent after it, while
+  it waits, is ignored. A switch sending CC 21 and CC 27 together, in either order, changes section without a fill.
+  Until now the change waited for the fill's end, as CC 20's does; CC 20 keeps the fill, the change on the bar after
+  it.
+
+### Website
+
+- **The editor's player** does the same: a section on the next bar (shift) drops a fill pending and ignores one asked
+  for after it; the Pedal card says so.
+
 ## 0.9.5 (2026-11-11)
 
 ### Firmware

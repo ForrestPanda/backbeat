@@ -4,14 +4,17 @@
  *
  *   A section change brings no fill of its own (asked 2026-10-14): a fill is CC 21's, and a footswitch that
  *   wants a fill into the change sends CC 21 with its CC 20 (either order: the fill to the bar's end, the
- *   change on the bar after it, as an arranger's AUTO FILL IN).
+ *   change on the bar after it, as an arranger's AUTO FILL IN). Not with CC 27: the next bar is the change's,
+ *   a fill with it does not play (2026-11-11).
  *   CC 20 n    go to section n (0..15, the song's) when the section playing ends: it plays its pattern out (its
  *              bars, from where it started); a one-bar section: the next bar. Stopped: start the loop with
  *              it. The section already playing asked for again (nothing else cued): nothing; with an
  *              ending pending it cancels the ending. A fill pending (asked before or after): on the bar
  *              after the fill instead
- *   CC 27 n    now: on the next bar, without waiting for the section's end, no fill of its own (a fill
- *              pending: after it, as CC 20)
+ *   CC 27 n    now: on the next bar, without waiting for the section's end, no fill of its own. A fill pending
+ *              or playing is dropped on the spot, and a fill asked for while it waits is ignored: the change
+ *              wins the bar line (asked 2026-11-11: "the section transition takes precedence over the fill,
+ *              and the fill does not play"; until then the change waited for the fill's end, as CC 20's)
  *   CC 21 v    the fill, as an arranger's fill-in (2026-10-15, before: to the pattern's end): from now to
  *              the end of this bar (the FILL ONLY hits in, the NO FILL hits out; a section's fill bar of
  *              its own instead of the pattern's, its step i at the bar's step i, so the phrase is cut from
@@ -130,11 +133,26 @@ static void pedal_name(uint32_t s, char *out)    /* the section's name for the s
  * 1"; a plain press, from now, until then). Until 2026-11-09 the fill bar sat on the section's last bars instead (the fill ending with the section);
  * the user: "the fill should happen after the section reaches its end, it seems it's replacing its last few bars" */
 enum { PF_NOW, PF_NEXT, PF_END };
+static void pedal_fill_drop(void)                 /* a change on the next bar (CC 27; LIVE's F#4, G#4, A#4 and OCT+ held;
+                                                   * 2026-11-11): a fill pending or playing goes, the change takes the
+                                                   * bar line */
+{
+    pedal_fill = 0;
+    pedal_fill_bars = 0;
+    pedal_fill_wait = 0;
+}
+static int pedal_nextbar_cued(void)              /* a change waits for the next bar line alone (CC 27): live_block
+                                                   * lands it there; a fill asked for meanwhile is ignored */
+{
+    return live_req >= 0 && !pedal_at_end && !pedal_fill && !pedal_fill_wait;
+}
 static void pedal_fill_req(uint32_t mode)
 {
     uint32_t b16 = meter_b16(clk_meter), beat = 16u / meter_den(clk_meter), at = clk_16th() % b16;
     if (!song.playing)
         return;
+    if (pedal_nextbar_cued())
+        return;                                   /* a change cued for the next bar (CC 27): it wins, no fill (2026-11-11) */
     if (mode == PF_END && fb_bars && !pedal_fill && !pedal_fill_wait) {
         uint32_t n = sng_cur >= 0 && live_sec >= 0 ? sng_bars((uint32_t)live_sec) : 1u;   /* the pattern's bars */
         uint32_t bar = live_bar == 0xFFFFFFFFu ? 0u : live_bar;
@@ -205,6 +223,8 @@ static void pedal_section_to(uint32_t s, uint32_t how, uint32_t brk)
         }                                         /* (a count-in running: it starts the section now cued) */
         return;
     }
+    if (how == PS_BAR)
+        pedal_fill_drop();                        /* the next bar is the change's: a fill pending or playing goes (2026-11-11) */
     pedal_at_end = (uint8_t)(how == PS_END && !pedal_fill && !pedal_fill_wait);   /* (a fill pending: this lands on the
                                                    * bar after it, live_block) */
     {
