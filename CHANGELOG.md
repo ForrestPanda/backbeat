@@ -13,11 +13,18 @@ ABOUT; the editor shows it next to the connect button.
   it waits, is ignored. A switch sending CC 21 and CC 27 together, in either order, changes section without a fill.
   Until now the change waited for the fill's end, as CC 20's does; CC 20 keeps the fill, the change on the bar after
   it.
+- **The bar count follows what plays.** LIVE counted the section's pattern bars throughout. Now a fill playing the
+  section's fill bar of its own counts that phrase's bars and says so (FILL 1 / 2, FILL 2 / 2), an entry or break
+  says ENTRY or BREAK with its own bars, and the pattern BAR n / m as before, in both layouts; the progress bar
+  follows. A fill without a fill bar of its own keeps the pattern's count (its bars are the section's).
+- **The battery on the song's row.** LIVE's battery icon moves up to the song's row, left of the transport, with USB
+  under it while a host powers the unit; it sat on the second row left of "bpm". A long song name is cut before it.
+  Both this and the bar count were run on the unit by the user on 2026-11-13.
 
 ### Website
 
 - **The editor's player** does the same: a section on the next bar (shift) drops a fill pending and ignores one asked
-  for after it; the Pedal card says so.
+  for after it; the Pedal card says so. Its bar line names what it counts too (FILL, ENTRY, BREAK n / m).
 
 ## 0.9.5 (2026-11-11)
 

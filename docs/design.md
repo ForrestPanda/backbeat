@@ -348,7 +348,9 @@ next bar). No named sections, one song, no fill tied to a section change.
    editing, section edits saved back into the song, SLOOP's A..D kept out of the way, TRACKS, the visualiser, the
    GLO pages and layer and the HOME-held menu gone, the settings on the device. Four screens, a button each:
    - **LIVE** (HOME, the boot screen; `ui_drummer.c`): the song and slot, the tempo, beat lights in the bar's
-     meter, the section large with "BAR n / m" and a bar-ticked progress (the count-in's beats while it clicks),
+     meter, the section large with "BAR n / m" (FILL n / m while a fill plays the section's fill bar of its own,
+     ENTRY or BREAK n / m while one plays: the bars counted are that phrase's, item 14, 2026-11-12) and a
+     bar-ticked progress (the count-in's beats while it clicks),
      what comes next in colour, the 8 sections as tiles laid out as the white keys, a footer with the kit, the
      pedal channel and a MIDI dot (`pedal_seen_ms`, set in `pedal_msg`). SEL / ENV / LFO are FILL / PREV / NEXT
      (CC 21 / 25 / 24; since 2026-10-30 SEL opens SONGS instead, from every screen but SECTIONS, and turns its page
@@ -799,6 +801,25 @@ next bar). No named sections, one song, no fill tied to a section change.
    a power cycle after an edit: DRM2 written and read), a 128-step pattern (the SEQ pages: black keys within the
    group, OCT- / OCT+ across it, the strip following the playhead), the editor's grid at 255 steps with locks past
    step 127 (LOCK_GET's two-byte steps), a song with a 15-bar entry and a 7-bar fill bar played from the pedal.
+14. **The bar count follows what plays (2026-11-12, done; run on the unit by the user 2026-11-13, "perfect working correctly").** Asked: "update the UI to reflect
+   the bar count depending on the number of bars in the current section/entry/fill/break ... I don't think the count
+   follows the fill number of bars for the standalone bars case". Until now LIVE counted the section's pattern bars
+   throughout: through a 2-bar fill bar of its own asked in bar 3 of 4 it read BAR 4 / 4, then BAR 1 / 4 while the
+   fill still played (the sequencer's count goes on underneath, for the pedal); an entry or break already counted
+   its own bars (`live_sec_bars`) but said BAR. Now `seq.c live_bar_now` gives the screen the bar and what it is a
+   bar of: a fill playing the section's fill bar of its own counts that phrase's bars (`fb_bars`, from
+   `pedal_fill_bars` left), an entry or break its bars, else the pattern's; and the label names it, BAR, FILL (the
+   fill's colour), ENTRY or BREAK (white), in both layouts (the tiles: "FILL 2 / 2" where "BAR n / m" was; the bar
+   big: the digits, the word at the right where COUNT goes). A fill without a fill bar of its own is the section's
+   own bars with the marks where the writer put them, so it keeps the pattern's count and the state line says FILL,
+   as before. The progress bar and its ticks follow the bars counted. `eb_brk` (seq.c, set in `sng_eb`) records
+   whether the phrase playing is the break: a section with no break written plays its entry as its break, and the
+   screen says BREAK. The editor's player does the same (`PLAY.barLabel`; the event carries `ebB`, `ebBrk`,
+   `fillBars`). Tests: song_test.c (FILL 1 / 2 and 2 / 2 through a 2-bar fill bar, ENTRY 2 / 4, BAR 1 / 3 after
+   it, BREAK 1 / 4), ui_pages_test.c (live-fill, live-big-fill, live-entry, live-big-break rendered),
+   test_web.mjs (the label on each case, the event's fields). The sound did not change (golden renders
+   unchanged). Verified on the unit by the user 2026-11-13, with the battery moved to the song's row the same day
+   (the LIVE header: the battery left of the transport, USB under it).
 
 
 The fork is **rebased** onto SLOOP upstream as it moves
@@ -1723,7 +1744,9 @@ rounded); `status` prints `batt_last`, the last raw sample, next to `batt_raw`. 
 this build on the unit; the run above is discarded. The user, asked where the battery shows (the parameter pages'
 header only, ui_draw.c draw_head; LIVE, SETUP and ABOUT have their own): "add it to the LIVE header", so the icon is
 `batt_icon` (ui_studio.c, with `batt_level` and `batt_shown`, moved there since ui_drummer.c comes before ui_draw.c in
-felucca.c) and LIVE's second row has it left of "bpm" (live_head, in its signature), USB to its left with a host.
+felucca.c) and LIVE's header has it (live_head, in its signature): on the second row left of "bpm", USB to its left
+with a host, until 2026-11-13; since then on the song's row, left of the transport, USB under it (asked: "move the
+battery indicator to be on the same row as the song title, put the usb label underneath").
 
 **Run 1 (2026-11-06, the fixed reading): stopped, the screen on, an hour.** `docs/battery/2026-11-06-run1-stopped-screen-on.csv`.
 The reading 619 with the cable in, 613 a minute after it went out, 604 after 61 minutes: -7.0 counts an hour over the

@@ -587,6 +587,21 @@ function editorPlay() {
   ok(ev.fill && st.fill, "play: ..the fill through the bar");
   for (let i = 8; i < 16; i++) ev = P.tick(st);
   ok(ev.fill && ev.newBar && !st.fill && !st.fillBars && st.sec === 0 && st.bar === 2 && st.step === 32, "play: ..over at the bar line, A on (its bar count too: no restart without a fill bar)");
+  {   /* the bar the player's screen counts (PLAY.barLabel, as seq.c live_bar_now; 2026-11-12): the pattern's; a fill playing
+       * the fill bar of its own, that phrase's bars; an entry's or break's, named */
+    const s2 = { name: "X", time: "4/4", div: "1/16", steps: 16, lanes: {}, fillbar: { steps: 32, lanes: {} } };   /* a 2-bar fill bar */
+    const L = (e, s) => { const l = P.barLabel(e, s); return `${l.word} ${l.bar + 1} / ${l.bars}`; };
+    ok(L({ bar: 5, fill: false, fillBars: 0, ebB: 0 }, spec.sections[1]) === "BAR 2 / 2", "play: the bar label: the pattern's bar");
+    ok(L({ bar: 7, fill: true, fillBars: 2, ebB: 0 }, s2) === "FILL 1 / 2" && L({ bar: 8, fill: true, fillBars: 1, ebB: 0 }, s2) === "FILL 2 / 2",
+       "play: ..a fill playing the fill bar of its own: the phrase's bars");
+    ok(L({ bar: 1, fill: true, fillBars: 1, ebB: 0 }, spec.sections[1]) === "BAR 2 / 2", "play: ..a fill without one: the pattern's bar still");
+    ok(L({ bar: 2, fill: false, ebB: 4, ebBrk: false }, s2) === "ENTRY 3 / 4" && L({ bar: 0, fill: false, ebB: 1, ebBrk: true }, s2) === "BREAK 1 / 1",
+       "play: ..an entry's and a break's bars, named");
+    const w = P.create(spec);
+    P.request(w, 1); for (let i = 0; i < 4; i++) P.tick(w);
+    P.fillNext(w); const e = P.tick(w);                   /* (B: no fill bar; the event carries the bars left and no entry) */
+    ok(e.fill && e.fillBars === 2 && e.ebB === 0 && !e.ebBrk, "play: ..the event carries the fill's bars left");
+  }
   {   /* in B (2 bars, no fill bar of its own): fill mode from the press to B's end (2026-10-17): asked in its first bar,
        * both bars; in its last, the rest of it; then B on from its top, no restart. Asked in a bar's last beat: the
        * whole next bar (B's last bar: the next cycle); with a section (before or after it): the section at the fill's

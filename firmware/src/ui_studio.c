@@ -61,8 +61,9 @@ UI_SMALL static int32_t batt_shown(void)
         return 1 + (int32_t)((fm1_ms / 600u) % 3u);
     return batt_level();
 }
-/* the battery as 3 bars in a 19 x 9 frame at x, y, and "USB" to its left (at y - 3, the small font) while a host
- * powers the unit; the parameter pages' header (ui_draw.c draw_head) and LIVE's (ui_drummer.c live_head) */
+/* the battery as 3 bars in a 19 x 9 frame at x, y, and "USB" while a host powers the unit: usb_text 1 to its left (at
+ * y - 3, the small font; the parameter pages' header, ui_draw.c draw_head), 2 under it (at y + 16, on the header's
+ * second row; LIVE's, ui_drummer.c live_head, 2026-11-13) */
 UI_SMALL static void batt_icon(int32_t bx, int32_t by, int usb_text)
 {
     int32_t lvl = batt_shown(), k;
@@ -74,7 +75,7 @@ UI_SMALL static void batt_icon(int32_t bx, int32_t by, int usb_text)
     for (k = 0; k < lvl; k++)
         cv_rect(bx + 2 + k * 5, by + 2, 3, 5, lvl == 1 && batt_level() <= 1 ? C_WHITE : C_HI);
     if (usb_text && usb.config && !usb.suspended)
-        cv_text(bx - 28, by - 3, &FONT_S, "USB", C_DIM);
+        cv_text(usb_text == 2 ? bx : bx - 28, usb_text == 2 ? by + 16 : by - 3, &FONT_S, "USB", C_DIM);
 }
 
 UI_SMALL static void te_play_icon(int32_t x, int32_t y, int playing)

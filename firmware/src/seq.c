@@ -432,6 +432,7 @@ static volatile uint8_t pedal_fill_bars;     /* bars of the pedal's fill left, t
 static dstep_t eb_dstep[NSTEP];
 static uint16_t eb_flam[NSTEP];
 static volatile uint8_t eb_len, eb_bars;     /* its steps, and the bars they take (0: none playing) */
+static volatile uint8_t eb_brk;              /* the one playing is the break (CC 28), not the entry: the screen's word */
 static uint32_t drum_fill_mask(uint32_t idx)       /* the lanes that do not play at this step, now (NSTEP: a fill bar
                                                     * step, no mark of the pattern's) */
 {
@@ -1164,6 +1165,24 @@ static uint32_t fill_bars_from(uint32_t bar)
     if (bar == 0xFFFFFFFFu)
         bar = 0;
     return n - bar % n;
+}
+/* the bar the screen counts, from 0, and of what (LB_*; 2026-11-12, asked: "the bar count depending on the number of
+ * bars in the current section/entry/fill/break"): a fill playing a section's fill bar of its own counts that phrase's
+ * bars (pedal_fill_bars left, this one counted; the section's count goes on underneath for the pedal); an entry or
+ * break playing, its bars (live_sec_bars); else the pattern's. A fill without a fill bar of its own is the section's
+ * own bars (the marks where the writer put them): the pattern's count, the state line says FILL */
+enum { LB_BAR, LB_FILL, LB_ENTRY, LB_BREAK };
+static uint32_t live_bar_now(uint32_t *bar, uint32_t *bars)
+{
+    uint32_t n = live_sec_bars(), b = live_bar == 0xFFFFFFFFu ? 0u : live_bar, left = pedal_fill_bars;
+    if (pedal_fill && fb_bars) {
+        *bars = fb_bars;
+        *bar = left && left <= fb_bars ? fb_bars - left : 0u;
+        return LB_FILL;
+    }
+    *bars = n;
+    *bar = b % n;
+    return eb_bars ? (eb_brk ? LB_BREAK : LB_ENTRY) : LB_BAR;
 }
 static uint32_t eb_bar_steps(void)                 /* a bar of the section landed, in its steps (not whole: its pattern) */
 {

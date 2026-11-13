@@ -382,6 +382,7 @@ static __attribute__((noinline)) void sng_eb(uint32_t k, uint32_t brk)
     const uint8_t *s = sng_cur >= 0 && k < sng.nsec ? sng_sec(k) : 0;
     uint32_t at = s ? sng_block(s, brk ? SNG_F_BREAK : SNG_F_ENTRY) : 0u;
     eb_len = 0;
+    eb_brk = (uint8_t)brk;                        /* (the screen's word for it: BREAK, even the entry standing in) */
     if (!at && brk && s)
         at = sng_block(s, SNG_F_ENTRY);
     if (at) {

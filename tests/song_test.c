@@ -476,12 +476,15 @@ int main(int argc, char **argv)
                                                                             * step fired after the bar line set the fill */
                 advance(CTL);
             assert(pedal_fill && pedal_fill_bars == 2u && !pedal_fill_wait && live_bar == 2 && drum_src(TDRUM, TDRUM->seq_abs, 0, &fb) == &fb_dstep[0] && fb);
+            { uint32_t lb_bar, lb_n; assert(live_bar_now(&lb_bar, &lb_n) == LB_FILL && lb_bar == 0u && lb_n == 2u); }   /* (the screen: FILL 1 / 2,
+                                                                         * the phrase's bars, not the pattern's; 2026-11-12) */
             while (TDRUM->seq_idx != 4u)
                 advance(CTL);
             assert(pedal_fill && pedal_fill_bars == 2u && !pedal_fill_wait && live_bar == 2 && drum_src(TDRUM, 4, (4) % trk_len(TDRUM), &fb) == &fb_dstep[4] && fb);
             while (TDRUM->seq_idx != 16u)                                  /* its second: the first step fired after the count moved */
                 advance(CTL);
             assert(pedal_fill && pedal_fill_bars == 1u && live_bar == 3 && drum_src(TDRUM, TDRUM->seq_abs, 16, &fb) == &fb_dstep[16] && fb);
+            { uint32_t lb_bar, lb_n; assert(live_bar_now(&lb_bar, &lb_n) == LB_FILL && lb_bar == 1u && lb_n == 2u); }   /* (FILL 2 / 2) */
             while (TDRUM->seq_idx != 18u)
                 advance(CTL);
             assert(pedal_fill && pedal_fill_bars == 1u && live_bar == 3 && drum_src(TDRUM, 18, (18) % trk_len(TDRUM), &fb) == &fb_dstep[18] && fb);
@@ -585,9 +588,11 @@ int main(int argc, char **argv)
         assert(lane_on(drum_src(TDRUM, TDRUM->seq_abs, (TDRUM->seq_abs) % trk_len(TDRUM), &fb), 12) == 0 && fb && !TDRUM->seq_skip);   /* (the entry's
                                                                          * bar 1: rest, not the pattern's snare) */
         assert(eb_bars == 4u && live_sec_bars() == 4u);                 /* (meanwhile the section's bars are the entry's) */
+        { uint32_t lb_bar, lb_n; assert(live_bar_now(&lb_bar, &lb_n) == LB_ENTRY && lb_bar == 1u && lb_n == 4u); }   /* (the screen: ENTRY 2 / 4) */
         while (eb_len)
             advance(CTL);
         assert(live_bar == 0u && eb_bars == 0u && live_sec_bars() == 3u && now - t0 >= 4u * bar - CTL && now - t0 < 4u * bar + 2u * CTL);
+        { uint32_t lb_bar, lb_n; assert(live_bar_now(&lb_bar, &lb_n) == LB_BAR && lb_bar == 0u && lb_n == 3u); }   /* (BAR 1 / 3 again) */
         advance(CTL * 4u);
         assert(TDRUM->seq_abs < 4u && drum_src(TDRUM, TDRUM->seq_abs, TDRUM->seq_idx, &fb) == &TDRUM->dstep[TDRUM->seq_idx] && !fb);   /* (the
                                                                          * pattern's top, after 4 bars) */
@@ -597,6 +602,8 @@ int main(int argc, char **argv)
         while (live_req >= 0)
             advance(CTL);
         assert(live_sec == 1 && live_bar == 0u && eb_len == 64u && !live_req_brk);
+        { uint32_t lb_bar, lb_n; assert(live_bar_now(&lb_bar, &lb_n) == LB_BREAK && lb_bar == 0u && lb_n == 4u); }   /* (the screen: BREAK 1 / 4, the
+                                                                         * entry standing in for the break still says BREAK) */
         assert(jumped - t0 >= 7u * bar - 2u * CTL && jumped - t0 < 7u * bar + 2u * CTL);
         /* a section asked for during it lands at its end, its 4 bars (not at the 3-bar pattern's) */
         advance(bar / 2u);

@@ -187,6 +187,11 @@ int main(int argc, char **argv)
         str_cpy(sng_ui_name, "VERSE", sizeof sng_ui_name);
         live_sec = 1; live_bar = 2; song.playing = 1;
         ui.force = 1; frame(); ppm("live-song");
+        usb.config = 1; usb.suspended = 0; str_cpy(sng_ui_song, "ABCDEFGHIJKL", sizeof sng_ui_song);   /* a host on USB, the
+                                                     * longest name: the battery on the song's row, USB under it, the name
+                                                     * cut before them (2026-11-13) */
+        ui.force = 1; frame(); ppm("live-song-usb");
+        usb.config = 0; str_cpy(sng_ui_song, "TIME", sizeof sng_ui_song); ui.force = 1; frame();
         pedal_say(PU_NEXT, "SOLO"); str_cpy(sng_ui_next, "SOLO", sizeof sng_ui_next);
         frame(); ppm("live-next");
         check(ui.msg_t > 40u && !strcmp(ui.msg, "NEXT: SOLO"), "drummer: the pedal's request said (NEXT: SOLO)");
@@ -831,6 +836,22 @@ int main(int argc, char **argv)
             ci_on = 0; ci_pedal = 0;
         }
         check(!song.playing, "LIVE: PLAY again: stop");
+        {   /* the bars counted named for what they are (2026-11-12, asked: the count "depending on the number of bars in the
+             * current section/entry/fill/break"): a fill playing a 2-bar fill bar of its own, FILL 2 / 2; a 4-bar entry,
+             * ENTRY 2 / 4; a break, BREAK 2 / 4; both layouts (the state as seq.c would leave it) */
+            uint32_t lb_bar, lb_n;
+            song.playing = 1; live_bar = 5; pedal_fill = 1; fb_bars = 2; pedal_fill_bars = 1;
+            check(live_bar_now(&lb_bar, &lb_n) == LB_FILL && lb_bar == 1u && lb_n == 2u, "LIVE: a fill bar of its own playing: its bars counted (FILL 2 / 2)");
+            ui.force = 1; frame(); ppm("live-big-fill");
+            live_view = 0; ui.force = 1; frame(); ppm("live-fill");
+            pedal_fill = 0; pedal_fill_bars = 0; fb_bars = 0; live_bar = 1; eb_bars = 4; eb_brk = 0;
+            check(live_bar_now(&lb_bar, &lb_n) == LB_ENTRY && lb_bar == 1u && lb_n == 4u, "LIVE: an entry playing: its bars counted (ENTRY 2 / 4)");
+            ui.force = 1; frame(); ppm("live-entry");
+            eb_brk = 1;
+            check(live_bar_now(&lb_bar, &lb_n) == LB_BREAK, "LIVE: a break playing: BREAK");
+            live_view = 1; ui.force = 1; frame(); ppm("live-big-break");
+            eb_bars = 0; eb_brk = 0; live_bar = 0xFFFFFFFFu; song.playing = 0;
+        }
         ui.force = 1; frame(); ppm("live-big-cued");             /* stopped: the bar dim, CUED: PLAY */
         live_view = 0;
         sng_cur = -1; sng_ui_song[0] = 0; live_sec = -1; live_req = -1; sng_ui_name[0] = 0;

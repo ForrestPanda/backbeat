@@ -504,8 +504,10 @@ UI_SMALL static void meter_str(char *b, uint32_t m)          /* "7/8" */
     fmt_int(b + str_len(b), (int32_t)meter_den(m));
 }
 
-/* the header: the song (its slot under it), the tempo big, the battery, the transport, the beat lights of the bar's meter (52 px;
- * without the lights, the beat big below them, 40) */
+/* the header: the song (its slot under it), the tempo big, the transport, the battery on the song's row left of the
+ * transport (USB under it while a host powers the unit; on the second row left of "bpm" until 2026-11-13, asked:
+ * "move the battery indicator to be on the same row as the song title, put the usb label underneath"), the beat lights
+ * of the bar's meter (52 px; without the lights, the beat big below them, 40) */
 UI_SMALL static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, const char *songname, uint32_t lights)
 {
     static uint32_t cache;
@@ -519,7 +521,9 @@ UI_SMALL static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, 
         return;
     cache = sig;
     cv_begin(240, lights ? 52u : 40u, C_BLACK);
-    cut_name(b, songname[0] ? songname : "NO SONG", &FONT_S, 140);
+    fmt_int(b, song.g[G_BPM]);
+    x = 236 - text_w(&FONT_L, b);                    /* the tempo's left edge: the transport and the battery sit from it */
+    cut_name(b, songname[0] ? songname : "NO SONG", &FONT_S, x - 68);   /* (the song's name up to the battery) */
     cv_text(4, 4, &FONT_S, b, songname[0] ? C_WHITE : TE_G3);
     if (sng_cur >= 0) {
         sng_label(b, (uint32_t)sng_cur);
@@ -528,11 +532,11 @@ UI_SMALL static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, 
     }
     cv_text(4, 22, &FONT_S, b, TE_G3);
     fmt_int(b, song.g[G_BPM]);
-    x = 236 - text_w(&FONT_L, b);
     cv_text(x, 2, &FONT_L, b, ui.bpm_t ? C_WHITE : TE_G4);
     cv_text(x - 28, 22, &FONT_S, mclk_on() ? "ext" : "bpm", sng_sec_tempo() && !mclk_on() ? C_AMB : TE_G3);   /* amber: the
                                                      * section's own tempo (2026-11-07): the knob and the tap set that one */
-    batt_icon(x - 52, 23, 1);                        /* the battery left of "bpm" (asked 2026-11-06), USB while a host is there */
+    batt_icon(x - 60, 6, 2);                         /* the battery on the song's row, left of the transport (2026-11-13; left
+                                                     * of "bpm" from 2026-11-06), USB under it while a host is there */
     te_play_icon(x - 24, 4, (int)playing);
     w = 232 / (int32_t)beats;                        /* the beats of the bar, as wide as the screen */
     cw = w - (beats > 8u ? 2 : 4);
@@ -546,11 +550,16 @@ UI_SMALL static void live_head(uint32_t playing, uint32_t beat, uint32_t beats, 
  * stopped, the first bar dim, CUED: PLAY at its right), then the progress ticked per bar; the state follows
  * (live_state). The beat of the bar sat at the right until 2026-11-09 (the user: two-digit bars ran into it, "I
  * prefer to follow through the bars"); the header's lights show the beat */
-UI_SMALL static void live_big(uint32_t playing, const char *sec, uint32_t bar, uint32_t bars, uint32_t ci, uint32_t ci_n)
+static const char *const LB_WORD[4] = { "BAR", "FILL", "ENTRY", "BREAK" };   /* seq.c live_bar_now's LB_*: what the
+                                                   * bars counted are (2026-11-12: the fill bar of its own, the entry, the
+                                                   * break count their own bars, and say so) */
+#define LB_COLOUR(lb) ((lb) == LB_FILL ? TE_DRUM : (lb) ? C_WHITE : TE_G4)
+UI_SMALL static void live_big(uint32_t playing, const char *sec, uint32_t bar, uint32_t bars, uint32_t ci, uint32_t ci_n,
+                              uint32_t lb)
 {
     static uint32_t cache;
     char b[24];
-    uint32_t k, sig = studio_hash(playing * 3u + bar * 17u + bars * 7919u + ci * 31u +
+    uint32_t k, sig = studio_hash(playing * 3u + bar * 17u + bars * 7919u + ci * 31u + lb * 193u +
                                   ci_n * 37u + (sng_cur < 0) * lib_page() * 104729u, sec);
     int32_t x;
     if (!ui.force && sig == cache)
@@ -569,13 +578,15 @@ UI_SMALL static void live_big(uint32_t playing, const char *sec, uint32_t bar, u
     fmt_int(b, (int32_t)(ci ? ci : bar + 1u));      /* the bar of the section (the count-in: its count) */
     str_cpy(b + str_len(b), "/", 2);
     fmt_int(b + str_len(b), (int32_t)(ci ? ci_n : bars));
-    cv_text(4, 36, &FONT_XL, b, ci ? C_AMB : playing ? C_WHITE : TE_G2);
+    cv_text(4, 36, &FONT_XL, b, ci ? C_AMB : !playing ? TE_G2 : lb == LB_FILL ? TE_DRUM : C_WHITE);
     if (ci) {                                       /* the count-in: the big number is its count */
         cv_text(236 - text_w(&FONT_S, "COUNT"), 56, &FONT_S, "COUNT", C_AMB);
     } else if (!playing) {
         x = 236 - text_w(&FONT_S, "CUED:");
         cv_text(x, 56, &FONT_S, "CUED:", TE_G3);
         cv_text(x, 72, &FONT_S, "PLAY", TE_G3);
+    } else if (lb) {                                /* the fill bar's, the entry's or the break's bars: its word beside */
+        cv_text(236 - text_w(&FONT_S, LB_WORD[lb]), 56, &FONT_S, LB_WORD[lb], LB_COLOUR(lb));
     }
     cv_rect(4, 116, 232, 6, TE_G1);                 /* the progress through the pattern's bars */
     if (playing && bars)
@@ -586,11 +597,12 @@ UI_SMALL static void live_big(uint32_t playing, const char *sec, uint32_t bar, u
 }
 
 /* the section: its name big; the bar it is in with a progress ticked per bar; the count-in's beats */
-UI_SMALL static void live_main(uint32_t playing, const char *sec, uint32_t bar, uint32_t bars, uint32_t ci, uint32_t ci_n)
+UI_SMALL static void live_main(uint32_t playing, const char *sec, uint32_t bar, uint32_t bars, uint32_t ci, uint32_t ci_n,
+                               uint32_t lb)
 {
     static uint32_t cache;
     char b[24];
-    uint32_t k, sig = studio_hash(playing * 3u + bar * 17u + bars * 131u + ci * 7919u + ci_n * 31u +
+    uint32_t k, sig = studio_hash(playing * 3u + bar * 17u + bars * 131u + ci * 7919u + ci_n * 31u + lb * 193u +
                                   (sng_cur < 0) * lib_page() * 104729u, sec);
     if (!ui.force && sig == cache)
         return;
@@ -611,12 +623,14 @@ UI_SMALL static void live_main(uint32_t playing, const char *sec, uint32_t bar, 
         str_cpy(b + str_len(b), " / ", 4);
         fmt_int(b + str_len(b), (int32_t)ci_n);
         cv_text(4, 38, &FONT_S, b, C_AMB);
-    } else if (playing) {
-        str_cpy(b, "BAR ", 5);
-        fmt_int(b + 4, (int32_t)bar + 1);
+    } else if (playing) {                           /* the bar of the pattern (BAR), of the fill bar of its own (FILL), of
+                                                     * the entry or break (ENTRY, BREAK) */
+        str_cpy(b, LB_WORD[lb], 6);
+        str_cpy(b + str_len(b), " ", 2);
+        fmt_int(b + str_len(b), (int32_t)bar + 1);
         str_cpy(b + str_len(b), " / ", 4);
         fmt_int(b + str_len(b), (int32_t)bars);
-        cv_text(4, 38, &FONT_S, b, TE_G4);
+        cv_text(4, 38, &FONT_S, b, LB_COLOUR(lb));
     } else {
         cv_text(4, 38, &FONT_S, "CUED: PLAY", TE_G3);
     }
@@ -860,7 +874,7 @@ UI_SMALL static void live_foot(void)
 UI_SMALL static void live_draw(void)
 {
     char songname[13], sec[13], next[13];
-    uint32_t playing = song.playing, p, m, beats, beat = 0xFFu, ci = 0, ci_n = 0, bar = 0, bars = 1;
+    uint32_t playing = song.playing, p, m, beats, beat = 0xFFu, ci = 0, ci_n = 0, bar = 0, bars = 1, lb = LB_BAR;
     int32_t req = live_req;
     fm1_irq_off();                                  /* (the ISR writes them: taken whole) */
     p = clk_16th();
@@ -879,19 +893,17 @@ UI_SMALL static void live_draw(void)
         beat = (p % meter_b16(m)) / (16u / meter_den(m));
     else if (ci)
         beat = (ci - 1u) % beats;
-    if (live_sec >= 0) {
-        bars = live_sec_bars();
-        bar = live_bar == 0xFFFFFFFFu ? 0u : live_bar % bars;
-    }
+    if (live_sec >= 0)
+        lb = live_bar_now(&bar, &bars);             /* the section's, the fill bar's, the entry's or break's bars */
     if (live_view) {                                /* the beat big: no lights, no tiles */
         live_head(playing, beat, beats, songname, 0);
-        live_big(playing, live_sec >= 0 ? sec : "", bar, bars, ci, ci_n);
+        live_big(playing, live_sec >= 0 ? sec : "", bar, bars, ci, ci_n, lb);
         live_state(playing, next, 1, beat, beats);
         live_foot();
         return;
     }
     live_head(playing, beat, beats, songname, 1);
-    live_main(playing, live_sec >= 0 ? sec : "", bar, bars, ci, ci_n);
+    live_main(playing, live_sec >= 0 ? sec : "", bar, bars, ci, ci_n, lb);
     live_state(playing, next, 0, beat, beats);
     live_tiles(playing, req, 144);
     live_foot();

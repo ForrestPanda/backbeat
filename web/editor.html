@@ -221,6 +221,7 @@
   .plive-sec.cued { color: var(--fg2); }
   .plive-bar { color: var(--fg2); margin: 4px 0; min-height: 1.2em; }
   .plive-bar.count { color: var(--t3); }
+  .plive-bar.fill { color: var(--t4); }                    /* a fill bar of its own: its bars, in the fill's colour */
   .plive-prog { position: relative; height: 8px; background: var(--s2); margin: 4px 0 8px; }
   .plive-prog b { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--t4); }
   .plive-prog s { position: absolute; top: -2px; bottom: -2px; width: 1px; background: #000; }
@@ -2663,7 +2664,7 @@ const PLAY = {
     return l;
   },
   create(spec, countIn = 0) {                        /* countIn: bars of clicks before a start from stopped (the device's setting) */
-    return { spec, sec: -1, cur: null, step: 0, pos: 0, bar: 0, req: -1, brk: false, eb: null, ebN: 0, ebB: 0, atEnd: false, fill: false, fillBars: 0, fillWait: 0,
+    return { spec, sec: -1, cur: null, step: 0, pos: 0, bar: 0, req: -1, brk: false, eb: null, ebN: 0, ebB: 0, ebBrk: false, atEnd: false, fill: false, fillBars: 0, fillWait: 0,
              endReq: 0, endBars: 0, endEb: false, playing: false, stopped: false, countIn, counting: 0, ciNum: 4, ciDen: 4, bpm: spec.bpm,
              songBpm: spec.bpm, secBpm: false, swing: +spec.swing || 0, swing8: spec.swing_grid === "1/8" };
   },
@@ -2685,6 +2686,15 @@ const PLAY = {
   bars(spec, k) { return PLAY.secBars(spec.sections[k]); },
   playing(st) { return st.cur || st.spec.sections[st.sec]; },   /* the pattern playing (a song loaded meanwhile: the old one's) */
   curBars(st) { return st.eb ? st.ebB : PLAY.secBars(PLAY.playing(st)); },   /* (an entry or break playing: its bars) */
+  /* the bar the player's screen counts, from 0, and the word for it, as the device (seq.c live_bar_now, 2026-11-12): a fill
+     playing the section's fill bar of its own counts that phrase's bars; an entry or break playing, its bars; else the
+     pattern's (a fill without a fill bar of its own: the pattern's count, the state line says FILL) */
+  barLabel(ev, s) {
+    const fbB = ev.fill && s.fillbar ? PLAY.fbBars(s) : 0;
+    if (fbB) return { word: "FILL", bar: ev.fillBars && ev.fillBars <= fbB ? fbB - ev.fillBars : 0, bars: fbB };
+    const bars = ev.ebB || PLAY.secBars(s);
+    return { word: ev.ebB ? (ev.ebBrk ? "BREAK" : "ENTRY") : "BAR", bar: ev.bar % bars, bars };
+  },
   outro(spec) { const k = spec.sections.findIndex((s) => s.outro); return k < 0 ? null : k; },
   /* the fill bar of its own (sng.c fb_bar / fb_bars): its steps, the steps of one bar of it (a bar of the section's
      meter when that is whole steps and fits), the bars it takes (a phrase longer than a bar ends that many bars on) */
@@ -2847,7 +2857,7 @@ const PLAY = {
       st.sec = st.req; st.req = -1; st.step = 0; st.pos = 0; st.bar = 0; st.fill = false; st.fillBars = 0; st.fillWait = 0;
       PLAY.tempo(st, st.sec);                       /* its own tempo, or the song's back (2026-11-07) */
       const e = enter ? PLAY.ebOf(st.spec.sections[st.sec], st.brk) : null;
-      st.eb = e && e.eb; st.ebN = e ? e.n : 0; st.ebB = e ? e.bars : 0; st.brk = false;
+      st.eb = e && e.eb; st.ebN = e ? e.n : 0; st.ebB = e ? e.bars : 0; st.ebBrk = !!(e && st.brk); st.brk = false;   /* (ebBrk: the screen's word) */
       if (st.ebB) st.endEb = !!st.endReq;         /* the ending's outro through its entry: its bars from the entry's end
                                                      (below; 2026-10-28: counted from here, the stop came as the entry
                                                      ended, as the firmware did) */
@@ -2912,8 +2922,10 @@ const PLAY = {
     const swung = ["1/4", "1/8", "1/16", "1/32"].includes(s.div) ? (gu * Math.max(0, Math.min(100, sw))) / 200 : 0;
     const len = on8 ? (Math.floor(st.pos / gu) % 2 ? gu - swung : gu + swung) / (gu / su) : Math.round(st.pos / su) % 2 ? su - swung : su + swung;
     const out = { hits, sec: st.sec, step: i, bar: st.bar, fill: fillNow, fb: !eb && !!(fb && fi >= 0 && fi < fbn), eb, brk: st.brk, secs: ((60 / st.bpm) * len) / 48, u: len, newBar: false,
-                  pos: st.pos, req: st.req, wait: st.fillWait, end: !!(st.endReq || st.endBars) };   /* (the view: where in the
-                                                        bar and the pattern, what comes, at this step) */
+                  pos: st.pos, req: st.req, wait: st.fillWait, end: !!(st.endReq || st.endBars),
+                  ebB: st.eb ? st.ebB : 0, ebBrk: !!st.ebBrk, fillBars: st.fillBars };   /* (the view: where in the bar and the
+                                                        pattern, what comes, at this step; the entry's or break's bars and the
+                                                        fill's left, for the bar label) */
     st.step++;
     st.pos += su;
     const bar = Math.floor(st.pos / PLAY.barU(s));
@@ -5448,7 +5460,7 @@ function playLiveDraw() {
   const st = SPLAY.st, sp = SPLAY.spec, ev = SPLAY.timer || SPLAY.queue.length ? SPLAY.heard : null;
   const beats = $("pl-beats"), prog = $("pl-prog"), secEl = $("pl-sec"), barEl = $("pl-bar"), stEl = $("pl-state");
   if (!beats) return;
-  let num = 4, beat = -1, frac = 0, nbars = 1, name = "", bar = "", count = false, playing = -1;
+  let num = 4, beat = -1, frac = 0, nbars = 1, name = "", bar = "", count = false, playing = -1, fillBar = false;
   if (ev && ev.sec < 0 && sp) {                            /* the count-in: its beats, amber */
     num = ev.ciNum; beat = (ev.ci - 1) % num; count = true;
     bar = `COUNT ${ev.ci} / ${ev.ciN}`;
@@ -5458,8 +5470,10 @@ function playLiveDraw() {
     const s = sp.sections[ev.sec], m = SNG.meter(s.time), barU = PLAY.barU(s), beatU = 192 / m.den;
     num = m.num; nbars = PLAY.secBars(s); playing = ev.sec;
     beat = Math.floor((ev.pos % barU) / beatU);
-    const b = ev.bar % nbars;
-    bar = `BAR ${b + 1} / ${nbars}`;
+    const L = PLAY.barLabel(ev, s), b = L.bar;            /* the pattern's bar, the fill bar's own, the entry's or break's, named
+                                                           as the device names them (2026-11-12) */
+    nbars = L.bars; fillBar = L.word === "FILL";
+    bar = `${L.word} ${b + 1} / ${nbars}`;
     name = s.name;
     frac = Math.min(1, (b * barU + (ev.pos % barU) + PLAY.STEP_U[s.div]) / (nbars * barU));
   } else if (st && sp) {                                    /* stopped: the section cued, or the first */
@@ -5471,7 +5485,7 @@ function playLiveDraw() {
   secEl.textContent = name;
   secEl.className = "plive-sec" + (ev ? "" : " cued");
   barEl.textContent = bar;
-  barEl.className = "plive-bar" + (count ? " count" : "");
+  barEl.className = "plive-bar" + (count ? " count" : fillBar ? " fill" : "");
   prog.firstElementChild.style.width = `${(frac * 100).toFixed(1)}%`;
   const ticks = count || nbars > 32 ? 0 : nbars - 1;       /* a tick between the pattern's bars */
   if (prog.querySelectorAll("s").length !== ticks) {
