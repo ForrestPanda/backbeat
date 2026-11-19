@@ -597,6 +597,13 @@ next bar). No named sections, one song, no fill tied to a section change.
    (the UC25HQ80). A song with a section's tempo or past 64 steps needs this firmware; the first autosave writes DRM2,
    which 0.9.4 does not read. The panel drawing says 0.9.5. **Run on the first unit by the user the same day, 2026-11-11:
    "everything working correctly"** (the items' "verify on hardware" lists stand as what was exercised).
+   **0.9.6 (2026-11-19)**: version `BACKBEAT 0.9.6`, the package `backbeat-0.9.6.fwsc`, identity `FM-1_988` still: a
+   change on the next bar (CC 27, the F#4 / G#4 / A#4 keys, OCT+ held) wins over a fill, the fill dropped; the bar
+   count follows what plays, FILL, ENTRY or BREAK n / m with their own bars (item 14); the battery on the song's row
+   with USB under it; the editor's player the same. No format change: a 0.9.5 unit reads every song and project this
+   one writes. The panel drawing says 0.9.6. **Each change run on the first unit by the user before the release**
+   (2026-11-12 "tested and it works", 2026-11-13 "perfect working correctly"); the release build differs from those
+   builds in its version string only.
 8. **More flash for the kit (proposed 2026-10-29, not started).** The user asked whether the samples could be
    compressed and loaded into RAM for better sound, since RAM is free and flash is not. Measured that day: the kit is
    IMA ADPCM, 4 bits a sample at 22 kHz (11 KB a second; 399 478 B, 36 s), played in place from the memory-mapped
